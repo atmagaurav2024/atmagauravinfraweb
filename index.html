@@ -1,159 +1,565 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atmagaurav Infra Private Limited - Infrastructure Excellence</title>
-    
-    <link rel="stylesheet" href="./Hercules App_files/index-D8hRZF6c.css">
-    <link rel="stylesheet" href="./Hercules App_files/css2">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atmagaurav Infra Private Limited</title>
+  <meta name="description" content="Building India's Infrastructure of Tomorrow — highways, bridges, and road safety solutions across Maharashtra and beyond.">
+  <meta name="author" content="Atmagaurav Infra Private Limited">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗️</text></svg>">
 
-    <style>
-        :root { --p: #e8730a; --d: #0d1b3e; --t: #1f2937; }
-        html { scroll-behavior: smooth; }
-        body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; color: var(--t); background: #fafafa; }
-        
-        /* Fixed Header Reconstruction */
-        header { background: var(--d); color: white; padding: 1rem 8%; position: fixed; width: 100%; top: 0; z-index: 1000; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
-        .l-box { background: var(--p); width: 45px; height: 45px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.5rem; color: white; }
-        nav a { color: rgba(255,255,255,0.85); text-decoration: none; margin-left: 30px; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; transition: 0.3s; }
-        nav a:hover { color: var(--p); }
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 
-        /* Section Base */
-        section { padding: 120px 10% 80px; }
-        .tag { color: var(--p); font-weight: 700; text-transform: uppercase; letter-spacing: 2px; font-size: 0.8rem; display: block; margin-bottom: 15px; }
-        
-        /* Hero (Based on original background logic) */
-        .hero { 
-            height: 90vh; 
-            background: linear-gradient(to right, rgba(13,27,62,0.9), rgba(13,27,62,0.6)), url('./Hercules App_files/photo-1764232317908-008813d734af');
-            background-size: cover; background-position: center;
-            display: flex; align-items: center; color: white; margin-top: 60px;
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Open Sans', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            serif: ['Playfair Display', 'Georgia', 'serif'],
+          },
+          colors: {
+            brand: '#e8730a',
+            navy: '#0d1b3e',
+            navydark: '#0a1628',
+          }
         }
+      }
+    }
+  </script>
 
-        /* About Section (Directly restored from your JS data) */
-        .about-wrap { display: grid; grid-template-columns: 1.2fr 1fr; gap: 80px; align-items: center; }
-        .about-img { width: 100%; border-radius: 20px; box-shadow: 0 30px 60px rgba(0,0,0,0.15); border: 8px solid white; }
+  <style>
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Open Sans', sans-serif; background: #fff; color: #1a1a2e; margin: 0; }
 
-        /* Service Grid (Matching your Tailwind config) */
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 40px; }
-        .card { background: white; padding: 45px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.03); border-top: 5px solid var(--p); position: relative; overflow: hidden; }
-        .card h3 { color: var(--d); font-size: 1.5rem; margin-bottom: 20px; }
+    /* Mobile menu */
+    #mobile-menu { display: none; }
+    #mobile-menu.open { display: block; }
 
-        /* Projects Section */
-        .p-card { border-radius: 15px; overflow: hidden; background: white; box-shadow: 0 15px 35px rgba(0,0,0,0.08); }
-        .p-img { width: 100%; height: 280px; object-fit: cover; }
+    /* Animations */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in-up { animation: fadeInUp 0.7s ease forwards; }
+    .delay-1 { animation-delay: 0.15s; opacity: 0; }
+    .delay-2 { animation-delay: 0.3s;  opacity: 0; }
+    .delay-3 { animation-delay: 0.45s; opacity: 0; }
+    .delay-4 { animation-delay: 0.6s;  opacity: 0; }
 
-        /* Careers & Footer */
-        .footer { background: var(--d); color: white; padding: 100px 10% 40px; text-align: center; }
-        .cta-btn { display: inline-block; padding: 18px 45px; background: var(--p); color: white; font-weight: 700; text-decoration: none; border-radius: 8px; margin-top: 30px; transition: 0.3s; }
-        .cta-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(232,115,10,0.3); }
-    </style>
+    /* Card hover */
+    .project-card:hover img { transform: scale(1.06); }
+    .project-card img { transition: transform 0.5s ease; }
+
+    /* Nav active */
+    .nav-link { transition: color 0.2s, background 0.2s; }
+    .nav-link:hover { color: #fff; background: rgba(255,255,255,0.1); border-radius: 4px; }
+    .nav-link.active { color: #e8730a; }
+
+    /* Sticky nav shadow on scroll */
+    header { transition: box-shadow 0.3s; }
+
+    /* Footer link hover */
+    .footer-link { transition: color 0.2s; }
+    .footer-link:hover { color: #e8730a; }
+
+    /* Social icon hover */
+    .social-icon { transition: background 0.2s; }
+    .social-icon:hover { background: #e8730a; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #e8730a; border-radius: 3px; }
+  </style>
 </head>
-<body>
+<body class="bg-white text-gray-900">
 
-    <header>
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <div class="l-box">A</div>
-            <div>
-                <div style="font-weight: 800; font-size: 1.3rem; letter-spacing: 1px;">ATMAGAURAV INFRA</div>
-                <div style="font-size: 0.7rem; color: var(--p); font-weight: 700; text-transform: uppercase;">Private Limited</div>
-            </div>
-        </div>
-        <nav>
-            <a href="#home">Home</a>
-            <a href="#about">About</a>
-            <a href="#services">Services</a>
-            <a href="#projects">Projects</a>
-            <a href="#careers">Careers</a>
+  <!-- ========== NAVBAR ========== -->
+  <header id="navbar" class="fixed top-0 left-0 right-0 z-50 bg-[#0d1b3e] shadow-lg shadow-black/20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 md:h-20">
+
+        <!-- Logo -->
+        <a href="#home" class="flex items-center gap-3 group cursor-pointer">
+          <div class="w-10 h-10 bg-[#e8730a] rounded flex items-center justify-center flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M14 6a6 6 0 0 1 6 6v3"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><rect x="2" y="15" width="20" height="4" rx="1"/>
+            </svg>
+          </div>
+          <div>
+            <div class="font-serif font-bold text-white text-sm md:text-base leading-tight">ATMAGAURAV INFRA</div>
+            <div class="text-[#e8730a] text-[10px] font-semibold tracking-widest uppercase">Private Limited</div>
+          </div>
+        </a>
+
+        <!-- Desktop Nav -->
+        <nav class="hidden lg:flex items-center gap-1">
+          <a href="#home"     class="nav-link active px-3 py-2 text-sm font-medium cursor-pointer">Home</a>
+          <a href="#about"    class="nav-link px-3 py-2 text-sm font-medium text-white/80 cursor-pointer">About Us</a>
+          <a href="#services" class="nav-link px-3 py-2 text-sm font-medium text-white/80 cursor-pointer">Services</a>
+          <a href="#projects" class="nav-link px-3 py-2 text-sm font-medium text-white/80 cursor-pointer">Projects</a>
+          <a href="#careers"  class="nav-link px-3 py-2 text-sm font-medium text-white/80 cursor-pointer">Careers</a>
+          <a href="#contact"  class="nav-link px-3 py-2 text-sm font-medium text-white/80 cursor-pointer">Contact</a>
         </nav>
-    </header>
 
-    <section class="hero" id="home">
-        <div style="max-width: 850px;">
-            <span class="tag">Leading Government Contractor</span>
-            <h1 style="font-size: 4.5rem; line-height: 1.1; margin-bottom: 30px; font-weight: 800;">Engineering the <span style="color: var(--p);">Foundation</span> of Progress</h1>
-            <p style="font-size: 1.4rem; opacity: 0.9; margin-bottom: 45px; max-width: 700px;">Specialized in large-scale highway construction, bridge engineering, and safety solutions across Maharashtra.</p>
-            <a href="#services" class="cta-btn">Explore Our Services</a>
+        <!-- CTA + Hamburger -->
+        <div class="flex items-center gap-3">
+          <a href="https://app.atmagauravinfra.com/" target="_blank" rel="noopener noreferrer" class="hidden sm:inline-flex">
+            <button class="bg-[#e8730a] hover:bg-[#cf6209] text-white font-semibold text-sm h-8 px-3 rounded-md cursor-pointer border-0 transition-colors">Employee Login</button>
+          </a>
+          <button id="hamburger" onclick="toggleMenu()" class="lg:hidden text-white p-2 cursor-pointer" aria-label="Toggle menu">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/>
+            </svg>
+          </button>
         </div>
-    </section>
+      </div>
+    </div>
 
-    <section id="about" style="background: white;">
-        <div class="about-wrap">
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="lg:hidden bg-[#0a1628] border-t border-white/10 px-4 py-4 space-y-2">
+      <a href="#home"     onclick="closeMenu()" class="block text-white/80 hover:text-[#e8730a] text-sm font-medium py-2">Home</a>
+      <a href="#about"    onclick="closeMenu()" class="block text-white/80 hover:text-[#e8730a] text-sm font-medium py-2">About Us</a>
+      <a href="#services" onclick="closeMenu()" class="block text-white/80 hover:text-[#e8730a] text-sm font-medium py-2">Services</a>
+      <a href="#projects" onclick="closeMenu()" class="block text-white/80 hover:text-[#e8730a] text-sm font-medium py-2">Projects</a>
+      <a href="#careers"  onclick="closeMenu()" class="block text-white/80 hover:text-[#e8730a] text-sm font-medium py-2">Careers</a>
+      <a href="#contact"  onclick="closeMenu()" class="block text-white/80 hover:text-[#e8730a] text-sm font-medium py-2">Contact</a>
+      <a href="https://app.atmagauravinfra.com/" target="_blank" rel="noopener noreferrer" class="block mt-2">
+        <button class="w-full bg-[#e8730a] text-white font-semibold text-sm h-9 rounded-md cursor-pointer border-0">Employee Login</button>
+      </a>
+    </div>
+  </header>
+
+  <!-- ========== HERO ========== -->
+  <section id="home" class="relative h-[90vh] min-h-[560px] flex items-center overflow-hidden pt-16 md:pt-20">
+    <!-- Background image -->
+    <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1764232317908-008813d734af?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NzIwMTN8MHwxfHNlYXJjaHwxfHxoaWdod2F5JTIwY29uc3RydWN0aW9uJTIwaW5mcmFzdHJ1Y3R1cmUlMjBhZXJpYWwlMjB2aWV3fGVufDB8fHx8MTc3NjAwMjkxNHww&ixlib=rb-4.1.0&q=80&w=1080');"></div>
+    <div class="absolute inset-0 bg-gradient-to-r from-[#0d1b3e]/90 via-[#0d1b3e]/70 to-transparent"></div>
+
+    <!-- Content -->
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+      <div class="max-w-2xl">
+        <div class="fade-in-up inline-flex items-center gap-2 bg-[#e8730a]/20 border border-[#e8730a]/40 rounded px-3 py-1.5 mb-6">
+          <span class="w-2 h-2 rounded-full bg-[#e8730a] inline-block"></span>
+          <span class="text-[#e8730a] text-xs font-semibold tracking-widest uppercase">Government Infrastructure Contractor</span>
+        </div>
+        <h1 class="fade-in-up delay-1 font-serif text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
+          Building India's<br>
+          <span class="text-[#e8730a]">Infrastructure</span><br>
+          of Tomorrow
+        </h1>
+        <p class="fade-in-up delay-2 text-white/75 text-lg leading-relaxed mb-8 max-w-xl">
+          Atmagaurav Infra Private Limited delivers world-class highway construction, bridge engineering, and road safety solutions across Maharashtra and beyond.
+        </p>
+        <div class="fade-in-up delay-3 flex flex-wrap gap-4">
+          <a href="#services">
+            <button class="inline-flex items-center gap-2 bg-[#e8730a] hover:bg-[#cf6209] text-white font-semibold text-sm h-10 px-6 rounded-md cursor-pointer border-0 transition-colors">
+              Our Services
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </button>
+          </a>
+          <a href="#projects">
+            <button class="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/30 font-semibold text-sm h-10 px-6 rounded-md cursor-pointer transition-colors">
+              View Projects
+            </button>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Accreditation bar -->
+    <div class="absolute bottom-0 left-0 right-0 bg-[#0d1b3e]/90 backdrop-blur-sm border-t border-white/10">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+          <div class="flex items-center gap-2 text-white/70"><div class="w-1.5 h-1.5 rounded-full bg-[#e8730a] flex-shrink-0"></div><span class="text-xs font-medium tracking-wide">NHAI Empanelled Contractor</span></div>
+          <div class="flex items-center gap-2 text-white/70"><div class="w-1.5 h-1.5 rounded-full bg-[#e8730a] flex-shrink-0"></div><span class="text-xs font-medium tracking-wide">MSRDC Registered</span></div>
+          <div class="flex items-center gap-2 text-white/70"><div class="w-1.5 h-1.5 rounded-full bg-[#e8730a] flex-shrink-0"></div><span class="text-xs font-medium tracking-wide">State PWD Approved</span></div>
+          <div class="flex items-center gap-2 text-white/70"><div class="w-1.5 h-1.5 rounded-full bg-[#e8730a] flex-shrink-0"></div><span class="text-xs font-medium tracking-wide">MORTH Standards Compliant</span></div>
+          <div class="flex items-center gap-2 text-white/70"><div class="w-1.5 h-1.5 rounded-full bg-[#e8730a] flex-shrink-0"></div><span class="text-xs font-medium tracking-wide">IRC Code Adherence</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SERVICES ========== -->
+  <section id="services" class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14">
+        <span class="text-[#e8730a] text-xs font-semibold tracking-widest uppercase">What We Do</span>
+        <h2 class="font-serif text-3xl md:text-4xl font-bold text-gray-900 mt-2">Core Services</h2>
+        <div class="w-16 h-1 bg-[#e8730a] mx-auto mt-4 rounded"></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <!-- Service Card 1 -->
+        <div class="project-card group rounded overflow-hidden border border-gray-200 bg-white hover:shadow-xl transition-shadow cursor-default">
+          <div class="h-44 overflow-hidden">
+            <img alt="Highway Construction" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1762937958295-c1c08b5e5e51?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600">
+          </div>
+          <div class="p-5">
+            <h3 class="font-serif font-bold text-gray-900 mb-2">Highway Construction</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">End-to-end highway construction from greenfield to upgradation projects.</p>
+          </div>
+        </div>
+
+        <!-- Service Card 2 -->
+        <div class="project-card group rounded overflow-hidden border border-gray-200 bg-white hover:shadow-xl transition-shadow cursor-default">
+          <div class="h-44 overflow-hidden">
+            <img alt="Bridge Construction" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1705242431246-e99952d509a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600">
+          </div>
+          <div class="p-5">
+            <h3 class="font-serif font-bold text-gray-900 mb-2">Bridge Construction</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Design and build of major bridges, flyovers, and viaducts with precision engineering.</p>
+          </div>
+        </div>
+
+        <!-- Service Card 3 -->
+        <div class="project-card group rounded overflow-hidden border border-gray-200 bg-white hover:shadow-xl transition-shadow cursor-default">
+          <div class="h-44 overflow-hidden">
+            <img alt="Highway Maintenance" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1774274951965-3828c5cea7c9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600">
+          </div>
+          <div class="p-5">
+            <h3 class="font-serif font-bold text-gray-900 mb-2">Highway Maintenance</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Periodic and routine maintenance of national and state highway corridors.</p>
+          </div>
+        </div>
+
+        <!-- Service Card 4 -->
+        <div class="project-card group rounded overflow-hidden border border-gray-200 bg-white hover:shadow-xl transition-shadow cursor-default">
+          <div class="h-44 overflow-hidden">
+            <img alt="Road Safety Works" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1577228336271-d1edca526d64?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600">
+          </div>
+          <div class="p-5">
+            <h3 class="font-serif font-bold text-gray-900 mb-2">Road Safety Works</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Crash barriers, signage, road marking, and traffic management systems.</p>
+          </div>
+        </div>
+
+      </div>
+      <div class="text-center mt-10">
+        <a href="#services">
+          <button class="inline-flex items-center gap-2 bg-[#0d1b3e] hover:bg-[#0d1b3e]/90 text-white font-semibold text-sm h-9 px-4 py-2 rounded-md cursor-pointer border-0 transition-colors">
+            View All Services
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </button>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== PROJECTS ========== -->
+  <section id="projects" class="py-20 bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14">
+        <span class="text-[#e8730a] text-xs font-semibold tracking-widest uppercase">Currently Under Execution</span>
+        <h2 class="font-serif text-3xl md:text-4xl font-bold text-gray-900 mt-2">Ongoing Projects</h2>
+        <div class="w-16 h-1 bg-[#e8730a] mx-auto mt-4 rounded"></div>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <!-- Project 1 -->
+        <div class="project-card bg-white border border-gray-200 rounded overflow-hidden group">
+          <div class="h-40 overflow-hidden relative">
+            <img alt="Foot Over Bridge at Hiwra Ashram" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1705242431246-e99952d509a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600">
+            <div class="absolute top-2 right-2 flex items-center gap-1 bg-green-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+              Ongoing
+            </div>
+          </div>
+          <div class="p-5">
+            <span class="text-xs font-semibold text-[#e8730a] uppercase tracking-wide">Bridge Construction</span>
+            <h3 class="font-serif font-semibold text-gray-900 mt-1 leading-snug text-sm">Foot Over Bridge at Hiwra Ashram</h3>
+            <p class="text-gray-400 text-xs mt-2 flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e8730a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+              District Buldhana, Maharashtra
+            </p>
+          </div>
+        </div>
+
+        <!-- Project 2 -->
+        <div class="project-card bg-white border border-gray-200 rounded overflow-hidden group">
+          <div class="h-40 overflow-hidden relative">
+            <img alt="Maintenance of NH 161G" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1774274951965-3828c5cea7c9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600">
+            <div class="absolute top-2 right-2 flex items-center gap-1 bg-green-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+              Ongoing
+            </div>
+          </div>
+          <div class="p-5">
+            <span class="text-xs font-semibold text-[#e8730a] uppercase tracking-wide">Highway Maintenance</span>
+            <h3 class="font-serif font-semibold text-gray-900 mt-1 leading-snug text-sm">Maintenance of NH 161G – Shegaon to Sangrampur</h3>
+            <p class="text-gray-400 text-xs mt-2 flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e8730a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+              Buldhana District, Maharashtra
+            </p>
+          </div>
+        </div>
+
+        <!-- Project 3 -->
+        <div class="project-card bg-white border border-gray-200 rounded overflow-hidden group">
+          <div class="h-40 overflow-hidden relative">
+            <img alt="Maintenance of NH 753C" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1764232317908-008813d734af?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=600">
+            <div class="absolute top-2 right-2 flex items-center gap-1 bg-green-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+              Ongoing
+            </div>
+          </div>
+          <div class="p-5">
+            <span class="text-xs font-semibold text-[#e8730a] uppercase tracking-wide">Highway Maintenance</span>
+            <h3 class="font-serif font-semibold text-gray-900 mt-1 leading-snug text-sm">Maintenance of NH 753C – Dusarbid to Pimpri Sarad</h3>
+            <p class="text-gray-400 text-xs mt-2 flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#e8730a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+              Jalna–Pulgaon Section, Maharashtra
+            </p>
+          </div>
+        </div>
+
+      </div>
+      <div class="text-center mt-10">
+        <a href="#projects">
+          <button class="inline-flex items-center gap-2 bg-[#0d1b3e] hover:bg-[#0d1b3e]/90 text-white font-semibold text-sm h-9 px-4 py-2 rounded-md cursor-pointer border-0 transition-colors">
+            View All Projects
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </button>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== ABOUT / WHY US ========== -->
+  <section id="about" class="py-20 bg-[#0d1b3e]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid lg:grid-cols-2 gap-14 items-center">
+        <!-- Left text -->
+        <div>
+          <span class="text-[#e8730a] text-xs font-semibold tracking-widest uppercase">Why Choose Us</span>
+          <h2 class="font-serif text-3xl md:text-4xl font-bold text-white mt-2 mb-6">Trusted by Government Agencies Across India</h2>
+          <p class="text-white/60 leading-relaxed mb-8">With over 15 years of proven execution, Atmagaurav Infra Private Limited has established itself as a preferred contractor for critical national infrastructure projects. Our commitment to engineering excellence, safety, and timely delivery makes us the trusted choice.</p>
+          <a href="#contact">
+            <button class="inline-flex items-center gap-2 bg-[#e8730a] hover:bg-[#cf6209] text-white font-semibold text-sm h-9 px-4 rounded-md cursor-pointer border-0 transition-colors">
+              Know More About Us
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </button>
+          </a>
+        </div>
+        <!-- Right feature grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div class="bg-white/5 border border-white/10 rounded p-5">
+            <div class="w-8 h-1 bg-[#e8730a] rounded mb-3"></div>
+            <h4 class="font-serif font-bold text-white mb-2">Government Empanelled</h4>
+            <p class="text-white/55 text-sm leading-relaxed">Registered contractor with NHAI, MSRDC, and State PWD for large-scale projects.</p>
+          </div>
+          <div class="bg-white/5 border border-white/10 rounded p-5">
+            <div class="w-8 h-1 bg-[#e8730a] rounded mb-3"></div>
+            <h4 class="font-serif font-bold text-white mb-2">Quality Assurance</h4>
+            <p class="text-white/55 text-sm leading-relaxed">Strict adherence to IRC, MORTH, and IS standards across all construction activities.</p>
+          </div>
+          <div class="bg-white/5 border border-white/10 rounded p-5">
+            <div class="w-8 h-1 bg-[#e8730a] rounded mb-3"></div>
+            <h4 class="font-serif font-bold text-white mb-2">Safety First</h4>
+            <p class="text-white/55 text-sm leading-relaxed">Zero-compromise safety culture with full PPE compliance and safety audits.</p>
+          </div>
+          <div class="bg-white/5 border border-white/10 rounded p-5">
+            <div class="w-8 h-1 bg-[#e8730a] rounded mb-3"></div>
+            <h4 class="font-serif font-bold text-white mb-2">Timely Delivery</h4>
+            <p class="text-white/55 text-sm leading-relaxed">Proven track record of on-time project completion without compromising quality.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== CAREERS ========== -->
+  <section id="careers" class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <span class="text-[#e8730a] text-xs font-semibold tracking-widest uppercase">Join Our Team</span>
+      <h2 class="font-serif text-3xl md:text-4xl font-bold text-gray-900 mt-2 mb-4">Careers at Atmagaurav Infra</h2>
+      <div class="w-16 h-1 bg-[#e8730a] mx-auto mt-4 rounded mb-8"></div>
+      <p class="text-gray-500 max-w-2xl mx-auto text-lg mb-8">We are always looking for talented engineers, project managers, and field professionals who share our passion for building India's infrastructure. Join us and be part of nation-building projects.</p>
+      <a href="mailto:hr@atmagauravinfra.com">
+        <button class="inline-flex items-center gap-2 bg-[#e8730a] hover:bg-[#cf6209] text-white font-semibold text-sm h-10 px-6 rounded-md cursor-pointer border-0 transition-colors">
+          Send Your Resume
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
+      </a>
+    </div>
+  </section>
+
+  <!-- ========== CTA BANNER ========== -->
+  <section class="relative py-20 overflow-hidden" style="background-image: url('https://images.unsplash.com/photo-1585467682547-e0d34502e4cf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1200'); background-size: cover; background-position: center;">
+    <div class="absolute inset-0 bg-[#0d1b3e]/85"></div>
+    <div class="relative max-w-3xl mx-auto px-4 text-center">
+      <h2 class="font-serif text-3xl md:text-4xl font-bold text-white mb-4">Ready to Build Something Great?</h2>
+      <p class="text-white/65 mb-8 text-lg">Partner with us for your next highway, bridge, or infrastructure project. Let's discuss how we can deliver excellence.</p>
+      <a href="#contact">
+        <button class="inline-flex items-center gap-2 bg-[#e8730a] hover:bg-[#cf6209] text-white font-semibold text-sm h-10 px-6 rounded-md cursor-pointer border-0 transition-colors">
+          Get In Touch
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
+      </a>
+    </div>
+  </section>
+
+  <!-- ========== CONTACT ========== -->
+  <section id="contact" class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14">
+        <span class="text-[#e8730a] text-xs font-semibold tracking-widest uppercase">Get In Touch</span>
+        <h2 class="font-serif text-3xl md:text-4xl font-bold text-gray-900 mt-2">Contact Us</h2>
+        <div class="w-16 h-1 bg-[#e8730a] mx-auto mt-4 rounded"></div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-12 max-w-4xl mx-auto">
+        <!-- Contact info -->
+        <div>
+          <h3 class="font-serif font-bold text-gray-900 text-xl mb-6">Our Office</h3>
+          <div class="space-y-5">
+            <div class="flex gap-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8730a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 mt-1"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+              <p class="text-gray-600 text-sm leading-relaxed">SH9, Govindrao Apt Buld G Ltd,<br>Vimal Dairy Road, Goddev Village,<br>Bhayander East, Dist Thane 401105,<br>Maharashtra, India</p>
+            </div>
+            <div class="flex gap-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8730a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 mt-1"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+              <a href="mailto:info@atmagauravinfra.com" class="text-gray-600 text-sm hover:text-[#e8730a] transition-colors">info@atmagauravinfra.com</a>
+            </div>
+          </div>
+        </div>
+        <!-- Contact form -->
+        <div>
+          <h3 class="font-serif font-bold text-gray-900 text-xl mb-6">Send a Message</h3>
+          <form onsubmit="handleForm(event)" class="space-y-4">
+            <input type="text" placeholder="Your Name" required class="w-full border border-gray-200 rounded-md px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-[#e8730a] transition-colors">
+            <input type="email" placeholder="Your Email" required class="w-full border border-gray-200 rounded-md px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-[#e8730a] transition-colors">
+            <input type="text" placeholder="Subject" class="w-full border border-gray-200 rounded-md px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-[#e8730a] transition-colors">
+            <textarea placeholder="Your Message" rows="4" required class="w-full border border-gray-200 rounded-md px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-[#e8730a] transition-colors resize-none"></textarea>
+            <button type="submit" class="w-full bg-[#e8730a] hover:bg-[#cf6209] text-white font-semibold text-sm h-10 rounded-md cursor-pointer border-0 transition-colors">Send Message</button>
+            <p id="form-msg" class="text-green-600 text-sm hidden text-center">Thank you! We'll get back to you soon.</p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== FOOTER ========== -->
+  <footer class="bg-[#0a1628] text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+
+        <!-- Brand -->
+        <div class="lg:col-span-1">
+          <div class="flex items-center gap-3 mb-5">
+            <div class="w-10 h-10 bg-[#e8730a] rounded flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/><path d="M14 6a6 6 0 0 1 6 6v3"/><path d="M4 15v-3a6 6 0 0 1 6-6"/><rect x="2" y="15" width="20" height="4" rx="1"/>
+              </svg>
+            </div>
             <div>
-                <span class="tag">Corporate Profile</span>
-                <h2 style="font-size: 3rem; color: var(--d); margin-bottom: 30px;">Committed to Infrastructure Excellence</h2>
-                <p style="font-size: 1.15rem; color: #555; margin-bottom: 25px;">Atmagaurav Infra Private Limited brings over a decade of expertise in civil engineering. We don't just build roads; we create lifelines for trade and connectivity.</p>
-                <p style="font-size: 1.15rem; color: #555;">With a fleet of advanced machinery and a highly skilled engineering team, we ensure quality control at every kilometer, adhering to strict NHAI and PWD standards.</p>
-                <div style="margin-top: 40px; display: flex; gap: 40px;">
-                    <div><h3 style="color: var(--p); font-size: 2.5rem;">150+</h3><p style="font-weight: 700;">KM CONSTRUCTED</p></div>
-                    <div><h3 style="color: var(--p); font-size: 2.5rem;">25+</h3><p style="font-weight: 700;">BRIDGES BUILT</p></div>
-                </div>
+              <div class="font-serif font-bold text-white text-sm leading-tight">ATMAGAURAV INFRA</div>
+              <div class="text-[#e8730a] text-[10px] font-semibold tracking-widest uppercase">Private Limited</div>
             </div>
-            <div>
-                <img src="./Hercules App_files/photo-1762937958295-c1c08b5e5e51" class="about-img" alt="Highway Construction">
-            </div>
+          </div>
+          <p class="text-white/60 text-sm leading-relaxed mb-6">Building the infrastructure of tomorrow — highways, bridges, and roads that connect communities and drive economic growth across India.</p>
+          <div class="flex gap-3">
+            <a href="#" class="social-icon w-9 h-9 rounded bg-white/10 flex items-center justify-center cursor-pointer">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            </a>
+          </div>
         </div>
-    </section>
 
-    <section id="services" style="background: #f4f6f9;">
-        <div style="text-align: center; margin-bottom: 60px;">
-            <span class="tag">Expertise</span>
-            <h2 style="font-size: 3rem; color: var(--d);">Our Core Capabilities</h2>
+        <!-- Quick Links -->
+        <div>
+          <h4 class="font-serif font-bold text-[#e8730a] mb-5 uppercase tracking-widest text-xs">Quick Links</h4>
+          <ul class="space-y-2">
+            <li><a href="#home"     class="footer-link text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Home</a></li>
+            <li><a href="#about"    class="footer-link text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>About Us</a></li>
+            <li><a href="#services" class="footer-link text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Services</a></li>
+            <li><a href="#projects" class="footer-link text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Projects</a></li>
+            <li><a href="#careers"  class="footer-link text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Careers</a></li>
+            <li><a href="#contact"  class="footer-link text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Contact Us</a></li>
+          </ul>
         </div>
-        <div class="grid">
-            <div class="card">
-                <h3>Highway Construction</h3>
-                <p>Full-scale development of National and State Highways, specializing in both Flexible (Bituminous) and Rigid (Concrete) pavements.</p>
-            </div>
-            <div class="card">
-                <h3>Bridge & Structural</h3>
-                <p>Expertise in Major/Minor Bridges, Culverts, and Flyovers with specialized pile foundations and superstructure designs.</p>
-            </div>
-            <div class="card">
-                <h3>Road Safety Works</h3>
-                <p>Installation of Metal Crash Barriers, Signage, and high-visibility Thermoplastic Road Markings for traffic management.</p>
-            </div>
+
+        <!-- Services list -->
+        <div>
+          <h4 class="font-serif font-bold text-[#e8730a] mb-5 uppercase tracking-widest text-xs">Our Services</h4>
+          <ul class="space-y-2">
+            <li class="text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Highway Construction</li>
+            <li class="text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Highway Maintenance</li>
+            <li class="text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Bridge Construction</li>
+            <li class="text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Bridge Maintenance</li>
+            <li class="text-white/60 text-sm flex items-center gap-2"><span class="text-[#e8730a] text-xs">›</span>Road Safety Works</li>
+          </ul>
         </div>
-    </section>
 
-    <section id="projects">
-        <span class="tag" style="text-align: center; display: block;">Portfolio</span>
-        <h2 style="text-align: center; font-size: 3rem; color: var(--d); margin-bottom: 60px;">Major Projects Executed</h2>
-        <div class="grid">
-            <div class="p-card">
-                <img src="./Hercules App_files/photo-1577228336271-d1edca526d64" class="p-img">
-                <div style="padding: 25px;">
-                    <h4 style="font-size: 1.3rem; margin-bottom: 10px;">NHAI Corridor Expansion</h4>
-                    <p style="color: #666; font-size: 0.95rem;">Successfully completed 4-lane expansion with complex interchange structures.</p>
-                </div>
-            </div>
-            <div class="p-card">
-                <img src="./Hercules App_files/photo-1705242431246-e99952d509a5" class="p-img">
-                <div style="padding: 25px;">
-                    <h4 style="font-size: 1.3rem; margin-bottom: 10px;">River Bridge Construction</h4>
-                    <p style="color: #666; font-size: 0.95rem;">Modern RCC bridge providing all-weather connectivity over seasonal river basins.</p>
-                </div>
-            </div>
+        <!-- Contact -->
+        <div>
+          <h4 class="font-serif font-bold text-[#e8730a] mb-5 uppercase tracking-widest text-xs">Contact Info</h4>
+          <ul class="space-y-4">
+            <li class="flex gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8730a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 mt-0.5"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+              <span class="text-white/60 text-sm">SH9, Govindrao Apt Buld G Ltd,<br>Vimal Dairy Road, Goddev Village,<br>Bhayander East, Dist Thane 401105,<br>Maharashtra, India</span>
+            </li>
+            <li class="flex gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8730a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 mt-0.5"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+              <a href="mailto:info@atmagauravinfra.com" class="text-white/60 text-sm hover:text-[#e8730a] transition-colors">info@atmagauravinfra.com</a>
+            </li>
+          </ul>
         </div>
-    </section>
+      </div>
+    </div>
 
-    <section id="careers" style="background: #fff; text-align: center; border-top: 1px solid #eee;">
-        <span class="tag">Join Our Team</span>
-        <h2 style="font-size: 3rem; color: var(--d);">Building Careers</h2>
-        <p style="max-width: 700px; margin: 25px auto; font-size: 1.2rem; color: #555;">We are always looking for skilled civil engineers, project managers, and site supervisors. Send your resume to join Maharashtra's fastest-growing infrastructure firm.</p>
-        <a href="mailto:contact@atmagauravinfra.com" class="cta-btn">Apply Now</a>
-    </section>
+    <!-- Bottom bar -->
+    <div class="border-t border-white/10">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <p class="text-white/40 text-sm text-center">© 2026 Atmagaurav Infra Private Limited. All rights reserved.</p>
+        <a href="https://app.atmagauravinfra.com/" target="_blank" rel="noopener noreferrer" class="text-[#e8730a] hover:text-white text-sm font-medium transition-colors cursor-pointer">Employee Portal →</a>
+      </div>
+    </div>
+  </footer>
 
-    <footer class="footer">
-        <h2 style="font-size: 2.5rem; margin-bottom: 30px;">Atmagaurav Infra Private Limited</h2>
-        <p style="opacity: 0.7; margin-bottom: 40px; font-size: 1.1rem;">Engineering excellence in road and bridge construction.</p>
-        <div style="font-size: 1.6rem; font-weight: 800; color: var(--p);">contact@atmagauravinfra.com</div>
-        <div style="margin-top: 60px; font-size: 0.85rem; opacity: 0.5;">
-            &copy; 2026 Atmagaurav Infra Private Limited | Maharashtra, India
-        </div>
-    </footer>
+  <!-- ========== JS ========== -->
+  <script>
+    // Mobile menu toggle
+    function toggleMenu() {
+      const menu = document.getElementById('mobile-menu');
+      menu.classList.toggle('open');
+    }
+    function closeMenu() {
+      document.getElementById('mobile-menu').classList.remove('open');
+    }
 
-    <script type="module" src="./Hercules App_files/index-qU8IMj_W.js.download"></script>
+    // Active nav link on scroll
+    const sections = document.querySelectorAll('section[id], div[id="home"]');
+    const navLinks = document.querySelectorAll('.nav-link');
+    window.addEventListener('scroll', () => {
+      let current = '';
+      document.querySelectorAll('section[id]').forEach(section => {
+        const sectionTop = section.offsetTop - 100;
+        if (window.scrollY >= sectionTop) current = section.getAttribute('id');
+      });
+      navLinks.forEach(link => {
+        link.classList.remove('active');
+        link.classList.add('text-white/80');
+        link.classList.remove('text-white/80');
+        if (link.getAttribute('href') === '#' + current) {
+          link.classList.add('active');
+        } else {
+          link.style.color = 'rgba(255,255,255,0.8)';
+        }
+      });
+    });
+
+    // Contact form handler
+    function handleForm(e) {
+      e.preventDefault();
+      const msg = document.getElementById('form-msg');
+      msg.classList.remove('hidden');
+      e.target.reset();
+      setTimeout(() => msg.classList.add('hidden'), 5000);
+    }
+  </script>
 </body>
 </html>
