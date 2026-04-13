@@ -3,67 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atmagaurav Infra Private Limited</title>
+    <title>Atmagaurav Infra Private Limited - Infrastructure Excellence</title>
     
     <link rel="stylesheet" href="./Hercules App_files/index-D8hRZF6c.css">
     <link rel="stylesheet" href="./Hercules App_files/css2">
 
     <style>
-        :root { --primary: #e8730a; --dark: #0d1b3e; --bg-light: #f8fafc; }
+        :root { --p: #e8730a; --d: #0d1b3e; --t: #1f2937; }
         html { scroll-behavior: smooth; }
-        body { font-family: sans-serif; margin: 0; color: #1f2937; line-height: 1.6; }
+        body { font-family: 'IBM Plex Sans', sans-serif; margin: 0; color: var(--t); background: #fafafa; }
         
-        /* Navigation */
-        header { background: var(--dark); color: white; padding: 1rem 5%; position: fixed; width: 100%; top: 0; z-index: 1000; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
-        .logo-box { background: var(--primary); width: 40px; height: 40px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; }
-        nav a { color: rgba(255,255,255,0.8); text-decoration: none; margin-left: 20px; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-        nav a:hover { color: var(--primary); }
+        /* Fixed Header Reconstruction */
+        header { background: var(--d); color: white; padding: 1rem 8%; position: fixed; width: 100%; top: 0; z-index: 1000; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .l-box { background: var(--p); width: 45px; height: 45px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.5rem; color: white; }
+        nav a { color: rgba(255,255,255,0.85); text-decoration: none; margin-left: 30px; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; transition: 0.3s; }
+        nav a:hover { color: var(--p); }
 
-        /* General Section Styling */
-        section { padding: 100px 10% 80px; }
-        .section-title { font-size: 2.5rem; color: var(--dark); margin-bottom: 15px; text-align: center; }
-        .section-subtitle { color: var(--primary); font-weight: 700; text-align: center; display: block; text-transform: uppercase; letter-spacing: 2px; font-size: 0.8rem; margin-bottom: 10px; }
-        .divider { width: 60px; height: 4px; background: var(--primary); margin: 0 auto 40px; }
-
-        /* Hero */
+        /* Section Base */
+        section { padding: 120px 10% 80px; }
+        .tag { color: var(--p); font-weight: 700; text-transform: uppercase; letter-spacing: 2px; font-size: 0.8rem; display: block; margin-bottom: 15px; }
+        
+        /* Hero (Based on original background logic) */
         .hero { 
-            height: 85vh; 
-            background: linear-gradient(rgba(13,27,62,0.8), rgba(13,27,62,0.7)), url('./Hercules App_files/photo-1764232317908-008813d734af');
+            height: 90vh; 
+            background: linear-gradient(to right, rgba(13,27,62,0.9), rgba(13,27,62,0.6)), url('./Hercules App_files/photo-1764232317908-008813d734af');
             background-size: cover; background-position: center;
             display: flex; align-items: center; color: white; margin-top: 60px;
         }
 
-        /* Stats Bar */
-        .stats-row { background: white; padding: 50px 10%; display: flex; justify-content: space-around; flex-wrap: wrap; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-        .stat-item h3 { color: var(--primary); font-size: 2.8rem; margin: 0; font-weight: 800; }
-        .stat-item p { color: #64748b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-top: 5px; }
+        /* About Section (Directly restored from your JS data) */
+        .about-wrap { display: grid; grid-template-columns: 1.2fr 1fr; gap: 80px; align-items: center; }
+        .about-img { width: 100%; border-radius: 20px; box-shadow: 0 30px 60px rgba(0,0,0,0.15); border: 8px solid white; }
 
-        /* About Us */
-        .about-flex { display: flex; gap: 60px; align-items: center; flex-wrap: wrap; }
-        .about-text { flex: 1; min-width: 300px; }
-        .about-image { flex: 1; min-width: 300px; }
-        .about-image img { width: 100%; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+        /* Service Grid (Matching your Tailwind config) */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 40px; }
+        .card { background: white; padding: 45px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.03); border-top: 5px solid var(--p); position: relative; overflow: hidden; }
+        .card h3 { color: var(--d); font-size: 1.5rem; margin-bottom: 20px; }
 
-        /* Grid Layouts */
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; }
-        .service-card { background: #fff; padding: 40px; border-radius: 8px; border-bottom: 4px solid var(--primary); box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s; }
-        .service-card:hover { transform: translateY(-5px); }
-        .project-card { border-radius: 12px; overflow: hidden; background: white; box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
-        .project-card img { width: 100%; height: 250px; object-fit: cover; }
-        
-        /* Footer/Contact */
-        footer { background: var(--dark); color: white; padding: 80px 10% 40px; text-align: center; }
-        .btn { display: inline-block; padding: 15px 35px; background: var(--primary); color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin-top: 20px; }
+        /* Projects Section */
+        .p-card { border-radius: 15px; overflow: hidden; background: white; box-shadow: 0 15px 35px rgba(0,0,0,0.08); }
+        .p-img { width: 100%; height: 280px; object-fit: cover; }
+
+        /* Careers & Footer */
+        .footer { background: var(--d); color: white; padding: 100px 10% 40px; text-align: center; }
+        .cta-btn { display: inline-block; padding: 18px 45px; background: var(--p); color: white; font-weight: 700; text-decoration: none; border-radius: 8px; margin-top: 30px; transition: 0.3s; }
+        .cta-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(232,115,10,0.3); }
     </style>
 </head>
 <body>
 
     <header>
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <div class="logo-box">A</div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div class="l-box">A</div>
             <div>
-                <div style="font-weight: 800; font-size: 1.1rem; letter-spacing: 1px;">ATMAGAURAV INFRA</div>
-                <div style="font-size: 0.6rem; color: var(--primary); font-weight: 700;">PRIVATE LIMITED</div>
+                <div style="font-weight: 800; font-size: 1.3rem; letter-spacing: 1px;">ATMAGAURAV INFRA</div>
+                <div style="font-size: 0.7rem; color: var(--p); font-weight: 700; text-transform: uppercase;">Private Limited</div>
             </div>
         </div>
         <nav>
@@ -71,87 +65,93 @@
             <a href="#about">About</a>
             <a href="#services">Services</a>
             <a href="#projects">Projects</a>
-            <a href="#contact">Contact</a>
+            <a href="#careers">Careers</a>
         </nav>
     </header>
 
     <section class="hero" id="home">
-        <div style="max-width: 700px;">
-            <span style="color: var(--primary); font-weight: 700; letter-spacing: 3px; font-size: 0.8rem;">ESTABLISHED EXCELLENCE</span>
-            <h1 style="font-size: 4rem; line-height: 1.1; margin: 20px 0;">Building the <span style="color: var(--primary);">Highways</span> of Modern India</h1>
-            <p style="font-size: 1.2rem; opacity: 0.9; margin-bottom: 30px;">Premier government contractor specializing in highway development, structural bridge engineering, and safety infrastructure.</p>
-            <a href="#services" class="btn">View Our Expertise</a>
+        <div style="max-width: 850px;">
+            <span class="tag">Leading Government Contractor</span>
+            <h1 style="font-size: 4.5rem; line-height: 1.1; margin-bottom: 30px; font-weight: 800;">Engineering the <span style="color: var(--p);">Foundation</span> of Progress</h1>
+            <p style="font-size: 1.4rem; opacity: 0.9; margin-bottom: 45px; max-width: 700px;">Specialized in large-scale highway construction, bridge engineering, and safety solutions across Maharashtra.</p>
+            <a href="#services" class="cta-btn">Explore Our Services</a>
         </div>
     </section>
 
-    <div class="stats-row">
-        <div class="stat-item"><h3>10+</h3><p>Years Experience</p></div>
-        <div class="stat-item"><h3>150+</h3><p>KM Roads Completed</p></div>
-        <div class="stat-item"><h3>25+</h3><p>Bridges Built</p></div>
-        <div class="stat-item"><h3>500+</h3><p>Workers Employed</p></div>
-    </div>
-
-    <section id="about">
-        <div class="about-flex">
-            <div class="about-text">
-                <span class="section-subtitle">Who We Are</span>
-                <h2 style="font-size: 2.5rem; color: var(--dark); margin-bottom: 25px;">Leader in Civil Infrastructure</h2>
-                <p>Atmagaurav Infra Private Limited is dedicated to transforming India's landscape through innovative construction techniques. We specialize in the end-to-end execution of National and State Highways.</p>
-                <p style="margin-top: 15px;">Our approach combines high-grade material sourcing with real-time GPS monitoring and stringent safety protocols to deliver infrastructure that lasts for generations.</p>
+    <section id="about" style="background: white;">
+        <div class="about-wrap">
+            <div>
+                <span class="tag">Corporate Profile</span>
+                <h2 style="font-size: 3rem; color: var(--d); margin-bottom: 30px;">Committed to Infrastructure Excellence</h2>
+                <p style="font-size: 1.15rem; color: #555; margin-bottom: 25px;">Atmagaurav Infra Private Limited brings over a decade of expertise in civil engineering. We don't just build roads; we create lifelines for trade and connectivity.</p>
+                <p style="font-size: 1.15rem; color: #555;">With a fleet of advanced machinery and a highly skilled engineering team, we ensure quality control at every kilometer, adhering to strict NHAI and PWD standards.</p>
+                <div style="margin-top: 40px; display: flex; gap: 40px;">
+                    <div><h3 style="color: var(--p); font-size: 2.5rem;">150+</h3><p style="font-weight: 700;">KM CONSTRUCTED</p></div>
+                    <div><h3 style="color: var(--p); font-size: 2.5rem;">25+</h3><p style="font-weight: 700;">BRIDGES BUILT</p></div>
+                </div>
             </div>
-            <div class="about-image">
-                <img src="./Hercules App_files/photo-1762937958295-c1c08b5e5e51" alt="About Atmagaurav">
+            <div>
+                <img src="./Hercules App_files/photo-1762937958295-c1c08b5e5e51" class="about-img" alt="Highway Construction">
             </div>
         </div>
     </section>
 
-    <section id="services" style="background: var(--bg-light);">
-        <span class="section-subtitle">What We Do</span>
-        <h2 class="section-title">Core Services</h2>
-        <div class="divider"></div>
+    <section id="services" style="background: #f4f6f9;">
+        <div style="text-align: center; margin-bottom: 60px;">
+            <span class="tag">Expertise</span>
+            <h2 style="font-size: 3rem; color: var(--d);">Our Core Capabilities</h2>
+        </div>
         <div class="grid">
-            <div class="service-card">
+            <div class="card">
                 <h3>Highway Construction</h3>
-                <p>Expertise in flexible and rigid pavement construction for major transport corridors.</p>
+                <p>Full-scale development of National and State Highways, specializing in both Flexible (Bituminous) and Rigid (Concrete) pavements.</p>
             </div>
-            <div class="service-card">
-                <h3>Bridge & Structures</h3>
-                <p>Specialized in major river bridges, flyovers, and complex interchange engineering.</p>
+            <div class="card">
+                <h3>Bridge & Structural</h3>
+                <p>Expertise in Major/Minor Bridges, Culverts, and Flyovers with specialized pile foundations and superstructure designs.</p>
             </div>
-            <div class="service-card">
+            <div class="card">
                 <h3>Road Safety Works</h3>
-                <p>Certified installation of metal crash barriers, signage, and thermal road markings.</p>
+                <p>Installation of Metal Crash Barriers, Signage, and high-visibility Thermoplastic Road Markings for traffic management.</p>
             </div>
         </div>
     </section>
 
     <section id="projects">
-        <span class="section-subtitle">Our Work</span>
-        <h2 class="section-title">Featured Projects</h2>
-        <div class="divider"></div>
+        <span class="tag" style="text-align: center; display: block;">Portfolio</span>
+        <h2 style="text-align: center; font-size: 3rem; color: var(--d); margin-bottom: 60px;">Major Projects Executed</h2>
         <div class="grid">
-            <div class="project-card">
-                <img src="./Hercules App_files/photo-1577228336271-d1edca526d64">
+            <div class="p-card">
+                <img src="./Hercules App_files/photo-1577228336271-d1edca526d64" class="p-img">
                 <div style="padding: 25px;">
-                    <h4 style="margin: 0; font-size: 1.2rem;">NHAI Highway Expansion</h4>
-                    <p style="font-size: 0.9rem; color: #64748b; margin-top: 10px;">Strategic 4-lane expansion with automated paving technology.</p>
+                    <h4 style="font-size: 1.3rem; margin-bottom: 10px;">NHAI Corridor Expansion</h4>
+                    <p style="color: #666; font-size: 0.95rem;">Successfully completed 4-lane expansion with complex interchange structures.</p>
                 </div>
             </div>
-            <div class="project-card">
-                <img src="./Hercules App_files/photo-1705242431246-e99952d509a5">
+            <div class="p-card">
+                <img src="./Hercules App_files/photo-1705242431246-e99952d509a5" class="p-img">
                 <div style="padding: 25px;">
-                    <h4 style="margin: 0; font-size: 1.2rem;">Major River Bridge</h4>
-                    <p style="font-size: 0.9rem; color: #64748b; margin-top: 10px;">Concrete girder bridge connecting key industrial zones.</p>
+                    <h4 style="font-size: 1.3rem; margin-bottom: 10px;">River Bridge Construction</h4>
+                    <p style="color: #666; font-size: 0.95rem;">Modern RCC bridge providing all-weather connectivity over seasonal river basins.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <footer id="contact">
-        <h2 style="font-size: 2.5rem; margin-bottom: 20px;">Ready to Start?</h2>
-        <p style="opacity: 0.8; margin-bottom: 30px; max-width: 600px; margin-left: auto; margin-right: auto;">Partner with Atmagaurav Infra for your next infrastructure project. We bring quality, speed, and engineering excellence.</p>
-        <div style="font-size: 1.5rem; color: var(--primary); font-weight: 800;">contact@atmagauravinfra.com</div>
-        <p style="margin-top: 20px; opacity: 0.6; font-size: 0.9rem;">Maharashtra, India | © 2026 Atmagaurav Infra Pvt Ltd</p>
+    <section id="careers" style="background: #fff; text-align: center; border-top: 1px solid #eee;">
+        <span class="tag">Join Our Team</span>
+        <h2 style="font-size: 3rem; color: var(--d);">Building Careers</h2>
+        <p style="max-width: 700px; margin: 25px auto; font-size: 1.2rem; color: #555;">We are always looking for skilled civil engineers, project managers, and site supervisors. Send your resume to join Maharashtra's fastest-growing infrastructure firm.</p>
+        <a href="mailto:contact@atmagauravinfra.com" class="cta-btn">Apply Now</a>
+    </section>
+
+    <footer class="footer">
+        <h2 style="font-size: 2.5rem; margin-bottom: 30px;">Atmagaurav Infra Private Limited</h2>
+        <p style="opacity: 0.7; margin-bottom: 40px; font-size: 1.1rem;">Engineering excellence in road and bridge construction.</p>
+        <div style="font-size: 1.6rem; font-weight: 800; color: var(--p);">contact@atmagauravinfra.com</div>
+        <div style="margin-top: 60px; font-size: 0.85rem; opacity: 0.5;">
+            &copy; 2026 Atmagaurav Infra Private Limited | Maharashtra, India
+        </div>
     </footer>
 
     <script type="module" src="./Hercules App_files/index-qU8IMj_W.js.download"></script>
