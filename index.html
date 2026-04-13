@@ -1,41 +1,67 @@
 <!DOCTYPE html>
-<html lang="en" class="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atmagaurav Infra Pvt Ltd</title>
+    <title>Atmagaurav Infra Private Limited</title>
     
     <link rel="stylesheet" href="./Hercules App_files/index-D8hRZF6c.css">
     <link rel="stylesheet" href="./Hercules App_files/css2">
 
-    <script type="module" crossorigin src="./Hercules App_files/index-qU8IMj_W.js.download"></script>
-    <script type="module" src="./Hercules App_files/i.js.download"></script>
-
     <style>
-        /* Fallback styling in case JS takes time to load */
-        body { margin: 0; background-color: #0d1b3e; color: white; font-family: sans-serif; }
-        .loading-screen { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .logo-text { font-size: 2rem; font-weight: bold; letter-spacing: 2px; }
-        .accent { color: #e8730a; }
+        :root { --primary: #e8730a; --dark: #0d1b3e; }
+        body { font-family: sans-serif; margin: 0; background: #fafafa; color: #1a1a1a; }
+        header { background: var(--dark); color: white; padding: 1rem 5%; position: fixed; width: 100%; top: 0; z-index: 1000; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: white; }
+        .logo-box { background: var(--primary); width: 40px; height: 40px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        nav a { color: rgba(255,255,255,0.8); text-decoration: none; margin-left: 20px; font-size: 0.9rem; font-weight: 500; transition: 0.3s; }
+        nav a:hover { color: var(--primary); }
+        .hero { height: 90vh; background: linear-gradient(to right, rgba(13,27,62,0.9), rgba(13,27,62,0.5)), url('https://images.unsplash.com/photo-1764232317908-008813d734af?q=80&w=1920'); background-size: cover; background-position: center; display: flex; align-items: center; padding: 0 10%; margin-top: 60px; }
+        .hero-content { max-width: 700px; }
+        .badge { display: inline-block; padding: 4px 12px; background: rgba(232,115,10,0.2); border: 1px solid var(--primary); color: var(--primary); border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; }
+        h1 { font-size: 3.5rem; line-height: 1.1; margin-bottom: 20px; color: white; }
+        .hero p { font-size: 1.2rem; color: rgba(255,255,255,0.8); margin-bottom: 30px; line-height: 1.6; }
+        .btn { display: inline-block; padding: 12px 28px; background: var(--primary); color: white; text-decoration: none; border-radius: 6px; font-weight: bold; transition: 0.3s; }
+        .btn:hover { background: #cf6209; transform: translateY(-2px); }
+        .btn-outline { background: transparent; border: 1px solid rgba(255,255,255,0.3); margin-left: 15px; }
+        .btn-outline:hover { background: rgba(255,255,255,0.1); }
     </style>
 </head>
 <body>
-    <div id="root">
-        <div class="loading-screen">
-            <div class="logo-text">ATMAGAURAV <span class="accent">INFRA</span></div>
-            <p>Loading Infrastructure Excellence...</p>
-        </div>
-    </div>
 
-    <script>
-        // Safety check: If the page stays blank for more than 4 seconds, 
-        // it means the script path is likely blocked by GitHub's folder structure.
-        setTimeout(() => {
-            const root = document.getElementById('root');
-            if (root && root.innerHTML.includes('Loading')) {
-                console.warn("Script is taking too long. Check folder paths.");
-            }
-        }, 4000);
-    </script>
+    <header>
+        <a href="#" class="logo">
+            <div class="logo-box">A</div>
+            <div>
+                <div style="font-size: 1.1rem; font-weight: bold; letter-spacing: 1px;">ATMAGAURAV INFRA</div>
+                <div style="font-size: 0.6rem; color: var(--primary); letter-spacing: 2px; text-transform: uppercase;">Private Limited</div>
+            </div>
+        </a>
+        <nav>
+            <a href="#home">Home</a>
+            <a href="#about">About</a>
+            <a href="#services">Services</a>
+            <a href="#projects">Projects</a>
+            <a href="#contact">Contact</a>
+        </nav>
+    </header>
+
+    <section class="hero" id="home">
+        <div class="hero-content">
+            <div class="badge">Government Infrastructure Contractor</div>
+            <h1>Building India's <span style="color: var(--primary);">Infrastructure</span> of Tomorrow</h1>
+            <p>Atmagaurav Infra Private Limited delivers world-class highway construction, bridge engineering, and road safety solutions across Maharashtra and beyond.</p>
+            <div class="flex">
+                <a href="#services" class="btn">Our Services</a>
+                <a href="#projects" class="btn btn-outline">View Projects</a>
+            </div>
+        </div>
+    </section>
+
+    <div id="root"></div>
+
+    <script type="module" crossorigin src="./Hercules App_files/index-qU8IMj_W.js.download"></script>
+    <script type="module" src="./Hercules App_files/i.js.download"></script>
+
 </body>
 </html>
