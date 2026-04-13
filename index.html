@@ -11,30 +11,41 @@
     <style>
         :root { --primary: #e8730a; --dark: #0d1b3e; }
         body { font-family: sans-serif; margin: 0; background: #fafafa; color: #1a1a1a; }
-        header { background: var(--dark); color: white; padding: 1rem 5%; position: fixed; width: 100%; top: 0; z-index: 1000; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        
+        /* Navigation */
+        header { background: var(--dark); color: white; padding: 1rem 5%; position: fixed; width: 100%; top: 0; z-index: 1000; display: flex; justify-content: space-between; align-items: center; }
         .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: white; }
         .logo-box { background: var(--primary); width: 40px; height: 40px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        nav a { color: rgba(255,255,255,0.8); text-decoration: none; margin-left: 20px; font-size: 0.9rem; font-weight: 500; transition: 0.3s; }
+        nav a { color: rgba(255,255,255,0.8); text-decoration: none; margin-left: 20px; font-size: 0.9rem; font-weight: 500; }
         nav a:hover { color: var(--primary); }
-        .hero { height: 90vh; background: linear-gradient(to right, rgba(13,27,62,0.9), rgba(13,27,62,0.5)), url('https://images.unsplash.com/photo-1764232317908-008813d734af?q=80&w=1920'); background-size: cover; background-position: center; display: flex; align-items: center; padding: 0 10%; margin-top: 60px; }
-        .hero-content { max-width: 700px; }
-        .badge { display: inline-block; padding: 4px 12px; background: rgba(232,115,10,0.2); border: 1px solid var(--primary); color: var(--primary); border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; }
-        h1 { font-size: 3.5rem; line-height: 1.1; margin-bottom: 20px; color: white; }
-        .hero p { font-size: 1.2rem; color: rgba(255,255,255,0.8); margin-bottom: 30px; line-height: 1.6; }
-        .btn { display: inline-block; padding: 12px 28px; background: var(--primary); color: white; text-decoration: none; border-radius: 6px; font-weight: bold; transition: 0.3s; }
-        .btn:hover { background: #cf6209; transform: translateY(-2px); }
-        .btn-outline { background: transparent; border: 1px solid rgba(255,255,255,0.3); margin-left: 15px; }
-        .btn-outline:hover { background: rgba(255,255,255,0.1); }
+
+        /* Sections */
+        section { padding: 100px 10%; min-height: 80vh; border-bottom: 1px solid #eee; }
+        
+        /* Hero Section */
+        .hero { 
+            height: 95vh; 
+            background: linear-gradient(to right, rgba(13,27,62,0.9), rgba(13,27,62,0.4)), url('https://images.unsplash.com/photo-1764232317908-008813d734af?q=80&w=1920');
+            background-size: cover; background-position: center;
+            display: flex; align-items: center; color: white;
+        }
+        h1 { font-size: 3.5rem; margin-bottom: 20px; }
+        .btn { display: inline-block; padding: 12px 28px; background: var(--primary); color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; }
+
+        /* Projects Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 40px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .card h3 { color: var(--dark); margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
     <header>
-        <a href="#" class="logo">
+        <a href="#home" class="logo">
             <div class="logo-box">A</div>
             <div>
-                <div style="font-size: 1.1rem; font-weight: bold; letter-spacing: 1px;">ATMAGAURAV INFRA</div>
-                <div style="font-size: 0.6rem; color: var(--primary); letter-spacing: 2px; text-transform: uppercase;">Private Limited</div>
+                <div style="font-weight: bold;">ATMAGAURAV INFRA</div>
+                <div style="font-size: 0.6rem; color: var(--primary); text-transform: uppercase;">Private Limited</div>
             </div>
         </a>
         <nav>
@@ -47,21 +58,66 @@
     </header>
 
     <section class="hero" id="home">
-        <div class="hero-content">
-            <div class="badge">Government Infrastructure Contractor</div>
-            <h1>Building India's <span style="color: var(--primary);">Infrastructure</span> of Tomorrow</h1>
-            <p>Atmagaurav Infra Private Limited delivers world-class highway construction, bridge engineering, and road safety solutions across Maharashtra and beyond.</p>
-            <div class="flex">
-                <a href="#services" class="btn">Our Services</a>
-                <a href="#projects" class="btn btn-outline">View Projects</a>
+        <div>
+            <div style="color: var(--primary); font-weight: bold; margin-bottom: 10px;">GOVERNMENT CONTRACTOR</div>
+            <h1>Building India's <br>Infrastructure</h1>
+            <p style="max-width: 600px; font-size: 1.2rem;">Delivering world-class highway construction, bridge engineering, and road safety solutions.</p>
+            <a href="#projects" class="btn">Our Projects</a>
+        </div>
+    </section>
+
+    <section id="about">
+        <h2 style="font-size: 2.5rem; color: var(--dark);">About Us</h2>
+        <div style="width: 50px; height: 5px; background: var(--primary); margin: 20px 0;"></div>
+        <p style="font-size: 1.1rem; line-height: 1.8; max-width: 800px;">
+            Atmagaurav Infra Private Limited is a premier infrastructure development company. We specialize in high-speed road networks and complex bridge structures, ensuring quality and safety at every kilometer.
+        </p>
+    </section>
+
+    <section id="services" style="background: #f0f2f5;">
+        <h2 style="font-size: 2.5rem; color: var(--dark);">Our Services</h2>
+        <div class="grid">
+            <div class="card">
+                <h3>Highway Construction</h3>
+                <p>Full-scale road development from earthworks to final paving.</p>
+            </div>
+            <div class="card">
+                <h3>Bridge Engineering</h3>
+                <p>Designing and building robust river and flyover bridges.</p>
+            </div>
+            <div class="card">
+                <h3>Road Safety</h3>
+                <p>Installation of crash barriers, signage, and marking systems.</p>
             </div>
         </div>
     </section>
 
-    <div id="root"></div>
+    <section id="projects">
+        <h2 style="font-size: 2.5rem; color: var(--dark);">Major Projects</h2>
+        <div class="grid">
+            <div class="card">
+                <div style="height: 200px; background: #ddd; margin-bottom: 15px; border-radius: 4px; overflow: hidden;">
+                    <img src="https://images.unsplash.com/photo-1577228336271-d1edca526d64?q=80&w=400" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <h3>National Highway Expansion</h3>
+                <p>4-lane expansion project focusing on terrain management.</p>
+            </div>
+            <div class="card">
+                <div style="height: 200px; background: #ddd; margin-bottom: 15px; border-radius: 4px; overflow: hidden;">
+                    <img src="https://images.unsplash.com/photo-1705242431246-e99952d509a5?q=80&w=400" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <h3>River Bridge Construction</h3>
+                <p>Advanced structural engineering for all-weather connectivity.</p>
+            </div>
+        </div>
+    </section>
 
-    <script type="module" crossorigin src="./Hercules App_files/index-qU8IMj_W.js.download"></script>
-    <script type="module" src="./Hercules App_files/i.js.download"></script>
+    <section id="contact" style="background: var(--dark); color: white;">
+        <h2>Contact Us</h2>
+        <p>Email: contact@atmagauravinfra.com</p>
+        <p>Maharashtra, India</p>
+    </section>
 
+    <script type="module" src="./Hercules App_files/index-qU8IMj_W.js.download"></script>
 </body>
 </html>
