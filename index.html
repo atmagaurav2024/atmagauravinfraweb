@@ -1,22 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" class="light" style="color-scheme: light;">
+<html lang="en" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Atmagaurav Infra Pvt Ltd</title>
     
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
-
     <link rel="stylesheet" href="./Hercules App_files/index-D8hRZF6c.css">
     <link rel="stylesheet" href="./Hercules App_files/css2">
 
     <script>
       try {
-        let theme = localStorage.getItem("theme");
-        if (theme === "system" || !theme) {
-          let prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          theme = prefersDark ? "dark" : "light";
-        }
+        let theme = localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
         document.documentElement.classList.add(theme);
       } catch (e) {}
     </script>
@@ -25,6 +19,17 @@
     <script type="module" src="./Hercules App_files/i.js.download"></script>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div class="flex flex-col min-h-screen">
+            <header class="fixed top-0 left-0 right-0 z-50 bg-[#0d1b3e] h-20 flex items-center px-8">
+                <div class="font-serif font-bold text-white">ATMAGAURAV INFRA</div>
+            </header>
+            <main class="flex-1 pt-20 flex items-center justify-center">
+                <div class="text-center">
+                    <h1 class="text-4xl font-bold">Loading...</h1>
+                </div>
+            </main>
+        </div>
+    </div>
 </body>
 </html>
