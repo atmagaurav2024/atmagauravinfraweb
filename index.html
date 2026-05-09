@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>AIPL — Construction Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ═══════════ LOGIN / AUTH SCREENS ═══════════ -->
+
+<!-- SPLASH -->
+<div class="screen on" id="scr-splash">
+  <div class="splash-logo">&#127959;</div>
+  <div class="splash-name">AIPL</div>
+  <div class="splash-tag">Construction Management Platform</div>
+  <div id="splash-msg" style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:16px;font-weight:600;">Loading...</div>
+  <div class="splash-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+</div>
+
+<!-- LOGIN -->
+<div class="screen" id="scr-login">
+  <div class="login-bg">
+    <div class="login-logo">&#127959;</div>
+    <div class="login-brand">AIPL</div>
+    <div class="login-sub">Construction Management</div>
+  </div>
+  <div class="login-card">
+    <div class="login-title">Welcome back</div>
+    <div class="login-desc">Sign in to your project dashboard</div>
+    <label class="flbl">Mobile Number</label>
+    <div class="inp-wrap">
+      <input class="finp" type="tel" placeholder="+91 98765 43210" id="inp-phone" style="padding-right:44px;">
+      <span class="inp-ic">&#128241;</span>
+    </div>
+    <label class="flbl">Password</label>
+    <div class="inp-wrap">
+      <input class="finp" type="password" placeholder="Enter your password" id="inp-pass" style="padding-right:44px;">
+      <span class="inp-ic" onclick="togglePass()" id="pass-ic">&#128065;</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="toggleRemember()">
+        <div id="remember-box" style="width:20px;height:20px;border-radius:6px;border:2px solid var(--blue);background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:12px;color:white;">&#10003;</div>
+        <span style="font-size:13px;font-weight:600;">Remember me</span>
+      </div>
+      <span style="font-size:13px;color:var(--blue);font-weight:700;cursor:pointer;" onclick="toast('Password reset OTP sent!','success')">Forgot password?</span>
+    </div>
+    <button class="btn-primary" onclick="doLogin()">&#9889; Sign In to Dashboard</button>
+  </div>
+</div>
+
+<!-- REGISTRATION SCREEN -->
+<div class="screen" id="scr-register">
+  <div class="reg-top">
+    <button class="back-btn" onclick="showScreen('scr-login')">&#8592;</button>
+    <div class="reg-top-title">New Registration</div>
+    <div class="reg-top-sub">Fill your details to request access</div>
+  </div>
+  <div class="reg-body" id="reg-body"></div>
+  <div class="reg-foot" id="reg-foot"></div>
+</div>
+
+<!-- OTP VERIFY -->
+<div class="screen" id="scr-otp">
+  <div class="otp-top">
+    <button class="back-btn" onclick="showScreen('scr-login')">&#8592;</button>
+    <div class="otp-title">Verify your phone</div>
+    <div class="otp-sub" id="otp-sub">OTP sent to your mobile</div>
+  </div>
+  <div class="otp-body">
+    <div style="font-size:14px;font-weight:700;color:var(--text2);margin-top:8px;">Enter the 6-digit code</div>
+    <div class="otp-boxes" style="justify-content:center;">
+      <input class="otp-box" type="tel" maxlength="1" id="otp-1" oninput="otpNext(this,'otp-2')">
+      <input class="otp-box" type="tel" maxlength="1" id="otp-2" oninput="otpNext(this,'otp-3')">
+      <input class="otp-box" type="tel" maxlength="1" id="otp-3" oninput="otpNext(this,'otp-4')">
+      <input class="otp-box" type="tel" maxlength="1" id="otp-4" oninput="otpNext(this,'otp-5')">
+      <input class="otp-box" type="tel" maxlength="1" id="otp-5" oninput="otpNext(this,'otp-6')">
+      <input class="otp-box" type="tel" maxlength="1" id="otp-6" oninput="if(this.value)verifyOTP()">
+    </div>
+    <div class="resend-row">
+      <span id="resend-timer">Resend in 30s</span>
+      <a onclick="toast('New OTP sent!','success')">Resend OTP</a>
+    </div>
+    <button class="btn-primary" onclick="verifyOTP()">&#9989; Verify &amp; Submit Registration</button>
+    <div style="text-align:center;font-size:12px;color:var(--text3);">Demo OTP: <b style="font-family:'JetBrains Mono',monospace;color:var(--navy);">123456</b></div>
+  </div>
+</div>
+
+<!-- PENDING APPROVAL SCREEN -->
+<div class="screen" id="scr-pending">
+  <div class="pending-card">
+    <div class="pending-ic">&#9203;</div>
+    <div class="pending-title">Registration Submitted!</div>
+    <div class="pending-sub">Your application has been received and is pending review by the AIPL Admin. You will be notified once approved.</div>
+    <div class="pending-id" id="pending-ref-id">Ref: AIPL-REG-001</div>
+    <div class="pending-steps">
+      <div class="ps-item"><div class="ps-dot done">&#10003;</div><div class="ps-text">Registration form submitted</div></div>
+      <div class="ps-item"><div class="ps-dot done">&#10003;</div><div class="ps-text">Mobile number verified</div></div>
+      <div class="ps-item"><div class="ps-dot active">&#9680;</div><div class="ps-text">Pending Admin approval</div></div>
+      <div class="ps-item"><div class="ps-dot wait">&#128274;</div><div class="ps-text">Access granted &amp; credentials sent</div></div>
+    </div>
+    <button class="btn-primary" onclick="showScreen('scr-login')">&#8592; Back to Login</button>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<!-- ═══════════ MAIN APP ═══════════ -->
+
+<!-- DASHBOARD -->
+<div class="app-screen" id="app-dashboard">
+  <div class="dash-top">
+    <div class="dt-row">
+      <button class="ham-btn" onclick="openDrawer()"><div class="ham-line"></div><div class="ham-line"></div><div class="ham-line"></div></button>
+      <div style="flex:1;margin-left:12px;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-name" id="dash-name">—</div><div class="dt-role" id="dash-role">—</div></div>
+      <div class="dt-avatar" id="dash-avatar" style="cursor:pointer;font-size:14px;font-weight:900;" onclick="showProfile()">👤</div>
+    </div>
+    <div class="dt-kpis">
+      <div class="dk"><div class="dk-val" id="dk-projects">—</div><div class="dk-lbl">Projects</div></div>
+      <div class="dk"><div class="dk-val" id="dk-workers">—</div><div class="dk-lbl">Workers</div></div>
+      <div class="dk"><div class="dk-val" id="dk-progress">—</div><div class="dk-lbl">Progress</div></div>
+      <div class="dk"><div class="dk-val" style="color:#FF6B6B;" id="dk-issues">—</div><div class="dk-lbl">Issues</div></div>
+    </div>
+  </div>
+  <div class="dash-body">
+    <div id="pending-approvals-card" style="display:none;margin-bottom:14px;">
+      <div class="sec-title">&#9203; Pending Approvals</div>
+      <div style="background:white;border-radius:16px;border:1.5px solid #FFE082;overflow:hidden;cursor:pointer;" onclick="openPendingApprovals()">
+        <div style="background:linear-gradient(135deg,#F57F17,#FF8F00);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;">&#128101;</div>
+            <div><div style="font-size:15px;font-weight:800;color:white;">Employee Registrations</div><div style="font-size:12px;color:rgba(255,255,255,0.8);">Pending admin approval</div></div>
+          </div>
+          <div style="text-align:right;"><div style="font-size:28px;font-weight:900;color:white;" id="pending-count">0</div><div style="font-size:11px;color:rgba(255,255,255,0.8);">Pending</div></div>
+        </div>
+        <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:12px;color:#E65100;font-weight:700;">Tap to review &amp; approve</span>
+          <span style="font-size:18px;color:#E65100;">›</span>
+        </div>
+      </div>
+    </div>
+    <div class="sec-title">&#128276; Recent Activity</div>
+    <div id="dash-activity-feed"><div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">No recent activity</div></div>
+  </div>
+</div>
+
+<!-- ATTENDANCE PAGE -->
+<div class="app-screen" id="app-attendance">
+  <div class="topbar">
+    <div class="topbar-logo">AIPL<span>.</span></div>
+    <div class="topbar-sep">›</div>
+    <div class="topbar-title">Attendance Module</div>
+    <div class="topbar-project">—</div>
+    <div class="topbar-right">
+      <div class="topbar-date" id="topbar-date">—</div>
+      <button class="btn btn-outline" style="color:#FFF;border-color:rgba(255,255,255,0.2);" onclick="openLeaveModal()">+ Apply Leave</button>
+      <button class="btn btn-outline" style="color:#FFF;border-color:rgba(255,255,255,0.2);" onclick="showToast('Attendance exported to Excel','success')">📥 Export</button>
+    </div>
+  </div>
+  <div class="punch-hero">
+    <div class="punch-layout">
+      <div class="punch-clock">
+        <div class="clock-time" id="hero-clock">--:--:--</div>
+        <div class="clock-date" id="hero-date">—</div>
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:6px;align-items:center;">
+          <div class="gps-strip gps-checking" id="gps-strip" onclick="refreshGPS()">
+            <div class="gps-dot"></div>
+            <span id="gps-text">📍 Locating GPS...</span>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);font-family:'JetBrains Mono',monospace;" id="gps-coords-display">Acquiring location...</div>
+        </div>
+      </div>
+      <div class="punch-center">
+        <div class="punch-ring punch-ring-in" id="punch-ring" onclick="doPunch()">
+          <div class="pulse-ring"></div>
+          <div class="punch-ring-inner">
+            <div class="punch-icon" id="punch-icon">👉</div>
+            <div class="punch-label" id="punch-label">PUNCH IN</div>
+          </div>
+        </div>
+        <div class="punch-status" id="punch-status">Tap to record attendance</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;max-width:160px;line-height:1.4;">GPS radius: 300m from site</div>
+      </div>
+      <div class="punch-stats">
+        <div class="pstat"><div class="pstat-icon">✅</div><div><div class="pstat-label">Present Today</div><div class="pstat-value" id="stat-present">— / —</div></div></div>
+        <div class="pstat"><div class="pstat-icon">❌</div><div><div class="pstat-label">Absent Today</div><div class="pstat-value" style="color:#EF9A9A;" id="stat-absent">—</div></div></div>
+        <div class="pstat"><div class="pstat-icon">⏱️</div><div><div class="pstat-label">My Time Today</div><div class="pstat-value" id="stat-mytime">Not Punched</div></div></div>
+        <div class="pstat"><div class="pstat-icon">📅</div><div><div class="pstat-label">This Month %</div><div class="pstat-value" style="color:#A5D6A7;">—</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="main">
+    <div id="att-self-card" style="display:none;"></div>
+    <div class="punch-log-wrap" id="punch-log-wrap">
+      <div class="punch-log-title" id="punch-log-date">📋 Today's Punch Log</div>
+      <div id="punch-log-list"><div class="punch-log-empty">No punches recorded yet</div></div>
+    </div>
+    <div class="summary-row">
+      <div class="scard" style="--scard-color:#1565C0;"><span class="scard-icon">👷</span><div class="scard-val" id="scard-total">0</div><div class="scard-label">Total Employees</div><div class="scard-sub">Assigned to project</div></div>
+      <div class="scard" style="--scard-color:#2E7D32;"><span class="scard-icon">✅</span><div class="scard-val" id="card-present">0</div><div class="scard-label">Present Today</div><div class="scard-sub">Updated daily</div></div>
+      <div class="scard" style="--scard-color:#C62828;"><span class="scard-icon">❌</span><div class="scard-val" id="card-absent">0</div><div class="scard-label">Absent Today</div><div class="scard-sub">Updated daily</div></div>
+      <div class="scard" style="--scard-color:#F57F17;"><span class="scard-icon">⏰</span><div class="scard-val" id="scard-leave">—</div><div class="scard-label">On Leave</div><div class="scard-sub">Approved leaves</div></div>
+      <div class="scard" style="--scard-color:#E65100;"><span class="scard-icon">🔱</span><div class="scard-val" id="scard-ot">—</div><div class="scard-label">Total Overtime</div><div class="scard-sub">Today all employees</div></div>
+    </div>
+    <div class="tabs-row">
+      <div class="tab active" onclick="switchTab('daily',this)">📅 Daily Entry</div>
+      <div class="tab" onclick="switchTab('monthly',this)">📊 Monthly View</div>
+      <div class="tab" onclick="switchTab('leaves',this)">🏖️ Leave Management</div>
+      <div class="tab" onclick="switchTab('logs',this)">📋 Punch Logs</div>
+    </div>
+    <div id="tab-daily">
+      <div class="table-card">
+        <div class="table-card-header">
+          <div class="tch-title">📅 Today's Attendance</div>
+          <div class="tch-actions">
+            <input type="date" id="att-date-sel" class="btn btn-outline" style="font-size:12px;padding:6px 10px;cursor:pointer;" onchange="showToast('Date changed','info')">
+            <button class="btn btn-outline btn-sm" onclick="markAllPresent()">✅ Mark All Present</button>
+            <button class="btn btn-green btn-sm" onclick="showToast('Attendance saved successfully!','success')">💾 Save All</button>
+          </div>
+        </div>
+        <table class="att-table" id="att-table">
+          <thead><tr><th>#</th><th>Employee</th><th>Status</th><th>In Time</th><th>Out Time</th><th>Working Hrs</th><th>Overtime</th><th>GPS</th><th>Remarks</th></tr></thead>
+          <tbody id="att-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="tab-monthly" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;">
+        <div class="table-card">
+          <div class="table-card-header">
+            <div class="tch-title">📊 Monthly Summary</div>
+            <div class="tch-actions">
+              <select class="btn btn-outline" style="font-size:12px;cursor:pointer;" id="att-emp-sel"><option>All Employees</option></select>
+              <button class="btn btn-outline btn-sm" onclick="showToast('Monthly report downloaded','success')">📥 Report</button>
+            </div>
+          </div>
+          <div style="padding:16px;">
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:8px;">
+              <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">SUN</div>
+              <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">MON</div>
+              <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">TUE</div>
+              <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">WED</div>
+              <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">THU</div>
+              <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">FRI</div>
+              <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">SAT</div>
+            </div>
+            <div class="month-grid" id="month-cal"></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="table-card" style="padding:20px;">
+            <div class="tch-title" style="margin-bottom:14px;">📈 My Month Stats</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div style="padding:12px;background:var(--bg3);border-radius:8px;text-align:center;"><div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;color:var(--green);" id="my-days-present">—</div><div style="font-size:11px;color:var(--text2);">Days Present</div></div>
+              <div style="padding:12px;background:var(--bg3);border-radius:8px;text-align:center;"><div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;color:var(--red2);" id="my-days-absent">—</div><div style="font-size:11px;color:var(--text2);">Days Absent</div></div>
+              <div style="padding:12px;background:var(--bg3);border-radius:8px;text-align:center;"><div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;color:var(--amber);" id="my-leave-taken">—</div><div style="font-size:11px;color:var(--text2);">Leave Taken</div></div>
+              <div style="padding:12px;background:var(--bg3);border-radius:8px;text-align:center;"><div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;color:var(--blue);" id="my-ot-hours">—</div><div style="font-size:11px;color:var(--text2);">Overtime (hrs)</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="tab-leaves" style="display:none;">
+      <div class="leave-balances" id="leave-balances-wrap"></div>
+      <div class="table-card">
+        <div class="table-card-header">
+          <div class="tch-title">🏖️ Leave Applications</div>
+          <div class="tch-actions">
+            <button class="btn btn-navy" onclick="openLeaveModal()">+ Apply Leave</button>
+            <button class="btn btn-outline btn-sm" onclick="showToast('Leave report downloaded','success')">📥 Export</button>
+          </div>
+        </div>
+        <table class="leave-table"><thead><tr><th>Employee</th><th>Leave Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Applied On</th><th>Status</th><th>Action</th></tr></thead><tbody id="leave-tbody"></tbody></table>
+      </div>
+    </div>
+    <div id="tab-logs" style="display:none;">
+      <div class="table-card">
+        <div class="table-card-header">
+          <div class="tch-title">📋 Punch Logs — Today</div>
+          <div class="tch-actions">
+            <button class="btn btn-outline btn-sm" onclick="showToast('Regularization form opening...','info')">✏️ Regularize</button>
+            <button class="btn btn-outline btn-sm" onclick="showToast('Logs exported','success')">📥 Export</button>
+          </div>
+        </div>
+        <table class="att-table"><thead><tr><th>Employee</th><th>Punch Type</th><th>Time</th><th>GPS Location</th><th>Accuracy</th><th>Within Radius</th><th>Device</th><th>Selfie</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Punch Modal -->
+  <div class="overlay" id="punch-modal">
+    <div class="modal">
+      <div class="modal-hdr"><div class="modal-ttl" id="punch-modal-title">📍 Punch In</div><div class="modal-x" onclick="closePunchModal()">✕</div></div>
+      <div class="modal-body">
+        <div class="selfie-box" id="selfie-box" onclick="takeSelfie()"><span id="selfie-content">📷</span></div>
+        <div style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:16px;">Tap to take selfie (required)</div>
+        <div class="gps-box">
+          <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:12px;font-weight:700;color:var(--text2);">📍 GPS Location</div><div class="radius-visual"><div class="radius-dot" id="modal-radius-dot"></div></div></div>
+          <div class="gps-coords" id="modal-coords">18.5204°N, 73.8567°E</div>
+          <div class="gps-accuracy" id="modal-accuracy">Accuracy: ±5m · Within 300m radius ✅</div>
+        </div>
+        <div class="fgrp"><label class="flabel">Punch Time</label><input type="time" class="finput" id="punch-time-input" style="font-family:'JetBrains Mono',monospace;"></div>
+        <div class="fgrp"><label class="flabel">Remarks (Optional)</label><input type="text" class="finput" placeholder="e.g., Came late due to transport issue"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-outline" onclick="closePunchModal()">Cancel</button>
+        <button class="btn btn-green" id="confirm-punch-btn" onclick="confirmPunch()">✅ Confirm Punch In</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leave Modal -->
+  <div class="overlay" id="leave-modal">
+    <div class="modal">
+      <div class="modal-hdr"><div class="modal-ttl">🏖️ Apply for Leave</div><div class="modal-x" onclick="document.getElementById('leave-modal').classList.remove('open')">✕</div></div>
+      <div class="modal-body">
+        <div class="fgrp"><label class="flabel">Employee</label><select class="fselect" id="leave-emp-sel"><option value="">— Select Employee —</option></select></div>
+        <div class="frow">
+          <div class="fgrp"><label class="flabel">Leave Type</label><select class="fselect"><option>Casual Leave (CL)</option><option>Sick Leave (SL)</option><option>Earned Leave (EL)</option><option>Comp Off</option><option>Loss of Pay (LOP)</option></select></div>
+          <div class="fgrp"><label class="flabel">Duration</label><select class="fselect"><option>Full Day</option><option>Half Day (Morning)</option><option>Half Day (Afternoon)</option></select></div>
+        </div>
+        <div class="frow">
+          <div class="fgrp"><label class="flabel">From Date</label><input type="date" class="finput"></div>
+          <div class="fgrp"><label class="flabel">To Date</label><input type="date" class="finput"></div>
+        </div>
+        <div class="fgrp"><label class="flabel">Reason for Leave</label><textarea class="ftextarea" rows="3" placeholder="Describe the reason for leave..."></textarea></div>
+        <div class="fgrp"><label class="flabel">Handover to (During Absence)</label><select class="fselect" id="leave-handover-sel"><option value="">-- Select Employee --</option></select></div>
+        <div style="padding:12px;background:#E3F2FD;border-radius:8px;font-size:12px;color:var(--blue);border:1px solid #BBDEFB;" id="leave-balance-info">ℹ️ Select employee to see leave balance</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-outline" onclick="document.getElementById('leave-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn-navy" onclick="submitLeave()">📤 Submit for Approval</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast"><span id="t-icon"></span><span id="t-msg"></span></div>
+</div>
+
+<!-- MASTER REGISTRY PAGE -->
+<div class="app-screen" id="app-registry">
+  <div class="topbar">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div class="tb-info"><div class="tb-title">Master Registry</div><div class="tb-sub">Vendors &bull; Materials &bull; Subcontractors</div></div>
+    <button class="tb-btn" id="export-btn" onclick="toast('Exporting registry...','info')">&#128229;</button>
+    <button class="tb-btn" id="fab-top" onclick="openAdd()">&#43;</button>
+  </div>
+  <nav class="bot-nav">
+    <div class="ni on" id="nav-vendors" onclick="switchPage('vendors')"><div class="ni-ic">&#127968;</div><div class="ni-lb">Vendors</div></div>
+    <div class="ni" id="nav-materials" onclick="switchPage('materials')"><div class="ni-ic">&#129521;</div><div class="ni-lb">Materials</div></div>
+    <div class="ni" id="nav-subcontractors" onclick="switchPage('subcontractors')"><div class="ni-ic">&#128296;</div><div class="ni-lb">Subcontractors</div></div>
+    <div class="ni" id="nav-labour" onclick="switchPage('labour')"><div class="ni-ic">&#128373;</div><div class="ni-lb">Labour</div></div>
+    <div class="ni" id="nav-settings" onclick="switchPage('settings')"><div class="ni-ic">&#9881;&#65039;</div><div class="ni-lb">Categories</div></div>
+  </nav>
+  <div class="scroll">
+    <div class="page on" id="pg-vendors">
+      <div class="stats-row">
+        <div class="stat-mini"><div class="stat-mini-val" style="color:var(--teal)" id="stat-v-total">0</div><div class="stat-mini-lbl">Total Vendors</div></div>
+        <div class="stat-mini"><div class="stat-mini-val" style="color:var(--green)" id="stat-v-active">0</div><div class="stat-mini-lbl">Categories</div></div>
+        <div class="stat-mini"><div class="stat-mini-val" style="color:var(--indigo);font-size:13px;" id="stat-v-cats">0</div><div class="stat-mini-lbl">Total Order Value</div></div>
+      </div>
+      <div class="search-bar"><span style="font-size:16px;color:var(--text3)">&#128269;</span><input type="text" placeholder="Search vendors by name, category, GST..." oninput="searchList('vendors',this.value)"></div>
+      <div class="pill-row" id="vendor-cat-pills"></div>
+      <div id="vendor-list"></div>
+    </div>
+    <div class="page" id="pg-materials">
+      <div class="stats-row">
+        <div class="stat-mini"><div class="stat-mini-val" style="color:var(--green)" id="stat-m-total">0</div><div class="stat-mini-lbl">Total Items</div></div>
+        <div class="stat-mini"><div class="stat-mini-val" style="color:var(--blue)" id="stat-m-cats">0</div><div class="stat-mini-lbl">Categories</div></div>
+        <div class="stat-mini"><div class="stat-mini-val" style="color:var(--indigo)" id="stat-m-vendors">0</div><div class="stat-mini-lbl">Linked Vendors</div></div>
+      </div>
+      <div class="search-bar"><span style="font-size:16px;color:var(--text3)">&#128269;</span><input type="text" placeholder="Search materials by name, code, category..." oninput="searchList('materials',this.value)"></div>
+      <div class="pill-row" id="mat-cat-pills"></div>
+      <div id="material-list"></div>
+    </div>
+    <div class="page" id="pg-subcontractors">
+      <div class="stats-row">
+        <div class="stat-mini"><div class="stat-mini-val" style="color:var(--purple)" id="stat-sc-total">0</div><div class="stat-mini-lbl">Registered</div></div>
+        <div class="stat-mini"><div class="stat-mini-val" style="color:var(--green)" id="stat-sc-pbg">0</div><div class="stat-mini-lbl">PBG Available</div></div>
+      </div>
+      <div class="search-bar"><span style="font-size:16px;color:var(--text3)">&#128269;</span><input type="text" placeholder="Search subcontractors by name, trade..." oninput="searchList('sc',this.value)"></div>
+      <div class="pill-row" id="sc-cat-pills"></div>
+      <div id="sc-list"></div>
+    </div>
+    <div class="page" id="pg-labour">
+      <div class="stats-row">
+        <div class="stat-mini"><div class="stat-mini-val" style="color:#E65100" id="stat-lab-total">0</div><div class="stat-mini-lbl">Total Labour</div></div>
+        <div class="stat-mini"><div class="stat-mini-val" style="color:#2E7D32" id="stat-lab-active">0</div><div class="stat-mini-lbl">Active</div></div>
+        <div class="stat-mini"><div class="stat-mini-val" style="color:#1565C0" id="stat-lab-skilled">0</div><div class="stat-mini-lbl">Skilled</div></div>
+      </div>
+      <div class="search-bar"><span style="font-size:16px;color:var(--text3)">&#128269;</span><input type="text" placeholder="Search by name, skill, ID..." oninput="searchList('labour',this.value)"></div>
+      <div class="pill-row" id="lab-cat-pills"></div>
+      <div id="labour-list"></div>
+    </div>
+    <div class="page" id="pg-settings">
+      <div style="background:linear-gradient(135deg,#1A237E,#283593,#303F9F);border-radius:20px;padding:16px;margin-bottom:14px;">
+        <div style="font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">System Configuration</div>
+        <div style="font-size:20px;font-weight:900;color:white;margin-bottom:2px;">&#9881;&#65039; Category Manager</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.45);">Manage categories for Vendors, Materials &bull; Changes apply app-wide</div>
+      </div>
+      <div style="background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div><div style="font-size:14px;font-weight:800;">&#127968; Vendor Categories</div><div style="font-size:11px;color:var(--text3);margin-top:2px;">Used in vendor registration &amp; filter pills</div></div><button class="btn btn-teal btn-sm" onclick="addCategory('vendor')">+ Add</button></div>
+        <div id="vendor-cats"></div>
+      </div>
+      <div style="background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div><div style="font-size:14px;font-weight:800;">&#129521; Material Categories</div><div style="font-size:11px;color:var(--text3);margin-top:2px;">Used in material registration &amp; BOQ grouping</div></div><button class="btn btn-green btn-sm" onclick="addCategory('material')">+ Add</button></div>
+        <div id="material-cats"></div>
+      </div>
+      <div style="background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div><div style="font-size:14px;font-weight:800;">&#128296; Subcontractor Trades</div></div><button class="btn btn-purple btn-sm" onclick="addCategory('sc')">+ Add</button></div>
+        <div id="sc-cats"></div>
+      </div>
+      <div style="background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div><div style="font-size:14px;font-weight:800;">&#128207; Units of Measure</div></div><button class="btn btn-navy btn-sm" onclick="addCategory('uom')">+ Add</button></div>
+        <div id="uom-cats"></div>
+      </div>
+      <div style="background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div><div style="font-size:14px;font-weight:800;">&#128101; User Roles</div></div><button class="btn btn-rose btn-sm" onclick="addCategory('role')">+ Add</button></div>
+        <div id="role-cats"></div>
+      </div>
+      <div style="background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div><div style="font-size:14px;font-weight:800;">&#127968; Departments</div></div><button class="btn btn-indigo btn-sm" onclick="addCategory('dept')">+ Add</button></div>
+        <div id="dept-cats"></div>
+      </div>
+      <div style="background:white;border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;"><div><div style="font-size:14px;font-weight:800;">&#128373; Labour Types / Skills</div></div><button class="btn btn-indigo btn-sm" onclick="addCategory('labour')">+ Add</button></div>
+        <div id="labour-cats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Sheet -->
+  <div class="sh-overlay" id="ov-det" onclick="closeSheet('ov-det','sh-det')"></div>
+  <div class="sheet" id="sh-det">
+    <div class="sh-handle"></div>
+    <div class="sh-head"><div class="sh-title" id="det-title">Details</div><span class="sh-close" onclick="closeSheet('ov-det','sh-det')">&#10005;</span></div>
+    <div class="sh-body" id="det-body"></div>
+    <div class="sh-foot" id="det-foot"></div>
+  </div>
+
+  <!-- Add Sheet -->
+  <div class="sh-overlay" id="ov-add" onclick="closeSheet('ov-add','sh-add')"></div>
+  <div class="sheet" id="sh-add">
+    <div class="sh-handle"></div>
+    <div class="sh-head"><div class="sh-title" id="add-title">Add New</div><span class="sh-close" onclick="closeSheet('ov-add','sh-add')">&#10005;</span></div>
+    <div class="sh-body" id="add-body"></div>
+    <div class="sh-foot" id="add-foot"></div>
+  </div>
+  <div class="toast-wrap" id="toast-wrap"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="app-nav" id="app-nav" style="display:none;">
+  <button class="an-item on" id="an-home" onclick="showApp('dashboard')"><div class="an-ic">&#127968;</div><div class="an-lb">Home</div></button>
+  <button class="an-item" id="an-attendance" onclick="showApp('attendance')"><div class="an-ic">&#128101;</div><div class="an-lb">Attendance</div></button>
+  <button class="an-item" id="an-registry" onclick="showApp('registry')"><div class="an-ic">&#128218;</div><div class="an-lb">Registry</div></button>
+  <button class="an-item" id="an-profile" onclick="showProfile()"><div class="an-ic">&#128100;</div><div class="an-lb">Profile</div></button>
+</nav>
+
+<!-- EMPLOYEE MANAGEMENT MODULE -->
+<div class="app-screen" id="app-employees">
+  <div style="background:#1B5E20;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128101; Employee Management</div>
+    <button class="tb-btn" id="emp-refresh-btn" title="Refresh" onclick="EMP_LIST=[];EMP_PAY=[];EMP_ORDERS=[];SALARY_RECORDS=[];initEmpMgmt();" style="font-size:16px;">&#8635;</button>
+    <button class="tb-btn" id="emp-add-btn" onclick="empOpenForm(null)" style="font-size:20px;">&#43;</button>
+  </div>
+  <div id="emp-tab-bar" style="display:flex;overflow-x:auto;background:#1B5E20;padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;">
+    <button onclick="empTab('active',this)"    id="emp-t-active"    style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:rgba(255,255,255,.2);color:white;">&#9989; Active</button>
+    <button onclick="empTab('pending',this)"   id="emp-t-pending"   style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#9203; Pending</button>
+    <button onclick="empTab('pay',this)"       id="emp-t-pay"       style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128178; Pay Fixation</button>
+    <button onclick="empTab('salary',this)"    id="emp-t-salary"    style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128200; Monthly Salary</button>
+    <button onclick="empTab('increment',this)" id="emp-t-increment" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128640; Increment</button>
+    <button onclick="empTab('transfer',this)"  id="emp-t-transfer"  style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128260; Transfer</button>
+    <button onclick="empTab('annual',this)"    id="emp-t-annual"    style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128200; Annual</button>
+    <button onclick="empTab('downloads',this)" id="emp-t-downloads" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128196; Downloads</button>
+    <button onclick="empTab('resigned',this)"  id="emp-t-resigned"  style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128683; Resigned</button>
+  </div>
+  <div id="emp-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 90px;background:#F0F4F8;"></div>
+</div>
+
+<!-- Employee Form Sheet -->
+<div class="sh-overlay" id="ov-emp" onclick="closeEmpSheet()"></div>
+<div class="sheet" id="sh-emp">
+  <div class="sh-handle"></div>
+  <div class="sh-head"><div class="sh-title" id="emp-sheet-title">New Employee</div><span class="sh-close" onclick="closeEmpSheet()">&#10005;</span></div>
+  <div class="sh-body" id="emp-sheet-body"></div>
+  <div class="sh-foot" id="emp-sheet-foot"></div>
+</div>
+
+<!-- Pay Fixation Sheet -->
+<div class="sh-overlay" id="ov-pay" onclick="closeSheet('ov-pay','sh-pay')"></div>
+<div class="sheet" id="sh-pay">
+  <div class="sh-handle"></div>
+  <div class="sh-head"><div class="sh-title" id="pay-sheet-title">Pay Fixation</div><span class="sh-close" onclick="closeSheet('ov-pay','sh-pay')">&#10005;</span></div>
+  <div class="sh-body" id="pay-sheet-body"></div>
+  <div class="sh-foot" id="pay-sheet-foot"></div>
+</div>
+
+<!-- PROJECT MODULE -->
+<div class="app-screen" id="app-projects">
+  <div style="background:#1B5E20;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127959; Project Module</div>
+    <button class="tb-btn" id="proj-mod-add-btn" onclick="projModAdd()" style="font-size:20px;">&#43;</button>
+  </div>
+  <div id="proj-mod-sel-row" style="background:#1B5E20;padding:0 14px 10px;flex-shrink:0;display:none;">
+    <select id="proj-mod-sel" class="fsel" style="width:100%;background:rgba(255,255,255,.15);color:white;border-color:rgba(255,255,255,.3);font-weight:700;-webkit-text-fill-color:white;" onchange="projModSelChange()">
+      <option value="">— Select Project —</option>
+    </select>
+  </div>
+  <div style="display:flex;overflow-x:auto;background:#155724;padding:6px 14px 8px;flex-shrink:0;scrollbar-width:none;gap:4px;">
+    <button onclick="projModTab('projects',this)" id="pmt-projects" style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:rgba(255,255,255,.2);color:white;">&#127959; Projects</button>
+    <button onclick="projModTab('boq',this)"       id="pmt-boq"       style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128203; BOQ</button>
+    <button onclick="projModTab('jm',this)"        id="pmt-jm"        style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128208; JM</button>
+    <button onclick="projModTab('planning',this)"  id="pmt-planning"  style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128230; Planning</button>
+    <button onclick="projModTab('execution',this)" id="pmt-execution"  style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128221; Work Allotment</button>
+    <button onclick="projModTab('allotted',this)"  id="pmt-allotted"  style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128230; Allotted Work</button>
+    <button onclick="projModTab('daily',this)"     id="pmt-daily"     style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128197; Daily Progress</button>
+    <button onclick="projModTab('bills',this)"     id="pmt-bills"     style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128203; Bills &amp; Payments</button>
+    <button onclick="projModTab('orders',this)"    id="pmt-orders"    style="padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128196; Orders</button>
+  </div>
+  <div id="proj-mod-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 90px;"></div>
+  <div class="sh-overlay" id="ov-proj"  onclick="closeProjSheet()"></div>
+  <div class="sheet" id="sh-proj"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="proj-sheet-title">New Project</div><span class="sh-close" onclick="closeProjSheet()">&#10005;</span></div><div class="sh-body" id="proj-sheet-body"></div><div class="sh-foot" id="proj-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-boq" onclick="closeBOQSheet()"></div>
+  <div class="sheet" id="sh-boq"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="boq-sheet-title">New BOQ Item</div><span class="sh-close" onclick="closeBOQSheet()">&#10005;</span></div><div class="sh-body" id="boq-sheet-body"></div><div class="sh-foot" id="boq-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-jm" onclick="closeSheet('ov-jm','sh-jm')"></div>
+  <div class="sheet" id="sh-jm"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="jm-sheet-title">Add JM</div><span class="sh-close" onclick="closeSheet('ov-jm','sh-jm')">&#10005;</span></div><div class="sh-body" id="jm-sheet-body"></div><div class="sh-foot" id="jm-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-plan" onclick="closeSheet('ov-plan','sh-plan')"></div>
+  <div class="sheet" id="sh-plan"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="plan-sheet-title">Add Plan</div><span class="sh-close" onclick="closeSheet('ov-plan','sh-plan')">&#10005;</span></div><div class="sh-body" id="plan-sheet-body"></div><div class="sh-foot" id="plan-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-exec" onclick="closeSheet('ov-exec','sh-exec')"></div>
+  <div class="sheet" id="sh-exec"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="exec-sheet-title">Work Allotment</div><span class="sh-close" onclick="closeSheet('ov-exec','sh-exec')">&#10005;</span></div><div class="sh-body" id="exec-sheet-body"></div><div class="sh-foot" id="exec-sheet-foot"></div></div>
+</div>
+
+<!-- PETTY CASH -->
+<div class="app-screen" id="app-petty-cash" style="background:#EFEBE4;overflow:hidden;">
+  <div style="display:flex;align-items:center;padding:18px 18px 10px;background:#EFEBE4;flex-shrink:0;">
+    <span onclick="showApp('dashboard')" style="font-size:28px;color:#1E2547;cursor:pointer;margin-right:10px;line-height:1;">&#8249;</span>
+    <div style="flex:1;"><div style="font-size:20px;font-weight:900;color:#1E2547;">Site Cash Manager</div><div style="font-size:12px;color:#6B7280;font-weight:600;">Atmagaurav Infra Pvt Ltd</div></div>
+  </div>
+  <div id="pc-site-tabs" style="display:flex;gap:10px;padding:2px 18px 14px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;-webkit-overflow-scrolling:touch;"></div>
+  <div id="pc-main" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:88px;"></div>
+  <button onclick="pcOpenExpense()" id="pc-fab" style="position:fixed;bottom:28px;left:50%;transform:translateX(-50%);width:62px;height:62px;background:#E07820;border-radius:50%;border:4px solid #fff;font-size:34px;color:#fff;cursor:pointer;box-shadow:0 6px 28px rgba(224,120,32,.7);z-index:400;line-height:1;display:none;">+</button>
+</div>
+<div class="sh-overlay" id="ov-pc" onclick="closeSheet('ov-pc','sh-pc')"></div>
+<div class="sheet" id="sh-pc"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="pc-sheet-title">Entry</div><span class="sh-close" onclick="closeSheet('ov-pc','sh-pc')">&#10005;</span></div><div class="sh-body" id="pc-sheet-body" style="padding:0 16px 16px;"></div><div class="sh-foot" id="pc-sheet-foot"></div></div>
+
+<!-- ACCOUNTS -->
+<div class="app-screen" id="app-accounts">
+  <div style="background:#1A237E;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128176; Accounts</div>
+    <button class="tb-btn" id="acc-add-btn" onclick="accQuickAdd()" style="font-size:20px;">&#43;</button>
+  </div>
+  <div id="acc-tab-bar" style="display:flex;overflow-x:auto;background:#1A237E;padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;"></div>
+  <div id="acc-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"></div>
+</div>
+<div class="sh-overlay" id="ov-acc" onclick="closeAccSheet()"></div>
+<div class="sheet" id="sh-acc"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="acc-sheet-title">New Voucher</div><span class="sh-close" onclick="closeAccSheet()">&#10005;</span></div><div class="sh-body" id="acc-sheet-body"></div><div class="sh-foot" id="acc-sheet-foot"></div></div>
+
+<!-- ACCESS CONTROL -->
+<div class="app-screen" id="app-access">
+  <div style="background:#4A148C;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128274; Access Control</div>
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 12px;">
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button id="ac-tab-emp"  onclick="acSwitchTab('emp')"  style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:none;font-family:'Nunito',sans-serif;background:var(--navy);color:white;">By Employee</button>
+      <button id="ac-tab-role" onclick="acSwitchTab('role')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);font-family:'Nunito',sans-serif;background:white;color:var(--text2);">By Role</button>
+    </div>
+    <div id="ac-selector" style="margin-bottom:14px;"><select id="ac-emp-sel" class="fsel" style="width:100%;" onchange="acLoadPerms()"><option value="">&#9203; Loading employees...</option></select></div>
+    <div id="ac-data-access" style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">
+      <div style="padding:10px 14px;background:#F8FAFC;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;"><span style="font-size:16px;">&#128202;</span><span style="font-size:13px;font-weight:800;color:var(--navy);">Employee Data Visibility</span></div>
+      <div style="padding:10px 14px;">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Which employees can this person see?</div>
+        <div style="display:flex;flex-direction:column;gap:6px;" id="ac-scope-options">
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1.5px solid var(--border);"><input type="radio" name="ac-emp-scope" value="all" style="width:16px;height:16px;accent-color:#4A148C;"><div><div style="font-size:12px;font-weight:800;">All Employees</div><div style="font-size:10px;color:var(--text3);">Can see every employee's data</div></div></label>
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1.5px solid var(--border);"><input type="radio" name="ac-emp-scope" value="department" style="width:16px;height:16px;accent-color:#4A148C;"><div><div style="font-size:12px;font-weight:800;">Department Only</div><div style="font-size:10px;color:var(--text3);">Can see only employees in same department</div></div></label>
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1.5px solid var(--border);"><input type="radio" name="ac-emp-scope" value="self" style="width:16px;height:16px;accent-color:#4A148C;"><div><div style="font-size:12px;font-weight:800;">Self Only</div><div style="font-size:10px;color:var(--text3);">Can only see their own record</div></div></label>
+        </div>
+      </div>
+    </div>
+    <div id="ac-modules-list"><div style="text-align:center;padding:40px;color:var(--text3);">Select employee or role</div></div>
+  </div>
+  <div style="padding:12px 14px;background:white;border-top:1px solid var(--border);flex-shrink:0;padding-bottom:calc(12px + 60px);">
+    <button onclick="acSavePermissions()" style="width:100%;padding:14px;background:#4A148C;color:white;border:none;border-radius:12px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;">&#128190; Save Permissions</button>
+  </div>
+</div>
+
+<!-- COMPANY DETAILS -->
+<div class="app-screen" id="app-company">
+  <div style="background:#1565C0;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127970; Company Details</div>
+    <button onclick="companySave()" style="background:rgba(255,255,255,.2);border:none;color:white;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128190; Save</button>
+  </div>
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;" id="company-body"></div>
+</div>
+
+<!-- SHARED SHEETS -->
+<div class="sh-overlay" id="ov-pending" onclick="closeSheet('ov-pending','sh-pending')"></div>
+<div class="sheet" id="sh-pending">
+  <div class="sh-head"><div class="sh-title">&#9203; Pending Approvals</div><span class="sh-close" onclick="closeSheet('ov-pending','sh-pending')">&#10005;</span></div>
+  <div class="sh-body" id="pending-list-body"></div>
+</div>
+
+<div class="sh-overlay" id="ov-approval-det" onclick="closeSheet('ov-approval-det','sh-approval-det')"></div>
+<div class="sheet" id="sh-approval-det">
+  <div class="sh-head"><div class="sh-title">&#128101; Employee Profile</div><span class="sh-close" onclick="closeSheet('ov-approval-det','sh-approval-det')">&#10005;</span></div>
+  <div class="sh-body" id="approval-det-body"></div>
+  <div class="sh-foot" id="approval-det-foot"></div>
+</div>
+
+<div class="sh-overlay" id="ov-profile" onclick="closeSheet('ov-profile','sh-profile')"></div>
+<div class="sheet" id="sh-profile">
+  <div class="sh-head"><div class="sh-title">&#128100; My Profile</div><span class="sh-close" onclick="closeSheet('ov-profile','sh-profile')">&#10005;</span></div>
+  <div class="sh-body" id="profile-body"></div>
+  <div class="sh-foot" id="profile-foot"></div>
+</div>
+
+<!-- HAMBURGER DRAWER -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="app-drawer">
+  <div class="drawer-head">
+    <div class="drawer-avatar" id="drawer-avatar">A</div>
+    <div class="drawer-name" id="drawer-name">—</div>
+    <div class="drawer-role" id="drawer-role">—</div>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-section" style="color:#1565C0;">&#127968; Dashboard</div>
+    <div class="drawer-item" onclick="showApp('dashboard');closeDrawer();"><div class="drawer-item-ic" style="background:#E3F2FD;">&#127968;</div><div class="drawer-item-info"><div class="drawer-item-title">Dashboard</div><div class="drawer-item-sub">Overview &amp; KPIs</div></div></div>
+    <div class="drawer-section" style="color:#2E7D32;">&#127959; Project Module</div>
+    <div class="drawer-item" onclick="showApp('projects');closeDrawer();"><div class="drawer-item-ic" style="background:#E8F5E9;">&#127959;</div><div class="drawer-item-info"><div class="drawer-item-title">Project Module</div><div class="drawer-item-sub">Projects, BOQ, JM, Planning</div></div></div>
+    <div class="drawer-section" style="color:#E65100;">&#128101; Employee</div>
+    <div class="drawer-item" onclick="showApp('employees');closeDrawer();"><div class="drawer-item-ic" style="background:#E8F5E9;">&#128101;</div><div class="drawer-item-info"><div class="drawer-item-title">Employee Management</div><div class="drawer-item-sub">Registration, Pay, HR</div></div></div>
+    <div class="drawer-item" onclick="showApp('attendance');closeDrawer();"><div class="drawer-item-ic" style="background:#E3F2FD;">&#9200;</div><div class="drawer-item-info"><div class="drawer-item-title">Attendance</div><div class="drawer-item-sub">Punch in/out &amp; records</div></div></div>
+    <div class="drawer-section" style="color:#880E4F;">&#128176; Accounting</div>
+    <div class="drawer-item" onclick="showApp('accounts');closeDrawer();"><div class="drawer-item-ic" style="background:#E8EAF6;">&#128176;</div><div class="drawer-item-info"><div class="drawer-item-title">Accounts</div><div class="drawer-item-sub">Vouchers, Ledger, GST, TDS</div></div></div>
+    <div class="drawer-item" onclick="showApp('petty-cash');closeDrawer();"><div class="drawer-item-ic" style="background:#FFF8E1;">&#128181;</div><div class="drawer-item-info"><div class="drawer-item-title">Petty Cash</div><div class="drawer-item-sub">Cash in hand &amp; site expenses</div></div></div>
+    <div class="drawer-section" style="color:#4A148C;">&#9881;&#65039; Settings</div>
+    <div class="drawer-item" onclick="showApp('access');closeDrawer();"><div class="drawer-item-ic" style="background:#EDE7F6;">&#128274;</div><div class="drawer-item-info"><div class="drawer-item-title">Access Control</div><div class="drawer-item-sub">Module permissions by role</div></div></div>
+    <div class="drawer-item" onclick="showApp('company');closeDrawer();"><div class="drawer-item-ic" style="background:#E3F2FD;">&#127963;</div><div class="drawer-item-info"><div class="drawer-item-title">Company Details</div><div class="drawer-item-sub">Registration, GST, documents</div></div></div>
+    <div class="drawer-item" onclick="showApp('registry');closeDrawer();"><div class="drawer-item-ic" style="background:#F3E5F5;">&#128218;</div><div class="drawer-item-info"><div class="drawer-item-title">Master Registry</div><div class="drawer-item-sub">Vendors, Materials, Subcontractors</div></div></div>
+    <div class="drawer-section" style="color:#94A3B8;">&#128312; Admin</div>
+    <div class="drawer-item" id="drawer-pending-item" style="display:none;" onclick="openPendingApprovals();closeDrawer();"><div class="drawer-item-ic" style="background:#FFF3E0;">⏳</div><div class="drawer-item-info"><div class="drawer-item-title">Pending Approvals</div><div class="drawer-item-sub">Review employee registrations</div></div><div class="drawer-item-badge" id="drawer-pending-badge">0</div></div>
+  </div>
+  <div class="drawer-foot">
+    <button style="width:100%;padding:12px;background:#FEE2E2;border:none;border-radius:12px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;color:#C62828;cursor:pointer;" onclick="doLogout();closeDrawer();">🚪 Sign Out</button>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<!-- ═══════════ SCRIPTS — load order matters ═══════════ -->
+<script src="js/core.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/registry.js"></script>
+<script src="js/attendance.js"></script>
+<script src="js/projects.js"></script>
+<script src="js/finance.js"></script>
+<script src="js/employee.js"></script>
+<script src="js/settings.js"></script>
+
+</body>
+</html>
