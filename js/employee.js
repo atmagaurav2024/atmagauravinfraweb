@@ -101,20 +101,55 @@ function empListHTML(list, mode){
 }
 
 function empPayHTML(){
+  if(!EMP_PAY.length){
+    sbFetch('employee_pay',{select:'*',order:'created_at.desc'}).then(function(data){
+      EMP_PAY=Array.isArray(data)?data:[];
+      var cont=document.getElementById('emp-content');
+      if(cont&&EMP_TAB==='pay')cont.innerHTML=empPayHTML();
+    }).catch(function(){});
+    return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
+      '<div style="font-size:15px;font-weight:800;">Pay Structures</div>'+
+      '<button class="btn btn-navy" onclick="empOpenPay()">+ Pay Structure</button></div>'+
+      '<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading pay structures...</div>';
+  }
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
     '<div style="font-size:15px;font-weight:800;">Pay Structures <span style="font-size:13px;color:var(--text3);">('+EMP_PAY.length+')</span></div>'+
-    '<button class="btn btn-navy" onclick="empOpenPay()">+ Pay Structure</button></div>'+
-  (!EMP_PAY.length?'<div style="text-align:center;padding:40px;color:var(--text3);">No pay structures defined</div>':
-  '<div class="table-card"><table class="att-table"><thead><tr><th>Employee</th><th>Basic</th><th>HRA</th><th>DA</th><th>Gross</th><th>Actions</th></tr></thead><tbody>'+
+    '<div style="display:flex;gap:6px;"><button class="btn btn-sm btn-outline" onclick="empReloadPay()">🔄 Refresh</button>'+
+    '<button class="btn btn-navy" onclick="empOpenPay()">+ Pay Structure</button></div></div>'+
+  '<div class="table-card"><table class="att-table"><thead><tr>'+
+    '<th>Employee</th><th>Emp ID</th><th>Basic</th><th>HRA</th><th>DA</th><th>Gross</th><th>Net</th><th>Actions</th>'+
+  '</tr></thead><tbody>'+
     EMP_PAY.map(function(p){
-      var emp=EMP_LIST.find(function(e){return e.id===p.emp_id||e.empId===p.emp_id;});
-      return '<tr><td><strong>'+(emp?emp.name:p.emp_id||'—')+'</strong><br><small style="color:var(--text3);">'+(emp?emp.empId||'—':'')+'</small></td>'+
-        '<td>'+fmtINR(p.basic||0)+'</td><td>'+fmtINR(p.hra||0)+'</td><td>'+fmtINR(p.da||0)+'</td>'+
-        '<td><strong>'+fmtINR((p.basic||0)+(p.hra||0)+(p.da||0)+(p.conveyance||0)+(p.medical||0)+(p.special||0))+'</strong></td>'+
-        '<td><button class="btn btn-sm btn-navy" onclick="empOpenPay(\''+p.id+'\')">✏</button></td></tr>';
-    }).join('')+'</tbody></table></div>');
+      var emp=EMP_LIST.find(function(e){return e.id===p.emp_id||e.empId===p.emp_id||e.employee_code===p.emp_id;});
+      var earnings=[];try{earnings=JSON.parse(p.earnings||'[]');}catch(ex){}
+      var deductions=[];try{deductions=JSON.parse(p.deductions||'[]');}catch(ex){}
+      var gross=earnings.length?earnings.reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0):
+                (parseFloat(p.gross)||0)||((p.basic||0)+(p.hra||0)+(p.da||0)+(p.conveyance||0)+(p.medical||0)+(p.special||0));
+      var ded=deductions.length?deductions.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0):0;
+      var net=gross-ded;
+      return '<tr>'+
+        '<td><strong>'+(emp?emp.name:(p.emp_name||p.emp_id||'—'))+'</strong></td>'+
+        '<td><code style="font-size:11px;">'+(emp?emp.empId||'—':p.emp_id||'—')+'</code></td>'+
+        '<td>'+fmtINR(p.basic||0)+'</td>'+
+        '<td>'+fmtINR(p.hra||0)+'</td>'+
+        '<td>'+fmtINR(p.da||0)+'</td>'+
+        '<td>'+fmtINR(gross)+'</td>'+
+        '<td><strong style="color:var(--green);">'+fmtINR(net)+'</strong></td>'+
+        '<td><button class="btn btn-sm btn-navy" onclick="empOpenPay(\''+p.id+'\')">✏ Edit</button></td></tr>';
+    }).join('')+
+  '</tbody></table></div>';
 }
 
+async function empReloadPay(){
+  var cont=document.getElementById('emp-content');
+  if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading...</div>';
+  try{
+    var data=await sbFetch('employee_pay',{select:'*',order:'created_at.desc'});
+    EMP_PAY=Array.isArray(data)?data:[];
+    if(cont)cont.innerHTML=empPayHTML();
+    toast('Pay structures refreshed ('+EMP_PAY.length+' records)','success');
+  }catch(e){toast('Error loading pay data','error');}
+}
 function empSalaryHTML(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
     '<div style="font-size:15px;font-weight:800;">Salary Processing</div>'+

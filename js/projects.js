@@ -32,13 +32,33 @@ function projModTab(tab){
     var el=document.getElementById('proj-tab-'+t);if(el)el.classList.toggle('active',t===tab);
     var cont=document.getElementById('proj-cont-'+t);if(cont)cont.style.display=t===tab?'block':'none';
   });
+  // sync global selector → local
+  var globalSel=document.getElementById('proj-mod-sel');
+  if(globalSel&&globalSel.value)PROJ_MOD_SEL=globalSel.value;
   projModLoadTab();
 }
 
 function projModLoadTab(){
+  // always re-read the global selector
   var sel=document.getElementById('proj-mod-sel');
-  PROJ_MOD_SEL=sel?sel.value:null;
-  if(PROJ_MOD==='projects')renderProjList();
+  if(sel&&sel.value)PROJ_MOD_SEL=sel.value;
+
+  if(PROJ_MOD==='projects'){renderProjList();return;}
+
+  // For non-projects tabs inject an inline project picker if no project selected
+  var cont=document.getElementById('proj-mod-content');if(!cont)return;
+
+  if(!PROJ_MOD_SEL){
+    // Show inline project picker
+    var opts='<option value="">-- Select Project --</option>'+PROJ_DATA.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
+    cont.innerHTML=
+      '<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:12px;padding:16px;margin-bottom:14px;">'+
+        '<div style="font-size:13px;font-weight:800;color:#F57F17;margin-bottom:10px;">⚠️ Select a project first</div>'+
+        '<select class="fsel" style="margin-bottom:0;" onchange="PROJ_MOD_SEL=this.value;if(this.value){document.getElementById(\'proj-mod-sel\').value=this.value;projModLoadTab();}">'+opts+'</select>'+
+      '</div>';
+    return;
+  }
+
   if(PROJ_MOD==='boq')boqLoadItems();
   if(PROJ_MOD==='jm')jmLoadItems();
   if(PROJ_MOD==='planning')planLoadItems();
@@ -136,10 +156,10 @@ async function boqLoadItems(){
 function boqRender(){
   var cont=document.getElementById('proj-mod-content');if(!cont)return;
   var total=BOQ_ITEMS.reduce(function(s,i){return s+((i.qty||0)*(i.rate||0));},0);
-  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'+
-    '<div><div style="font-size:16px;font-weight:800;">Bill of Quantities</div><div style="font-size:12px;color:var(--text2);">Total: '+fmtINR(total)+'</div></div>'+
-    '<button class="btn btn-navy" onclick="boqOpenAddItem()">+ Add Item</button></div>';
-  if(!BOQ_ITEMS.length){html+='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items. Select a project and add items.</div>';cont.innerHTML=html;return;}
+  var proj=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL;});
+  var selHtml='<div style="margin-bottom:12px;"><label class="flbl">Project</label><select class="fsel" style="margin-bottom:0;" onchange="PROJ_MOD_SEL=this.value;var gs=document.getElementById('proj-mod-sel');if(gs)gs.value=this.value;boqLoadItems();"><option value="">-- Select Project --</option>'+PROJ_DATA.map(function(p){return '<option value="'+p.id+'"'+(p.id===PROJ_MOD_SEL?' selected':'')+'>'+p.name+'</option>';}).join('')+'</select></div>';
+  var html=selHtml+'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><div><div style="font-size:16px;font-weight:800;">Bill of Quantities</div><div style="font-size:12px;color:var(--text2);">'+(proj?proj.name+' · ':'')+' Total: '+fmtINR(total)+'</div></div><button class="btn btn-navy" onclick="boqOpenAddItem()">+ Add Item</button></div>';
+  if(!BOQ_ITEMS.length){html+='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items for this project. Click + Add Item.</div>';cont.innerHTML=html;return;}
   html+='<div class="table-card"><table class="att-table"><thead><tr><th>#</th><th>Description</th><th>Unit</th><th>Qty</th><th>Rate</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
     BOQ_ITEMS.map(function(item,i){
       var amt=(item.qty||0)*(item.rate||0);
