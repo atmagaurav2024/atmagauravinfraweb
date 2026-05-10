@@ -12,44 +12,60 @@ var currentUser = null;
 var currentSession = null;
 
 // ── SUPABASE CRUD ─────────────────────────────────────────
-async function sbFetch(table, options={}) {
-  var url = SUPABASE_URL + '/rest/v1/' + table;
+// ════════════════════════════════════════════════════════════════
+// SECURITY PATCH — Replace these functions in core.js
+// Change: sbToken() picks the logged-in user JWT over the anon key
+// This makes RLS work correctly per-user
+// ════════════════════════════════════════════════════════════════
+
+function sbToken(){
+  return (currentUser && currentUser.accessToken)
+    ? currentUser.accessToken
+    : SUPABASE_ANON_KEY;
+}
+
+async function sbFetch(table, options={}){
+  var url = SUPABASE_URL+'/rest/v1/'+table;
   var params = [];
-  if (options.select) params.push('select=' + options.select);
-  if (options.filter) params.push(options.filter);
-  if (options.order)  params.push('order=' + options.order);
-  if (params.length)  url += '?' + params.join('&');
-  var res = await fetch(url, {
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }
+  if(options.select) params.push('select='+options.select);
+  if(options.filter) params.push(options.filter);
+  if(options.order)  params.push('order='+options.order);
+  if(params.length)  url += '?'+params.join('&');
+  var res = await fetch(url,{
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+sbToken(),'Content-Type':'application/json'}
   });
+  if(!res.ok){ var e=await res.json(); console.error('sbFetch',table,res.status,e); throw new Error(e.message||res.status); }
   return res.json();
 }
 
-async function sbInsert(table, data) {
-  var res = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
-    method: 'POST',
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
-    body: JSON.stringify(data)
+async function sbInsert(table, data){
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+sbToken(),'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(data)
   });
+  if(!res.ok){ var e=await res.json(); console.error('sbInsert',table,res.status,e); throw new Error(e.message||res.status); }
   return res.json();
 }
 
-async function sbUpdate(table, id, data) {
-  var res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + id, {
-    method: 'PATCH',
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
-    body: JSON.stringify(data)
+async function sbUpdate(table, id, data){
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
+    method:'PATCH',
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+sbToken(),'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(data)
   });
+  if(!res.ok){ var e=await res.json(); console.error('sbUpdate',table,res.status,e); throw new Error(e.message||res.status); }
   return res.json();
 }
 
-async function sbDelete(table, id) {
-  var res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + id, {
-    method: 'DELETE',
-    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }
+async function sbDelete(table, id){
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
+    method:'DELETE',
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+sbToken(),'Content-Type':'application/json'}
   });
   return res.ok;
 }
+
 
 // ── SUPABASE AUTH ─────────────────────────────────────────
 async function authSignUp(mobile, password) {
