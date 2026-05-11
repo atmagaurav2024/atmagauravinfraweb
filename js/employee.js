@@ -3180,7 +3180,8 @@ async function empSavePay(){
       gross:data.gross, pf_employee:data.pf_employee, pf_employer:data.pf_employer,
       esic_employee:data.esic_employee, esic_employer:data.esic_employer,
       tds:data.tds, profession_tax:data.profession_tax||0, net_salary:data.net_salary, pay_type:data.pay_type,
-      remarks:data.remarks, created_by:data.created_by
+      remarks:data.remarks, created_by:data.created_by,
+      letter_date:data.letter_date
     };
     // Try with extra columns first, fallback without
     var res;
