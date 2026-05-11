@@ -4,6 +4,24 @@
 // ════════════════════════════════════════════════════════════════
 var EMP_LIST=[], EMP_PAY=[], EMP_TAB='active', EMP_EDIT_ID=null;
 
+// ── LOCATION DROPDOWN (loads from projects list) ─────────────────
+async function loadLocationDropdown(selectId, currentVal){
+  var el = document.getElementById(selectId);
+  if(!el) return;
+  try{
+    var projs = await sbFetch('projects',{select:'id,name',order:'name.asc'});
+    var locs = ['Head Office'].concat(Array.isArray(projs)?projs.map(function(p){return p.name;}):[]);
+    el.innerHTML = '<option value="">-- Select Location --</option>'+
+      locs.map(function(l){
+        return '<option value="'+l+'"'+(l===currentVal?' selected':'')+'>'+l+'</option>';
+      }).join('');
+  }catch(e){
+    el.innerHTML = '<option value="">Head Office</option>';
+  }
+}
+
+
+
 // ── LOCAL DELETE HELPER (uses JWT token, bypasses sbDelete anon key bug) ──
 async function empDbDelete(table, id){
   // SUPABASE_URL and SUPABASE_ANON_KEY are const in core.js — access directly, not via window
@@ -3150,7 +3168,6 @@ async function empGenerateOfferLetter(empId){
   if(win){
     win.document.write(html);
     win.document.close();
-    setTimeout(function(){win.print();},800);
   } else {
     // Fallback: download as HTML
     var blob=new Blob([html],{type:'text/html'});
