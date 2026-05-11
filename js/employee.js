@@ -4885,7 +4885,6 @@ function annBuildStatement(records, periodLabel, empId, empName){
     // Use EXACT same logic as payslip:
     // 1. Read deductions/net directly from salary_records (these are saved at finalisation)
     // 2. Recompute earnings from pay structure using pay_structure_id (same as payslip does)
-    var basic  = Number(r.basic||0);
     var earned = Number(r.earned||r.gross||0);
     var gross  = Number(r.gross||0);
     var otPay  = Number(r.ot_pay||0);
@@ -4911,7 +4910,9 @@ function annBuildStatement(records, periodLabel, empId, empName){
     var extraEarnings=[];
     try{extraEarnings=pay.extra_earnings?JSON.parse(pay.extra_earnings):[];}catch(ex){}
 
+    // Pro-rate basic by days/26 — same as payslip (pBasic)
     var pBasic = Math.round((pay.basic||0)*ratio);
+    var basic  = pBasic; // use pro-rated basic, not full basic from salary_records
     var rowComps={};
     if(extraEarnings.length){
       extraEarnings.forEach(function(ex){
@@ -4929,7 +4930,7 @@ function annBuildStatement(records, periodLabel, empId, empName){
       if(pay.other_allowance)  rowComps['Other Allowance']  = Math.round((pay.other_allowance||0)*ratio);
     }
 
-    totals.days+=days; totals.basic+=basic; totals.gross+=gross; totals.earned+=earned;
+    totals.days+=days; totals.basic+=pBasic; totals.gross+=gross; totals.earned+=earned;
     totals.pf+=pf; totals.esic+=esic; totals.tds+=tds; totals.pt+=pt;
     totals.adv+=adv; totals.ded+=ded; totals.net+=net; totals.ot+=otPay;
     compKeys.forEach(function(k){compTotals[k]=(compTotals[k]||0)+(rowComps[k]||0);});
@@ -5149,7 +5150,7 @@ function annDownloadExcel(){
       var ded=Number(r.pf_employee||0)+Number(r.esic_employee||0)+Number(r.tds||0)+Number(r.profession_tax||0)+Number(r.advance_deduct||0);
       rows.push([
         monthNames[r.month]+' '+r.year,
-        Number(r.days_worked||0), Number(r.basic||0)
+        Number(r.days_worked||0), pBasic  // pro-rated basic
       ].concat(d.compKeys.map(function(k){return rowComps[k]||0;}))
        .concat(d.hasOT?[Number(r.ot_pay||0)]:[])
        .concat([
@@ -5275,7 +5276,7 @@ function annDownloadPDF(){
     return '<tr style="border-bottom:1px solid #EEE;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
       '<td style="padding:5px 7px;font-weight:700;white-space:nowrap;">'+monthNames[r.month]+' '+r.year+'</td>'+
       '<td style="padding:5px 7px;text-align:center;">'+Number(r.days_worked||0)+'</td>'+
-      '<td style="padding:5px 7px;text-align:right;">'+inr(Number(r.basic||0))+'</td>'+
+      '<td style="padding:5px 7px;text-align:right;">'+inr(pBasic)+'</td>'+  // pro-rated basic
       d.compKeys.map(function(k){return '<td style="padding:5px 7px;text-align:right;">'+inr(rowComps[k]||0)+'</td>';}).join('')+
       (d.hasOT?'<td style="padding:5px 7px;text-align:right;">'+inr(Number(r.ot_pay||0))+'</td>':'')+
       '<td style="padding:5px 7px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(Number(r.gross||0))+'</td>'+
