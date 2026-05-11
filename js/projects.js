@@ -1078,7 +1078,6 @@ async function execOpenAllot(itemId){
           '<div style="font-size:10px;color:var(--text3);">Planned: '+(res.qty||0)+' '+(res.unit||'')+
           ' &nbsp;|&nbsp; Balance: <b style="color:#E65100;">'+bal.toFixed(3).replace(/\.?0+$/,'')+'</b></div>'+
         '</div>'+
-        // Qty + Rate inline — always visible once checked
         '<div class="wa-res-inputs" style="display:none;align-items:center;gap:6px;">'+
           '<div style="text-align:center;">'+
             '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty</div>'+
@@ -1097,6 +1096,11 @@ async function execOpenAllot(itemId){
             '<div class="wa-est-amt" data-res-id="'+res.id+'" style="font-size:12px;font-weight:800;color:#1565C0;white-space:nowrap;">₹0</div>'+
           '</div>'+
         '</div>'+
+      '</div>'+
+      // Specification — shown when checkbox is checked
+      '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid #F0F0F0;background:white;">'+
+        '<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:4px;">Specification / Description for this item</label>'+
+        '<textarea class="wa-spec-inp ftxt" data-res-id="'+res.id+'" rows="2" placeholder="Material grade, size, brand, make, model or any specific requirement..."></textarea>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -1150,6 +1154,8 @@ async function execOpenAllot(itemId){
         if(!row) return;
         var inputs = row.querySelector('.wa-res-inputs');
         if(inputs) inputs.style.display = chk.checked ? 'flex' : 'none';
+        var specRow = row.querySelector('.wa-res-spec-row');
+        if(specRow) specRow.style.display = chk.checked ? 'block' : 'none';
         if(chk.checked && !chk._wired){
           chk._wired = true;
           var qInp = row.querySelector('.wa-qty-inp');
@@ -1286,13 +1292,14 @@ async function execSaveAllot(itemId, projId){
     var qty  = parseFloat(row&&row.querySelector('.wa-qty-inp')?row.querySelector('.wa-qty-inp').value:0)||0;
     var rate = parseFloat(row&&row.querySelector('.wa-rate-inp')?row.querySelector('.wa-rate-inp').value:0)||0;
     var unit = row&&row.querySelector('.wa-unit-sel')?row.querySelector('.wa-unit-sel').value:null;
+    var spec = row&&row.querySelector('.wa-spec-inp')?(row.querySelector('.wa-spec-inp').value||'').trim():'';
 
     if(!qty){toast('Enter qty for all selected resources','warning');allValid=false;return;}
     if(!rate){toast('Enter rate for all selected resources','warning');allValid=false;return;}
 
     var planRes = WA_PLANNED.find(function(r){return r.id===resId;})||{};
     toSave.push({resId:resId, planRes:planRes, type:type, party:party, qty:qty, rate:rate,
-      unit:unit||null, scope:scope||null, start:start||null, end:end||null, docType:docType});
+      unit:unit||null, scope:scope||null, spec:spec||null, start:start||null, end:end||null, docType:docType});
   });
 
   if(!allValid) return;
@@ -1316,6 +1323,7 @@ async function execSaveAllot(itemId, projId){
         qty: s.qty, unit: s.unit, rate: s.rate,
         scope: s.scope, start_date: s.start, end_date: s.end,
         doc_type: s.docType==='none'?null:s.docType,
+        specification: s.spec||null,
         batch_id: batchId
       });
       if(res&&res[0]) WA_ALLOT.push(res[0]);
@@ -1711,10 +1719,11 @@ function execRenderAllotted(){
         '</div>'
       : '';
 
-    // Download footer — only shown if no order issued yet, and doc_type was selected
-    var downloadRow = (!hasOrder && (hasWO||hasPO))
+    // Download footer — always shown when doc_type was selected (WO or PO)
+    // After order issued: shows as re-download; before: shows as generate
+    var downloadRow = (hasWO||hasPO)
       ? '<div style="padding:10px 14px;background:#FAFAFA;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">'+
-          '<div style="flex:1;font-size:10px;color:var(--text3);">Generate combined document for this allotment</div>'+
+          '<div style="flex:1;font-size:10px;color:var(--text3);">'+(hasOrder?'Re-download document':'Generate document for this allotment')+'</div>'+
           (hasWO?'<button onclick="execGenBatchDoc(\''+batchKey+'\',\'wo\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#11015; Work Order</button>':'')+
           (hasPO?'<button onclick="execGenBatchDoc(\''+batchKey+'\',\'po\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#11015; Purchase Order</button>':'')+
         '</div>'
@@ -1849,84 +1858,239 @@ async function execGenBatchDoc(batchKey, docType){
   });
   if(!batchItems.length){toast('Allotment not found','warning');return;}
 
-  // Generate doc number
+  // Check if order already exists for this batch
   var prefix = docType==='wo'?'WO':'PO';
-  var existingNos = WA_ORDERS.filter(function(o){return o.doc_type===docType;}).map(function(o){return parseInt(o.doc_number)||0;});
-  var nextNo = (existingNos.length?Math.max.apply(null,existingNos):0)+1;
-  var docNumber = String(nextNo).padStart(4,'0');
-  var fullDocNo = prefix+'-'+new Date().getFullYear()+'-'+docNumber;
+  var existingBatchOrders = WA_ORDERS.filter(function(o){
+    return o.doc_type===docType && batchItems.some(function(a){return a.id===o.allot_id;});
+  });
 
-  try{
-    toast('Generating '+fullDocNo+'...','info');
-    for(var i=0;i<batchItems.length;i++){
-      var a=batchItems[i];
-      var res=await sbInsert('work_orders',{
-        project_id:projId,
-        party_type:a.exec_type,
-        party_name:a.party_name,
-        allot_id:a.id,
-        batch_id:batchKey,
-        doc_type:docType,
-        doc_number:docNumber,
-        doc_date:today,
-        qty:a.qty, rate:a.rate, unit:a.unit||null,
-        amount:Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)),
-        boq_item_id:a.boq_item_id||null
-      });
-      if(res&&res[0]) WA_ORDERS.push(res[0]);
-    }
-    toast(fullDocNo+' saved!','success');
-  }catch(e){toast('Error: '+e.message,'error');console.error(e);return;}
+  var docNumber, fullDocNo;
+  if(existingBatchOrders.length){
+    // Already generated — re-download using existing doc number
+    docNumber = existingBatchOrders[0].doc_number;
+    fullDocNo = prefix+'-'+new Date().getFullYear()+'-'+docNumber;
+    toast('Re-downloading '+fullDocNo,'info');
+  } else {
+    // First time — generate new doc number and save to DB
+    var existingNos = WA_ORDERS.filter(function(o){return o.doc_type===docType;}).map(function(o){return parseInt(o.doc_number)||0;});
+    var nextNo = (existingNos.length?Math.max.apply(null,existingNos):0)+1;
+    docNumber = String(nextNo).padStart(4,'0');
+    fullDocNo = prefix+'-'+new Date().getFullYear()+'-'+docNumber;
+    try{
+      toast('Generating '+fullDocNo+'...','info');
+      for(var i=0;i<batchItems.length;i++){
+        var a=batchItems[i];
+        var res=await sbInsert('work_orders',{
+          project_id:projId,
+          party_type:a.exec_type,
+          party_name:a.party_name,
+          allot_id:a.id,
+          batch_id:batchKey,
+          doc_type:docType,
+          doc_number:docNumber,
+          doc_date:today,
+          qty:a.qty, rate:a.rate, unit:a.unit||null,
+          amount:Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)),
+          boq_item_id:a.boq_item_id||null
+        });
+        if(res&&res[0]) WA_ORDERS.push(res[0]);
+      }
+      toast(fullDocNo+' saved!','success');
+    }catch(e){toast('Error: '+e.message,'error');console.error(e);return;}
+  }
 
   // Build combined document
   var total = batchItems.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
-  var titleStr = docType==='wo'?'WORK ORDER':'PURCHASE ORDER';
-  var col = docType==='wo'?'#E65100':'#1565C0';
+  var isPO  = docType==='po';
+  var titleStr = isPO ? 'PURCHASE ORDER' : 'WORK ORDER';
+  var accentCol = isPO ? '#1565C0' : '#E65100';
+  var lightBg   = isPO ? '#E3F2FD' : '#FFF3E0';
+  var partyLabel = batchItems.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;}).join(', ');
 
+  // Common scope/terms from first item
+  var commonScope = batchItems[0].scope||'';
+  var commonStart = batchItems[0].start_date||'';
+  var commonEnd   = batchItems[0].end_date||'';
+
+  // Table rows
   var rows = batchItems.map(function(a,idx){
     var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var boqItem = WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
-    var desc = (boqItem.item_code?'['+boqItem.item_code+'] ':'')+a.party_name+(a.scope?'<br><small style="color:#666">'+a.scope+'</small>':'');
+    var itemCode = boqItem.item_code?'<div style="font-size:9px;color:#888;margin-bottom:2px;">BOQ: '+boqItem.item_code+' — '+(boqItem.short_name||boqItem.description||'')+'</div>':'';
+    var specText = a.specification?'<div style="font-size:9px;color:#555;margin-top:3px;font-style:italic;">Spec: '+a.specification+'</div>':'';
+    var descText = planRes.party_name||a.party_name||'Item '+(idx+1);
     var amt = Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
-    return '<tr><td>'+(idx+1)+'</td><td>'+desc+'</td><td>'+(tLbl[a.exec_type]||a.exec_type)+'</td>'+
-      '<td>'+a.qty+' '+(a.unit||'')+'</td><td>'+inr(a.rate)+'</td><td>'+inr(amt)+'</td></tr>';
+    var inrFull = function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2});};
+    return '<tr>'+
+      '<td style="text-align:center;color:#888;">'+(idx+1)+'</td>'+
+      '<td>'+itemCode+'<span style="font-weight:700;">'+descText+'</span>'+specText+'</td>'+
+      '<td style="text-align:center;">'+a.qty+' '+(a.unit||'')+'</td>'+
+      '<td style="text-align:right;">'+inrFull(a.rate)+'</td>'+
+      '<td style="text-align:right;font-weight:700;">'+inrFull(amt)+'</td>'+
+    '</tr>';
   }).join('');
 
-  // Party info — use first item's party if single, else list all
-  var parties = batchItems.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;});
-  var partyLabel = parties.join(', ');
+  var inrFull = function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2});};
+  var amtWords = (function(n){
+    // simple number to words for totals up to crores
+    var a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+    var b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+    function t(n){if(n<20)return a[n];var r=b[Math.floor(n/10)];return n%10?r+' '+a[n%10]:r;}
+    function h(n){return n>99?a[Math.floor(n/100)]+' Hundred'+(n%100?' '+t(n%100):''):t(n);}
+    if(n===0)return 'Zero';
+    var cr=Math.floor(n/10000000),lac=Math.floor((n%10000000)/100000),th=Math.floor((n%100000)/1000),rem=n%1000;
+    var s='';
+    if(cr)s+=h(cr)+' Crore ';
+    if(lac)s+=h(lac)+' Lakh ';
+    if(th)s+=h(th)+' Thousand ';
+    if(rem)s+=h(rem);
+    return s.trim()+' Only';
+  })(Math.round(total));
 
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+titleStr+'</title>'+
-    '<style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;color:#222;}'+
-    'table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:'+col+';color:white;padding:7px 10px;text-align:left;font-size:11px;}'+
-    'td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:'+(docType==='wo'?'#FFF3E0':'#E3F2FD')+';}'+
-    '.hdr{display:flex;justify-content:space-between;border-bottom:3px solid '+col+';padding-bottom:10px;margin-bottom:14px;}'+
-    '.cn{font-size:18px;font-weight:900;color:'+col+';}'+
-    '.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}'+
-    '.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}'+
-    '@media print{button{display:none;}}</style></head><body>'+
-    '<button onclick="window.print()" style="background:'+col+';color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;">&#128438; Print / Save PDF</button>'+
-    '<div class="hdr">'+
-      '<div><div class="cn">'+(co.name||'Company Name')+'</div>'+
-        '<div style="font-size:10px;color:#666;">'+(co.address||'')+'</div>'+
-        '<div style="font-size:10px;color:#666;">'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div></div>'+
-      '<div style="text-align:right">'+
-        '<div style="font-size:20px;font-weight:900;">'+titleStr+'</div>'+
-        '<div style="color:#666;">'+fullDocNo+'</div>'+
-        '<div style="color:#666;">Date: '+fmtD(today)+'</div>'+
-        '<div style="color:#666;">Project: '+(proj.name||'')+'</div></div></div>'+
-    '<div style="background:#F8FAFC;border-radius:8px;padding:10px;margin-bottom:12px;">'+
-      '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+(docType==='wo'?'CONTRACTOR / PARTY':'VENDOR / SUPPLIER')+'</div>'+
-      '<div style="font-weight:800;font-size:14px;">'+partyLabel+'</div>'+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<title>'+titleStr+' — '+fullDocNo+'</title>'+
+    '<style>'+
+      '*{box-sizing:border-box;margin:0;padding:0;}'+
+      'body{font-family:"Arial",sans-serif;font-size:12px;color:#1a1a1a;background:#fff;}'+
+      '.page{max-width:800px;margin:0 auto;padding:32px 36px;}'+
+      // Header strip
+      '.top-strip{background:'+accentCol+';color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:8px 8px 0 0;}'+
+      '.top-strip .doc-type{font-size:22px;font-weight:900;letter-spacing:1px;}'+
+      '.top-strip .doc-no{font-size:13px;font-weight:700;opacity:.9;}'+
+      // Company header
+      '.co-bar{background:'+lightBg+';padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+accentCol+';}'+
+      '.co-name{font-size:17px;font-weight:900;color:'+accentCol+';}'+
+      '.co-info{font-size:10px;color:#555;margin-top:3px;line-height:1.5;}'+
+      '.doc-meta{text-align:right;font-size:11px;color:#444;line-height:1.8;}'+
+      // Party + Project cards
+      '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #DDD;border-radius:6px;overflow:hidden;margin:14px 0;}'+
+      '.info-card{padding:10px 14px;}.info-card+.info-card{border-left:1px solid #DDD;}'+
+      '.info-card .lbl{font-size:9px;font-weight:800;text-transform:uppercase;color:'+accentCol+';letter-spacing:.5px;margin-bottom:4px;}'+
+      '.info-card .val{font-size:13px;font-weight:800;color:#111;}'+
+      '.info-card .sub{font-size:10px;color:#666;margin-top:2px;}'+
+      // Terms row
+      '.terms-bar{background:#F8FAFC;border:1px solid #DDD;border-radius:6px;padding:8px 14px;margin-bottom:14px;display:flex;gap:24px;flex-wrap:wrap;}'+
+      '.terms-bar .t-item{font-size:10px;color:#555;}<br>'+
+      '.terms-bar .t-item b{color:#111;}'+
+      // Table
+      'table{width:100%;border-collapse:collapse;margin-bottom:0;font-size:11.5px;}'+
+      'thead tr{background:'+accentCol+';color:white;}'+
+      'thead th{padding:8px 10px;text-align:left;font-size:11px;font-weight:700;}'+
+      'tbody tr{border-bottom:1px solid #EEE;}'+
+      'tbody tr:nth-child(even){background:#FAFAFA;}'+
+      'tbody td{padding:7px 10px;vertical-align:top;}'+
+      '.total-row td{background:'+lightBg+';font-weight:900;font-size:13px;border-top:2px solid '+accentCol+';}'+
+      '.amt-words{background:#F0F4FF;border:1px dashed '+accentCol+';border-radius:6px;padding:8px 14px;margin:12px 0;font-size:11px;color:#333;}'+
+      '.amt-words b{color:'+accentCol+';}'+
+      // Terms & conditions
+      '.tnc{margin-top:14px;padding:12px 14px;border:1px solid #DDD;border-radius:6px;font-size:10px;color:#555;}'+
+      '.tnc .tnc-title{font-size:11px;font-weight:800;color:#333;margin-bottom:6px;}'+
+      '.tnc ol{padding-left:16px;line-height:2;}'+
+      // Signatures
+      '.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:32px;}'+
+      '.sig-box{border-top:1.5px solid #333;padding-top:8px;text-align:center;}'+
+      '.sig-box .sig-name{font-size:11px;font-weight:800;color:#333;margin-top:4px;}'+
+      '.sig-box .sig-role{font-size:9px;color:#888;margin-top:2px;}'+
+      '.sig-space{height:48px;}'+
+      '@media print{button{display:none!important;}.page{padding:20px 24px;}}'+
+    '</style></head><body>'+
+    '<div class="page">'+
+
+    // Print button
+    '<button onclick="window.print()" style="background:'+accentCol+';color:white;border:none;padding:9px 22px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px;font-weight:700;font-family:Arial,sans-serif;">&#128438; Print / Save as PDF</button>'+
+
+    // Top strip
+    '<div class="top-strip">'+
+      '<div class="doc-type">'+titleStr+'</div>'+
+      '<div class="doc-no">'+fullDocNo+'</div>'+
     '</div>'+
-    '<table><tr><th>#</th><th>Description</th><th>Type</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>'+
-    rows+
-    '<tr class="tr"><td colspan="5" style="text-align:right;font-weight:900;">Total Amount</td><td>'+inr(total)+'</td></tr></table>'+
-    '<div class="ft">'+
-      '<div><div class="sg">Issued By<br><br>'+(co.name||'')+'<br>Authorized Signatory</div></div>'+
-      '<div><div class="sg">Accepted By<br><br>'+partyLabel+'</div></div>'+
+
+    // Company bar
+    '<div class="co-bar">'+
+      '<div>'+
+        '<div class="co-name">'+(co.name||'Company Name')+'</div>'+
+        '<div class="co-info">'+(co.address?co.address+'<br>':'')+(co.gstin?'GSTIN: '+co.gstin:'')+
+          (co.cin?'&nbsp;&nbsp;|&nbsp;&nbsp;CIN: '+co.cin:'')+'</div>'+
+      '</div>'+
+      '<div class="doc-meta">'+
+        '<div><b>Date:</b> '+fmtD(today)+'</div>'+
+        '<div><b>Project:</b> '+(proj.name||'—')+'</div>'+
+        (proj.location?'<div><b>Site:</b> '+proj.location+'</div>':'')+
+      '</div>'+
     '</div>'+
-    '</body></html>';
+
+    // Party + Project info
+    '<div class="info-grid">'+
+      '<div class="info-card">'+
+        '<div class="lbl">'+(isPO?'Vendor / Supplier':'Contractor / Party')+'</div>'+
+        '<div class="val">'+partyLabel+'</div>'+
+        '<div class="sub">'+(tLbl[batchItems[0].exec_type]||batchItems[0].exec_type)+'</div>'+
+      '</div>'+
+      '<div class="info-card">'+
+        '<div class="lbl">Delivery / Work Location</div>'+
+        '<div class="val">'+(proj.name||'—')+'</div>'+
+        '<div class="sub">'+(proj.location||proj.code||'As per project site')+'</div>'+
+      '</div>'+
+    '</div>'+
+
+    // Terms bar (dates + scope)
+    ((commonStart||commonEnd||commonScope)?
+      '<div class="terms-bar">'+
+        (commonStart?'<div class="t-item"><b>Start Date:</b> '+fmtD(commonStart)+'</div>':'')+
+        (commonEnd?'<div class="t-item"><b>Completion Date:</b> '+fmtD(commonEnd)+'</div>':'')+
+        (commonScope?'<div class="t-item" style="flex:1;"><b>Scope:</b> '+commonScope+'</div>':'')+
+      '</div>':'<br>')+
+
+    // Items table
+    '<table>'+
+      '<thead><tr>'+
+        '<th style="width:36px;text-align:center;">#</th>'+
+        '<th>'+(isPO?'Item / Material Description':'Work Description')+'</th>'+
+        '<th style="width:90px;text-align:center;">Qty</th>'+
+        '<th style="width:100px;text-align:right;">Rate</th>'+
+        '<th style="width:110px;text-align:right;">Amount</th>'+
+      '</tr></thead>'+
+      '<tbody>'+rows+
+        '<tr class="total-row">'+
+          '<td colspan="4" style="text-align:right;padding:10px;">TOTAL ORDER VALUE</td>'+
+          '<td style="text-align:right;padding:10px;">'+inrFull(total)+'</td>'+
+        '</tr>'+
+      '</tbody>'+
+    '</table>'+
+
+    // Amount in words
+    '<div class="amt-words"><b>Amount in Words:</b> '+amtWords+'</div>'+
+
+    // Terms & conditions
+    '<div class="tnc">'+
+      '<div class="tnc-title">Terms &amp; Conditions</div>'+
+      '<ol>'+
+        (isPO?
+          '<li>Payment will be made within 30 days of receipt of material and invoice.</li>'+
+          '<li>Materials must conform to the specifications mentioned above and applicable IS standards.</li>'+
+          '<li>Vendor shall provide delivery challan / invoice with each consignment.</li>'+
+          '<li>Any defective or non-conforming material will be returned at vendor&apos;s cost.</li>'+
+          '<li>This PO is valid for 90 days from the date of issue unless extended in writing.</li>'+
+          '<li>GST as applicable shall be charged separately and mentioned clearly on invoice.</li>'
+          :
+          '<li>Work shall be executed as per approved drawings, specifications and instructions of site engineer.</li>'+
+          '<li>Contractor shall deploy adequate skilled manpower and maintain quality standards.</li>'+
+          '<li>Payment will be processed after measurement and certification of completed work.</li>'+
+          '<li>Contractor shall comply with all safety norms and labour laws applicable at site.</li>'+
+          '<li>Any damage to existing structures or utilities will be rectified at contractor&apos;s cost.</li>'+
+          '<li>This order is valid only when countersigned by authorized representative of '+( co.name||'the company')+' .</li>'
+        )+
+      '</ol>'+
+    '</div>'+
+
+    // Signature block
+    '<div class="sig-grid">'+
+      '<div class="sig-box"><div class="sig-space"></div><div class="sig-name">'+(co.name||'Company')+'</div><div class="sig-role">Prepared By</div></div>'+
+      '<div class="sig-box"><div class="sig-space"></div><div class="sig-name">'+(co.name||'Company')+'</div><div class="sig-role">Authorized Signatory</div></div>'+
+      '<div class="sig-box"><div class="sig-space"></div><div class="sig-name">'+partyLabel+'</div><div class="sig-role">'+(isPO?'Vendor Acceptance':'Contractor Acceptance')+'</div></div>'+
+    '</div>'+
+
+    '</div></body></html>';
 
   var w=window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
