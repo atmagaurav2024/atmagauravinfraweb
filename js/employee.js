@@ -2550,7 +2550,7 @@ function empOpenPay(empId, empName){
       '</div>'+
       '<div>'+
         '<label style="font-size:10px;opacity:.7;display:block;margin-bottom:4px;">Letter Date *</label>'+
-        '<input id="pf-letter-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:6px 10px;color:white;font-size:12px;font-weight:700;font-family:Nunito,sans-serif;outline:none;">'+
+        '<input id="pf-letter-date" type="date" value="'+toISODate(v&&v.letter_date ? v.letter_date : new Date().toISOString().slice(0,10))+'" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:6px 10px;color:white;font-size:12px;font-weight:700;font-family:Nunito,sans-serif;outline:none;">'+
       '</div>'+
     '</div>'+
 
@@ -2913,21 +2913,38 @@ var LETTER_PREFIXES = {
 async function getNextLetterNo(type){
   var prefix = LETTER_PREFIXES[type]||type.toUpperCase();
   var year = new Date().getFullYear();
+  // Use direct fetch with JWT (sbInsert uses anon key which is blocked by RLS)
+  var baseUrl = typeof SUPABASE_URL!=='undefined' ? SUPABASE_URL : '';
+  var anonKey = typeof SUPABASE_ANON_KEY!=='undefined' ? SUPABASE_ANON_KEY : '';
+  var token = (typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)
+    ? currentUser.accessToken : anonKey;
+  var headers = {
+    'apikey': anonKey,
+    'Authorization': 'Bearer '+token,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
   try{
-    // Count existing letters of this type this year
-    var rows = await sbFetch('letter_numbers',{
-      select:'*',
-      filter:'letter_type=eq.'+type+'&year=eq.'+year,
-      order:'seq_no.desc'
+    // Fetch existing records for this type+year to get last seq_no
+    var fetchRes = await fetch(baseUrl+'/rest/v1/letter_numbers?letter_type=eq.'+type+'&year=eq.'+year+'&order=seq_no.desc&limit=1',{
+      headers: headers
     });
+    var rows = fetchRes.ok ? await fetchRes.json() : [];
     var lastSeq = (Array.isArray(rows)&&rows.length) ? (parseInt(rows[0].seq_no)||0) : 0;
     var nextSeq = lastSeq + 1;
-    // Save to DB
-    await sbInsert('letter_numbers',{letter_type:type, year:year, seq_no:nextSeq});
+    // Insert new record
+    var insertRes = await fetch(baseUrl+'/rest/v1/letter_numbers',{
+      method:'POST',
+      headers: headers,
+      body: JSON.stringify({letter_type:type, year:year, seq_no:nextSeq})
+    });
+    if(!insertRes.ok){
+      var err = await insertRes.json().catch(function(){return {};});
+      throw new Error(err.message||'Insert failed: '+insertRes.status);
+    }
     return prefix+'/'+year+'/'+String(nextSeq).padStart(4,'0');
   }catch(e){
-    // Fallback: use timestamp-based number if table not ready
-    console.warn('letter_numbers table not found, using fallback:',e.message);
+    console.warn('letter_numbers error, using fallback:', e.message);
     return prefix+'/'+year+'/'+String(Date.now()).slice(-5);
   }
 }
@@ -3198,24 +3215,49 @@ async function empSavePay(){
 
   try{
     toast('Saving pay structure...','info');
-    // Remove columns that may not exist in DB yet
-    var safeData={
-      employee_id:data.employee_id, effective_date:data.effective_date,
-      basic:data.basic, da:data.da, hra:data.hra, conveyance:data.conveyance,
-      special_allowance:data.special_allowance, medical_allowance:data.medical_allowance, other_allowance:data.other_allowance,
-      gross:data.gross, pf_employee:data.pf_employee, pf_employer:data.pf_employer,
-      esic_employee:data.esic_employee, esic_employer:data.esic_employer,
-      tds:data.tds, profession_tax:data.profession_tax||0, net_salary:data.net_salary, pay_type:data.pay_type,
-      remarks:data.remarks, created_by:data.created_by,
-      letter_date:data.letter_date
-    };
-    // Try with extra columns first, fallback without
+    // Use direct fetch with JWT so letter_date and all columns save correctly
+    var baseUrl = typeof SUPABASE_URL!=='undefined' ? SUPABASE_URL : '';
+    var anonKey = typeof SUPABASE_ANON_KEY!=='undefined' ? SUPABASE_ANON_KEY : '';
+    var token = (typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)
+      ? currentUser.accessToken : anonKey;
+    var insertRes = await fetch(baseUrl+'/rest/v1/employee_pay',{
+      method:'POST',
+      headers:{
+        'apikey': anonKey,
+        'Authorization': 'Bearer '+token,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(data)
+    });
     var res;
-    try{
-      res=await sbInsert('employee_pay',data);
-    }catch(e2){
-      console.warn('Retrying without extra columns:',e2.message);
-      res=await sbInsert('employee_pay',safeData);
+    if(insertRes.ok){
+      res = await insertRes.json();
+    } else {
+      // Fallback without optional columns if column error
+      var err = await insertRes.json().catch(function(){return {};});
+      console.warn('Full insert failed, trying safe columns:', err.message);
+      var safeData={
+        employee_id:data.employee_id, effective_date:data.effective_date,
+        basic:data.basic, da:data.da, hra:data.hra, conveyance:data.conveyance,
+        special_allowance:data.special_allowance, medical_allowance:data.medical_allowance, other_allowance:data.other_allowance,
+        gross:data.gross, pf_employee:data.pf_employee, pf_employer:data.pf_employer,
+        esic_employee:data.esic_employee, esic_employer:data.esic_employer,
+        tds:data.tds, profession_tax:data.profession_tax||0, net_salary:data.net_salary, pay_type:data.pay_type,
+        remarks:data.remarks, created_by:data.created_by, letter_date:data.letter_date
+      };
+      var fallbackRes = await fetch(baseUrl+'/rest/v1/employee_pay',{
+        method:'POST',
+        headers:{
+          'apikey': anonKey,
+          'Authorization': 'Bearer '+token,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(safeData)
+      });
+      if(!fallbackRes.ok) throw new Error(err.message||'Save failed');
+      res = await fallbackRes.json();
     }
     if(res&&res[0])EMP_PAY.unshift(res[0]);
     toast('Pay structure saved!','success');
