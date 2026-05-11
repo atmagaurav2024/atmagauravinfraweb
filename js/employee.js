@@ -2662,7 +2662,7 @@ function empOpenPay(empId, empName){
               '<div style="font-size:10px;color:var(--text3);">Basic ₹'+Number(p.basic||0).toLocaleString('en-IN')+' &bull; Net ₹'+Number(p.net_salary||0).toLocaleString('en-IN')+'</div>'+
             '</div>'+
             '<div style="display:flex;align-items:center;gap:4px;">'+
-              '<input type="date" value="'+fmtDate(p.effective_date)+'" data-payid="'+p.id+'" '+
+              '<input type="date" value="'+toISODate(p.effective_date)+'" data-payid="'+p.id+'" '+
                 'style="border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;color:#333;" '+
                 'onchange="payUpdateEffectiveDate(\''+p.id+'\',this.value)">'+
             '</div>'+
