@@ -966,12 +966,7 @@ function execRender(){
       '<div style="padding:10px 14px;background:#FFF8E1;"><span style="font-size:11px;font-weight:800;color:#E65100;">&#9888; Uncategorized Resources</span></div>'+
       '<div style="padding:8px 14px;">'+orphanRes.map(function(r){return resRow(r,'',tCol,tLbl);}).join('')+'</div></div>':'';
 
-  var topBar='<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">'+
-    '<div style="flex:1;font-size:11px;color:var(--text3);">&#9745; Check to include in combined document</div>'+
-    '<button onclick="execGenCombinedDoc(\'wo\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; WO</button>'+
-    '<button onclick="execGenCombinedDoc(\'po\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; PO</button></div>';
-
-  el.innerHTML=topBar+itemsHtml+orphanHtml;
+  el.innerHTML=itemsHtml+orphanHtml;
 
   function resRow(res,itemUnit,tCol,tLbl){
     var resUnit=res.unit||itemUnit;
@@ -997,13 +992,10 @@ function execRender(){
           '<div style="padding:4px 12px 8px;">'+
             rAllot.map(function(a){
               var col=tCol[a.exec_type]||'#37474F';var lbl=tLbl[a.exec_type]||a.exec_type;
-              return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #F5F5F5;">'+
-                '<input type="checkbox" class="wa-sel-chk" data-allot-id="'+a.id+'" style="width:14px;height:14px;accent-color:#E65100;flex-shrink:0;">'+'<span style="font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;background:'+col+'20;color:'+col+';">'+lbl+'</span>'+
+              return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #F5F5F5;">'+'<span style="font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;background:'+col+'20;color:'+col+';">'+lbl+'</span>'+
                 '<div style="flex:1;font-size:11px;font-weight:700;">'+a.party_name+'</div>'+
                 '<div style="font-size:10px;color:var(--text3);">'+a.qty+' '+(a.unit||'')+(a.rate?' @ ₹'+a.rate:'')+'</div>'+
                 '<button data-edit-allot-id="'+a.id+'" title="Edit" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button>'+
-                '<button data-wo-id="'+a.id+'" title="Work Order" style="background:#FFF3E0;border:none;border-radius:4px;padding:2px 6px;font-size:9px;font-weight:800;cursor:pointer;color:#E65100;">WO</button>'+
-                '<button data-po-id="'+a.id+'" title="Purchase Order" style="background:#E3F2FD;border:none;border-radius:4px;padding:2px 6px;font-size:9px;font-weight:800;cursor:pointer;color:#1565C0;">PO</button>'+
                 '<button data-del-id="'+a.id+'" class="wa-del-btn" title="Delete" style="background:none;border:none;color:#C62828;font-size:14px;cursor:pointer;">&#215;</button>'+
               '</div>';
             }).join('')+
@@ -1017,14 +1009,18 @@ async function execOpenAllot(itemId){
   await loadUomIfNeeded();
   var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
   var item = WA_ITEMS.find(function(i){return i.id===itemId;})||{};
-  var itemRes = WA_PLANNED.filter(function(r){return r.boq_item_id===itemId;});
-  // Only show resources with remaining balance
+  // Get sub-item IDs for this BOQ item
+  var itemSubIds = WA_SUBS.filter(function(s){return s.boq_item_id===itemId;}).map(function(s){return s.id;});
+  // Match resources by boq_item_id OR by boq_subitem_id belonging to this item
+  var itemRes = WA_PLANNED.filter(function(r){
+    return r.boq_item_id===itemId || (r.boq_subitem_id && itemSubIds.includes(r.boq_subitem_id));
+  });
+  // Show all resources — checked ones will be allotted
   var pendingRes = itemRes.filter(function(res){
     var allotted = WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;})
       .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
     return (parseFloat(res.qty)||0) > allotted;
   });
-  console.log('[execOpenAllot] itemId:',itemId,'WA_PLANNED:',WA_PLANNED.length,'itemRes:',itemRes.length,'pendingRes:',pendingRes.length);
   if(!pendingRes.length){toast('All resources for this item are fully allotted','info');return;}
 
   // Build resource rows with checkboxes
@@ -1250,6 +1246,9 @@ async function execSaveAllot(itemId, projId){
 
   if(!allValid) return;
 
+  // Generate one batch_id for all resources saved together
+  var batchId = 'batch-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
+
   var saved = 0;
   var errors = 0;
   for(var i=0;i<toSave.length;i++){
@@ -1264,7 +1263,9 @@ async function execSaveAllot(itemId, projId){
         exec_type: s.type,
         party_name: s.party,
         qty: s.qty, unit: s.unit, rate: s.rate,
-        scope: s.scope, start_date: s.start, end_date: s.end
+        scope: s.scope, start_date: s.start, end_date: s.end,
+        doc_type: s.docType==='none'?null:s.docType,
+        batch_id: batchId
       });
       if(res&&res[0]) WA_ALLOT.push(res[0]);
       saved++;
@@ -1577,69 +1578,108 @@ async function execDeleteOrder(id){
 
 function execRenderAllotted(){
   var el=document.getElementById('exec-content');if(!el)return;
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
   if(!WA_ALLOT.length){
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128221;</div><div style="font-weight:700;margin-top:8px;">No allotments yet</div><div style="font-size:12px;margin-top:4px;">Allot work in the Work Allotment tab first</div></div>';
     return;
   }
-  // Group by party
-  var parties={};
-  WA_ALLOT.forEach(function(a){
-    var key=a.exec_type+'::'+a.party_name;
-    if(!parties[key]) parties[key]={type:a.exec_type,name:a.party_name,items:[]};
-    parties[key].items.push(a);
-  });
+
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
 
-  el.innerHTML=Object.keys(parties).map(function(key){
-    var p=parties[key];var col=tCol[p.type]||'#37474F';
-    // Existing orders for this party
-    var pOrders=WA_ORDERS.filter(function(o){return o.party_name===p.name&&o.party_type===p.type;});
-    var totalOrdered=pOrders.reduce(function(s,o){return s+(parseFloat(o.qty)||0);},0);
-    var totalAmt=p.items.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
-    var totalQty=p.items.reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
+  // Group by batch_id — allotments saved together appear as one group
+  // Allotments without batch_id (old data) each get their own group
+  var batches={};
+  var batchOrder=[];
+  WA_ALLOT.forEach(function(a){
+    var key = a.batch_id || ('solo-'+a.id);
+    if(!batches[key]){
+      batches[key]={batchId:key, items:[], date:a.date||a.created_at};
+      batchOrder.push(key);
+    }
+    batches[key].items.push(a);
+  });
 
-    var itemRows=p.items.map(function(a){
-      // Check if this item has an order
-      var itemOrders=WA_ORDERS.filter(function(o){return o.allot_id===a.id;});
-      var orderedQty=itemOrders.reduce(function(s,o){return s+(parseFloat(o.qty)||0);},0);
-      var balQty=Math.max(0,(parseFloat(a.qty)||0)-orderedQty);
-      var hasFullOrder=orderedQty>=(parseFloat(a.qty)||0);
-      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid #F5F5F5;">'+
-        '<input type="checkbox" class="allot-chk" data-allot-id="'+a.id+'" data-qty="'+a.qty+'" data-rate="'+(a.rate||0)+'" data-unit="'+(a.unit||'')+'" data-bal="'+balQty+'"'+(hasFullOrder?' disabled':'')+' style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
+  el.innerHTML = batchOrder.map(function(batchKey){
+    var batch = batches[batchKey];
+    var items = batch.items;
+
+    // Determine doc type for this batch (all items in a batch share same doc_type)
+    var docType = items.reduce(function(dt,a){ return a.doc_type||dt; }, null);
+    var hasWO = docType==='wo';
+    var hasPO = docType==='po';
+
+    var totalAmt = items.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
+    var batchDate = items[0].date||'';
+
+    // Get existing orders for this entire batch
+    var batchOrders = WA_ORDERS.filter(function(o){
+      return items.some(function(a){return a.id===o.allot_id;});
+    });
+    var hasOrder = batchOrders.length>0;
+
+    // Batch header — show all party names if multiple
+    var partyNames = items.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;});
+    var headerLabel = partyNames.length===1
+      ? partyNames[0]
+      : partyNames.length+' parties';
+    var firstType = items[0].exec_type||'';
+    var col = tCol[firstType]||'#37474F';
+
+    // Resource rows
+    var itemRows = items.map(function(a){
+      var aCol = tCol[a.exec_type]||'#37474F';
+      var itemOrders = WA_ORDERS.filter(function(o){return o.allot_id===a.id;});
+      var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+      var boqItem = WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
         '<div style="flex:1;min-width:0;">'+
-          '<div style="font-size:12px;font-weight:700;">'+(a.party_name||'Resource')+'</div>'+
-          '<div style="font-size:10px;color:var(--text3);">'+(a.unit?a.qty+' '+a.unit:'Qty: '+a.qty)+(a.rate?' @ &#8377;'+a.rate:'')+(a.scope?'<br>'+a.scope:'')+'</div>'+
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">'+
+            '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+aCol+'20;color:'+aCol+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
+            '<span style="font-size:12px;font-weight:800;">'+a.party_name+'</span>'+
+          '</div>'+
+          (boqItem.item_code?'<div style="font-size:9px;color:var(--text3);">BOQ: '+boqItem.item_code+' '+(boqItem.short_name||boqItem.description||'')+'</div>':'')+
+          '<div style="font-size:10px;color:var(--text3);">'+a.qty+' '+(a.unit||'')+(a.rate?' @ '+inr(a.rate):'')+(a.scope?' | '+a.scope:'')+'</div>'+
         '</div>'+
         '<div style="text-align:right;flex-shrink:0;">'+
-          '<div style="font-size:11px;font-weight:800;">&#8377;'+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)).toLocaleString('en-IN')+'</div>'+
-          (orderedQty>0?'<div style="font-size:9px;color:#2E7D32;font-weight:700;">Ordered: '+orderedQty+(parseFloat(a.qty)>orderedQty?' | Bal: '+balQty.toFixed(2):'&#10003;')+'</div>':
-           '<div style="font-size:9px;color:var(--text3);">Not ordered</div>')+
+          '<div style="font-size:12px;font-weight:800;">'+inr((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0))+'</div>'+
+          (itemOrders.length?'<div style="font-size:9px;color:#2E7D32;font-weight:700;">&#10003; Doc issued</div>':'<div style="font-size:9px;color:var(--text3);">Pending</div>')+
         '</div>'+
-        (itemOrders.length?itemOrders.map(function(o){
-          return '<div style="font-size:9px;background:#E8F5E9;color:#2E7D32;padding:1px 6px;border-radius:4px;font-weight:700;cursor:pointer;" onclick="execViewOrder(\''+o.id+'\')">'+o.doc_type.toUpperCase()+'-'+o.doc_number+'</div>';
-        }).join(''):'')+
         '<button onclick="execEditAllotted(\''+a.id+'\')" title="Edit" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;flex-shrink:0;">&#9998;</button>'+
-        '<button onclick="execDelAllotted(\''+a.id+'\')" title="Delete allotment" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;flex-shrink:0;">&#215;</button>'+
+        '<button onclick="execDelAllotted(\''+a.id+'\')" title="Delete" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;flex-shrink:0;">&#215;</button>'+
       '</div>';
     }).join('');
 
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;" id="allotted-'+key.replace(/[^a-z0-9]/gi,'-')+'">'+
-      // Party header
+    // Batch order download row
+    var orderRow = hasOrder
+      ? '<div style="padding:6px 14px;background:#E8F5E9;border-top:1px solid #C8E6C9;display:flex;align-items:center;gap:8px;">'+
+          '<span style="font-size:11px;color:#2E7D32;font-weight:800;">&#10003; Document issued</span>'+
+          batchOrders.filter(function(o,i,arr){return arr.findIndex(function(x){return x.doc_number===o.doc_number&&x.doc_type===o.doc_type;})===i;}).map(function(o){
+            return '<span style="font-size:10px;background:#2E7D32;color:white;padding:2px 8px;border-radius:4px;font-weight:700;cursor:pointer;" onclick="execViewOrder(\''+o.id+'\')">'+(o.doc_type||'').toUpperCase()+'-'+o.doc_number+'</span>';
+          }).join('')+
+        '</div>'
+      : '';
+
+    // Download footer — only shown if no order issued yet, and doc_type was selected
+    var downloadRow = (!hasOrder && (hasWO||hasPO))
+      ? '<div style="padding:10px 14px;background:#FAFAFA;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">'+
+          '<div style="flex:1;font-size:10px;color:var(--text3);">Generate combined document for this allotment</div>'+
+          (hasWO?'<button onclick="execGenBatchDoc(\''+batchKey+'\',\'wo\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#11015; Work Order</button>':'')+
+          (hasPO?'<button onclick="execGenBatchDoc(\''+batchKey+'\',\'po\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#11015; Purchase Order</button>':'')+
+        '</div>'
+      : '';
+
+    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
-        '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:14px;font-weight:800;">'+p.name+'</div>'+
-        '<div style="text-align:right;font-size:10px;color:var(--text3);">'+p.items.length+' items | &#8377;'+Math.round(totalAmt).toLocaleString('en-IN')+'</div>'+
+        '<div style="flex:1;">'+
+          '<div style="font-size:13px;font-weight:800;">'+headerLabel+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);">'+items.length+' resource'+(items.length>1?'s':'')+' | Allotted: '+(batchDate?batchDate.slice(0,10):'')+'</div>'+
+        '</div>'+
+        '<div style="font-size:13px;font-weight:800;color:'+col+';">'+inr(totalAmt)+'</div>'+
       '</div>'+
-      // Items with checkboxes
       itemRows+
-      // Footer with generate buttons
-      '<div style="padding:10px 14px;background:#FAFAFA;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">'+
-        '<div style="flex:1;font-size:10px;color:var(--text3);">Select items above to include in document</div>'+
-        '<button onclick="execGenPartyDoc(\''+key+'\',\'wo\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Work Order</button>'+
-        '<button onclick="execGenPartyDoc(\''+key+'\',\'po\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Purchase Order</button>'+
-      '</div>'+
+      orderRow+
+      downloadRow+
     '</div>';
   }).join('');
 }
@@ -1740,6 +1780,108 @@ async function execGenPartyDoc(partyKey, docType){
 
   // Refresh view
   setTimeout(function(){execRenderAllotted();},500);
+}
+
+
+async function execGenBatchDoc(batchKey, docType){
+  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+  var co=COMPANY_DATA||{};
+  var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
+  var fmtD=function(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
+  var today=new Date().toISOString().slice(0,10);
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+
+  // Get all allotments in this batch
+  var batchItems = WA_ALLOT.filter(function(a){
+    return (a.batch_id||('solo-'+a.id)) === batchKey;
+  });
+  if(!batchItems.length){toast('Allotment not found','warning');return;}
+
+  // Generate doc number
+  var prefix = docType==='wo'?'WO':'PO';
+  var existingNos = WA_ORDERS.filter(function(o){return o.doc_type===docType;}).map(function(o){return parseInt(o.doc_number)||0;});
+  var nextNo = (existingNos.length?Math.max.apply(null,existingNos):0)+1;
+  var docNumber = String(nextNo).padStart(4,'0');
+  var fullDocNo = prefix+'-'+new Date().getFullYear()+'-'+docNumber;
+
+  try{
+    toast('Generating '+fullDocNo+'...','info');
+    for(var i=0;i<batchItems.length;i++){
+      var a=batchItems[i];
+      var res=await sbInsert('work_orders',{
+        project_id:projId,
+        party_type:a.exec_type,
+        party_name:a.party_name,
+        allot_id:a.id,
+        batch_id:batchKey,
+        doc_type:docType,
+        doc_number:docNumber,
+        doc_date:today,
+        qty:a.qty, rate:a.rate, unit:a.unit||null,
+        amount:Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)),
+        boq_item_id:a.boq_item_id||null
+      });
+      if(res&&res[0]) WA_ORDERS.push(res[0]);
+    }
+    toast(fullDocNo+' saved!','success');
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);return;}
+
+  // Build combined document
+  var total = batchItems.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
+  var titleStr = docType==='wo'?'WORK ORDER':'PURCHASE ORDER';
+  var col = docType==='wo'?'#E65100':'#1565C0';
+
+  var rows = batchItems.map(function(a,idx){
+    var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+    var boqItem = WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
+    var desc = (boqItem.item_code?'['+boqItem.item_code+'] ':'')+a.party_name+(a.scope?'<br><small style="color:#666">'+a.scope+'</small>':'');
+    var amt = Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
+    return '<tr><td>'+(idx+1)+'</td><td>'+desc+'</td><td>'+(tLbl[a.exec_type]||a.exec_type)+'</td>'+
+      '<td>'+a.qty+' '+(a.unit||'')+'</td><td>'+inr(a.rate)+'</td><td>'+inr(amt)+'</td></tr>';
+  }).join('');
+
+  // Party info — use first item's party if single, else list all
+  var parties = batchItems.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;});
+  var partyLabel = parties.join(', ');
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+titleStr+'</title>'+
+    '<style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;color:#222;}'+
+    'table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:'+col+';color:white;padding:7px 10px;text-align:left;font-size:11px;}'+
+    'td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:'+(docType==='wo'?'#FFF3E0':'#E3F2FD')+';}'+
+    '.hdr{display:flex;justify-content:space-between;border-bottom:3px solid '+col+';padding-bottom:10px;margin-bottom:14px;}'+
+    '.cn{font-size:18px;font-weight:900;color:'+col+';}'+
+    '.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}'+
+    '.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}'+
+    '@media print{button{display:none;}}</style></head><body>'+
+    '<button onclick="window.print()" style="background:'+col+';color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;">&#128438; Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div><div class="cn">'+(co.name||'Company Name')+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(co.address||'')+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div style="text-align:right">'+
+        '<div style="font-size:20px;font-weight:900;">'+titleStr+'</div>'+
+        '<div style="color:#666;">'+fullDocNo+'</div>'+
+        '<div style="color:#666;">Date: '+fmtD(today)+'</div>'+
+        '<div style="color:#666;">Project: '+(proj.name||'')+'</div></div></div>'+
+    '<div style="background:#F8FAFC;border-radius:8px;padding:10px;margin-bottom:12px;">'+
+      '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+(docType==='wo'?'CONTRACTOR / PARTY':'VENDOR / SUPPLIER')+'</div>'+
+      '<div style="font-weight:800;font-size:14px;">'+partyLabel+'</div>'+
+    '</div>'+
+    '<table><tr><th>#</th><th>Description</th><th>Type</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>'+
+    rows+
+    '<tr class="tr"><td colspan="5" style="text-align:right;font-weight:900;">Total Amount</td><td>'+inr(total)+'</td></tr></table>'+
+    '<div class="ft">'+
+      '<div><div class="sg">Issued By<br><br>'+(co.name||'')+'<br>Authorized Signatory</div></div>'+
+      '<div><div class="sg">Accepted By<br><br>'+partyLabel+'</div></div>'+
+    '</div>'+
+    '</body></html>';
+
+  var w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Allow popups to open document','warning');
+
+  setTimeout(function(){execRenderAllotted();},400);
 }
 
 function execViewOrder(orderId){
