@@ -2522,6 +2522,10 @@ function empOpenPay(empId, empName){
         '<label style="font-size:10px;opacity:.7;display:block;margin-bottom:4px;">Effective Date *</label>'+
         '<input id="pf-date" type="date" value="'+defaultDate+'" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:6px 10px;color:white;font-size:12px;font-weight:700;font-family:Nunito,sans-serif;outline:none;">'+
       '</div>'+
+      '<div>'+
+        '<label style="font-size:10px;opacity:.7;display:block;margin-bottom:4px;">Letter Date *</label>'+
+        '<input id="pf-letter-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:6px 10px;color:white;font-size:12px;font-weight:700;font-family:Nunito,sans-serif;outline:none;">'+
+      '</div>'+
     '</div>'+
 
     // ── Two-column: Earnings | Deductions ─────────────────────────────────
@@ -3114,6 +3118,7 @@ function empGenerateOfferLetter(empId){
 async function empSavePay(){
   var empId=document.getElementById('pf-emp-id')?document.getElementById('pf-emp-id').value:'';
   var date=document.getElementById('pf-date')?document.getElementById('pf-date').value:'';
+  var letterDate=document.getElementById('pf-letter-date')?document.getElementById('pf-letter-date').value:new Date().toISOString().slice(0,10);
   var basic=gn('pf-basic');
   if(!empId||!date){toast('Missing data','error');return;}
   if(!basic){toast('Basic salary is required','warning');return;}
@@ -3162,7 +3167,8 @@ async function empSavePay(){
     })),
     extra_deductions:JSON.stringify(PAY_DEDUCTIONS),
     remarks:remarks||null,
-    created_by:currentUser?currentUser.name:null
+    created_by:currentUser?currentUser.name:null,
+    letter_date:letterDate||null
   };
 
   try{
@@ -3943,9 +3949,8 @@ function hrWireDownloadButtons(containerId){
 }
 
 // ─── Pay Fixation Order PDF ──────────────────────────────────────────────
-function downloadPayFixationOrder(empId, effectiveDate, details){
+async function downloadPayFixationOrder(empId, effectiveDate, details){
   var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
-  pickLetterDate('Pay Fixation Order', async function(letterDateStr){
   var pays= EMP_PAY.filter(function(p){return p.employee_id===empId;})
                    .sort(function(a,b){return a.effective_date.localeCompare(b.effective_date);});
   var letterNo = await getNextLetterNo('pay');
@@ -3955,6 +3960,8 @@ function downloadPayFixationOrder(empId, effectiveDate, details){
   var code  = emp.employee_code||emp.emp_id||'—';
   var desig = emp.designation||emp.role||'—';
   var dept  = emp.department||'—';
+  // Use letter_date saved during pay fixation, fallback to effective date or today
+  var letterDateStr = pay.letter_date || effectiveDate || new Date().toISOString().slice(0,10);
   var today = fmtDate(letterDateStr);
   var wefFmt= effectiveDate?fmtDate(effectiveDate):today;
   var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
@@ -4032,7 +4039,6 @@ function downloadPayFixationOrder(empId, effectiveDate, details){
   var w=window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
   else{toast('Allow popups to download PDF','warning');}
-  }); // end pickLetterDate
 }
 
 // ─── Resignation Acceptance Letter PDF ───────────────────────────────────
