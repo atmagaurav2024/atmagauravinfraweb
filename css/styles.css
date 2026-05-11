@@ -423,3 +423,298 @@ body[data-app="registry"] .reg-foot{display:flex;}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
 *{touch-action:pan-x pan-y;}
 input,select,textarea{font-size:16px !important;}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   AIPL — MOBILE RESPONSIVE FIXES
+   Add this to the END of css/styles.css
+   Breakpoints: ≤480px = small phone, ≤640px = phone, ≤768px = tablet
+═══════════════════════════════════════════════════════════════ */
+
+/* ── 1. DASHBOARD KPI TILES: 4-col → 2-col on mobile ─────────── */
+@media (max-width: 640px) {
+  .dt-kpis {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  /* Module grid: 3-col → 2-col */
+  .mod-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ── 2. REGISTRATION GRIDS ────────────────────────────────────── */
+@media (max-width: 480px) {
+  .g3 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .cat-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* ── 3. STATS ROWS (employee, finance): 4-col → 2-col ─────────── */
+@media (max-width: 640px) {
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ── 4. ATTENDANCE CALENDAR: fixed sidebar → stacked ──────────── */
+@media (max-width: 768px) {
+  /* Calendar + sidebar: 1fr 340px → single column */
+  #app-attendance [style*="340px"] {
+    display: block !important;
+  }
+  #app-attendance [style*="grid-template-columns: 1fr 340px"],
+  #app-attendance [style*="grid-template-columns:1fr 340px"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* 7-col week grid — allow smaller cells */
+  #app-attendance [style*="repeat(7,1fr)"],
+  #app-attendance [style*="repeat(7, 1fr)"] {
+    gap: 2px !important;
+  }
+}
+
+/* ── 5. SHEET FORMS: 3-col → 2-col on phone, 1-col on small ───── */
+@media (max-width: 640px) {
+  /* All 3-col grids inside sheets → 2-col */
+  .sh-body [style*="grid-template-columns:1fr 1fr 1fr"],
+  .sh-body [style*="grid-template-columns: 1fr 1fr 1fr"],
+  .sh-body [style*="repeat(3,1fr)"],
+  .sh-body [style*="repeat(3, 1fr)"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  /* 4-col grids → 2-col */
+  .sh-body [style*="grid-template-columns:1fr 1fr 1fr 1fr"],
+  .sh-body [style*="repeat(4,1fr)"],
+  .sh-body [style*="repeat(4, 1fr)"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 380px) {
+  /* On very small phones, all multi-col grids in sheets → 1-col */
+  .sh-body [style*="grid-template-columns:1fr 1fr"],
+  .sh-body [style*="grid-template-columns: 1fr 1fr"],
+  .sh-body [style*="grid-template-columns:1fr 1fr 1fr"],
+  .sh-body [style*="grid-template-columns: 1fr 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── 6. PAY FIXATION SHEET HEADER: side-by-side → stacked ─────── */
+@media (max-width: 480px) {
+  /* Header row with name + date inputs */
+  #sh-pay .sh-head-inner,
+  #sh-pay [style*="justify-content:space-between"][style*="align-items:center"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+}
+
+/* ── 7. WORK ALLOTMENT RESOURCE INLINE INPUTS: wrap nicely ─────── */
+@media (max-width: 600px) {
+  .wa-res-inputs {
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+  .wa-res-inputs > div {
+    flex: 1 1 auto !important;
+    min-width: 60px !important;
+  }
+  .wa-qty-inp {
+    width: 70px !important;
+  }
+  .wa-rate-inp {
+    width: 80px !important;
+  }
+  .wa-unit-sel {
+    width: 60px !important;
+  }
+}
+
+/* ── 8. TABLES: wrap in scrollable container ────────────────────── */
+@media (max-width: 768px) {
+  /* Any app-screen table that isn't already in an overflow container */
+  .app-screen table:not([style*="border-collapse"]) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  /* Salary table */
+  #app-employees table,
+  #emp-content table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* BOQ / Planning / Execution tables */
+  #app-projects table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Finance / Accounts tables */
+  #app-finance table,
+  #app-accounts table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ── 9. EMPLOYEE PAY FIXATION: earnings/deductions 2-col → 1-col on tiny phones */
+@media (max-width: 380px) {
+  #pf-fields,
+  #esic-fields {
+    grid-template-columns: 1fr !important;
+  }
+  /* Pay fixation earnings/deductions panels */
+  [style*="grid-template-columns:1fr 1fr"][style*="pay"],
+  .sh-body [style*="grid-template-columns:1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── 10. PROJECT MODULE SELECTOR BAR ──────────────────────────── */
+@media (max-width: 640px) {
+  /* Project tab bar — allow scroll, no wrapping */
+  #app-projects [style*="display:flex"][style*="background:#1B5E20"],
+  #app-projects [style*="display:flex"][style*="background:#155724"] {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  #app-projects [style*="display:flex"][style*="background:#1B5E20"]::-webkit-scrollbar,
+  #app-projects [style*="display:flex"][style*="background:#155724"]::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── 11. EMPLOYEE MODULE TAB BAR ──────────────────────────────── */
+@media (max-width: 640px) {
+  #emp-tab-bar {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  #emp-tab-bar::-webkit-scrollbar { display: none; }
+  #emp-tab-bar button {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* ── 12. SHEET ITSELF: full width on mobile ───────────────────── */
+@media (max-width: 640px) {
+  .sheet {
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 92vh !important;
+  }
+  .sh-body {
+    padding: 12px 12px !important;
+  }
+  .sh-foot {
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
+}
+
+/* ── 13. ALLOTTED WORK CARD: resource row flex → wrap ─────────── */
+@media (max-width: 480px) {
+  /* Allotment batch card item rows */
+  #exec-content [style*="display:flex"][style*="align-items:center"][style*="gap:8px"] {
+    flex-wrap: wrap !important;
+  }
+}
+
+/* ── 14. FINANCE / PETTY CASH / ACCOUNTS ─────────────────────── */
+@media (max-width: 640px) {
+  /* Account voucher buttons row — allow wrap */
+  #acc-content [style*="display:flex"][style*="gap:8px"],
+  #pc-content [style*="display:flex"][style*="gap:8px"] {
+    flex-wrap: wrap !important;
+  }
+  /* Voucher type buttons */
+  [style*="min-width:70px"] {
+    min-width: 0 !important;
+    flex: 1 1 calc(50% - 4px) !important;
+  }
+}
+
+/* ── 15. GENERAL CONTENT PADDING ON SMALL SCREENS ────────────── */
+@media (max-width: 480px) {
+  .main {
+    padding: 10px !important;
+  }
+  /* Form labels — reduce letter spacing on small screens */
+  .flbl {
+    letter-spacing: 0.3px !important;
+  }
+}
+
+/* ── 16. TOAST — full width on mobile ────────────────────────── */
+@media (max-width: 480px) {
+  .toast-wrap {
+    left: 8px !important;
+    right: 8px !important;
+  }
+  .toast-item {
+    font-size: 12px !important;
+    padding: 10px 12px !important;
+  }
+}
+
+/* ── 17. BOQ / EXECUTION: inline resource inputs in allot form ── */
+@media (max-width: 480px) {
+  /* Party section in allotment form: 2-col → 1-col */
+  #exec-sheet-body [style*="grid-template-columns:1fr 1fr"],
+  #exec-sheet-body [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  #exec-sheet-body [style*="grid-template-columns:1fr 1fr 1fr"],
+  #exec-sheet-body [style*="grid-template-columns: 1fr 1fr 1fr"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* ── 18. REGISTRY CARDS: detail grid ─────────────────────────── */
+@media (max-width: 380px) {
+  .rc-detail {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── 19. SALARY SLIP HEADER INSIDE SHEET ─────────────────────── */
+@media (max-width: 480px) {
+  /* Salary month/year selector row */
+  #sal-content [style*="display:flex"][style*="gap"] {
+    flex-wrap: wrap !important;
+  }
+}
+
+/* ── 20. PREVENT HORIZONTAL OVERFLOW ON ALL APP SCREENS ──────── */
+.app-screen {
+  overflow-x: hidden;
+}
+.app-screen .main,
+.app-screen [id$="-content"] {
+  overflow-x: hidden;
+  word-break: break-word;
+}
+
+/* Safe area insets for iPhone notch/home bar */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .app-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+    height: calc(60px + env(safe-area-inset-bottom));
+  }
+  .sheet {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
