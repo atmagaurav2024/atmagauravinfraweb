@@ -1009,13 +1009,10 @@ async function execOpenAllot(itemId){
   await loadUomIfNeeded();
   var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
   var item = WA_ITEMS.find(function(i){return i.id===itemId;})||{};
-  // Get sub-item IDs for this BOQ item
   var itemSubIds = WA_SUBS.filter(function(s){return s.boq_item_id===itemId;}).map(function(s){return s.id;});
-  // Match resources by boq_item_id OR by boq_subitem_id belonging to this item
   var itemRes = WA_PLANNED.filter(function(r){
     return r.boq_item_id===itemId || (r.boq_subitem_id && itemSubIds.includes(r.boq_subitem_id));
   });
-  // Show all resources — checked ones will be allotted
   var pendingRes = itemRes.filter(function(res){
     var allotted = WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;})
       .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
@@ -1023,64 +1020,81 @@ async function execOpenAllot(itemId){
   });
   if(!pendingRes.length){toast('All resources for this item are fully allotted','info');return;}
 
-  // Build resource rows with checkboxes
+  // ── STEP 1: Party details (shared for all selected resources) ──
+  var partySection =
+    '<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-bottom:14px;">'+
+      '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Party Details</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+        '<div><label class="flbl">Party Type *</label>'+
+          '<select id="wa-party-type" class="fsel">'+
+            '<option value="">— Select Type —</option>'+
+            '<option value="sc">Subcontractor</option>'+
+            '<option value="vendor">Vendor</option>'+
+            '<option value="labour_contractor">Labour Contractor</option>'+
+            '<option value="labour">Labour</option>'+
+            '<option value="machinery">Machinery</option>'+
+          '</select>'+
+        '</div>'+
+        '<div><label class="flbl">Party Name *</label>'+
+          '<select id="wa-party-name" class="fsel"><option value="">— Select type first —</option></select>'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+        '<div><label class="flbl">Start Date</label><input id="wa-start-date" class="finp" type="date"></div>'+
+        '<div><label class="flbl">End Date</label><input id="wa-end-date" class="finp" type="date"></div>'+
+      '</div>'+
+      '<div style="margin-bottom:8px;"><label class="flbl">Scope / Terms</label>'+
+        '<textarea id="wa-scope" class="ftxt" rows="2" placeholder="Common scope for all selected resources..."></textarea>'+
+      '</div>'+
+      '<div><label class="flbl">Document Type (optional)</label>'+
+        '<div style="display:flex;gap:6px;margin-top:4px;">'+
+          '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+            '<input type="radio" name="wa-doc-type" value="wo" style="accent-color:#E65100;">'+
+            '<div><div style="font-size:10px;font-weight:800;">Work Order</div><div style="font-size:9px;color:var(--text3);">SC / Labour</div></div>'+
+          '</label>'+
+          '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+            '<input type="radio" name="wa-doc-type" value="po" style="accent-color:#1565C0;">'+
+            '<div><div style="font-size:10px;font-weight:800;">Purchase Order</div><div style="font-size:9px;color:var(--text3);">Vendor</div></div>'+
+          '</label>'+
+          '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+            '<input type="radio" name="wa-doc-type" value="none" checked style="accent-color:#555;">'+
+            '<div><div style="font-size:10px;font-weight:800;">None</div><div style="font-size:9px;color:var(--text3);">Save only</div></div>'+
+          '</label>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+  // ── STEP 2: Resource rows with checkbox + qty/rate only ──
   var resRowsHtml = pendingRes.map(function(res){
     var allotted = WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;})
       .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
     var bal = Math.max(0,(parseFloat(res.qty)||0)-allotted);
     var uomOpts = buildUomOpts(res.unit||item.unit||'');
-    return '<div class="wa-res-row" data-res-id="'+res.id+'" data-bal="'+bal+'" data-rate="'+(res.rate||0)+'" data-unit="'+(res.unit||item.unit||'')+'" style="border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#FAFAFA;">'+
+    return '<div class="wa-res-row" data-res-id="'+res.id+'" style="border:1px solid var(--border);border-radius:10px;margin-bottom:6px;overflow:hidden;">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#FAFAFA;">'+
         '<input type="checkbox" class="wa-res-chk" data-res-id="'+res.id+'" style="width:16px;height:16px;accent-color:#E65100;flex-shrink:0;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:12px;font-weight:800;">'+res.party_name+'</div>'+
-          '<div style="font-size:10px;color:var(--text3);">Planned: '+(res.qty||0)+' '+(res.unit||'')+' | Balance: <b style="color:#E65100;">'+bal.toFixed(3).replace(/\.?0+$/,'')+'</b></div>'+
+          '<div style="font-size:10px;color:var(--text3);">Planned: '+(res.qty||0)+' '+(res.unit||'')+
+          ' &nbsp;|&nbsp; Balance: <b style="color:#E65100;">'+bal.toFixed(3).replace(/\.?0+$/,'')+'</b></div>'+
         '</div>'+
-      '</div>'+
-      '<div class="wa-res-fields" style="display:none;padding:10px 12px;border-top:1px solid var(--border);background:white;">'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">'+
-          '<div><label class="flbl">Party Type *</label>'+
-            '<select class="fsel wa-type-sel" data-res-id="'+res.id+'">'+
-              '<option value="">— Type —</option>'+
-              '<option value="sc">Subcontractor</option>'+
-              '<option value="vendor">Vendor</option>'+
-              '<option value="labour_contractor">Labour Contractor</option>'+
-              '<option value="labour">Labour</option>'+
-              '<option value="machinery">Machinery</option>'+
-            '</select>'+
+        // Qty + Rate inline — always visible once checked
+        '<div class="wa-res-inputs" style="display:none;align-items:center;gap:6px;">'+
+          '<div style="text-align:center;">'+
+            '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty</div>'+
+            '<input class="wa-qty-inp finp" data-res-id="'+res.id+'" type="number" step="0.001" max="'+bal+'" placeholder="'+bal+'" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
           '</div>'+
-          '<div><label class="flbl">Party Name *</label>'+
-            '<select class="fsel wa-party-sel" data-res-id="'+res.id+'"><option value="">— Select type first —</option></select>'+
+          '<div style="text-align:center;">'+
+            '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Unit</div>'+
+            '<select class="wa-unit-sel fsel" data-res-id="'+res.id+'" style="width:70px;padding:4px 4px;font-size:11px;">'+uomOpts+'</select>'+
           '</div>'+
-          '<div><label class="flbl">Qty *</label>'+
-            '<input class="finp wa-qty-inp" data-res-id="'+res.id+'" type="number" step="0.001" max="'+bal+'" placeholder="'+bal+'">'+
+          '<div style="text-align:center;">'+
+            '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Rate (₹)</div>'+
+            '<input class="wa-rate-inp finp" data-res-id="'+res.id+'" type="number" step="0.01" value="'+(res.rate||'')+'" placeholder="0" style="width:90px;padding:4px 6px;font-size:12px;text-align:center;">'+
           '</div>'+
-        '</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">'+
-          '<div><label class="flbl">Unit</label><select class="fsel wa-unit-sel" data-res-id="'+res.id+'">'+uomOpts+'</select></div>'+
-          '<div><label class="flbl">Rate (₹) *</label><input class="finp wa-rate-inp" data-res-id="'+res.id+'" type="number" step="0.01" value="'+(res.rate||'')+'" placeholder="'+(res.rate||0)+'"></div>'+
-          '<div><label class="flbl">Est. Amount</label><div class="wa-est-amt" data-res-id="'+res.id+'" style="padding:10px 12px;background:#F8FAFC;border:1px solid var(--border);border-radius:10px;font-size:12px;font-weight:800;color:#1565C0;margin-top:2px;">₹0</div></div>'+
-        '</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
-          '<div><label class="flbl">Start Date</label><input class="finp wa-start-inp" data-res-id="'+res.id+'" type="date"></div>'+
-          '<div><label class="flbl">End Date</label><input class="finp wa-end-inp" data-res-id="'+res.id+'" type="date"></div>'+
-        '</div>'+
-        '<div><label class="flbl">Scope / Terms</label><textarea class="ftxt wa-scope-inp" data-res-id="'+res.id+'" rows="2" placeholder="Scope, terms..."></textarea></div>'+
-        '<div style="margin-top:8px;">'+
-          '<label class="flbl">Document (optional — download later if needed)</label>'+
-          '<div style="display:flex;gap:6px;margin-top:4px;">'+
-            '<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;" onclick="waDocToggle(this,\'wo\')">'+
-              '<input type="radio" name="wa-doc-'+res.id+'" class="wa-doc-radio" value="wo" style="accent-color:#E65100;">'+
-              '<div><div style="font-size:10px;font-weight:800;">Work Order</div><div style="font-size:9px;color:var(--text3);">SC / Labour</div></div>'+
-            '</label>'+
-            '<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;" onclick="waDocToggle(this,\'po\')">'+
-              '<input type="radio" name="wa-doc-'+res.id+'" class="wa-doc-radio" value="po" style="accent-color:#1565C0;">'+
-              '<div><div style="font-size:10px;font-weight:800;">Purchase Order</div><div style="font-size:9px;color:var(--text3);">Vendor</div></div>'+
-            '</label>'+
-            '<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
-              '<input type="radio" name="wa-doc-'+res.id+'" class="wa-doc-radio" value="none" checked style="accent-color:#555;">'+
-              '<div><div style="font-size:10px;font-weight:800;">None</div><div style="font-size:9px;color:var(--text3);">Save only</div></div>'+
-            '</label>'+
+          '<div style="text-align:center;">'+
+            '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Amount</div>'+
+            '<div class="wa-est-amt" data-res-id="'+res.id+'" style="font-size:12px;font-weight:800;color:#1565C0;white-space:nowrap;">₹0</div>'+
           '</div>'+
         '</div>'+
       '</div>'+
@@ -1089,9 +1103,9 @@ async function execOpenAllot(itemId){
 
   document.getElementById('exec-sheet-title').textContent='Allot Work — '+(item.short_name||item.description||'');
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF3E0;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#E65100;font-weight:700;">'+
-      '&#9745; Check resources to include in this allotment'+
-    '</div>'+
+    partySection+
+    '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:8px;">&#9313; Select Resources</div>'+
+    '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Check resources to include — enter qty and rate for each</div>'+
     resRowsHtml;
 
   var sf=document.getElementById('exec-sheet-foot');
@@ -1099,32 +1113,45 @@ async function execOpenAllot(itemId){
   var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
   cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
   var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#E65100;color:white;';
-  sb.innerHTML='&#10003; Save Allotments';
+  sb.innerHTML='&#10003; Save Allotment';
   sb.onclick=function(){execSaveAllot(itemId,projId);};
   sf.appendChild(cb);sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
 
-  // Wire checkboxes via event delegation on the sheet body (more reliable than querySelectorAll)
+  // Wire events after render
   setTimeout(function(){
-    var sheetBody = document.getElementById('exec-sheet-body');
-    if(!sheetBody) return;
+    var body = document.getElementById('exec-sheet-body');
+    if(!body) return;
 
-    // Use event delegation on the sheet body — catches all checkbox changes
-    sheetBody.addEventListener('change', function(e){
+    // Party type → load party names
+    var typesel = document.getElementById('wa-party-type');
+    if(typesel) typesel.addEventListener('change', function(){
+      waLoadPartyNames(this.value);
+    });
+
+    // WO/PO mutual exclusion
+    body.querySelectorAll('input[name="wa-doc-type"]').forEach(function(r){
+      r.addEventListener('change', function(){
+        var val = this.value;
+        body.querySelectorAll('input[name="wa-doc-type"]').forEach(function(x){
+          var lbl = x.closest('label');
+          if(val==='none'){ x.disabled=false; if(lbl){lbl.style.opacity='1';lbl.style.cursor='pointer';} }
+          else if(x.value!==val && x.value!=='none'){ x.disabled=true; if(lbl){lbl.style.opacity='0.4';lbl.style.cursor='not-allowed';} }
+          else { x.disabled=false; if(lbl){lbl.style.opacity='1';lbl.style.cursor='pointer';} }
+        });
+      });
+    });
+
+    // Checkbox → show/hide inline inputs + wire qty/rate calc
+    body.addEventListener('change', function(e){
       var chk = e.target;
-      // Checkbox toggle — show/hide fields
       if(chk.classList && chk.classList.contains('wa-res-chk')){
         var row = chk.closest('.wa-res-row');
         if(!row) return;
-        var fields = row.querySelector('.wa-res-fields');
-        if(fields) fields.style.display = chk.checked ? 'block' : 'none';
-        // Wire qty/rate → est amount when first checked
+        var inputs = row.querySelector('.wa-res-inputs');
+        if(inputs) inputs.style.display = chk.checked ? 'flex' : 'none';
         if(chk.checked && !chk._wired){
           chk._wired = true;
-          var typesel = row.querySelector('.wa-type-sel');
-          if(typesel) typesel.addEventListener('change', function(){
-            waTypeChangeFor(this.getAttribute('data-res-id'), this.value);
-          });
           var qInp = row.querySelector('.wa-qty-inp');
           var rInp = row.querySelector('.wa-rate-inp');
           var amtEl = row.querySelector('.wa-est-amt');
@@ -1132,13 +1159,32 @@ async function execOpenAllot(itemId){
             if(qInp&&rInp&&amtEl)
               amtEl.textContent='\u20b9'+Math.round((parseFloat(qInp.value)||0)*(parseFloat(rInp.value)||0)).toLocaleString('en-IN');
           }
-          if(qInp) qInp.addEventListener('input', updAmt);
-          if(rInp) rInp.addEventListener('input', updAmt);
+          if(qInp) qInp.addEventListener('input',updAmt);
+          if(rInp) rInp.addEventListener('input',updAmt);
           updAmt();
         }
       }
     });
-  }, 100);
+  },100);
+}
+
+// Load party names dropdown when type changes
+async function waLoadPartyNames(type){
+  var sel = document.getElementById('wa-party-name');
+  if(!sel||!type){if(sel)sel.innerHTML='<option value="">— Select type first —</option>';return;}
+  sel.innerHTML='<option value="">&#9203; Loading...</option>';
+  try{
+    var rows=[];
+    if(type==='sc'||type==='labour_contractor') rows=await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+    else if(type==='vendor') rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+    else if(type==='labour') rows=await sbFetch('labourers',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+    else if(type==='machinery'){
+      try{rows=await sbFetch('equipment',{select:'id,name',order:'name.asc'});}catch(e){rows=[];}
+      if(!Array.isArray(rows)||!rows.length) rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+    }
+    var list=Array.isArray(rows)?rows:[];
+    sel.innerHTML='<option value="">— Select —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('');
+  }catch(e){sel.innerHTML='<option value="">— Error loading —</option>';console.error(e);}
 }
 
 // WO/PO mutual exclusion per resource
@@ -1215,9 +1261,21 @@ async function waTypeChange(){
 
 
 async function execSaveAllot(itemId, projId){
-  // Collect all checked resource rows
+  // Read shared party details from Step 1
+  var type  = (document.getElementById('wa-party-type')||{}).value||'';
+  var party = ((document.getElementById('wa-party-name')||{}).value||'').trim();
+  var start = (document.getElementById('wa-start-date')||{}).value||'';
+  var end   = (document.getElementById('wa-end-date')||{}).value||'';
+  var scope = ((document.getElementById('wa-scope')||{}).value||'').trim();
+  var docRadio = document.querySelector('input[name="wa-doc-type"]:checked');
+  var docType  = docRadio ? docRadio.value : 'none';
+
+  if(!type){toast('Select party type','warning');return;}
+  if(!party){toast('Select party name','warning');return;}
+
+  // Collect checked resources from Step 2
   var checkedRows = Array.from(document.querySelectorAll('.wa-res-chk:checked'));
-  if(!checkedRows.length){toast('Select at least one resource to allot','warning');return;}
+  if(!checkedRows.length){toast('Select at least one resource','warning');return;}
 
   var allValid = true;
   var toSave = [];
@@ -1225,23 +1283,16 @@ async function execSaveAllot(itemId, projId){
   checkedRows.forEach(function(chk){
     var resId = chk.getAttribute('data-res-id');
     var row = chk.closest('.wa-res-row');
-    var type = row&&row.querySelector('.wa-type-sel')?row.querySelector('.wa-type-sel').value:'';
-    var party = row&&row.querySelector('.wa-party-sel')?row.querySelector('.wa-party-sel').value.trim():'';
-    var qty = parseFloat(row&&row.querySelector('.wa-qty-inp')?row.querySelector('.wa-qty-inp').value:0)||0;
+    var qty  = parseFloat(row&&row.querySelector('.wa-qty-inp')?row.querySelector('.wa-qty-inp').value:0)||0;
     var rate = parseFloat(row&&row.querySelector('.wa-rate-inp')?row.querySelector('.wa-rate-inp').value:0)||0;
     var unit = row&&row.querySelector('.wa-unit-sel')?row.querySelector('.wa-unit-sel').value:null;
-    var scope = row&&row.querySelector('.wa-scope-inp')?row.querySelector('.wa-scope-inp').value:'';
-    var start = row&&row.querySelector('.wa-start-inp')?row.querySelector('.wa-start-inp').value:'';
-    var end = row&&row.querySelector('.wa-end-inp')?row.querySelector('.wa-end-inp').value:'';
-    var docRadio = row&&row.querySelector('.wa-doc-radio:checked');
-    var docType = docRadio?docRadio.value:'none';
 
-    if(!type||!party){toast('Party type and name required for all selected resources','warning');allValid=false;return;}
-    if(!qty){toast('Qty required for all selected resources','warning');allValid=false;return;}
-    if(!rate){toast('Rate required for all selected resources','warning');allValid=false;return;}
+    if(!qty){toast('Enter qty for all selected resources','warning');allValid=false;return;}
+    if(!rate){toast('Enter rate for all selected resources','warning');allValid=false;return;}
 
     var planRes = WA_PLANNED.find(function(r){return r.id===resId;})||{};
-    toSave.push({resId:resId, planRes:planRes, type:type, party:party, qty:qty, rate:rate, unit:unit||null, scope:scope||null, start:start||null, end:end||null, docType:docType});
+    toSave.push({resId:resId, planRes:planRes, type:type, party:party, qty:qty, rate:rate,
+      unit:unit||null, scope:scope||null, start:start||null, end:end||null, docType:docType});
   });
 
   if(!allValid) return;
