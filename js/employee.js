@@ -4638,45 +4638,71 @@ async function empAnnualHTMLAsync(){
   var curFYStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear()-1;
   var curFYEnd   = curFYStart + 1;
 
-  // Employee options — only those with salary records
-  var empWithSal = {};
-  SALARY_RECORDS.forEach(function(r){ if(r.employee_id) empWithSal[r.employee_id]=true; });
-  var empOpts = EMP_LIST.filter(function(e){ return empWithSal[e.id]; })
+  // FY options for all-employees tab
+  var fySet = {};
+  SALARY_RECORDS.forEach(function(r){ var fy = r.month>=4?r.year:r.year-1; fySet[fy]=true; });
+  var fyList = Object.keys(fySet).map(Number).sort().reverse();
+  var fyOpts = fyList.length
+    ? fyList.map(function(fy){
+        var lbl='FY '+fy+'-'+(fy+1).toString().slice(-2);
+        return '<option value="'+fy+'"'+(fy===curFYStart?' selected':'')+'>'+lbl+'</option>';
+      }).join('')+'<option value="custom">&#128197; Custom Range</option>'
+    : '<option value="">— No salary records found —</option>';
+
+  // Employee options
+  var empWithSal={};
+  SALARY_RECORDS.forEach(function(r){if(r.employee_id)empWithSal[r.employee_id]=true;});
+  var empOpts = EMP_LIST.filter(function(e){return empWithSal[e.id];})
     .map(function(e){
-      var name = ((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim();
+      var name=((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim();
       return '<option value="'+e.id+'">'+name+(e.employee_code?' ('+e.employee_code+')':'')+'</option>';
     }).join('');
-  if(!empOpts) empOpts = '<option value="">— No employees with salary data —</option>';
 
   var html =
-    '<div style="background:white;border-radius:14px;padding:14px;margin-bottom:12px;">'+
-    '<div style="font-size:13px;font-weight:800;color:#1565C0;margin-bottom:12px;">&#128200; Annual Salary Statement</div>'+
+    '<div style="background:white;border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
+      // Tab bar
+      '<div style="display:flex;border-bottom:2px solid var(--border);">'+
+        '<button id="ann-tab-individual" onclick="annSwitchTab(\'individual\')" style="flex:1;padding:11px;font-size:12px;font-weight:800;border:none;cursor:pointer;background:#1565C0;color:white;border-radius:14px 0 0 0;">&#128100; Individual Statement</button>'+
+        '<button id="ann-tab-all" onclick="annSwitchTab(\'all\')" style="flex:1;padding:11px;font-size:12px;font-weight:800;border:none;cursor:pointer;background:#F8FAFC;color:var(--text3);border-radius:0 14px 0 0;">&#128202; All Employees</button>'+
+      '</div>'+
 
-    // Step 1: Select employee
-    '<div style="margin-bottom:12px;">'+
-      '<label class="flbl">Employee</label>'+
-      '<select id="ann-emp" class="fsel" onchange="annLoadPaymentDates()">'+
-        '<option value="">— Select Employee —</option>'+
-        empOpts+
-      '</select>'+
-    '</div>'+
-
-    // Step 2: Payment dates (loaded dynamically)
-    '<div id="ann-pay-dates-section" style="display:none;margin-bottom:12px;">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'+
-        '<label class="flbl" style="margin:0;">Select Payment Dates</label>'+
-        '<div style="display:flex;gap:6px;">'+
-          '<button onclick="annSelectAllDates(true)" style="font-size:10px;padding:3px 8px;border:1px solid #1565C0;color:#1565C0;background:white;border-radius:5px;cursor:pointer;font-weight:700;">All</button>'+
-          '<button onclick="annSelectAllDates(false)" style="font-size:10px;padding:3px 8px;border:1px solid var(--border);color:var(--text3);background:white;border-radius:5px;cursor:pointer;">None</button>'+
+      // Individual tab
+      '<div id="ann-panel-individual" style="padding:14px;">'+
+        '<div style="margin-bottom:12px;">'+
+          '<label class="flbl">Employee</label>'+
+          '<select id="ann-emp" class="fsel" onchange="annLoadPaymentDates()">'+
+            '<option value="">— Select Employee —</option>'+empOpts+
+          '</select>'+
+        '</div>'+
+        '<div id="ann-pay-dates-section" style="display:none;margin-bottom:12px;">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'+
+            '<label class="flbl" style="margin:0;">Select Payment Dates</label>'+
+            '<div style="display:flex;gap:6px;">'+
+              '<button onclick="annSelectAllDates(true)" style="font-size:10px;padding:3px 8px;border:1px solid #1565C0;color:#1565C0;background:white;border-radius:5px;cursor:pointer;font-weight:700;">All</button>'+
+              '<button onclick="annSelectAllDates(false)" style="font-size:10px;padding:3px 8px;border:1px solid var(--border);color:var(--text3);background:white;border-radius:5px;cursor:pointer;">None</button>'+
+            '</div>'+
+          '</div>'+
+          '<div id="ann-pay-dates" style="display:flex;flex-wrap:wrap;gap:6px;"></div>'+
+        '</div>'+
+        '<div id="ann-gen-btn-row" style="display:none;">'+
+          '<button onclick="annGenerate()" style="width:100%;padding:11px;background:#1565C0;color:white;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128200; Generate Statement</button>'+
         '</div>'+
       '</div>'+
-      '<div id="ann-pay-dates" style="display:flex;flex-wrap:wrap;gap:6px;"></div>'+
-    '</div>'+
 
-    // Generate button
-    '<div id="ann-gen-btn-row" style="display:none;">'+
-      '<button onclick="annGenerate()" style="width:100%;padding:11px;background:#1565C0;color:white;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128200; Generate Statement</button>'+
-    '</div>'+
+      // All employees tab
+      '<div id="ann-panel-all" style="display:none;padding:14px;">'+
+        '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:10px;">'+
+          '<div>'+
+            '<label class="flbl">Financial Year / Period</label>'+
+            '<select id="ann-fy" class="fsel" onchange="annToggleDates()">'+fyOpts+'</select>'+
+          '</div>'+
+          '<button onclick="annGenerateAll()" style="padding:10px 16px;background:#1565C0;color:white;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128200; Generate</button>'+
+        '</div>'+
+        '<div id="ann-custom" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
+          '<div><label class="flbl">From Date</label><input id="ann-from" class="finp" type="date" value="'+curFYStart+'-04-01"></div>'+
+          '<div><label class="flbl">To Date</label><input id="ann-to" class="finp" type="date" value="'+curFYEnd+'-03-31"></div>'+
+        '</div>'+
+      '</div>'+
     '</div>'+
     '<div id="ann-results"></div>';
 
@@ -4684,6 +4710,17 @@ async function empAnnualHTMLAsync(){
   if(el) el.innerHTML = html;
 }
 
+function annSwitchTab(tab){
+  var panels = ['individual','all'];
+  panels.forEach(function(t){
+    var btn = document.getElementById('ann-tab-'+t);
+    var panel = document.getElementById('ann-panel-'+t);
+    var active = t===tab;
+    if(btn){ btn.style.background=active?'#1565C0':'#F8FAFC'; btn.style.color=active?'white':'var(--text3)'; }
+    if(panel) panel.style.display = active?'block':'none';
+  });
+  document.getElementById('ann-results').innerHTML='';
+}
 // Load payment dates for selected employee
 function annLoadPaymentDates(){
   var empId = (document.getElementById('ann-emp')||{}).value||'';
@@ -4742,128 +4779,153 @@ function empAnnualHTML(){
   return ''; // content set async above
 }
 
-function annToggleDates(){} // kept for compatibility
+function annToggleDates(){
+  var fy = (document.getElementById('ann-fy')||{}).value||'';
+  var custom = document.getElementById('ann-custom');
+  if(custom) custom.style.display = (fy==='custom')?'grid':'none';
+}
 
+// Individual employee: generate from checked payment dates
 async function annGenerate(){
   var empId = (document.getElementById('ann-emp')||{}).value||'';
   if(!empId){ toast('Select an employee','warning'); return; }
-
-  // Get selected record IDs from checkboxes
   var checkedIds = Array.from(document.querySelectorAll('.ann-date-chk:checked')).map(function(c){return c.value;});
-  if(!checkedIds.length){ toast('Select at least one payment date','warning'); return; }
-
-  var filtered = SALARY_RECORDS.filter(function(r){ return checkedIds.includes(r.id); });
-  if(!filtered.length){ toast('No records found for selection','warning'); return; }
-
-  // Period label: earliest to latest payment_date or month
+  if(!checkedIds.length){ toast('Select at least one month','warning'); return; }
+  var filtered = SALARY_RECORDS.filter(function(r){return checkedIds.includes(r.id);});
+  if(!filtered.length){ toast('No records found','warning'); return; }
   var monthNames=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var sorted = filtered.slice().sort(function(a,b){
     if(a.payment_date&&b.payment_date) return a.payment_date.localeCompare(b.payment_date);
     return (a.year*12+a.month)-(b.year*12+b.month);
   });
-  var first = sorted[0], last = sorted[sorted.length-1];
-  var label = monthNames[first.month]+' '+first.year;
-  if(sorted.length>1) label += ' to '+monthNames[last.month]+' '+last.year;
-
-  var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
-  var empName = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'Employee';
-
-  annBuildStatement(filtered, label, empId, empName);
+  var first=sorted[0], last=sorted[sorted.length-1];
+  var label=monthNames[first.month]+' '+first.year+(sorted.length>1?' to '+monthNames[last.month]+' '+last.year:'');
+  var emp=EMP_LIST.find(function(e){return e.id===empId;})||{};
+  var empName=((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'Employee';
+  annBuildStatement(sorted, label, empId, empName);
 }
 
+// All employees: generate from FY or custom range
+async function annGenerateAll(){
+  if(!SALARY_RECORDS.length){ toast('Loading...','info'); await salLoadRecords(); }
+  var fy = (document.getElementById('ann-fy')||{}).value||'';
+  var monthNames=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var filtered, label;
+  if(fy==='custom'){
+    var from=(document.getElementById('ann-from')||{}).value||'';
+    var to=(document.getElementById('ann-to')||{}).value||'';
+    if(!from||!to){toast('Select date range','warning');return;}
+    var fd=new Date(from), td=new Date(to);
+    filtered=SALARY_RECORDS.filter(function(r){
+      var d=new Date(r.year+'-'+String(r.month).padStart(2,'0')+'-01');
+      return d>=fd && d<=td;
+    });
+    label=from+' to '+to;
+  } else {
+    var fyYear=parseInt(fy);
+    filtered=SALARY_RECORDS.filter(function(r){
+      return (r.month>=4&&r.year===fyYear)||(r.month<=3&&r.year===fyYear+1);
+    });
+    label='FY '+fyYear+'-'+(fyYear+1).toString().slice(-2);
+  }
+  if(!filtered.length){toast('No records for this period','warning');return;}
+  annBuildStatementAll(filtered, label);
+}
+
+// KEY FIX: Read ALL values directly from salary_records (same source as payslip)
+// This ensures annual statement matches payslip exactly
 function annBuildStatement(records, periodLabel, empId, empName){
   var el = document.getElementById('ann-results');
   if(!el) return;
-
   if(!records.length){
-    el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);background:white;border-radius:12px;">No records found for selected dates.</div>';
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);background:white;border-radius:12px;">No records found.</div>';
     return;
   }
 
-  var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
-  var empCode = emp.employee_code||emp.emp_id||'—';
-  var desig   = emp.designation||emp.role||'—';
-  var dept    = emp.department||'—';
+  var emp  = EMP_LIST.find(function(e){return e.id===empId;})||{};
+  var empCode = emp.employee_code||emp.emp_id||records[0].employee_code||'—';
+  var desig   = emp.designation||emp.role||records[0].designation||'—';
+  var dept    = emp.department||records[0].department||'—';
   var doj     = emp.date_of_joining||emp.doj||'—';
   var co      = COMPANY_DATA||{};
+  var monthNames=['','January','February','March','April','May','June','July','August','September','October','November','December'];
 
-  var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
   function inr(n){ return '\u20b9'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2}); }
-  function fmtD(d){ if(!d) return '—'; if(typeof d==='string'&&/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];} return fmtDate(d)||d; }
-
-  // Get pay structure
-  var pay = EMP_PAY.filter(function(p){return p.employee_id===empId;})
-                   .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
-  var extraEarnings=[];try{extraEarnings=pay.extra_earnings?JSON.parse(pay.extra_earnings):[];}catch(ex){}
-
-  // Sort records by payment_date (most important), then year/month
-  var sorted = records.slice().sort(function(a,b){
-    if(a.payment_date&&b.payment_date) return a.payment_date.localeCompare(b.payment_date);
-    return (a.year*12+a.month)-(b.year*12+b.month);
-  });
-
-  // Collect all earning component labels
-  var compSet = {};
-  if(extraEarnings.length){
-    extraEarnings.forEach(function(e){ if(e.label) compSet[e.label]=true; });
-  } else {
-    if(pay.da) compSet['DA']=true;
-    if(pay.hra) compSet['HRA']=true;
-    if(pay.conveyance) compSet['Conveyance']=true;
-    if(pay.special_allowance) compSet['Special Allowance']=true;
-    if(pay.medical_allowance) compSet['Medical Allowance']=true;
-    if(pay.other_allowance) compSet['Other Allowance']=true;
+  function fmtD(d){
+    if(!d)return '—';
+    if(typeof d==='string'&&/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+    return fmtDate(d)||d;
   }
-  var compKeys = Object.keys(compSet);
 
-  // Totals
-  var totals = {days:0,basic:0,gross:0,pf:0,esic:0,tds:0,pt:0,adv:0,ded:0,net:0,ot:0};
-  var compTotals = {};
-  compKeys.forEach(function(k){compTotals[k]=0;});
-  var hasOT = sorted.some(function(r){return r.ot_pay>0;});
-
-  // Monthly rows
-  var rows = sorted.map(function(r){
-    var basic = Number(r.basic||0);
-    var ratio = (Number(r.days_worked||26))/26;
-    var rowComps = {};
-    if(extraEarnings.length){
-      extraEarnings.forEach(function(ex){
-        var amt = ex.pct>0 ? Math.round(basic*ex.pct/100*ratio) : Math.round((ex.amount||0)*ratio);
-        rowComps[ex.label] = amt;
-      });
-    } else {
-      if(pay.da) rowComps['DA']=Math.round((pay.da||0)*ratio);
-      if(pay.hra) rowComps['HRA']=Math.round((pay.hra||0)*ratio);
-      if(pay.conveyance) rowComps['Conveyance']=Math.round((pay.conveyance||0)*ratio);
-      if(pay.special_allowance) rowComps['Special Allowance']=Math.round((pay.special_allowance||0)*ratio);
-      if(pay.medical_allowance) rowComps['Medical Allowance']=Math.round((pay.medical_allowance||0)*ratio);
-      if(pay.other_allowance) rowComps['Other Allowance']=Math.round((pay.other_allowance||0)*ratio);
+  // Collect all earning component labels from saved extra_earnings in salary_records
+  var compSet={};
+  records.forEach(function(r){
+    var ee=[];try{ee=r.extra_earnings?JSON.parse(r.extra_earnings):[];}catch(ex){}
+    ee.forEach(function(e){if(e.label&&e.amount>0)compSet[e.label]=true;});
+    // Also check pay structure fallback columns
+    if(!ee.length){
+      var p=EMP_PAY.filter(function(p){return p.employee_id===empId;})
+                   .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
+      if(p.da)compSet['DA']=true; if(p.hra)compSet['HRA']=true;
+      if(p.conveyance)compSet['Conveyance']=true;
+      if(p.special_allowance)compSet['Special Allowance']=true;
+      if(p.medical_allowance)compSet['Medical Allowance']=true;
+      if(p.other_allowance)compSet['Other Allowance']=true;
     }
-    var pf   = Number(r.pf_employee||0);
-    var esic = Number(r.esic_employee||0);
-    var tds  = Number(r.tds||0);
-    var pt   = Number(r.profession_tax||0);
-    var adv  = Number(r.advance_deduct||0);
-    var ded  = pf+esic+tds+pt+adv;
-    var net  = Number(r.net_payable||0);
-    var gross= Number(r.gross||0);
-    var otPay= Number(r.ot_pay||0);
-    var days = Number(r.days_worked||0);
+  });
+  var compKeys=Object.keys(compSet);
 
-    totals.days+=days; totals.basic+=basic; totals.gross+=gross;
+  var totals={days:0,basic:0,gross:0,earned:0,pf:0,esic:0,tds:0,pt:0,adv:0,ded:0,net:0,ot:0};
+  var compTotals={};
+  compKeys.forEach(function(k){compTotals[k]=0;});
+  var hasOT=records.some(function(r){return Number(r.ot_pay||0)>0;});
+
+  var rows=records.map(function(r,i){
+    // Read directly from salary_records — same as payslip
+    var basic  = Number(r.basic||0);
+    var earned = Number(r.earned||r.gross||0);
+    var gross  = Number(r.gross||0);
+    var otPay  = Number(r.ot_pay||0);
+    var pf     = Number(r.pf_employee||0);
+    var esic   = Number(r.esic_employee||0);
+    var tds    = Number(r.tds||0);
+    var pt     = Number(r.profession_tax||0);
+    var adv    = Number(r.advance_deduct||0);
+    var net    = Number(r.net_payable||0);
+    var days   = Number(r.days_worked||0);
+    var ded    = pf+esic+tds+pt+adv;
+
+    // Read allowances from saved extra_earnings in salary_record
+    var ee=[];try{ee=r.extra_earnings?JSON.parse(r.extra_earnings):[];}catch(ex){}
+    var rowComps={};
+    if(ee.length){
+      ee.forEach(function(e){rowComps[e.label]=(e.amount||0);});
+    } else {
+      // Fallback: recompute from pay structure (only if extra_earnings not saved)
+      var ratio=days/26;
+      var pay=EMP_PAY.filter(function(p){return p.employee_id===empId;})
+                     .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
+      if(pay.da)rowComps['DA']=Math.round((pay.da||0)*ratio);
+      if(pay.hra)rowComps['HRA']=Math.round((pay.hra||0)*ratio);
+      if(pay.conveyance)rowComps['Conveyance']=Math.round((pay.conveyance||0)*ratio);
+      if(pay.special_allowance)rowComps['Special Allowance']=Math.round((pay.special_allowance||0)*ratio);
+      if(pay.medical_allowance)rowComps['Medical Allowance']=Math.round((pay.medical_allowance||0)*ratio);
+      if(pay.other_allowance)rowComps['Other Allowance']=Math.round((pay.other_allowance||0)*ratio);
+    }
+
+    totals.days+=days; totals.basic+=basic; totals.gross+=gross; totals.earned+=earned;
     totals.pf+=pf; totals.esic+=esic; totals.tds+=tds; totals.pt+=pt;
     totals.adv+=adv; totals.ded+=ded; totals.net+=net; totals.ot+=otPay;
-    compKeys.forEach(function(k){ compTotals[k]=(compTotals[k]||0)+(rowComps[k]||0); });
+    compKeys.forEach(function(k){compTotals[k]=(compTotals[k]||0)+(rowComps[k]||0);});
 
-    var isPaid = !!r.payment_date;
-    var payCell = isPaid
-      ? '<td style="padding:6px 8px;font-size:10px;text-align:center;white-space:nowrap;">'+
-          '<div style="font-weight:800;color:#1B5E20;">'+fmtD(r.payment_date)+'</div>'+
-          (r.payment_ref?'<div style="font-size:9px;color:#555;">'+r.payment_ref+'</div>':'')+'</td>'
-      : '<td style="padding:6px 8px;text-align:center;"><span style="font-size:9px;background:#FFF3E0;color:#E65100;padding:2px 6px;border-radius:4px;font-weight:700;">Unpaid</span></td>';
+    var isPaid=!!r.payment_date;
+    var payCell='<td style="padding:6px 8px;font-size:10px;text-align:center;white-space:nowrap;">'+
+      (isPaid
+        ? '<div style="font-weight:800;color:#1B5E20;">'+fmtD(r.payment_date)+'</div>'+(r.payment_ref?'<div style="font-size:9px;color:#555;">'+r.payment_ref+'</div>':'')
+        : '<span style="font-size:9px;background:#FFF3E0;color:#E65100;padding:2px 6px;border-radius:4px;font-weight:700;">Unpaid</span>'
+      )+'</td>';
 
-    return '<tr style="border-bottom:1px solid #F5F5F5;">'+
+    return '<tr style="border-bottom:1px solid #F5F5F5;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
       '<td style="padding:6px 8px;font-size:11px;font-weight:700;white-space:nowrap;">'+monthNames[r.month]+' '+r.year+'</td>'+
       '<td style="padding:6px 8px;font-size:11px;text-align:center;">'+days+'</td>'+
       '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+inr(basic)+'</td>'+
@@ -4881,8 +4943,7 @@ function annBuildStatement(records, periodLabel, empId, empName){
     '</tr>';
   }).join('');
 
-  // Header row
-  var thead = '<tr style="background:#1565C0;color:white;">'+
+  var thead='<tr style="background:#1565C0;color:white;">'+
     '<th style="padding:8px;font-size:10px;text-align:left;white-space:nowrap;">Month</th>'+
     '<th style="padding:8px;font-size:10px;text-align:center;">Days</th>'+
     '<th style="padding:8px;font-size:10px;text-align:right;">Basic</th>'+
@@ -4899,8 +4960,8 @@ function annBuildStatement(records, periodLabel, empId, empName){
     '<th style="padding:8px;font-size:10px;text-align:center;background:#E65100;">Payment Date</th>'+
   '</tr>';
 
-  var tfoot = '<tr style="background:#E8F5E9;border-top:2px solid #1B5E20;font-weight:900;">'+
-    '<td style="padding:8px;font-size:11px;font-weight:800;">TOTAL ('+sorted.length+' months)</td>'+
+  var tfoot='<tr style="background:#E8F5E9;border-top:2px solid #1B5E20;font-weight:900;">'+
+    '<td style="padding:8px;font-size:11px;font-weight:800;">TOTAL ('+records.length+' months)</td>'+
     '<td style="padding:8px;text-align:center;font-weight:800;">'+totals.days+'</td>'+
     '<td style="padding:8px;text-align:right;font-weight:900;">'+inr(totals.basic)+'</td>'+
     compKeys.map(function(k){return '<td style="padding:8px;text-align:right;font-weight:900;">'+inr(compTotals[k]||0)+'</td>';}).join('')+
@@ -4916,15 +4977,15 @@ function annBuildStatement(records, periodLabel, empId, empName){
     '<td></td>'+
   '</tr>';
 
-  // Store for download
-  window._annData = {
+  // Store for downloads
+  window._annData={
     empId:empId, empName:empName, empCode:empCode, desig:desig, dept:dept, doj:doj,
-    records:sorted, compKeys:compKeys, compTotals:compTotals, totals:totals,
-    hasOT:hasOT, label:periodLabel, co:co, inr:inr, fmtD:fmtD, monthNames:monthNames
+    records:records, compKeys:compKeys, compTotals:compTotals, totals:totals,
+    hasOT:hasOT, label:periodLabel, co:co, inr:inr, fmtD:fmtD, monthNames:monthNames,
+    type:'individual'
   };
 
-  el.innerHTML =
-    // Employee info card
+  el.innerHTML=
     '<div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">'+
       '<div>'+
         '<div style="font-size:14px;font-weight:900;">'+empName+'</div>'+
@@ -4936,170 +4997,274 @@ function annBuildStatement(records, periodLabel, empId, empName){
         '<button onclick="annDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
       '</div>'+
     '</div>'+
-    // Table
     '<div style="background:white;border-radius:14px;overflow:hidden;">'+
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
         '<table style="width:100%;border-collapse:collapse;min-width:900px;">'+
-          '<thead>'+thead+'</thead>'+
-          '<tbody>'+rows+'</tbody>'+
-          '<tfoot>'+tfoot+'</tfoot>'+
+          '<thead>'+thead+'</thead><tbody>'+rows+'</tbody><tfoot>'+tfoot+'</tfoot>'+
+        '</table>'+
+      '</div>'+
+    '</div>';
+}
+
+// All-employees combined statement
+function annBuildStatementAll(records, periodLabel){
+  var el=document.getElementById('ann-results');
+  if(!el)return;
+  if(!records.length){
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);background:white;border-radius:12px;">No records for this period.</div>';
+    return;
+  }
+  function inr(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');}
+
+  // Aggregate by employee, reading directly from salary_records
+  var empMap={};
+  records.forEach(function(r){
+    var key=r.employee_id||r.employee_name;
+    if(!empMap[key]) empMap[key]={
+      name:r.employee_name, code:r.employee_code||'—',
+      desig:r.designation||'—', dept:r.department||'—',
+      months:0,days:0,basic:0,gross:0,pf:0,esic:0,tds:0,pt:0,adv:0,net:0
+    };
+    var e=empMap[key];
+    e.months++; e.days+=Number(r.days_worked||0);
+    e.basic+=Number(r.basic||0); e.gross+=Number(r.gross||0);
+    e.pf+=Number(r.pf_employee||0); e.esic+=Number(r.esic_employee||0);
+    e.tds+=Number(r.tds||0); e.pt+=Number(r.profession_tax||0);
+    e.adv+=Number(r.advance_deduct||0); e.net+=Number(r.net_payable||0);
+  });
+
+  var empList=Object.values(empMap).sort(function(a,b){return a.name.localeCompare(b.name);});
+  var totals={basic:0,gross:0,pf:0,esic:0,tds:0,pt:0,adv:0,net:0};
+  empList.forEach(function(e){
+    totals.basic+=e.basic; totals.gross+=e.gross; totals.pf+=e.pf;
+    totals.esic+=e.esic; totals.tds+=e.tds; totals.pt+=e.pt;
+    totals.adv+=e.adv; totals.net+=e.net;
+  });
+
+  function th(txt,right){ return '<th style="padding:7px 8px;font-size:9px;font-weight:800;color:white;text-align:'+(right?'right':'left')+';white-space:nowrap;">'+txt+'</th>'; }
+  var thead='<tr style="background:#1565C0;">'+th('#')+th('Employee')+th('Code')+th('Dept')+th('Months')+th('Basic',true)+th('Gross',true)+th('PF',true)+th('ESIC',true)+th('TDS',true)+th('P.Tax',true)+th('Advance',true)+th('Total Ded.',true)+th('Net Salary',true)+'</tr>';
+
+  var rows=empList.map(function(e,i){
+    var ded=e.pf+e.esic+e.tds+e.pt+e.adv;
+    return '<tr style="border-bottom:1px solid #F5F5F5;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
+      '<td style="padding:6px 8px;font-size:11px;">'+( i+1)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;font-weight:700;white-space:nowrap;">'+e.name+'<div style="font-size:9px;color:var(--text3);">'+e.desig+'</div></td>'+
+      '<td style="padding:6px 8px;font-size:10px;color:var(--text3);">'+e.code+'</td>'+
+      '<td style="padding:6px 8px;font-size:10px;color:var(--text3);white-space:nowrap;">'+e.dept+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:center;">'+e.months+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+inr(e.basic)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(e.gross)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+inr(e.pf)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+inr(e.esic)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+inr(e.tds)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+inr(e.pt)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+inr(e.adv)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:800;color:#C62828;">'+inr(ded)+'</td>'+
+      '<td style="padding:6px 8px;font-size:12px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(e.net)+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var tfoot='<tr style="background:#E8F5E9;border-top:2px solid #1B5E20;font-weight:900;">'+
+    '<td colspan="5" style="padding:8px;font-size:11px;font-weight:800;">TOTAL ('+empList.length+' employees)</td>'+
+    '<td style="padding:8px;text-align:right;">'+inr(totals.basic)+'</td>'+
+    '<td style="padding:8px;text-align:right;color:#2E7D32;">'+inr(totals.gross)+'</td>'+
+    '<td style="padding:8px;text-align:right;">'+inr(totals.pf)+'</td>'+
+    '<td style="padding:8px;text-align:right;">'+inr(totals.esic)+'</td>'+
+    '<td style="padding:8px;text-align:right;">'+inr(totals.tds)+'</td>'+
+    '<td style="padding:8px;text-align:right;">'+inr(totals.pt)+'</td>'+
+    '<td style="padding:8px;text-align:right;">'+inr(totals.adv)+'</td>'+
+    '<td style="padding:8px;text-align:right;color:#C62828;">'+inr(totals.pf+totals.esic+totals.tds+totals.pt+totals.adv)+'</td>'+
+    '<td style="padding:8px;text-align:right;font-size:13px;color:#1B5E20;">'+inr(totals.net)+'</td>'+
+  '</tr>';
+
+  window._annData={type:'all',empList:empList,totals:totals,label:periodLabel,inr:inr};
+
+  el.innerHTML=
+    '<div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">'+
+      '<div>'+
+        '<div style="font-size:14px;font-weight:900;">All Employees — '+periodLabel+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);">'+empList.length+' employees &bull; Total Net: '+inr(totals.net)+'</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:6px;">'+
+        '<button onclick="annDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
+        '<button onclick="annDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="background:white;border-radius:14px;overflow:hidden;">'+
+      '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
+        '<table style="width:100%;border-collapse:collapse;min-width:800px;">'+
+          '<thead>'+thead+'</thead><tbody>'+rows+'</tbody><tfoot>'+tfoot+'</tfoot>'+
         '</table>'+
       '</div>'+
     '</div>';
 }
 function annDownloadExcel(){
   var d = window._annData;
-  if(!d||!d.records){toast('Generate statement first','warning');return;}
-  var monthNames = d.monthNames;
-  var rows = [['Month','Days Worked','Basic'].concat(d.compKeys).concat(d.hasOT?['OT Pay']:[]).concat(['Gross','PF','ESIC','TDS','Prof.Tax','Advance','Total Ded.','Net Salary','Payment Date','Payment Ref'])];
-  d.records.forEach(function(r){
-    var basic = Number(r.basic||0);
-    var ratio = (Number(r.days_worked||26))/26;
-    var pay = EMP_PAY.filter(function(p){return p.employee_id===d.empId;})
-                     .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
-    var extraEarnings=[];try{extraEarnings=pay.extra_earnings?JSON.parse(pay.extra_earnings):[];}catch(ex){}
-    var rowComps = {};
-    if(extraEarnings.length){
-      extraEarnings.forEach(function(ex){ rowComps[ex.label]=ex.pct>0?Math.round(basic*ex.pct/100*ratio):Math.round((ex.amount||0)*ratio); });
-    } else {
-      if(pay.da) rowComps['DA']=Math.round((pay.da||0)*ratio);
-      if(pay.hra) rowComps['HRA']=Math.round((pay.hra||0)*ratio);
-      if(pay.conveyance) rowComps['Conveyance']=Math.round((pay.conveyance||0)*ratio);
-      if(pay.special_allowance) rowComps['Special Allowance']=Math.round((pay.special_allowance||0)*ratio);
-      if(pay.medical_allowance) rowComps['Medical Allowance']=Math.round((pay.medical_allowance||0)*ratio);
-      if(pay.other_allowance) rowComps['Other Allowance']=Math.round((pay.other_allowance||0)*ratio);
-    }
-    var row = [
-      monthNames[r.month]+' '+r.year,
-      Number(r.days_worked||0),
-      Number(r.basic||0)
-    ].concat(d.compKeys.map(function(k){return rowComps[k]||0;}))
-     .concat(d.hasOT?[Number(r.ot_pay||0)]:[])
-     .concat([
-      Number(r.gross||0),
-      Number(r.pf_employee||0), Number(r.esic_employee||0),
-      Number(r.tds||0), Number(r.profession_tax||0), Number(r.advance_deduct||0),
-      Number(r.pf_employee||0)+Number(r.esic_employee||0)+Number(r.tds||0)+Number(r.profession_tax||0)+Number(r.advance_deduct||0),
-      Number(r.net_payable||0),
-      r.payment_date?d.fmtD(r.payment_date):'Unpaid',
-      r.payment_ref||''
-    ]);
-    rows.push(row);
-  });
-  // Totals row
-  rows.push(['TOTAL',d.totals.days,d.totals.basic]
-    .concat(d.compKeys.map(function(k){return d.compTotals[k]||0;}))
-    .concat(d.hasOT?[d.totals.ot]:[])
-    .concat([d.totals.gross,d.totals.pf,d.totals.esic,d.totals.tds,d.totals.pt,d.totals.adv,d.totals.ded,d.totals.net,'',''])
-  );
+  if(!d){toast('Generate statement first','warning');return;}
 
-  var csv = rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
-  var blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'SalaryStatement_'+d.empName.replace(/\s+/g,'_')+'_'+d.label.replace(/\s+/g,'_')+'.csv';
-  a.click();
+  var rows, filename;
+  if(d.type==='individual'){
+    var monthNames=d.monthNames;
+    var hdr=['Month','Days','Basic'].concat(d.compKeys).concat(d.hasOT?['OT Pay']:[]).concat(['Gross','PF','ESIC','TDS','P.Tax','Advance','Total Ded.','Net Salary','Payment Date','Payment Ref']);
+    rows=[hdr];
+    d.records.forEach(function(r){
+      var ee=[];try{ee=r.extra_earnings?JSON.parse(r.extra_earnings):[];}catch(ex){}
+      var rowComps={};
+      if(ee.length){ee.forEach(function(e){rowComps[e.label]=e.amount||0;});}
+      var ded=Number(r.pf_employee||0)+Number(r.esic_employee||0)+Number(r.tds||0)+Number(r.profession_tax||0)+Number(r.advance_deduct||0);
+      rows.push([
+        monthNames[r.month]+' '+r.year,
+        Number(r.days_worked||0), Number(r.basic||0)
+      ].concat(d.compKeys.map(function(k){return rowComps[k]||0;}))
+       .concat(d.hasOT?[Number(r.ot_pay||0)]:[])
+       .concat([
+        Number(r.gross||0),
+        Number(r.pf_employee||0),Number(r.esic_employee||0),Number(r.tds||0),Number(r.profession_tax||0),Number(r.advance_deduct||0),
+        ded, Number(r.net_payable||0),
+        r.payment_date?d.fmtD(r.payment_date):'Unpaid', r.payment_ref||''
+      ]));
+    });
+    rows.push(['TOTAL',d.totals.days,d.totals.basic]
+      .concat(d.compKeys.map(function(k){return d.compTotals[k]||0;}))
+      .concat(d.hasOT?[d.totals.ot]:[])
+      .concat([d.totals.gross,d.totals.pf,d.totals.esic,d.totals.tds,d.totals.pt,d.totals.adv,d.totals.ded,d.totals.net,'','']));
+    filename='SalaryStatement_'+d.empName.replace(/\s+/g,'_')+'_'+d.label.replace(/[^a-z0-9]/gi,'_')+'.csv';
+  } else {
+    rows=[['#','Employee','Code','Dept','Months','Basic','Gross','PF','ESIC','TDS','P.Tax','Advance','Total Ded.','Net Salary']];
+    d.empList.forEach(function(e,i){
+      var ded=e.pf+e.esic+e.tds+e.pt+e.adv;
+      rows.push([i+1,e.name,e.code,e.dept,e.months,e.basic,e.gross,e.pf,e.esic,e.tds,e.pt,e.adv,ded,e.net]);
+    });
+    var t=d.totals; var td=t.pf+t.esic+t.tds+t.pt+t.adv;
+    rows.push(['TOTAL','','','',d.empList.length,t.basic,t.gross,t.pf,t.esic,t.tds,t.pt,t.adv,td,t.net]);
+    filename='AnnualStatement_'+d.label.replace(/[^a-z0-9]/gi,'_')+'.csv';
+  }
+
+  var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
 }
 
 function annDownloadPDF(){
-  var d = window._annData;
-  if(!d||!d.records){toast('Generate statement first','warning');return;}
-  var co = d.co||{};
-  var inr = d.inr;
-  var fmtD = d.fmtD;
-  var monthNames = d.monthNames;
+  var d=window._annData;
+  if(!d){toast('Generate statement first','warning');return;}
 
-  var thead = '<tr style="background:#1565C0;color:white;font-size:10px;">'+
-    '<th style="padding:6px 8px;text-align:left;">Month</th>'+
-    '<th style="padding:6px 8px;text-align:center;">Days</th>'+
-    '<th style="padding:6px 8px;text-align:right;">Basic</th>'+
-    d.compKeys.map(function(k){return '<th style="padding:6px 8px;text-align:right;">'+k+'</th>';}).join('')+
-    (d.hasOT?'<th style="padding:6px 8px;text-align:right;">OT Pay</th>':'')+
-    '<th style="padding:6px 8px;text-align:right;background:#1B5E20;">Gross</th>'+
-    '<th style="padding:6px 8px;text-align:right;">PF</th>'+
-    '<th style="padding:6px 8px;text-align:right;">ESIC</th>'+
-    '<th style="padding:6px 8px;text-align:right;">TDS</th>'+
-    '<th style="padding:6px 8px;text-align:right;">P.Tax</th>'+
-    '<th style="padding:6px 8px;text-align:right;">Advance</th>'+
-    '<th style="padding:6px 8px;text-align:right;background:#B71C1C;">Total Ded.</th>'+
-    '<th style="padding:6px 8px;text-align:right;background:#1B5E20;">Net Salary</th>'+
-    '<th style="padding:6px 8px;text-align:center;background:#E65100;">Payment Date</th>'+
-  '</tr>';
+  if(d.type==='all'){
+    // All-employees PDF
+    var inr=d.inr; var rows=d.empList.map(function(e,i){
+      var ded=e.pf+e.esic+e.tds+e.pt+e.adv;
+      return '<tr style="border-bottom:1px solid #EEE;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
+        '<td>'+(i+1)+'</td><td><b>'+e.name+'</b><br><small>'+e.desig+'</small></td>'+
+        '<td>'+e.code+'</td><td>'+e.dept+'</td><td style="text-align:center;">'+e.months+'</td>'+
+        '<td style="text-align:right;">'+inr(e.basic)+'</td>'+
+        '<td style="text-align:right;font-weight:800;color:#2E7D32;">'+inr(e.gross)+'</td>'+
+        '<td style="text-align:right;">'+inr(e.pf)+'</td><td style="text-align:right;">'+inr(e.esic)+'</td>'+
+        '<td style="text-align:right;">'+inr(e.tds)+'</td><td style="text-align:right;">'+inr(e.pt)+'</td>'+
+        '<td style="text-align:right;">'+inr(e.adv)+'</td>'+
+        '<td style="text-align:right;font-weight:800;color:#C62828;">'+inr(ded)+'</td>'+
+        '<td style="text-align:right;font-weight:900;color:#1B5E20;">'+inr(e.net)+'</td></tr>';
+    }).join('');
+    var t=d.totals; var td=t.pf+t.esic+t.tds+t.pt+t.adv;
+    var tfoot='<tr style="background:#E8F5E9;border-top:2px solid #1B5E20;font-weight:900;">'+
+      '<td colspan="5" style="padding:6px;">TOTAL ('+d.empList.length+' employees)</td>'+
+      '<td style="text-align:right;">'+inr(t.basic)+'</td><td style="text-align:right;color:#2E7D32;">'+inr(t.gross)+'</td>'+
+      '<td style="text-align:right;">'+inr(t.pf)+'</td><td style="text-align:right;">'+inr(t.esic)+'</td>'+
+      '<td style="text-align:right;">'+inr(t.tds)+'</td><td style="text-align:right;">'+inr(t.pt)+'</td>'+
+      '<td style="text-align:right;">'+inr(t.adv)+'</td>'+
+      '<td style="text-align:right;color:#C62828;">'+inr(td)+'</td>'+
+      '<td style="text-align:right;font-size:13px;color:#1B5E20;">'+inr(t.net)+'</td></tr>';
+    var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+    var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Annual Statement</title>'+
+      '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:10px;padding:20px;}'+
+      'table{width:100%;border-collapse:collapse;}th{background:#1565C0;color:white;padding:6px 8px;text-align:left;font-size:9px;}'+
+      'td{padding:5px 7px;}@media print{button{display:none;}}</style></head><body>'+
+      '<button onclick="window.print()" style="background:#1565C0;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;margin-bottom:14px;font-family:Arial;font-weight:700;">Print / Save PDF</button>'+
+      '<div style="display:flex;justify-content:space-between;border-bottom:3px solid #1565C0;padding-bottom:8px;margin-bottom:12px;">'+
+        '<div><div style="font-size:16px;font-weight:900;color:#1565C0;">'+(co.name||'Company Name')+'</div>'+
+        '<div style="font-size:10px;color:#555;">'+(co.address||'')+'</div></div>'+
+        '<div style="text-align:right;"><div style="font-size:16px;font-weight:900;">ANNUAL SALARY STATEMENT</div>'+
+        '<div style="color:#555;">Period: '+d.label+'</div></div>'+
+      '</div>'+
+      '<table><thead><tr><th>#</th><th>Employee</th><th>Code</th><th>Dept</th><th style="text-align:center;">Months</th>'+
+        '<th style="text-align:right;">Basic</th><th style="text-align:right;background:#1B5E20;">Gross</th>'+
+        '<th style="text-align:right;">PF</th><th style="text-align:right;">ESIC</th>'+
+        '<th style="text-align:right;">TDS</th><th style="text-align:right;">P.Tax</th><th style="text-align:right;">Advance</th>'+
+        '<th style="text-align:right;background:#B71C1C;">Total Ded.</th><th style="text-align:right;background:#1B5E20;">Net Salary</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody><tfoot>'+tfoot+'</tfoot></table></body></html>';
+    var w=window.open('','_blank'); if(w){w.document.write(html);w.document.close();}
+    else toast('Allow popups','warning');
+    return;
+  }
 
-  var tbody = d.records.map(function(r,i){
-    var basic = Number(r.basic||0);
-    var ratio = (Number(r.days_worked||26))/26;
-    var pay = EMP_PAY.filter(function(p){return p.employee_id===d.empId;})
-                     .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
-    var extraEarnings=[];try{extraEarnings=pay.extra_earnings?JSON.parse(pay.extra_earnings):[];}catch(ex){}
+  // Individual PDF
+  var inr=d.inr; var fmtD=d.fmtD; var monthNames=d.monthNames;
+  var co=d.co||{};
+  var thead='<tr style="background:#1565C0;color:white;font-size:9px;">'+
+    '<th style="padding:6px;text-align:left;">Month</th><th style="padding:6px;text-align:center;">Days</th>'+
+    '<th style="padding:6px;text-align:right;">Basic</th>'+
+    d.compKeys.map(function(k){return '<th style="padding:6px;text-align:right;">'+k+'</th>';}).join('')+
+    (d.hasOT?'<th style="padding:6px;text-align:right;">OT Pay</th>':'')+
+    '<th style="padding:6px;text-align:right;background:#1B5E20;">Gross</th>'+
+    '<th style="padding:6px;text-align:right;">PF</th><th style="padding:6px;text-align:right;">ESIC</th>'+
+    '<th style="padding:6px;text-align:right;">TDS</th><th style="padding:6px;text-align:right;">P.Tax</th>'+
+    '<th style="padding:6px;text-align:right;">Advance</th>'+
+    '<th style="padding:6px;text-align:right;background:#B71C1C;">Total Ded.</th>'+
+    '<th style="padding:6px;text-align:right;background:#1B5E20;">Net Salary</th>'+
+    '<th style="padding:6px;text-align:center;background:#E65100;">Payment Date</th></tr>';
+
+  var tbody=d.records.map(function(r,i){
+    var ee=[];try{ee=r.extra_earnings?JSON.parse(r.extra_earnings):[];}catch(ex){}
     var rowComps={};
-    if(extraEarnings.length){
-      extraEarnings.forEach(function(ex){ rowComps[ex.label]=ex.pct>0?Math.round(basic*ex.pct/100*ratio):Math.round((ex.amount||0)*ratio); });
-    } else {
-      if(pay.da) rowComps['DA']=Math.round((pay.da||0)*ratio);
-      if(pay.hra) rowComps['HRA']=Math.round((pay.hra||0)*ratio);
-      if(pay.conveyance) rowComps['Conveyance']=Math.round((pay.conveyance||0)*ratio);
-      if(pay.special_allowance) rowComps['Special Allowance']=Math.round((pay.special_allowance||0)*ratio);
-      if(pay.medical_allowance) rowComps['Medical Allowance']=Math.round((pay.medical_allowance||0)*ratio);
-      if(pay.other_allowance) rowComps['Other Allowance']=Math.round((pay.other_allowance||0)*ratio);
-    }
-    var pf=Number(r.pf_employee||0),esic=Number(r.esic_employee||0),tds=Number(r.tds||0);
-    var pt=Number(r.profession_tax||0),adv=Number(r.advance_deduct||0);
-    var ded=pf+esic+tds+pt+adv;
-    var isPaid=!!r.payment_date;
+    if(ee.length){ee.forEach(function(e){rowComps[e.label]=e.amount||0;});}
+    var pf=Number(r.pf_employee||0),esic=Number(r.esic_employee||0),tds=Number(r.tds||0),pt=Number(r.profession_tax||0),adv=Number(r.advance_deduct||0);
+    var ded=pf+esic+tds+pt+adv; var isPaid=!!r.payment_date;
     return '<tr style="border-bottom:1px solid #EEE;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
       '<td style="padding:5px 7px;font-weight:700;white-space:nowrap;">'+monthNames[r.month]+' '+r.year+'</td>'+
       '<td style="padding:5px 7px;text-align:center;">'+Number(r.days_worked||0)+'</td>'+
-      '<td style="padding:5px 7px;text-align:right;">'+inr(basic)+'</td>'+
+      '<td style="padding:5px 7px;text-align:right;">'+inr(Number(r.basic||0))+'</td>'+
       d.compKeys.map(function(k){return '<td style="padding:5px 7px;text-align:right;">'+inr(rowComps[k]||0)+'</td>';}).join('')+
       (d.hasOT?'<td style="padding:5px 7px;text-align:right;">'+inr(Number(r.ot_pay||0))+'</td>':'')+
       '<td style="padding:5px 7px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(Number(r.gross||0))+'</td>'+
-      '<td style="padding:5px 7px;text-align:right;">'+inr(pf)+'</td>'+
-      '<td style="padding:5px 7px;text-align:right;">'+inr(esic)+'</td>'+
-      '<td style="padding:5px 7px;text-align:right;">'+inr(tds)+'</td>'+
-      '<td style="padding:5px 7px;text-align:right;">'+inr(pt)+'</td>'+
+      '<td style="padding:5px 7px;text-align:right;">'+inr(pf)+'</td><td style="padding:5px 7px;text-align:right;">'+inr(esic)+'</td>'+
+      '<td style="padding:5px 7px;text-align:right;">'+inr(tds)+'</td><td style="padding:5px 7px;text-align:right;">'+inr(pt)+'</td>'+
       '<td style="padding:5px 7px;text-align:right;">'+inr(adv)+'</td>'+
       '<td style="padding:5px 7px;text-align:right;font-weight:800;color:#C62828;">'+inr(ded)+'</td>'+
       '<td style="padding:5px 7px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(Number(r.net_payable||0))+'</td>'+
       '<td style="padding:5px 7px;text-align:center;white-space:nowrap;">'+
-        (isPaid?'<b style="color:#1B5E20;">'+fmtD(r.payment_date)+'</b>'+(r.payment_ref?'<br><span style="font-size:8px;color:#555;">'+r.payment_ref+'</span>':'')
+        (isPaid?'<b style="color:#1B5E20;">'+fmtD(r.payment_date)+'</b>'+(r.payment_ref?'<br><span style="font-size:8px;">'+r.payment_ref+'</span>':'')
                :'<span style="color:#E65100;font-weight:700;">Unpaid</span>')+
-      '</td>'+
-    '</tr>';
+      '</td></tr>';
   }).join('');
 
-  var tfoot = '<tr style="background:#E8F5E9;border-top:2px solid #1B5E20;font-weight:900;">'+
-    '<td colspan="2" style="padding:6px 8px;">TOTAL ('+d.records.length+' months)</td>'+
-    '<td style="padding:6px 8px;text-align:right;">'+inr(d.totals.basic)+'</td>'+
-    d.compKeys.map(function(k){return '<td style="padding:6px 8px;text-align:right;">'+inr(d.compTotals[k]||0)+'</td>';}).join('')+
-    (d.hasOT?'<td style="padding:6px 8px;text-align:right;">'+inr(d.totals.ot)+'</td>':'')+
-    '<td style="padding:6px 8px;text-align:right;color:#2E7D32;">'+inr(d.totals.gross)+'</td>'+
-    '<td style="padding:6px 8px;text-align:right;">'+inr(d.totals.pf)+'</td>'+
-    '<td style="padding:6px 8px;text-align:right;">'+inr(d.totals.esic)+'</td>'+
-    '<td style="padding:6px 8px;text-align:right;">'+inr(d.totals.tds)+'</td>'+
-    '<td style="padding:6px 8px;text-align:right;">'+inr(d.totals.pt)+'</td>'+
-    '<td style="padding:6px 8px;text-align:right;">'+inr(d.totals.adv)+'</td>'+
-    '<td style="padding:6px 8px;text-align:right;color:#C62828;">'+inr(d.totals.ded)+'</td>'+
-    '<td style="padding:6px 8px;text-align:right;font-size:13px;color:#1B5E20;">'+inr(d.totals.net)+'</td>'+
-    '<td></td>'+
-  '</tr>';
+  var tfoot='<tr style="background:#E8F5E9;border-top:2px solid #1B5E20;font-weight:900;">'+
+    '<td colspan="2" style="padding:6px;font-weight:800;">TOTAL ('+d.records.length+' months)</td>'+
+    '<td style="padding:6px;text-align:right;">'+inr(d.totals.basic)+'</td>'+
+    d.compKeys.map(function(k){return '<td style="padding:6px;text-align:right;">'+inr(d.compTotals[k]||0)+'</td>';}).join('')+
+    (d.hasOT?'<td style="padding:6px;text-align:right;">'+inr(d.totals.ot)+'</td>':'')+
+    '<td style="padding:6px;text-align:right;color:#2E7D32;">'+inr(d.totals.gross)+'</td>'+
+    '<td style="padding:6px;text-align:right;">'+inr(d.totals.pf)+'</td>'+
+    '<td style="padding:6px;text-align:right;">'+inr(d.totals.esic)+'</td>'+
+    '<td style="padding:6px;text-align:right;">'+inr(d.totals.tds)+'</td>'+
+    '<td style="padding:6px;text-align:right;">'+inr(d.totals.pt)+'</td>'+
+    '<td style="padding:6px;text-align:right;">'+inr(d.totals.adv)+'</td>'+
+    '<td style="padding:6px;text-align:right;color:#C62828;">'+inr(d.totals.ded)+'</td>'+
+    '<td style="padding:6px;text-align:right;font-size:12px;color:#1B5E20;">'+inr(d.totals.net)+'</td>'+
+    '<td></td></tr>';
 
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salary Statement — '+d.empName+'</title>'+
-    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:24px;}'+
-    'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
-    'th{padding:7px 8px;font-size:9px;font-weight:800;text-align:right;}td{padding:5px 7px;vertical-align:middle;}'+
-    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1565C0;padding-bottom:10px;margin-bottom:14px;}'+
-    '.co{font-size:16px;font-weight:900;color:#1565C0;}.emp-card{background:#F8FAFC;border:1px solid #DDD;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}'+
-    '.lbl{font-size:8px;color:#888;font-weight:700;text-transform:uppercase;margin-bottom:2px;}.val{font-size:12px;font-weight:800;}'+
-    '@media print{button{display:none!important;}}'+
-    '</style></head><body>'+
-    '<button onclick="window.print()" style="background:#1565C0;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-family:Arial;font-weight:700;">Print / Save PDF</button>'+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Salary Statement — '+d.empName+'</title>'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:10px;padding:20px;}'+
+    'table{width:100%;border-collapse:collapse;}th{font-size:9px;font-weight:800;}td{padding:5px 7px;vertical-align:middle;}'+
+    '.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #1565C0;padding-bottom:8px;margin-bottom:12px;}'+
+    '.emp-card{background:#F8FAFC;border:1px solid #DDD;border-radius:6px;padding:10px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;}'+
+    '.lbl{font-size:8px;color:#888;font-weight:700;text-transform:uppercase;margin-bottom:1px;}.val{font-size:11px;font-weight:800;}'+
+    '@media print{button{display:none;}}</style></head><body>'+
+    '<button onclick="window.print()" style="background:#1565C0;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;margin-bottom:14px;font-family:Arial;font-weight:700;">Print / Save PDF</button>'+
     '<div class="hdr">'+
-      '<div><div class="co">'+(co.name||'Company Name')+'</div>'+
-        '<div style="font-size:10px;color:#555;margin-top:3px;">'+(co.address||'')+'</div>'+
+      '<div><div style="font-size:15px;font-weight:900;color:#1565C0;">'+(co.name||'Company Name')+'</div>'+
+        '<div style="font-size:10px;color:#555;">'+(co.address||'')+'</div>'+
         '<div style="font-size:10px;color:#555;">'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div></div>'+
-      '<div style="text-align:right;"><div style="font-size:18px;font-weight:900;color:#1565C0;">SALARY STATEMENT</div>'+
-        '<div style="font-size:11px;color:#555;">Period: '+d.label+'</div></div>'+
+      '<div style="text-align:right;"><div style="font-size:15px;font-weight:900;">SALARY STATEMENT</div>'+
+        '<div style="color:#555;">Period: '+d.label+'</div></div>'+
     '</div>'+
     '<div class="emp-card">'+
       '<div><div class="lbl">Employee Name</div><div class="val">'+d.empName+'</div></div>'+
@@ -5110,13 +5275,11 @@ function annDownloadPDF(){
       '<div><div class="lbl">Total Net Paid</div><div class="val" style="color:#1B5E20;">'+inr(d.totals.net)+'</div></div>'+
     '</div>'+
     '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody><tfoot>'+tfoot+'</tfoot></table>'+
-    '<div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:60px;">'+
+    '<div style="margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:60px;">'+
       '<div style="border-top:1.5px solid #333;padding-top:6px;text-align:center;"><div style="font-size:10px;color:#666;">Prepared By</div><div style="font-weight:800;margin-top:4px;">'+(co.name||'')+'</div></div>'+
       '<div style="border-top:1.5px solid #333;padding-top:6px;text-align:center;"><div style="font-size:10px;color:#666;">Employee Signature</div><div style="font-weight:800;margin-top:4px;">'+d.empName+'</div></div>'+
-    '</div>'+
-    '</body></html>';
+    '</div></body></html>';
 
-  var w = window.open('','_blank');
-  if(w){ w.document.write(html); w.document.close(); }
+  var w=window.open('','_blank'); if(w){w.document.write(html);w.document.close();}
   else toast('Allow popups to download PDF','warning');
 }
