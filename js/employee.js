@@ -4857,22 +4857,23 @@ function annBuildStatement(records, periodLabel, empId, empName){
     return fmtDate(d)||d;
   }
 
-  // Collect all earning component labels from saved extra_earnings in salary_records
+  // Collect earning component labels from pay structure (same as payslip does)
+  // Use the most recent pay structure for this employee as reference
+  var refPay = EMP_PAY.filter(function(p){return p.employee_id===empId;})
+                      .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
+  var refExtraEarnings=[];
+  try{refExtraEarnings=refPay.extra_earnings?JSON.parse(refPay.extra_earnings):[];}catch(ex){}
   var compSet={};
-  records.forEach(function(r){
-    var ee=[];try{ee=r.extra_earnings?JSON.parse(r.extra_earnings):[];}catch(ex){}
-    ee.forEach(function(e){if(e.label&&e.amount>0)compSet[e.label]=true;});
-    // Also check pay structure fallback columns
-    if(!ee.length){
-      var p=EMP_PAY.filter(function(p){return p.employee_id===empId;})
-                   .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
-      if(p.da)compSet['DA']=true; if(p.hra)compSet['HRA']=true;
-      if(p.conveyance)compSet['Conveyance']=true;
-      if(p.special_allowance)compSet['Special Allowance']=true;
-      if(p.medical_allowance)compSet['Medical Allowance']=true;
-      if(p.other_allowance)compSet['Other Allowance']=true;
-    }
-  });
+  if(refExtraEarnings.length){
+    refExtraEarnings.forEach(function(ex){if(ex.amount>0)compSet[ex.label]=true;});
+  } else {
+    if(refPay.da)               compSet['DA']=true;
+    if(refPay.hra)              compSet['HRA']=true;
+    if(refPay.conveyance)       compSet['Conveyance']=true;
+    if(refPay.special_allowance)compSet['Special Allowance']=true;
+    if(refPay.medical_allowance)compSet['Medical Allowance']=true;
+    if(refPay.other_allowance)  compSet['Other Allowance']=true;
+  }
   var compKeys=Object.keys(compSet);
 
   var totals={days:0,basic:0,gross:0,earned:0,pf:0,esic:0,tds:0,pt:0,adv:0,ded:0,net:0,ot:0};
@@ -4881,7 +4882,9 @@ function annBuildStatement(records, periodLabel, empId, empName){
   var hasOT=records.some(function(r){return Number(r.ot_pay||0)>0;});
 
   var rows=records.map(function(r,i){
-    // Read directly from salary_records — same as payslip
+    // Use EXACT same logic as payslip:
+    // 1. Read deductions/net directly from salary_records (these are saved at finalisation)
+    // 2. Recompute earnings from pay structure using pay_structure_id (same as payslip does)
     var basic  = Number(r.basic||0);
     var earned = Number(r.earned||r.gross||0);
     var gross  = Number(r.gross||0);
@@ -4894,23 +4897,36 @@ function annBuildStatement(records, periodLabel, empId, empName){
     var net    = Number(r.net_payable||0);
     var days   = Number(r.days_worked||0);
     var ded    = pf+esic+tds+pt+adv;
+    var ratio  = days/26;
 
-    // Read allowances from saved extra_earnings in salary_record
-    var ee=[];try{ee=r.extra_earnings?JSON.parse(r.extra_earnings):[];}catch(ex){}
+    // Get pay structure used at time of finalisation (via pay_structure_id)
+    var pay = (r.pay_structure_id
+      ? EMP_PAY.find(function(p){return p.id===r.pay_structure_id;})
+      : null)
+      || EMP_PAY.filter(function(p){return p.employee_id===empId;})
+               .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]
+      || {};
+
+    // Recompute earnings exactly like payslip does
+    var extraEarnings=[];
+    try{extraEarnings=pay.extra_earnings?JSON.parse(pay.extra_earnings):[];}catch(ex){}
+
+    var pBasic = Math.round((pay.basic||0)*ratio);
     var rowComps={};
-    if(ee.length){
-      ee.forEach(function(e){rowComps[e.label]=(e.amount||0);});
+    if(extraEarnings.length){
+      extraEarnings.forEach(function(ex){
+        if(ex.amount>0){
+          var amt = ex.pct>0 ? Math.round(pBasic*ex.pct/100) : Math.round(ex.amount*ratio);
+          rowComps[ex.label] = amt;
+        }
+      });
     } else {
-      // Fallback: recompute from pay structure (only if extra_earnings not saved)
-      var ratio=days/26;
-      var pay=EMP_PAY.filter(function(p){return p.employee_id===empId;})
-                     .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
-      if(pay.da)rowComps['DA']=Math.round((pay.da||0)*ratio);
-      if(pay.hra)rowComps['HRA']=Math.round((pay.hra||0)*ratio);
-      if(pay.conveyance)rowComps['Conveyance']=Math.round((pay.conveyance||0)*ratio);
-      if(pay.special_allowance)rowComps['Special Allowance']=Math.round((pay.special_allowance||0)*ratio);
-      if(pay.medical_allowance)rowComps['Medical Allowance']=Math.round((pay.medical_allowance||0)*ratio);
-      if(pay.other_allowance)rowComps['Other Allowance']=Math.round((pay.other_allowance||0)*ratio);
+      if(pay.da)               rowComps['DA']               = Math.round((pay.da||0)*ratio);
+      if(pay.hra)              rowComps['HRA']              = Math.round((pay.hra||0)*ratio);
+      if(pay.conveyance)       rowComps['Conveyance']       = Math.round((pay.conveyance||0)*ratio);
+      if(pay.special_allowance)rowComps['Special Allowance']= Math.round((pay.special_allowance||0)*ratio);
+      if(pay.medical_allowance)rowComps['Medical Allowance']= Math.round((pay.medical_allowance||0)*ratio);
+      if(pay.other_allowance)  rowComps['Other Allowance']  = Math.round((pay.other_allowance||0)*ratio);
     }
 
     totals.days+=days; totals.basic+=basic; totals.gross+=gross; totals.earned+=earned;
@@ -5108,9 +5124,28 @@ function annDownloadExcel(){
     var hdr=['Month','Days','Basic'].concat(d.compKeys).concat(d.hasOT?['OT Pay']:[]).concat(['Gross','PF','ESIC','TDS','P.Tax','Advance','Total Ded.','Net Salary','Payment Date','Payment Ref']);
     rows=[hdr];
     d.records.forEach(function(r){
-      var ee=[];try{ee=r.extra_earnings?JSON.parse(r.extra_earnings):[];}catch(ex){}
+      // Same computation as payslip
+      var pay = (r.pay_structure_id
+        ? EMP_PAY.find(function(p){return p.id===r.pay_structure_id;})
+        : null)
+        || EMP_PAY.filter(function(p){return p.employee_id===d.empId;})
+                 .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
+      var extraEarnings=[];try{extraEarnings=pay.extra_earnings?JSON.parse(pay.extra_earnings):[];}catch(ex){}
+      var days=Number(r.days_worked||0); var ratio=days/26;
+      var pBasic=Math.round((pay.basic||0)*ratio);
       var rowComps={};
-      if(ee.length){ee.forEach(function(e){rowComps[e.label]=e.amount||0;});}
+      if(extraEarnings.length){
+        extraEarnings.forEach(function(ex){
+          if(ex.amount>0){ var amt=ex.pct>0?Math.round(pBasic*ex.pct/100):Math.round(ex.amount*ratio); rowComps[ex.label]=amt; }
+        });
+      } else {
+        if(pay.da)               rowComps['DA']               =Math.round((pay.da||0)*ratio);
+        if(pay.hra)              rowComps['HRA']              =Math.round((pay.hra||0)*ratio);
+        if(pay.conveyance)       rowComps['Conveyance']       =Math.round((pay.conveyance||0)*ratio);
+        if(pay.special_allowance)rowComps['Special Allowance']=Math.round((pay.special_allowance||0)*ratio);
+        if(pay.medical_allowance)rowComps['Medical Allowance']=Math.round((pay.medical_allowance||0)*ratio);
+        if(pay.other_allowance)  rowComps['Other Allowance']  =Math.round((pay.other_allowance||0)*ratio);
+      }
       var ded=Number(r.pf_employee||0)+Number(r.esic_employee||0)+Number(r.tds||0)+Number(r.profession_tax||0)+Number(r.advance_deduct||0);
       rows.push([
         monthNames[r.month]+' '+r.year,
@@ -5213,9 +5248,28 @@ function annDownloadPDF(){
     '<th style="padding:6px;text-align:center;background:#E65100;">Payment Date</th></tr>';
 
   var tbody=d.records.map(function(r,i){
-    var ee=[];try{ee=r.extra_earnings?JSON.parse(r.extra_earnings):[];}catch(ex){}
+    // Same computation as payslip
+    var pay=(r.pay_structure_id
+      ?EMP_PAY.find(function(p){return p.id===r.pay_structure_id;})
+      :null)
+      ||EMP_PAY.filter(function(p){return p.employee_id===d.empId;})
+               .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
+    var extraEarnings=[];try{extraEarnings=pay.extra_earnings?JSON.parse(pay.extra_earnings):[];}catch(ex){}
+    var days=Number(r.days_worked||0); var ratio=days/26;
+    var pBasic=Math.round((pay.basic||0)*ratio);
     var rowComps={};
-    if(ee.length){ee.forEach(function(e){rowComps[e.label]=e.amount||0;});}
+    if(extraEarnings.length){
+      extraEarnings.forEach(function(ex){
+        if(ex.amount>0){var amt=ex.pct>0?Math.round(pBasic*ex.pct/100):Math.round(ex.amount*ratio);rowComps[ex.label]=amt;}
+      });
+    } else {
+      if(pay.da)               rowComps['DA']               =Math.round((pay.da||0)*ratio);
+      if(pay.hra)              rowComps['HRA']              =Math.round((pay.hra||0)*ratio);
+      if(pay.conveyance)       rowComps['Conveyance']       =Math.round((pay.conveyance||0)*ratio);
+      if(pay.special_allowance)rowComps['Special Allowance']=Math.round((pay.special_allowance||0)*ratio);
+      if(pay.medical_allowance)rowComps['Medical Allowance']=Math.round((pay.medical_allowance||0)*ratio);
+      if(pay.other_allowance)  rowComps['Other Allowance']  =Math.round((pay.other_allowance||0)*ratio);
+    }
     var pf=Number(r.pf_employee||0),esic=Number(r.esic_employee||0),tds=Number(r.tds||0),pt=Number(r.profession_tax||0),adv=Number(r.advance_deduct||0);
     var ded=pf+esic+tds+pt+adv; var isPaid=!!r.payment_date;
     return '<tr style="border-bottom:1px solid #EEE;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
