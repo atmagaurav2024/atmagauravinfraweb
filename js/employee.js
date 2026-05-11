@@ -2531,8 +2531,9 @@ function empOpenPay(empId, empName){
     if(/^\d{2}\/\d{2}\/\d{4}/.test(d)){ var p=d.split('/'); return p[2]+'-'+p[1]+'-'+p[0]; }
     var dt=new Date(d); return isNaN(dt)?new Date().toISOString().slice(0,10):dt.toISOString().slice(0,10);
   }
+  // For revision: show existing effective_date; for first fixation: show DOJ
   var defaultDate = existing.length
-    ? new Date().toISOString().slice(0,10)
+    ? toISODate(v.effective_date||new Date().toISOString().slice(0,10))
     : toISODate(emp.date_of_joining||emp.doj||'');
 
   document.getElementById('pay-sheet-title').textContent='\u{1F4B8} Pay Fixation \u2014 '+empName;
@@ -2981,7 +2982,10 @@ async function empGenerateOfferLetter(empId){
   var pays=EMP_PAY.filter(function(p){return p.employee_id===empId;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
   var pay=pays[0];
   if(!pay){toast('No pay structure found. Save pay first.','warning');return;}
-  var letterDateStr = new Date().toISOString().slice(0,10);
+  // Use letter_date from pay record (same as pay fixation order)
+  var letterDateStr = (pay.letter_date && pay.letter_date.match(/^\d{4}-\d{2}-\d{2}/))
+    ? pay.letter_date.slice(0,10)
+    : new Date().toISOString().slice(0,10);
   var name=((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
   var designation=emp.designation||emp.role||'—';
   var dept=emp.department||'—';
