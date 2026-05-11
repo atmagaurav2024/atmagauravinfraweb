@@ -2863,22 +2863,87 @@ async function payUpdateEffectiveDate(payId, newDate){
 function payNetCalc(){payCalc();}
 
 
+
+// ════════════════════════════════════════════════════════
+// LETTER DATE + UNIQUE NUMBER HELPERS
+// ════════════════════════════════════════════════════════
+
+// Letter type codes for numbering
+var LETTER_PREFIXES = {
+  offer:      'OFR',
+  pay:        'PAY',
+  increment:  'INC',
+  transfer:   'TRF',
+  promotion:  'PRO',
+  resignation:'RES',
+  payslip:    'SLP'
+};
+
+// Fetch next sequential number for a letter type from DB
+async function getNextLetterNo(type){
+  var prefix = LETTER_PREFIXES[type]||type.toUpperCase();
+  var year = new Date().getFullYear();
+  try{
+    // Count existing letters of this type this year
+    var rows = await sbFetch('letter_numbers',{
+      select:'*',
+      filter:'letter_type=eq.'+type+'&year=eq.'+year,
+      order:'seq_no.desc'
+    });
+    var lastSeq = (Array.isArray(rows)&&rows.length) ? (parseInt(rows[0].seq_no)||0) : 0;
+    var nextSeq = lastSeq + 1;
+    // Save to DB
+    await sbInsert('letter_numbers',{letter_type:type, year:year, seq_no:nextSeq});
+    return prefix+'/'+year+'/'+String(nextSeq).padStart(4,'0');
+  }catch(e){
+    // Fallback: use timestamp-based number if table not ready
+    console.warn('letter_numbers table not found, using fallback:',e.message);
+    return prefix+'/'+year+'/'+String(Date.now()).slice(-5);
+  }
+}
+
+// Show letter date picker before generating any letter
+// cb(dateStr) is called with the chosen date in YYYY-MM-DD format
+function pickLetterDate(title, cb){
+  var today = new Date().toISOString().slice(0,10);
+  // Reuse sh-pay sheet for simplicity, or create a small modal
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML =
+    '<div style="background:white;border-radius:16px;padding:28px 28px 20px;min-width:300px;max-width:380px;box-shadow:0 8px 40px rgba(0,0,0,0.18);">'+
+      '<div style="font-size:15px;font-weight:800;margin-bottom:16px;color:#1B5E20;">'+title+'</div>'+
+      '<label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:6px;">Letter Date</label>'+
+      '<input id="ltr-date-inp" type="date" value="'+today+'" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #C8E6C9;border-radius:10px;font-size:14px;font-family:inherit;outline:none;margin-bottom:20px;">'+
+      '<div style="display:flex;gap:10px;justify-content:flex-end;">'+
+        '<button id="ltr-date-cancel" style="padding:8px 18px;border:1.5px solid #CCC;border-radius:8px;background:white;cursor:pointer;font-weight:700;font-size:13px;">Cancel</button>'+
+        '<button id="ltr-date-ok" style="padding:8px 22px;border:none;border-radius:8px;background:#1B5E20;color:white;cursor:pointer;font-weight:800;font-size:13px;">Generate</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(overlay);
+  document.getElementById('ltr-date-cancel').onclick = function(){ document.body.removeChild(overlay); };
+  document.getElementById('ltr-date-ok').onclick = function(){
+    var d = document.getElementById('ltr-date-inp').value;
+    document.body.removeChild(overlay);
+    if(d) cb(d);
+  };
+}
+
 function empGenerateOfferLetter(empId){
-  // Find employee and latest pay record
   var emp=EMP_LIST.find(function(e){return e.id===empId;});
   if(!emp){toast('Employee not found','error');return;}
   var pays=EMP_PAY.filter(function(p){return p.employee_id===empId;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
   var pay=pays[0];
   if(!pay){toast('No pay structure found. Save pay first.','warning');return;}
-
+  pickLetterDate('Offer Letter', async function(letterDateStr){
   var name=((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
   var designation=emp.designation||emp.role||'—';
   var dept=emp.department||'—';
   var doj=emp.date_of_joining||emp.doj||pay.effective_date||'—';
   var empCode=emp.employee_code||emp.emp_id||'—';
-  var today=fmtDate(new Date());
+  var today=fmtDate(letterDateStr);
   var dojFmt=doj&&doj!=='—'?fmtDate(doj):doj;
   var wef=pay.effective_date?fmtDate(pay.effective_date):today;
+  var letterNo = await getNextLetterNo('offer');
 
   // Parse earnings
   var extraEarnings=[];
@@ -2946,7 +3011,10 @@ function empGenerateOfferLetter(empId){
 
   '<div class="title">APPOINTMENT LETTER</div>'+
 
-  '<p style="font-size:12px;margin-bottom:14px;">Date: <strong>'+today+'</strong></p>'+
+  '<div style="display:flex;justify-content:space-between;margin-bottom:14px;">'+
+    '<div style="font-size:12px;"><b>Ref No:</b> '+letterNo+'</div>'+
+    '<div style="font-size:12px;"><b>Date:</b> '+today+'</div>'+
+  '</div>'+
   '<p style="font-size:12px;margin-bottom:14px;">To,<br><strong>'+name+'</strong><br>'+(emp.address?emp.address+'<br>':'')+(emp.mobile||emp.phone?'Mobile: '+(emp.mobile||emp.phone):'')+'</p>'+
 
   '<p class="clause">Dear <strong>'+name+'</strong>,</p>'+
@@ -3040,6 +3108,7 @@ function empGenerateOfferLetter(empId){
     a.download='OfferLetter_'+name.replace(/\s+/g,'_')+'.html';
     a.click();
   }
+  }); // end pickLetterDate
 }
 
 async function empSavePay(){
@@ -3252,10 +3321,12 @@ function downloadPayslipPDF(empId, monthLabel){
 function downloadIncrementLetter(empId, newBasic, oldBasic, effectiveDate, remarks, oldPayObj, newPayObj){
   var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
+  pickLetterDate('Increment Letter', async function(letterDateStr){
   var code  = emp.employee_code||emp.emp_id||'—';
   var desig = emp.designation||emp.role||'—';
   var dept  = emp.department||'—';
-  var today = fmtDate(new Date());
+  var today = fmtDate(letterDateStr);
+  var letterNo = await getNextLetterNo('increment');
   var wefFmt = effectiveDate ? fmtDate(effectiveDate) : today;
   var increment = Number(newBasic) - Number(oldBasic);
   var pct = Number(oldBasic)>0 ? ((increment/Number(oldBasic))*100).toFixed(1) : '0';
@@ -3359,7 +3430,7 @@ function downloadIncrementLetter(empId, newBasic, oldBasic, effectiveDate, remar
     '</div>'+
 
     '<div class="ref">'+
-      '<div><b>Ref No.:</b> AIPL/INC/'+code+'/'+new Date().getFullYear()+'</div>'+
+      '<div style="display:flex;justify-content:space-between;"><span><b>Ref No.:</b> '+letterNo+'</span><span><b>Date:</b> '+today+'</span></div>'+
       '<div><b>Date:</b> '+today+'</div>'+
     '</div>'+
 
@@ -3434,6 +3505,7 @@ function downloadIncrementLetter(empId, newBasic, oldBasic, effectiveDate, remar
   var w = window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
   else{toast('Allow popups to download PDF','warning');}
+  }); // end pickLetterDate
 }
 
 
@@ -3443,8 +3515,11 @@ function downloadTransferOrder(empId, type, details){
   // type: 'transfer' | 'promotion'
   var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
+  var isPromo = type==='promotion';
+  pickLetterDate(isPromo?'Promotion Order':'Transfer Order', async function(letterDateStr){
+  var letterNo = await getNextLetterNo(isPromo?'promotion':'transfer');
   var code  = emp.employee_code||emp.emp_id||'—';
-  var today = fmtDate(new Date());
+  var today = fmtDate(letterDateStr);
   var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
   var compAddr = typeof coAddr==='function'?coAddr():'';
   var compCIN  = typeof coCIN==='function'?coCIN():'';
@@ -3482,7 +3557,7 @@ function downloadTransferOrder(empId, type, details){
     '</div>'+
 
     '<div class="ref">'+
-      '<div><b>Order No.:</b> AIPL/'+(isPromo?'PRO':'TRF')+'/'+code+'/'+new Date().getFullYear()+'</div>'+
+      '<div style="display:flex;justify-content:space-between;"><span><b>Ref No.:</b> '+letterNo+'</span><span><b>Date:</b> '+today+'</span></div>'+
       '<div><b>Date:</b> '+today+'</div>'+
     '</div>'+
 
@@ -3526,6 +3601,7 @@ function downloadTransferOrder(empId, type, details){
   var w = window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
   else{toast('Allow popups to download PDF','warning');}
+  }); // end pickLetterDate
 }
 
 
@@ -3869,15 +3945,17 @@ function hrWireDownloadButtons(containerId){
 // ─── Pay Fixation Order PDF ──────────────────────────────────────────────
 function downloadPayFixationOrder(empId, effectiveDate, details){
   var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
+  pickLetterDate('Pay Fixation Order', async function(letterDateStr){
   var pays= EMP_PAY.filter(function(p){return p.employee_id===empId;})
                    .sort(function(a,b){return a.effective_date.localeCompare(b.effective_date);});
+  var letterNo = await getNextLetterNo('pay');
   // find closest pay record to effectiveDate
   var pay = pays.find(function(p){return p.effective_date===effectiveDate;})||pays[0]||{};
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
   var code  = emp.employee_code||emp.emp_id||'—';
   var desig = emp.designation||emp.role||'—';
   var dept  = emp.department||'—';
-  var today = fmtDate(new Date());
+  var today = fmtDate(letterDateStr);
   var wefFmt= effectiveDate?fmtDate(effectiveDate):today;
   var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
   var compAddr = typeof coAddr==='function'?coAddr():'';
@@ -3919,7 +3997,7 @@ function downloadPayFixationOrder(empId, effectiveDate, details){
     '<div class="header"><div class="logo">'+compName.toUpperCase()+'</div>'+(compAddr?'<div class="sub">'+compAddr+'</div>':'')+
     '<div class="sub">'+(compCIN?'CIN: '+compCIN+' | ':'')+( compGST?'GSTIN: '+compGST:'')+'</div></div>'+
     '<div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:12px;">'+
-      '<div><b>Ref No.:</b> AIPL/PAY/'+code+'/'+new Date().getFullYear()+'</div><div><b>Date:</b> '+today+'</div>'+
+      '<div style="display:flex;justify-content:space-between;"><span><b>Ref No.:</b> '+letterNo+'</span><span><b>Date:</b> '+today+'</span></div>'+
     '</div>'+
     '<p style="font-size:12px;">To,<br><b>'+name+'</b><br>'+desig+', '+dept+'<br>Employee Code: '+code+'</p>'+
     '<div class="title">PAY FIXATION ORDER</div>'+
@@ -3954,6 +4032,7 @@ function downloadPayFixationOrder(empId, effectiveDate, details){
   var w=window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
   else{toast('Allow popups to download PDF','warning');}
+  }); // end pickLetterDate
 }
 
 // ─── Resignation Acceptance Letter PDF ───────────────────────────────────
@@ -4214,10 +4293,12 @@ function downloadIDCard(empId){
 function downloadResignationLetter(empId){
   var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
+  pickLetterDate('Resignation Letter', async function(letterDateStr){
   var code  = emp.employee_code||emp.emp_id||'—';
   var desig = emp.designation||emp.role||'—';
   var dept  = emp.department||'—';
-  var today = fmtDate(new Date());
+  var today = fmtDate(letterDateStr);
+  var letterNo = await getNextLetterNo('resignation');
   var resDate = emp.resignation_date||'—';
   var lwd     = emp.last_working_day||'—';
   var reason  = emp.resignation_reason||emp.rejection_reason||'Personal reasons';
@@ -4243,7 +4324,7 @@ function downloadResignationLetter(empId){
     '<div class="header"><div class="logo">'+compName.toUpperCase()+'</div>'+(compAddr?'<div class="sub">'+compAddr+'</div>':'')+
     '<div class="sub">'+(compCIN?'CIN: '+compCIN+' | ':'')+( compGST?'GSTIN: '+compGST:'')+'</div></div>'+
     '<div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:12px;">'+
-      '<div><b>Ref No.:</b> AIPL/RES/'+code+'/'+new Date().getFullYear()+'</div><div><b>Date:</b> '+today+'</div>'+
+      '<div style="display:flex;justify-content:space-between;"><span><b>Ref No.:</b> '+letterNo+'</span><span><b>Date:</b> '+today+'</span></div>'+
     '</div>'+
     '<p style="font-size:12px;">To,<br><b>'+name+'</b><br>'+desig+', '+dept+'<br>Employee Code: '+code+'</p>'+
     '<div class="title">ACCEPTANCE OF RESIGNATION</div>'+
@@ -4277,6 +4358,7 @@ function downloadResignationLetter(empId){
   var w=window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
   else{toast('Allow popups to download PDF','warning');}
+  }); // end pickLetterDate
 }
 
 // ════ SALARY PAYMENT TRACKING ════════════════════════════════════════════
