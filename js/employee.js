@@ -4,6 +4,29 @@
 // ════════════════════════════════════════════════════════════════
 var EMP_LIST=[], EMP_PAY=[], EMP_TAB='active', EMP_EDIT_ID=null;
 
+// ── LOCAL DELETE HELPER (uses JWT token, bypasses sbDelete anon key bug) ──
+async function empDbDelete(table, id){
+  var token = (window.currentUser&&window.currentUser.accessToken)
+    ? window.currentUser.accessToken
+    : window.SUPABASE_ANON_KEY;
+  var res = await fetch(window.SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
+    method:'DELETE',
+    headers:{
+      'apikey': window.SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer '+token,
+      'Content-Type': 'application/json'
+    }
+  });
+  if(!res.ok){
+    var e = {};
+    try{ e = await res.json(); }catch(ex){}
+    throw new Error(e.message||('Delete failed: '+res.status));
+  }
+  return true;
+}
+
+
+
 var EMP_DEPTS=['Site','Finance','HR/Admin','QC/Safety','Procurement','Planning','Management','Other'];
 var EMP_GRADES=['Grade-1','Grade-2','Grade-3','Grade-4','Grade-5','Manager','Sr. Manager','DGM','GM','Other'];
 var EMP_CATS=['Permanent','Contract','Probation','Daily Wage','Consultant'];
@@ -107,18 +130,18 @@ function empRender(){
           var payId   = btn.getAttribute('data-pay-del-id');
           var empName = btn.getAttribute('data-pay-del-name')||'this employee';
           if(!confirm('Delete pay record for '+empName+'? This cannot be undone.')) return;
-          sbDelete('employee_pay',payId).then(function(){
+          empDbDelete('employee_pay',payId).then(function(){
             EMP_PAY = EMP_PAY.filter(function(p){return p.id!==payId;});
             var matchOrder = EMP_ORDERS.find(function(o){
               try{var d=JSON.parse(o.details||'{}');return d.pay_record_id===payId;}catch(ex){return false;}
             });
             if(matchOrder){
-              sbDelete('employee_orders',matchOrder.id).catch(function(){});
+              empDbDelete('employee_orders',matchOrder.id).catch(function(){});
               EMP_ORDERS=EMP_ORDERS.filter(function(o){return o.id!==matchOrder.id;});
             }
             toast('Pay record deleted','info');
             empRender();
-          }).catch(function(e){toast('Error: '+e.message,'error');});
+          }).catch(function(e){toast('Error deleting: '+e.message,'error');});
         });
       });
     },200);
@@ -147,14 +170,14 @@ function empRender(){
         var empName = btn.getAttribute('data-inc-del-name')||'this entry';
         if(!confirm('Delete increment entry for '+empName+'? This will also remove the pay record.')) return;
         // Delete from employee_pay
-        sbDelete('employee_pay', payId).then(function(){
+        empDbDelete('employee_pay', payId).then(function(){
           EMP_PAY = EMP_PAY.filter(function(p){return p.id!==payId;});
           // Also delete matching order record
           var matchOrder = EMP_ORDERS.find(function(o){
             try{ var d=JSON.parse(o.details||'{}'); return d.pay_record_id===payId||(d.newPay&&d.newPay.id===payId); }catch(ex){return false;}
           });
           if(matchOrder){
-            sbDelete('employee_orders',matchOrder.id).catch(function(){});
+            empDbDelete('employee_orders',matchOrder.id).catch(function(){});
             EMP_ORDERS = EMP_ORDERS.filter(function(o){return o.id!==matchOrder.id;});
           }
           toast('Increment entry deleted','info');
@@ -1289,7 +1312,7 @@ async function hrDeleteOrder(orderId, label, refreshFn){
     var details = {};
     if(order){ try{details=JSON.parse(order.details||'{}');}catch(ex){} }
 
-    await sbDelete('employee_orders', orderId);
+    await empDbDelete('employee_orders', orderId);
     EMP_ORDERS = EMP_ORDERS.filter(function(o){return o.id!==orderId;});
 
     var empId = order ? order.employee_id : null;
@@ -1298,7 +1321,7 @@ async function hrDeleteOrder(orderId, label, refreshFn){
     // INCREMENT: delete pay record, show old basic
     if(order && order.order_type==='increment'){
       var payId = details.pay_record_id || (details.newPay&&details.newPay.id) || null;
-      if(payId){ try{ await sbDelete('employee_pay',payId); EMP_PAY=EMP_PAY.filter(function(p){return p.id!==payId;}); }catch(ex){} }
+      if(payId){ try{ await empDbDelete('employee_pay',payId); EMP_PAY=EMP_PAY.filter(function(p){return p.id!==payId;}); }catch(ex){} }
       var oldBasic = details.oldBasic || (details.oldPay&&details.oldPay.basic) || null;
       toast(label+' deleted'+(oldBasic?' \u2014 reverted to \u20b9'+Number(oldBasic).toLocaleString('en-IN'):''),'info');
       if(typeof refreshFn==='function') refreshFn();
@@ -1308,7 +1331,7 @@ async function hrDeleteOrder(orderId, label, refreshFn){
     // PAY FIXATION / REVISION: delete linked pay record
     if(order && (order.order_type==='pay_fixation'||order.order_type==='revision')){
       var payId = details.pay_record_id || (details.newPay&&details.newPay.id) || null;
-      if(payId){ try{ await sbDelete('employee_pay',payId); EMP_PAY=EMP_PAY.filter(function(p){return p.id!==payId;}); }catch(ex){} }
+      if(payId){ try{ await empDbDelete('employee_pay',payId); EMP_PAY=EMP_PAY.filter(function(p){return p.id!==payId;}); }catch(ex){} }
       toast(label+' deleted','info');
       if(typeof refreshFn==='function') refreshFn();
       return;
