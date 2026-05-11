@@ -6,13 +6,16 @@ var EMP_LIST=[], EMP_PAY=[], EMP_TAB='active', EMP_EDIT_ID=null;
 
 // ── LOCAL DELETE HELPER (uses JWT token, bypasses sbDelete anon key bug) ──
 async function empDbDelete(table, id){
-  var token = (window.currentUser&&window.currentUser.accessToken)
-    ? window.currentUser.accessToken
-    : window.SUPABASE_ANON_KEY;
-  var res = await fetch(window.SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
+  // SUPABASE_URL and SUPABASE_ANON_KEY are const in core.js — access directly, not via window
+  var token = (typeof currentUser!=='undefined' && currentUser && currentUser.accessToken)
+    ? currentUser.accessToken
+    : (typeof SUPABASE_ANON_KEY!=='undefined' ? SUPABASE_ANON_KEY : '');
+  var baseUrl = typeof SUPABASE_URL!=='undefined' ? SUPABASE_URL : '';
+  var anonKey = typeof SUPABASE_ANON_KEY!=='undefined' ? SUPABASE_ANON_KEY : '';
+  var res = await fetch(baseUrl+'/rest/v1/'+table+'?id=eq.'+id,{
     method:'DELETE',
     headers:{
-      'apikey': window.SUPABASE_ANON_KEY,
+      'apikey': anonKey,
       'Authorization': 'Bearer '+token,
       'Content-Type': 'application/json'
     }
