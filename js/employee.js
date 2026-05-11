@@ -2932,13 +2932,13 @@ function pickLetterDate(title, cb){
   };
 }
 
-function empGenerateOfferLetter(empId){
+async function empGenerateOfferLetter(empId){
   var emp=EMP_LIST.find(function(e){return e.id===empId;});
   if(!emp){toast('Employee not found','error');return;}
   var pays=EMP_PAY.filter(function(p){return p.employee_id===empId;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
   var pay=pays[0];
   if(!pay){toast('No pay structure found. Save pay first.','warning');return;}
-  pickLetterDate('Offer Letter', async function(letterDateStr){
+  var letterDateStr = new Date().toISOString().slice(0,10);
   var name=((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
   var designation=emp.designation||emp.role||'—';
   var dept=emp.department||'—';
@@ -3112,7 +3112,6 @@ function empGenerateOfferLetter(empId){
     a.download='OfferLetter_'+name.replace(/\s+/g,'_')+'.html';
     a.click();
   }
-  }); // end pickLetterDate
 }
 
 async function empSavePay(){
@@ -3324,10 +3323,10 @@ function downloadPayslipPDF(empId, monthLabel){
 
 // ════ INCREMENT APPROVAL LETTER ═════════════════════════════════════════
 
-function downloadIncrementLetter(empId, newBasic, oldBasic, effectiveDate, remarks, oldPayObj, newPayObj){
+async function downloadIncrementLetter(empId, newBasic, oldBasic, effectiveDate, remarks, oldPayObj, newPayObj){
   var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
-  pickLetterDate('Increment Letter', async function(letterDateStr){
+  var letterDateStr = new Date().toISOString().slice(0,10);
   var code  = emp.employee_code||emp.emp_id||'—';
   var desig = emp.designation||emp.role||'—';
   var dept  = emp.department||'—';
@@ -3511,18 +3510,17 @@ function downloadIncrementLetter(empId, newBasic, oldBasic, effectiveDate, remar
   var w = window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
   else{toast('Allow popups to download PDF','warning');}
-  }); // end pickLetterDate
 }
 
 
 // ════ TRANSFER ORDER DOWNLOAD ════════════════════════════════════════════
 
-function downloadTransferOrder(empId, type, details){
+async function downloadTransferOrder(empId, type, details){
   // type: 'transfer' | 'promotion'
   var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
   var isPromo = type==='promotion';
-  pickLetterDate(isPromo?'Promotion Order':'Transfer Order', async function(letterDateStr){
+  var letterDateStr = new Date().toISOString().slice(0,10);
   var letterNo = await getNextLetterNo(isPromo?'promotion':'transfer');
   var code  = emp.employee_code||emp.emp_id||'—';
   var today = fmtDate(letterDateStr);
@@ -3607,7 +3605,6 @@ function downloadTransferOrder(empId, type, details){
   var w = window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
   else{toast('Allow popups to download PDF','warning');}
-  }); // end pickLetterDate
 }
 
 
@@ -4296,10 +4293,10 @@ function downloadIDCard(empId){
   else{toast('Allow popups to print ID card','warning');}
 }
 
-function downloadResignationLetter(empId){
+async function downloadResignationLetter(empId){
   var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
-  pickLetterDate('Resignation Letter', async function(letterDateStr){
+  var letterDateStr = new Date().toISOString().slice(0,10);
   var code  = emp.employee_code||emp.emp_id||'—';
   var desig = emp.designation||emp.role||'—';
   var dept  = emp.department||'—';
@@ -4364,7 +4361,6 @@ function downloadResignationLetter(empId){
   var w=window.open('','_blank');
   if(w){w.document.write(html);w.document.close();}
   else{toast('Allow popups to download PDF','warning');}
-  }); // end pickLetterDate
 }
 
 // ════ SALARY PAYMENT TRACKING ════════════════════════════════════════════
