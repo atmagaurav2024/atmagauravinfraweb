@@ -825,7 +825,7 @@ async function planDelRes(id){
 
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
-var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[];
+var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[];
 var WA_SUBTAB='allot'; // allot | allotted | daily | bills
 
 var WA_LOADED_PROJ = ''; // track which project data is currently loaded
@@ -872,7 +872,8 @@ async function execLoadItems(){
       safe(sbFetch('work_daily_progress',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'})),
       safe(sbFetch('work_bills',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
       safe(sbFetch('work_payments',{select:'*',filter:'project_id=eq.'+projId,order:'payment_date.desc'})),
-      safe(sbFetch('work_orders',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'}))
+      safe(sbFetch('work_orders',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
+      safe(sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'}))
     ]);
     WA_ITEMS=Array.isArray(r[0])?r[0]:[];
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -883,6 +884,7 @@ async function execLoadItems(){
     WA_BILLS=Array.isArray(r[4])?r[4]:[];
     WA_PAYMENTS=Array.isArray(r[5])?r[5]:[];
     WA_ORDERS=Array.isArray(r[6])?r[6]:[];
+    WA_JMS=Array.isArray(r[7])?r[7]:[];
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
   execRenderSubTab();
@@ -2115,8 +2117,119 @@ function execRenderDaily(){
 
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  function pBar(pct,col,h){h=h||6;pct=Math.min(100,Math.max(0,pct));return '<div style="flex:1;background:#EEE;border-radius:'+h+'px;height:'+h+'px;"><div style="width:'+pct+'%;background:'+col+';height:'+h+'px;border-radius:'+h+'px;"></div></div>';}
+  function pColor(pct){return pct>=100?'#2E7D32':pct>=60?'#1565C0':pct>=30?'#F57F17':'#E65100';}
+  function fmt(n){var v=parseFloat(n)||0;return v%1===0?String(v):v.toFixed(2).replace(/\.?0+$/,'');}
 
-  // Group daily entries by boq_item_id
+  // ── 1. BOQ ITEM PROGRESS SUMMARY ───────────────────────────────────────
+  var summaryRows=WA_ITEMS.map(function(item){
+    var boqQty  = parseFloat(item.boq_qty||item.qty)||0;
+    var jmQty   = WA_JMS.filter(function(j){return j.boq_item_id===item.id;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+    var doneQty = WA_DAILY.filter(function(d){return d.boq_item_id===item.id;}).reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+    var jmPct   = boqQty>0?Math.round(jmQty/boqQty*100):0;
+    var donePct = jmQty>0?Math.round(doneQty/jmQty*100):(boqQty>0?Math.round(doneQty/boqQty*100):0);
+    var jmBal   = Math.max(0,jmQty-doneQty);
+    var unit    = item.unit||'';
+    return '<tr style="border-bottom:1px solid #F0F0F0;">'+
+      '<td style="padding:7px 8px;font-size:10px;font-family:monospace;color:#E65100;white-space:nowrap;">'+item.item_code+'</td>'+
+      '<td style="padding:7px 8px;font-size:11px;font-weight:700;">'+(item.short_name||item.description)+'</td>'+
+      '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;">'+fmt(boqQty)+' <span style="font-size:9px;color:var(--text3);">'+unit+'</span></td>'+
+      '<td style="padding:7px 8px;min-width:130px;">'+
+        '<div style="display:flex;align-items:center;gap:5px;">'+pBar(jmPct,'#283593',5)+
+          '<span style="font-size:10px;font-weight:800;color:#283593;white-space:nowrap;">'+fmt(jmQty)+' <small>('+jmPct+'%)</small></span>'+
+        '</div></td>'+
+      '<td style="padding:7px 8px;min-width:130px;">'+
+        '<div style="display:flex;align-items:center;gap:5px;">'+pBar(donePct,pColor(donePct),5)+
+          '<span style="font-size:10px;font-weight:800;color:'+pColor(donePct)+';white-space:nowrap;">'+fmt(doneQty)+' <small>('+donePct+'%)</small></span>'+
+        '</div></td>'+
+      '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;color:'+(jmBal>0?'#E65100':'#2E7D32')+';">'+fmt(jmBal)+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var summaryTable=
+    '<div style="background:white;border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
+      '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #E8EAF6;">'+
+        '<div style="font-size:12px;font-weight:800;color:#1565C0;">&#128202; BOQ Item Progress — Completed vs JM vs BOQ</div>'+
+        '<div style="display:flex;gap:12px;margin-top:5px;font-size:9px;font-weight:700;">'+
+          '<span style="color:#283593;">&#9632; JM Qty (issued)</span>'+
+          '<span style="color:#1565C0;">&#9632; Completed (daily progress)</span>'+
+          '<span style="color:#E65100;">JM Bal = JM Qty &#8722; Completed</span>'+
+        '</div>'+
+      '</div>'+
+      '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
+        '<table style="width:100%;border-collapse:collapse;min-width:600px;">'+
+          '<thead><tr style="background:#F0F4FF;">'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:var(--text3);">CODE</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:var(--text3);">ITEM</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:right;color:var(--text3);">BOQ QTY</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:#283593;">JM QTY</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:#1565C0;">COMPLETED</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:right;color:#E65100;">JM BALANCE</th>'+
+          '</tr></thead>'+
+          '<tbody>'+summaryRows+'</tbody>'+
+        '</table>'+
+      '</div>'+
+    '</div>';
+
+  // ── 2. RESOURCE UTILISATION TABLE ──────────────────────────────────────
+  // For each allotment, sum qty from daily entries that reference its allot_id
+  var resMap={};
+  WA_ALLOT.forEach(function(a){
+    var pKey=a.exec_type+'::'+a.party_name;
+    if(!resMap[pKey]) resMap[pKey]={type:a.exec_type,name:a.party_name,allotted:0,used:0,unit:a.unit||''};
+    resMap[pKey].allotted+=parseFloat(a.qty)||0;
+  });
+  WA_DAILY.forEach(function(d){
+    var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
+    resources.forEach(function(r){
+      if(!r.qty) return;
+      var allot=WA_ALLOT.find(function(a){return a.id===r.allot_id;});
+      if(!allot) return;
+      var pKey=allot.exec_type+'::'+allot.party_name;
+      if(resMap[pKey]) resMap[pKey].used+=parseFloat(r.qty)||0;
+    });
+  });
+
+  var resRows=Object.values(resMap).map(function(r){
+    var pct=r.allotted>0?Math.round(r.used/r.allotted*100):0;
+    var col=tCol[r.type]||'#555';
+    return '<tr style="border-bottom:1px solid #F0F0F0;">'+
+      '<td style="padding:7px 8px;">'+
+        '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+col+'15;color:'+col+';">'+( tLbl[r.type]||r.type)+'</span>'+
+      '</td>'+
+      '<td style="padding:7px 8px;font-size:11px;font-weight:800;">'+r.name+'</td>'+
+      '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;">'+fmt(r.allotted)+' <span style="font-size:9px;color:var(--text3);">'+(r.unit||'')+'</span></td>'+
+      '<td style="padding:7px 8px;min-width:160px;">'+
+        '<div style="display:flex;align-items:center;gap:6px;">'+pBar(pct,col,5)+
+          '<span style="font-size:10px;font-weight:800;color:'+col+';white-space:nowrap;">'+fmt(r.used)+' ('+pct+'%)</span>'+
+        '</div>'+
+      '</td>'+
+      '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;color:'+(r.used>r.allotted?'#C62828':r.allotted-r.used<0.01?'#2E7D32':'#555')+';">'+fmt(Math.max(0,r.allotted-r.used))+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var resTable=resRows?
+    '<div style="background:white;border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
+      '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #E8F5E9;">'+
+        '<div style="font-size:12px;font-weight:800;color:#2E7D32;">&#128101; Resource Utilisation vs Allotted</div>'+
+        '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Based on qty recorded in daily entries</div>'+
+      '</div>'+
+      '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
+        '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
+          '<thead><tr style="background:#F1FBF4;">'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:var(--text3);">TYPE</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:var(--text3);">PARTY</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:#2E7D32;">UTILISED</th>'+
+            '<th style="padding:6px 8px;font-size:9px;text-align:right;color:var(--text3);">BALANCE</th>'+
+          '</tr></thead>'+
+          '<tbody>'+resRows+'</tbody>'+
+        '</table>'+
+      '</div>'+
+    '</div>':
+    '';
+
+  // ── 3. DAILY ENTRIES PER ITEM ───────────────────────────────────────────
   var entriesByItem={};
   WA_DAILY.forEach(function(d){
     var key=d.boq_item_id||'misc';
@@ -2126,54 +2239,52 @@ function execRenderDaily(){
 
   var itemCards=WA_ITEMS.map(function(item){
     var entries=(entriesByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
-    var totalDone=entries.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
-    var totalQty=parseFloat(item.qty)||0;
-    var pct=totalQty>0?Math.min(100,Math.round(totalDone/totalQty*100)):0;
-    var pctColor=pct>=100?'#2E7D32':pct>=50?'#F57F17':'#E65100';
+    var doneQty =entries.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+    var jmQty   =WA_JMS.filter(function(j){return j.boq_item_id===item.id;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+    var refQty  =jmQty||parseFloat(item.boq_qty||item.qty)||0;
+    var pct     =refQty>0?Math.min(100,Math.round(doneQty/refQty*100)):0;
+    var pc      =pColor(pct);
 
     var entryRows=entries.map(function(d){
       var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
       return '<div style="padding:7px 12px;border-bottom:1px solid #F5F5F5;">'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(resources.length?'5':'0')+'px;">'+
-          '<span style="font-size:10px;color:var(--text3);flex-shrink:0;">'+(d.date?d.date.split('-').reverse().join('/'):'-')+'</span>'+
+          '<span style="font-size:10px;color:var(--text3);flex-shrink:0;">&#128197; '+(d.date?d.date.split('-').reverse().join('/'):'-')+'</span>'+
           '<span style="font-size:12px;font-weight:800;color:#E65100;">'+d.qty_done+' '+(d.unit||item.unit||'')+'</span>'+
           (d.remarks?'<span style="font-size:10px;color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+d.remarks+'</span>':'<span style="flex:1;"></span>')+
           '<button onclick="execDelDaily(\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;flex-shrink:0;">&#215;</button>'+
         '</div>'+
         (resources.length?
           '<div style="display:flex;flex-wrap:wrap;gap:4px;">'+
-            resources.map(function(r){
-              var col=tCol[r.type]||'#555';
-              return '<span style="font-size:9px;background:'+col+'15;color:'+col+';border:1px solid '+col+'30;border-radius:4px;padding:2px 6px;font-weight:700;">'+
-                (tLbl[r.type]||r.type)+': '+r.name+(r.qty?' × '+r.qty+(r.unit?' '+r.unit:''):'')+
-              '</span>';
-            }).join('')+
-          '</div>':'')+'</div>';
+            resources.map(function(r){var col=tCol[r.type]||'#555';return '<span style="font-size:9px;background:'+col+'15;color:'+col+';border:1px solid '+col+'30;border-radius:4px;padding:2px 6px;font-weight:700;">'+(tLbl[r.type]||r.type)+': '+r.name+(r.qty?' \u00d7 '+fmt(r.qty)+(r.unit?' '+r.unit:''):'')+  '</span>';}).join('')+
+          '</div>':'')+
+      '</div>';
     }).join('');
 
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:10px 14px;background:#FFF3E0;border-bottom:1px solid var(--border);">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'+
+    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
+      '<div style="padding:9px 14px;background:#FFF3E0;border-bottom:1px solid var(--border);">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">'+
           '<div style="flex:1;min-width:0;">'+
             '<span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
-            '<span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span>'+
+            '<span style="font-size:12px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span>'+
           '</div>'+
-          '<button onclick="execOpenDailyEntry(\''+item.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Entry</button>'+
+          '<button onclick="execOpenDailyEntry(\''+item.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:4px 11px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Entry</button>'+
         '</div>'+
-        '<div style="display:flex;align-items:center;gap:8px;">'+
-          '<div style="flex:1;background:#EEE;border-radius:4px;height:6px;">'+
-            '<div style="width:'+pct+'%;background:'+pctColor+';height:6px;border-radius:4px;"></div>'+
-          '</div>'+
-          '<span style="font-size:10px;font-weight:800;color:'+pctColor+';white-space:nowrap;">'+totalDone.toFixed(2)+' / '+(totalQty||'?')+' '+(item.unit||'')+' ('+pct+'%)</span>'+
+        '<div style="display:flex;align-items:center;gap:6px;">'+
+          pBar(pct,pc,5)+
+          '<span style="font-size:9px;font-weight:800;color:'+pc+';white-space:nowrap;">'+fmt(doneQty)+'/'+(refQty?fmt(refQty):'?')+' '+(item.unit||'')+' ('+pct+'%)'+(jmQty?' | JM:'+fmt(jmQty):'')+  '</span>'+
         '</div>'+
       '</div>'+
-      (entryRows||'<div style="padding:8px 14px;font-size:11px;color:var(--text3);">No entries yet — click + Entry to record progress</div>')+
+      (entryRows||'<div style="padding:8px 14px;font-size:11px;color:var(--text3);">No entries yet</div>')+
     '</div>';
   }).join('');
 
-  el.innerHTML='<div style="margin-bottom:10px;font-size:11px;color:var(--text3);">Click <b>+ Entry</b> on any BOQ item to record daily progress and resources used</div>'+itemCards;
+  el.innerHTML=
+    summaryTable+
+    resTable+
+    '<div style="font-size:11px;font-weight:800;color:var(--text3);margin-bottom:8px;">&#128203; Daily Entries by BOQ Item</div>'+
+    itemCards;
 }
-
 async function execOpenDailyEntry(itemId){
   var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
   var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
