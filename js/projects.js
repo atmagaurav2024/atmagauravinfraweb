@@ -2117,7 +2117,6 @@ function execRenderDaily(){
 
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  function pBar(pct,col,h){h=h||6;pct=Math.min(100,Math.max(0,pct));return '<div style="flex:1;background:#EEE;border-radius:'+h+'px;height:'+h+'px;"><div style="width:'+pct+'%;background:'+col+';height:'+h+'px;border-radius:'+h+'px;"></div></div>';}
   function pColor(pct){return pct>=100?'#2E7D32':pct>=60?'#1565C0':pct>=30?'#F57F17':'#E65100';}
   function fmt(n){var v=parseFloat(n)||0;return v%1===0?String(v):v.toFixed(2).replace(/\.?0+$/,'');}
 
@@ -2134,14 +2133,14 @@ function execRenderDaily(){
       '<td style="padding:7px 8px;font-size:10px;font-family:monospace;color:#E65100;white-space:nowrap;">'+item.item_code+'</td>'+
       '<td style="padding:7px 8px;font-size:11px;font-weight:700;">'+(item.short_name||item.description)+'</td>'+
       '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;">'+fmt(boqQty)+' <span style="font-size:9px;color:var(--text3);">'+unit+'</span></td>'+
-      '<td style="padding:7px 8px;min-width:130px;">'+
-        '<div style="display:flex;align-items:center;gap:5px;">'+pBar(jmPct,'#283593',5)+
-          '<span style="font-size:10px;font-weight:800;color:#283593;white-space:nowrap;">'+fmt(jmQty)+' <small>('+jmPct+'%)</small></span>'+
-        '</div></td>'+
-      '<td style="padding:7px 8px;min-width:130px;">'+
-        '<div style="display:flex;align-items:center;gap:5px;">'+pBar(donePct,pColor(donePct),5)+
-          '<span style="font-size:10px;font-weight:800;color:'+pColor(donePct)+';white-space:nowrap;">'+fmt(doneQty)+' <small>('+donePct+'%)</small></span>'+
-        '</div></td>'+
+      '<td style="padding:7px 8px;font-size:11px;text-align:right;">'+
+        '<span style="font-weight:800;color:#283593;">'+fmt(jmQty)+'</span> <span style="font-size:9px;color:var(--text3);">'+unit+'</span>'+
+        '<div style="font-size:9px;color:#283593;">('+jmPct+'% of BOQ)</div>'+
+      '</td>'+
+      '<td style="padding:7px 8px;font-size:11px;text-align:right;">'+
+        '<span style="font-weight:800;color:'+pColor(donePct)+';">'+fmt(doneQty)+'</span> <span style="font-size:9px;color:var(--text3);">'+unit+'</span>'+
+        '<div style="font-size:9px;color:'+pColor(donePct)+';">('+donePct+'% of JM)</div>'+
+      '</td>'+
       '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;color:'+(jmBal>0?'#E65100':'#2E7D32')+';">'+fmt(jmBal)+'</td>'+
     '</tr>';
   }).join('');
@@ -2203,11 +2202,10 @@ function execRenderDaily(){
         (a.scope?'<div style="font-size:9px;color:var(--text3);font-style:italic;">'+a.scope+'</div>':'')+
       '</td>'+
       '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span></td>'+
-      '<td style="padding:7px 8px;min-width:160px;">'+
-        '<div style="display:flex;align-items:center;gap:6px;">'+
-          pBar(pct,col,5)+
-          '<span style="font-size:10px;font-weight:800;color:'+(overused?'#C62828':col)+';white-space:nowrap;">'+fmt(usedQty)+' ('+pct+'%)</span>'+
-        '</div>'+
+      '<td style="padding:7px 8px;font-size:11px;text-align:right;">'+
+        '<span style="font-weight:800;color:'+(overused?'#C62828':col)+';">'+fmt(usedQty)+'</span>'+
+        '<span style="font-size:9px;color:var(--text3);"> '+(a.unit||'')+'</span>'+
+        '<div style="font-size:9px;color:'+(overused?'#C62828':col)+';">('+pct+'% of allotted)</div>'+
       '</td>'+
       '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;color:'+(overused?'#C62828':bal<0.01?'#2E7D32':'#555')+';">'+
         (overused?'<span style="color:#C62828;">+'+fmt(usedQty-allotQty)+' over</span>':fmt(bal))+
@@ -2277,9 +2275,8 @@ function execRenderDaily(){
           '</div>'+
           '<button onclick="execOpenDailyEntry(\''+item.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:4px 11px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Entry</button>'+
         '</div>'+
-        '<div style="display:flex;align-items:center;gap:6px;">'+
-          pBar(pct,pc,5)+
-          '<span style="font-size:9px;font-weight:800;color:'+pc+';white-space:nowrap;">'+fmt(doneQty)+'/'+(refQty?fmt(refQty):'?')+' '+(item.unit||'')+' ('+pct+'%)'+(jmQty?' | JM:'+fmt(jmQty):'')+  '</span>'+
+        '<div style="font-size:10px;color:'+pc+';font-weight:800;">'+
+          'Done: '+fmt(doneQty)+' '+(item.unit||'')+' ('+pct+'%)'+(jmQty?' &nbsp;|&nbsp; JM: '+fmt(jmQty)+' '+(item.unit||''):'')+(refQty?' &nbsp;|&nbsp; BOQ: '+fmt(refQty)+' '+(item.unit||''):'')+
         '</div>'+
       '</div>'+
       (entryRows||'<div style="padding:8px 14px;font-size:11px;color:var(--text3);">No entries yet</div>')+
