@@ -2129,19 +2129,14 @@ function execRenderDaily(){
     var donePct = jmQty>0?Math.round(doneQty/jmQty*100):(boqQty>0?Math.round(doneQty/boqQty*100):0);
     var jmBal   = Math.max(0,jmQty-doneQty);
     var unit    = item.unit||'';
+    var td='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;';
     return '<tr style="border-bottom:1px solid #F0F0F0;">'+
-      '<td style="padding:7px 8px;font-size:10px;font-family:monospace;color:#E65100;white-space:nowrap;">'+item.item_code+'</td>'+
-      '<td style="padding:7px 8px;font-size:11px;font-weight:700;">'+(item.short_name||item.description)+'</td>'+
-      '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;">'+fmt(boqQty)+' <span style="font-size:9px;color:var(--text3);">'+unit+'</span></td>'+
-      '<td style="padding:7px 8px;font-size:11px;text-align:right;">'+
-        '<span style="font-weight:800;color:#283593;">'+fmt(jmQty)+'</span> <span style="font-size:9px;color:var(--text3);">'+unit+'</span>'+
-        '<div style="font-size:9px;color:#283593;">('+jmPct+'% of BOQ)</div>'+
-      '</td>'+
-      '<td style="padding:7px 8px;font-size:11px;text-align:right;">'+
-        '<span style="font-weight:800;color:'+pColor(donePct)+';">'+fmt(doneQty)+'</span> <span style="font-size:9px;color:var(--text3);">'+unit+'</span>'+
-        '<div style="font-size:9px;color:'+pColor(donePct)+';">('+donePct+'% of JM)</div>'+
-      '</td>'+
-      '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;color:'+(jmBal>0?'#E65100':'#2E7D32')+';">'+fmt(jmBal)+'</td>'+
+      '<td style="'+td+';font-family:monospace;color:#E65100;font-weight:800;">'+item.item_code+'</td>'+
+      '<td style="padding:7px 10px;font-size:11px;font-weight:700;">'+( item.short_name||item.description)+'</td>'+
+      '<td style="'+td+'">'+fmt(boqQty)+' <span style="font-size:9px;color:var(--text3);">'+unit+'</span></td>'+
+      '<td style="'+td+';color:#283593;font-weight:800;">'+fmt(jmQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span><span style="font-size:9px;color:#283593;"> ('+jmPct+'%)</span></td>'+
+      '<td style="'+td+';color:'+pColor(donePct)+';font-weight:800;">'+fmt(doneQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span><span style="font-size:9px;color:'+pColor(donePct)+';"> ('+donePct+'%)</span></td>'+
+      '<td style="'+td+';font-weight:800;color:'+(jmBal>0?'#E65100':'#2E7D32')+';">'+fmt(jmBal)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span></td>'+
     '</tr>';
   }).join('');
 
@@ -2158,12 +2153,12 @@ function execRenderDaily(){
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
         '<table style="width:100%;border-collapse:collapse;min-width:600px;">'+
           '<thead><tr style="background:#F0F4FF;">'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:var(--text3);">CODE</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:var(--text3);">ITEM</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:right;color:var(--text3);">BOQ QTY</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:#283593;">JM QTY</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:#1565C0;">COMPLETED</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:right;color:#E65100;">JM BALANCE</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);white-space:nowrap;">CODE</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">ITEM</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);white-space:nowrap;">BOQ QTY</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#283593;white-space:nowrap;">JM QTY</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;white-space:nowrap;">COMPLETED</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#E65100;white-space:nowrap;">JM BALANCE</th>'+
           '</tr></thead>'+
           '<tbody>'+summaryRows+'</tbody>'+
         '</table>'+
@@ -2193,22 +2188,19 @@ function execRenderDaily(){
     var boqItem  = WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
     var itemLabel= boqItem.item_code?'['+boqItem.item_code+']':'';
 
+    var td2='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;';
     return '<tr style="border-bottom:1px solid #F0F0F0;">'+
-      '<td style="padding:7px 8px;">'+
+      '<td style="padding:7px 10px;">'+
         '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+col+'15;color:'+col+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
       '</td>'+
-      '<td style="padding:7px 8px;font-size:11px;font-weight:800;">'+a.party_name+
-        (itemLabel?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+itemLabel+' '+(boqItem.short_name||boqItem.description||'')+'</div>':'')+
+      '<td style="padding:7px 10px;font-size:11px;font-weight:800;">'+a.party_name+
+        (itemLabel?' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+itemLabel+'</span>':'')+
         (a.scope?'<div style="font-size:9px;color:var(--text3);font-style:italic;">'+a.scope+'</div>':'')+
       '</td>'+
-      '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span></td>'+
-      '<td style="padding:7px 8px;font-size:11px;text-align:right;">'+
-        '<span style="font-weight:800;color:'+(overused?'#C62828':col)+';">'+fmt(usedQty)+'</span>'+
-        '<span style="font-size:9px;color:var(--text3);"> '+(a.unit||'')+'</span>'+
-        '<div style="font-size:9px;color:'+(overused?'#C62828':col)+';">('+pct+'% of allotted)</div>'+
-      '</td>'+
-      '<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:800;color:'+(overused?'#C62828':bal<0.01?'#2E7D32':'#555')+';">'+
-        (overused?'<span style="color:#C62828;">+'+fmt(usedQty-allotQty)+' over</span>':fmt(bal))+
+      '<td style="'+td2+'">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span></td>'+
+      '<td style="'+td2+';color:'+(overused?'#C62828':col)+';font-weight:800;">'+fmt(usedQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+(a.unit||'')+'</span><span style="font-size:9px;color:'+(overused?'#C62828':col)+';"> ('+pct+'%)</span></td>'+
+      '<td style="'+td2+';font-weight:800;color:'+(overused?'#C62828':bal<0.01?'#2E7D32':'#555')+';">'+
+        (overused?'+'+fmt(usedQty-allotQty)+' over':fmt(bal))+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+(a.unit||'')+'</span>'+
       '</td>'+
     '</tr>';
   }).join('');
@@ -2222,11 +2214,11 @@ function execRenderDaily(){
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
         '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
           '<thead><tr style="background:#F1FBF4;">'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:var(--text3);">TYPE</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:var(--text3);">PARTY</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:left;color:#2E7D32;">UTILISED</th>'+
-            '<th style="padding:6px 8px;font-size:9px;text-align:right;color:var(--text3);">BALANCE</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);white-space:nowrap;">TYPE</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">PARTY / ITEM</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);white-space:nowrap;">ALLOTTED</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;white-space:nowrap;">UTILISED</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);white-space:nowrap;">BALANCE</th>'+
           '</tr></thead>'+
           '<tbody>'+resRows+'</tbody>'+
         '</table>'+
