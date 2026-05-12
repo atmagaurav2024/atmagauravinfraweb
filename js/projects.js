@@ -826,6 +826,7 @@ async function planDelRes(id){
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
 var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[];
+var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_SUBTAB='allot'; // allot | allotted | daily | bills
 
 var WA_LOADED_PROJ = ''; // track which project data is currently loaded
@@ -2107,6 +2108,12 @@ function execViewOrder(orderId){
   toast((o.doc_type==='wo'?'WO':'PO')+'-'+o.doc_number+': &#8377;'+Math.round(o.amount).toLocaleString('en-IN')+' | '+o.doc_date,'info');
 }
 
+function execDailyDateChange(){
+  var inp=document.getElementById('dp-view-date');
+  if(inp) WA_DAILY_DATE=inp.value;
+  execRenderDailyContent();
+}
+
 function execRenderDaily(){
   var el=document.getElementById('exec-content');if(!el)return;
 
@@ -2115,27 +2122,56 @@ function execRenderDaily(){
     return;
   }
 
+  // Render the date picker shell, then fill content
+  el.innerHTML=
+    '<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
+      '<div style="font-size:12px;font-weight:800;color:#1565C0;">&#128197; View Date</div>'+
+      '<input id="dp-view-date" type="date" value="'+WA_DAILY_DATE+'" '+
+        'style="border:1.5px solid #1565C0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:#1565C0;outline:none;cursor:pointer;" '+
+        'onchange="execDailyDateChange()">'+
+      '<div style="flex:1;font-size:10px;color:var(--text3);">Showing entries for selected date &amp; cumulative upto that date</div>'+
+      '<button onclick="WA_DAILY_DATE=new Date().toISOString().slice(0,10);document.getElementById(\'dp-view-date\').value=WA_DAILY_DATE;execRenderDailyContent();" '+
+        'style="font-size:10px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">Today</button>'+
+    '</div>'+
+    '<div id="dp-daily-content"></div>';
+
+  execRenderDailyContent();
+}
+
+function execRenderDailyContent(){
+  var el=document.getElementById('dp-daily-content');if(!el)return;
+  var selDate=WA_DAILY_DATE;
+
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   function pColor(pct){return pct>=100?'#2E7D32':pct>=60?'#1565C0':pct>=30?'#F57F17':'#E65100';}
   function fmt(n){var v=parseFloat(n)||0;return v%1===0?String(v):v.toFixed(2).replace(/\.?0+$/,'');}
 
+  // Filter: today's entries = exact date, cumulative = upto and including selDate
+  var todayEntries = WA_DAILY.filter(function(d){return d.date===selDate;});
+  var cumulEntries = WA_DAILY.filter(function(d){return d.date<=selDate;});
+
   // ── 1. BOQ ITEM PROGRESS SUMMARY ───────────────────────────────────────
   var summaryRows=WA_ITEMS.map(function(item){
     var boqQty  = parseFloat(item.boq_qty||item.qty)||0;
     var jmQty   = WA_JMS.filter(function(j){return j.boq_item_id===item.id;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
-    var doneQty = WA_DAILY.filter(function(d){return d.boq_item_id===item.id;}).reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
-    var jmPct   = boqQty>0?Math.round(jmQty/boqQty*100):0;
-    var donePct = jmQty>0?Math.round(doneQty/jmQty*100):(boqQty>0?Math.round(doneQty/boqQty*100):0);
-    var jmBal   = Math.max(0,jmQty-doneQty);
-    var unit    = item.unit||'';
-    var td='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;';
+    var doneToday  = todayEntries.filter(function(d){return d.boq_item_id===item.id;}).reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+    var doneCumul  = cumulEntries.filter(function(d){return d.boq_item_id===item.id;}).reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+    var doneQty = doneCumul;
+    var jmPct    = boqQty>0?Math.round(jmQty/boqQty*100):0;
+    var cumulPct = jmQty>0?Math.round(doneCumul/jmQty*100):(boqQty>0?Math.round(doneCumul/boqQty*100):0);
+    var jmBal    = Math.max(0,jmQty-doneCumul);
+    var unit     = item.unit||'';
+    var td='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;vertical-align:middle;';
     return '<tr style="border-bottom:1px solid #F0F0F0;">'+
       '<td style="'+td+';font-family:monospace;color:#E65100;font-weight:800;">'+item.item_code+'</td>'+
-      '<td style="padding:7px 10px;font-size:11px;font-weight:700;">'+( item.short_name||item.description)+'</td>'+
+      '<td style="padding:7px 10px;font-size:11px;font-weight:700;vertical-align:middle;">'+( item.short_name||item.description)+'</td>'+
       '<td style="'+td+'">'+fmt(boqQty)+' <span style="font-size:9px;color:var(--text3);">'+unit+'</span></td>'+
-      '<td style="'+td+';color:#283593;font-weight:800;">'+fmt(jmQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span><span style="font-size:9px;color:#283593;"> ('+jmPct+'%)</span></td>'+
-      '<td style="'+td+';color:'+pColor(donePct)+';font-weight:800;">'+fmt(doneQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span><span style="font-size:9px;color:'+pColor(donePct)+';"> ('+donePct+'%)</span></td>'+
+      '<td style="'+td+';color:#283593;font-weight:800;">'+fmt(jmQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span> <span style="font-size:9px;color:#283593;">('+jmPct+'%)</span></td>'+
+      '<td style="'+td+';color:#E65100;font-weight:800;background:#FFF8F5;">'+
+        (doneToday>0?fmt(doneToday)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span>':'<span style="color:#CCC;font-size:11px;">—</span>')+
+      '</td>'+
+      '<td style="'+td+';color:'+pColor(cumulPct)+';font-weight:800;">'+fmt(doneCumul)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span> <span style="font-size:9px;color:'+pColor(cumulPct)+';">('+cumulPct+'%)</span></td>'+
       '<td style="'+td+';font-weight:800;color:'+(jmBal>0?'#E65100':'#2E7D32')+';">'+fmt(jmBal)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span></td>'+
     '</tr>';
   }).join('');
@@ -2157,7 +2193,8 @@ function execRenderDaily(){
             '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">ITEM</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);white-space:nowrap;">BOQ QTY</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#283593;white-space:nowrap;">JM QTY</th>'+
-            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;white-space:nowrap;">COMPLETED</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#E65100;white-space:nowrap;background:#FFF8F5;">TODAY</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;white-space:nowrap;">CUMULATIVE</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#E65100;white-space:nowrap;">JM BALANCE</th>'+
           '</tr></thead>'+
           '<tbody>'+summaryRows+'</tbody>'+
@@ -2168,11 +2205,11 @@ function execRenderDaily(){
   // ── 2. RESOURCE UTILISATION TABLE — one row per allotment ───────────────
   // Build cumulative used qty per allot_id from daily entries
   var usedByAllot={};
-  WA_DAILY.forEach(function(d){
+  cumulEntries.forEach(function(d){
     var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
     resources.forEach(function(r){
       if(!r.allot_id||!r.qty) return;
-      usedByAllot[r.allot_id]=(usedByAllot[r.allot_id]||0)+( parseFloat(r.qty)||0);
+      usedByAllot[r.allot_id]=(usedByAllot[r.allot_id]||0)+(parseFloat(r.qty)||0);
     });
   });
 
@@ -2226,23 +2263,37 @@ function execRenderDaily(){
     '</div>':
     '';
 
-  // ── 3. DAILY ENTRIES PER ITEM ───────────────────────────────────────────
-  var entriesByItem={};
-  WA_DAILY.forEach(function(d){
+  // ── 3. DAILY ENTRIES FOR SELECTED DATE ────────────────────────────────
+  // Show today's entries prominently; cumul entries collapsible
+  var todayByItem={};
+  todayEntries.forEach(function(d){
     var key=d.boq_item_id||'misc';
-    if(!entriesByItem[key]) entriesByItem[key]=[];
-    entriesByItem[key].push(d);
+    if(!todayByItem[key]) todayByItem[key]=[];
+    todayByItem[key].push(d);
   });
 
-  var itemCards=WA_ITEMS.map(function(item){
-    var entries=(entriesByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
-    var doneQty =entries.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+  // Only show items that have any entry on selected date OR cumulative entries
+  var cumulByItem={};
+  cumulEntries.forEach(function(d){
+    var key=d.boq_item_id||'misc';
+    if(!cumulByItem[key]) cumulByItem[key]=[];
+    cumulByItem[key].push(d);
+  });
+
+  var itemCards=WA_ITEMS.filter(function(item){
+    return (todayByItem[item.id]||[]).length>0||(cumulByItem[item.id]||[]).length>0;
+  }).map(function(item){
+    var todayItemEntries=(todayByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+    var cumulItemEntries=(cumulByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+    var doneToday2=todayItemEntries.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+    var doneCumul2=cumulItemEntries.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
     var jmQty   =WA_JMS.filter(function(j){return j.boq_item_id===item.id;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
     var refQty  =jmQty||parseFloat(item.boq_qty||item.qty)||0;
-    var pct     =refQty>0?Math.min(100,Math.round(doneQty/refQty*100)):0;
+    var pct     =refQty>0?Math.min(100,Math.round(doneCumul2/refQty*100)):0;
     var pc      =pColor(pct);
+    var doneQty =doneCumul2;
 
-    var entryRows=entries.map(function(d){
+    function makeEntryRow(d){
       var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
       return '<div style="padding:7px 12px;border-bottom:1px solid #F5F5F5;">'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(resources.length?'5':'0')+'px;">'+
@@ -2256,30 +2307,59 @@ function execRenderDaily(){
             resources.map(function(r){var col=tCol[r.type]||'#555';return '<span style="font-size:9px;background:'+col+'15;color:'+col+';border:1px solid '+col+'30;border-radius:4px;padding:2px 6px;font-weight:700;">'+(tLbl[r.type]||r.type)+': '+r.name+(r.qty?' \u00d7 '+fmt(r.qty)+(r.unit?' '+r.unit:''):'')+  '</span>';}).join('')+
           '</div>':'')+
       '</div>';
-    }).join('');
+    }
+
+    // Today's entries — shown with orange header
+    var todayRowsHtml = todayItemEntries.length
+      ? '<div style="background:#FFF3E0;padding:4px 12px;font-size:9px;font-weight:800;color:#E65100;">'+
+          '&#128197; Today ('+selDate.split('-').reverse().join('/')+') — '+fmt(doneToday2)+' '+(item.unit||'')+
+        '</div>'+
+        todayItemEntries.map(makeEntryRow).join('')
+      : '<div style="padding:6px 14px;font-size:11px;color:var(--text3);background:#FFF8F5;">No entry for selected date</div>';
+
+    // Previous entries (cumul excluding today)
+    var prevEntries = cumulItemEntries.filter(function(d){return d.date!==selDate;});
+    var prevRowsHtml = prevEntries.length
+      ? '<div style="background:#F8FAFC;padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">'+
+          'Previous entries (cumulative: '+fmt(doneCumul2)+' '+(item.unit||'')+')'+
+        '</div>'+
+        prevEntries.map(makeEntryRow).join('')
+      : '';
 
     return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
       '<div style="padding:9px 14px;background:#FFF3E0;border-bottom:1px solid var(--border);">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
           '<div style="flex:1;min-width:0;">'+
             '<span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
             '<span style="font-size:12px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span>'+
           '</div>'+
           '<button onclick="execOpenDailyEntry(\''+item.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:4px 11px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Entry</button>'+
         '</div>'+
-        '<div style="font-size:10px;color:'+pc+';font-weight:800;">'+
-          'Done: '+fmt(doneQty)+' '+(item.unit||'')+' ('+pct+'%)'+(jmQty?' &nbsp;|&nbsp; JM: '+fmt(jmQty)+' '+(item.unit||''):'')+(refQty?' &nbsp;|&nbsp; BOQ: '+fmt(refQty)+' '+(item.unit||''):'')+
+        '<div style="font-size:10px;color:var(--text3);">'+
+          'Today: <b style="color:#E65100;">'+(doneToday2>0?fmt(doneToday2)+' '+(item.unit||''):'nil')+'</b>'+
+          ' &nbsp;|&nbsp; Cumulative: <b style="color:'+pc+';">'+fmt(doneCumul2)+' '+(item.unit||'')+' ('+pct+'%)</b>'+
+          (jmQty?' &nbsp;|&nbsp; JM: <b style="color:#283593;">'+fmt(jmQty)+'</b>':'')+
         '</div>'+
       '</div>'+
-      (entryRows||'<div style="padding:8px 14px;font-size:11px;color:var(--text3);">No entries yet</div>')+
+      todayRowsHtml+
+      prevRowsHtml+
     '</div>';
   }).join('');
+
+  var noEntries = WA_ITEMS.every(function(item){
+    return (todayByItem[item.id]||[]).length===0&&(cumulByItem[item.id]||[]).length===0;
+  });
 
   el.innerHTML=
     summaryTable+
     resTable+
-    '<div style="font-size:11px;font-weight:800;color:var(--text3);margin-bottom:8px;">&#128203; Daily Entries by BOQ Item</div>'+
-    itemCards;
+    '<div style="font-size:11px;font-weight:800;color:var(--text3);margin-bottom:8px;">'+
+      '&#128203; Entries for '+(selDate.split('-').reverse().join('/'))+
+      ' &nbsp;<span style="font-size:9px;font-weight:400;">and cumulative upto this date</span>'+
+    '</div>'+
+    (noEntries
+      ? '<div style="text-align:center;padding:20px;color:var(--text3);background:white;border-radius:12px;">No entries found upto '+selDate.split('-').reverse().join('/')+'</div>'
+      : itemCards);
 }
 async function execOpenDailyEntry(itemId){
   var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
