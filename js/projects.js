@@ -2107,120 +2107,195 @@ function execViewOrder(orderId){
 
 function execRenderDaily(){
   var el=document.getElementById('exec-content');if(!el)return;
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
 
-  // Group allotments by party for daily entry
-  var parties={};
-  WA_ALLOT.forEach(function(a){
-    var key=a.exec_type+'::'+a.party_name;
-    if(!parties[key]) parties[key]={type:a.exec_type,name:a.party_name,allotments:[],totalAllot:0};
-    parties[key].allotments.push(a);
-    parties[key].totalAllot+=(parseFloat(a.qty)||0);
+  if(!WA_ITEMS.length){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128197;</div><div style="font-weight:700;margin-top:8px;">No BOQ items found</div></div>';
+    return;
+  }
+
+  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+
+  // Group daily entries by boq_item_id
+  var entriesByItem={};
+  WA_DAILY.forEach(function(d){
+    var key=d.boq_item_id||'misc';
+    if(!entriesByItem[key]) entriesByItem[key]=[];
+    entriesByItem[key].push(d);
   });
-  // Only show daily entries for currently allotted parties
-  var activeKeys={}; Object.keys(parties).forEach(function(k){activeKeys[parties[k].name]=true;});
+
+  var itemCards=WA_ITEMS.map(function(item){
+    var entries=(entriesByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+    var totalDone=entries.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+    var totalQty=parseFloat(item.qty)||0;
+    var pct=totalQty>0?Math.min(100,Math.round(totalDone/totalQty*100)):0;
+    var pctColor=pct>=100?'#2E7D32':pct>=50?'#F57F17':'#E65100';
+
+    var entryRows=entries.map(function(d){
+      var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
+      return '<div style="padding:7px 12px;border-bottom:1px solid #F5F5F5;">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(resources.length?'5':'0')+'px;">'+
+          '<span style="font-size:10px;color:var(--text3);flex-shrink:0;">'+(d.date?d.date.split('-').reverse().join('/'):'-')+'</span>'+
+          '<span style="font-size:12px;font-weight:800;color:#E65100;">'+d.qty_done+' '+(d.unit||item.unit||'')+'</span>'+
+          (d.remarks?'<span style="font-size:10px;color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+d.remarks+'</span>':'<span style="flex:1;"></span>')+
+          '<button onclick="execDelDaily(\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;flex-shrink:0;">&#215;</button>'+
+        '</div>'+
+        (resources.length?
+          '<div style="display:flex;flex-wrap:wrap;gap:4px;">'+
+            resources.map(function(r){
+              var col=tCol[r.type]||'#555';
+              return '<span style="font-size:9px;background:'+col+'15;color:'+col+';border:1px solid '+col+'30;border-radius:4px;padding:2px 6px;font-weight:700;">'+
+                (tLbl[r.type]||r.type)+': '+r.name+(r.qty?' × '+r.qty+(r.unit?' '+r.unit:''):'')+
+              '</span>';
+            }).join('')+
+          '</div>':'')+'</div>';
+    }).join('');
+
+    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+      '<div style="padding:10px 14px;background:#FFF3E0;border-bottom:1px solid var(--border);">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'+
+          '<div style="flex:1;min-width:0;">'+
+            '<span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
+            '<span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span>'+
+          '</div>'+
+          '<button onclick="execOpenDailyEntry(\''+item.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Entry</button>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;">'+
+          '<div style="flex:1;background:#EEE;border-radius:4px;height:6px;">'+
+            '<div style="width:'+pct+'%;background:'+pctColor+';height:6px;border-radius:4px;"></div>'+
+          '</div>'+
+          '<span style="font-size:10px;font-weight:800;color:'+pctColor+';white-space:nowrap;">'+totalDone.toFixed(2)+' / '+(totalQty||'?')+' '+(item.unit||'')+' ('+pct+'%)</span>'+
+        '</div>'+
+      '</div>'+
+      (entryRows||'<div style="padding:8px 14px;font-size:11px;color:var(--text3);">No entries yet — click + Entry to record progress</div>')+
+    '</div>';
+  }).join('');
+
+  el.innerHTML='<div style="margin-bottom:10px;font-size:11px;color:var(--text3);">Click <b>+ Entry</b> on any BOQ item to record daily progress and resources used</div>'+itemCards;
+}
+
+async function execOpenDailyEntry(itemId){
+  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
+
+  // Get allotted resources for this item (via boq_item_id or sub-item)
+  var itemSubIds=WA_SUBS.filter(function(s){return s.boq_item_id===itemId;}).map(function(s){return s.id;});
+  var itemAllots=WA_ALLOT.filter(function(a){
+    return a.boq_item_id===itemId||(a.boq_subitem_id&&itemSubIds.includes(a.boq_subitem_id));
+  });
 
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
 
-  var partyKeys=Object.keys(parties);
-  if(!partyKeys.length){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128197;</div><div style="font-weight:700;margin-top:8px;">No allotments yet</div><div style="font-size:11px;margin-top:4px;">Allot work to parties first</div></div>';
-    return;
-  }
+  var resourceRows=itemAllots.length
+    ? itemAllots.map(function(a){
+        var col=tCol[a.exec_type]||'#37474F';
+        return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:#FAFAFA;">'+
+          '<input type="checkbox" class="dp-res-chk" '+
+            'data-allot-id="'+a.id+'" '+
+            'data-name="'+a.party_name+'" '+
+            'data-type="'+a.exec_type+'" '+
+            'data-unit="'+(a.unit||'')+'" '+
+            'style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
+          '<div style="flex:1;min-width:0;">'+
+            '<span style="font-size:9px;font-weight:800;padding:1px 6px;background:'+col+'15;color:'+col+';border-radius:3px;margin-right:4px;">'+(tLbl[a.exec_type]||a.exec_type)+'</span>'+
+            '<span style="font-size:12px;font-weight:800;">'+a.party_name+'</span>'+
+            (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
+          '</div>'+
+          '<div class="dp-res-qty-wrap" style="display:none;align-items:center;gap:4px;">'+
+            '<div>'+
+              '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
+              '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
+            '</div>'+
+            '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
+          '</div>'+
+        '</div>';
+      }).join('')
+    : '<div style="font-size:11px;color:var(--text3);padding:8px 0;font-style:italic;">No resources allotted for this item yet.</div>';
 
-  el.innerHTML=
-    '<div style="margin-bottom:10px;display:flex;justify-content:flex-end;">'+
-      '<button onclick="execOpenDailyEntry()" style="background:#E65100;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#43; Daily Entry</button>'+
-    '</div>'+
-    partyKeys.map(function(key){
-      var p=parties[key];
-      var col=tCol[p.type]||'#37474F';
-      var pDone=WA_DAILY.filter(function(d){return d.party_name===p.name&&d.party_type===p.type&&activeKeys[d.party_name];});
-      var totalDone=pDone.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
-      var bal=Math.max(0,p.totalAllot-totalDone);
-      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-        '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
-          '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-          '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
-          '<div style="text-align:right;font-size:10px;color:var(--text3);">Allot: '+p.totalAllot+' | Done: '+totalDone.toFixed(2)+' | <b style="color:'+(bal>0?col:'#2E7D32')+'">Bal: '+bal.toFixed(2)+'</b></div>'+
-        '</div>'+
-        (pDone.length?
-          '<div style="padding:6px 14px;">'+
-            pDone.slice(0,5).map(function(d){
-              return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F5F5F5;font-size:11px;">'+
-                '<span style="color:var(--text3);flex-shrink:0;">'+d.date+'</span>'+
-                '<div style="flex:1;font-weight:700;">'+d.qty_done+' '+(d.unit||'')+'</div>'+
-                (d.remarks?'<span style="color:var(--text3);">'+d.remarks+'</span>':'')+
-                '<button onclick="execDelDaily(\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;">&#215;</button>'+
-              '</div>';
-            }).join('')+
-            (pDone.length>5?'<div style="font-size:10px;color:var(--text3);padding:4px 0;">+'+( pDone.length-5)+' more entries</div>':'')+
-          '</div>':
-          '<div style="padding:8px 14px;font-size:11px;color:var(--text3);">No entries yet</div>')+
-      '</div>';
-    }).join('');
-}
-
-async function execOpenDailyEntry(){
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
-  // Build party options from allotments
-  var parties={};
-  WA_ALLOT.forEach(function(a){
-    var key=a.exec_type+'::'+a.party_name;
-    if(!parties[key]) parties[key]={type:a.exec_type,name:a.party_name};
-  });
-  Object.keys(parties).forEach(function(k){ if(!parties[k].unit) parties[k].unit=(WA_ALLOT.find(function(a){return a.exec_type+'::'+a.party_name===k;})||{}).unit||''; });
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var partyOpts='<option value="">\u2014 Select Party \u2014</option>'+
-    Object.keys(parties).map(function(k){
-      var p=parties[k];
-      return '<option value="'+k+'" data-unit="'+p.unit+'">' +p.name+' ('+(tLbl[p.type]||p.type)+')</option>';
-    }).join('');
-
-  document.getElementById('exec-sheet-title').textContent='Daily Progress Entry';
+  document.getElementById('exec-sheet-title').textContent='Daily Progress — '+(item.item_code?item.item_code+' ':'')+(item.short_name||item.description||'');
   document.getElementById('exec-sheet-body').innerHTML=
-    '<label class="flbl">Date *</label>'+
-    '<input id="dp-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
-    '<label class="flbl">Party *</label>'+
-    '<select id="dp-party" class="fsel" onchange="dpPartyChange()">'+partyOpts+'</select>'+
-    '<div class="g2">'+
-      '<div><label class="flbl">Qty Done *</label><input id="dp-qty" class="finp" type="number" step="0.001" placeholder="0"></div>'+
-      '<div><label class="flbl">Unit</label><input id="dp-unit" class="finp" placeholder="auto-filled" style="background:#F8FAFC;" readonly></div>'+
+    '<div style="background:#FFF3E0;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+      '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Quantity Completed</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+        '<div><label class="flbl">Date *</label><input id="dp-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+        '<div><label class="flbl">Qty Completed *</label>'+
+          '<div style="display:flex;gap:6px;align-items:center;">'+
+            '<input id="dp-qty" class="finp" type="number" step="0.001" placeholder="0" style="flex:1;">'+
+            '<span style="font-size:12px;font-weight:700;color:var(--text3);padding-top:2px;">'+(item.unit||'')+'</span>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div><label class="flbl">Remarks / Observations</label><input id="dp-remarks" class="finp" placeholder="Weather, issues, notes..."></div>'+
     '</div>'+
-    '<label class="flbl">Remarks</label>'+
-    '<input id="dp-remarks" class="finp" placeholder="Any notes...">';
+    '<div style="font-size:11px;font-weight:800;color:#1565C0;margin-bottom:8px;">'+
+      '&#9313; Resources Utilised Today '+
+      '<span style="font-size:9px;font-weight:500;color:var(--text3);">(check all that worked — enter qty used if applicable)</span>'+
+    '</div>'+
+    resourceRows;
 
   var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
   var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
   cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
   var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#E65100;color:white;';
   sb.innerHTML='&#10003; Save Entry';
-  sb.onclick=function(){execSaveDailyEntry(projId);};
+  sb.onclick=function(){execSaveDailyEntry(projId,itemId);};
   sf.appendChild(cb);sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
+
+  // Wire checkboxes → show qty input
+  setTimeout(function(){
+    var body=document.getElementById('exec-sheet-body');
+    if(!body)return;
+    body.addEventListener('change',function(e){
+      var chk=e.target;
+      if(chk.classList&&chk.classList.contains('dp-res-chk')){
+        var row=chk.closest('.dp-res-row');
+        if(!row)return;
+        var qw=row.querySelector('.dp-res-qty-wrap');
+        if(qw)qw.style.display=chk.checked?'flex':'none';
+      }
+    });
+  },100);
 }
 
-function dpPartyChange(){var s=document.getElementById("dp-party");var u=document.getElementById("dp-unit");if(s&&u){var o=s.options[s.selectedIndex];u.value=o?o.getAttribute("data-unit")||"":"";u.readOnly=true;}}
+function dpPartyChange(){} // kept for compatibility
 
-async function execSaveDailyEntry(projId){
+async function execSaveDailyEntry(projId,itemId){
   var date=gv('dp-date'),qty=parseFloat(gv('dp-qty'))||0;
-  var partyKey=gv('dp-party');
-  if(!date||!partyKey||!qty){toast('Date, party and qty required','warning');return;}
-  var parts=partyKey.split('::');
-  var partyType=parts[0],partyName=parts[1];
+  if(!date){toast('Date required','warning');return;}
+  if(!qty){toast('Enter qty completed','warning');return;}
+
+  // Collect checked resources with qty
+  var resources=[];
+  document.querySelectorAll('.dp-res-chk:checked').forEach(function(chk){
+    var row=chk.closest('.dp-res-row');
+    var qtyInp=row&&row.querySelector('.dp-res-qty');
+    resources.push({
+      allot_id:chk.getAttribute('data-allot-id'),
+      name:chk.getAttribute('data-name'),
+      type:chk.getAttribute('data-type'),
+      unit:chk.getAttribute('data-unit')||null,
+      qty:parseFloat(qtyInp&&qtyInp.value)||null
+    });
+  });
+
+  var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
   try{
     var res=await sbInsert('work_daily_progress',{
-      project_id:projId,date:date,
-      party_type:partyType,party_name:partyName,
-      qty_done:qty,unit:gv('dp-unit')||null,
-      remarks:gv('dp-remarks')||null
+      project_id:projId,
+      boq_item_id:itemId,
+      date:date,
+      qty_done:qty,
+      unit:item.unit||null,
+      remarks:gv('dp-remarks')||null,
+      resources_used:resources.length?JSON.stringify(resources):null
     });
     if(res&&res[0]) WA_DAILY.push(res[0]);
     toast('Entry saved!','success');
     closeSheet('ov-exec','sh-exec');
     execRenderDaily();
-  }catch(e){toast('Error: '+e.message,'error');}
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
 async function execDelDaily(id){
@@ -2229,7 +2304,6 @@ async function execDelDaily(id){
   execRenderDaily();
   try{await sbDelete('work_daily_progress',id);}catch(e){console.error(e);}
 }
-
 // ── Bills & Payments ────────────────────────────────────────────────────
 function execRenderBills(){
   var el=document.getElementById('exec-content');if(!el)return;
