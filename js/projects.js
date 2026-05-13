@@ -935,19 +935,31 @@ function rrEnsureContainer(){
 
 async function rrLoadItems(){
   rrEnsureContainer();
-  // Sync project selector from planning tab
-  var planSel=document.getElementById('plan-proj-sel');
-  var rrSel=document.getElementById('rr-proj-sel');
-  if(planSel&&rrSel) rrSel.innerHTML=planSel.innerHTML;
-
   var el=document.getElementById('rr-content'); if(!el)return;
-  el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
 
-  var projId=(planSel||{}).value||'';
+  // Load project list into RR selector if not already loaded
+  var rrSel=document.getElementById('rr-proj-sel');
+  if(rrSel&&(!rrSel.options||rrSel.options.length<=1)){
+    try{
+      var projs=await sbFetch('projects',{select:'id,name',order:'name.asc'});
+      rrSel.innerHTML='<option value="">— Select Project —</option>'+
+        (Array.isArray(projs)?projs:[]).map(function(p){
+          return '<option value="'+p.id+'">'+p.name+'</option>';
+        }).join('');
+    }catch(e){}
+  }
+
+  var projId=(rrSel||{}).value||'';
+  // Render the selector bar + content
+  rrRenderShell(projId);
+
   if(!projId){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project in the Planning tab first</div>';
+    document.getElementById('rr-inner').innerHTML=
+      '<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">Select a project above to view requisitions</div>';
     return;
   }
+
+  document.getElementById('rr-inner').innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
 
   try{
     var r=await Promise.all([
@@ -961,21 +973,76 @@ async function rrLoadItems(){
     RR_PLAN_RES  =Array.isArray(r[2])?r[2]:[];
     RR_ITEMS     =Array.isArray(r[3])?r[3]:[];
   }catch(e){
-    // resource_requisitions table may not exist yet
-    RR_PLAN_ITEMS=PLAN_ITEMS.length?PLAN_ITEMS:[];
-    RR_PLAN_SUBS =PLAN_SUBS.length?PLAN_SUBS:[];
-    RR_PLAN_RES  =PLAN_RES.length?PLAN_RES:[];
-    RR_ITEMS=[];
-    console.warn('RR table error:',e.message);
+    RR_PLAN_ITEMS=[]; RR_PLAN_SUBS=[]; RR_PLAN_RES=[]; RR_ITEMS=[];
+    console.warn('RR load error:',e.message);
+    document.getElementById('rr-inner').innerHTML='<div style="text-align:center;padding:30px;color:#C62828;">Error loading data: '+e.message+'</div>';
+    return;
+  }
+  rrRender();
+}
+
+function rrRenderShell(projId){
+  var el=document.getElementById('rr-content'); if(!el)return;
+  var rrSel=document.getElementById('rr-proj-sel');
+  var selectorHtml='<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
+    '<label style="font-size:11px;font-weight:800;color:#00838F;white-space:nowrap;">Project</label>'+
+    '<select id="rr-proj-sel-vis" class="fsel" onchange="rrOnProjChange(this.value)" style="flex:1;">'+
+      (rrSel?rrSel.innerHTML:'<option value="">Loading...</option>')+
+    '</select>'+
+    '<button onclick="rrLoadItems()" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">&#8635; Refresh</button>'+
+  '</div>'+
+  '<div id="rr-inner"></div>';
+
+  // Only set innerHTML if shell not already rendered (avoid losing dropdown selection)
+  if(!document.getElementById('rr-inner')){
+    el.innerHTML=selectorHtml;
+    // Sync visible selector to selected project
+    var vis=document.getElementById('rr-proj-sel-vis');
+    if(vis&&projId) vis.value=projId;
+  }
+}
+
+async function rrOnProjChange(projId){
+  // Update hidden selector value and reload
+  var rrSel=document.getElementById('rr-proj-sel');
+  if(rrSel) rrSel.value=projId;
+  // Sync visible selector
+  var vis=document.getElementById('rr-proj-sel-vis');
+  if(vis) vis.value=projId;
+
+  if(!projId){
+    document.getElementById('rr-inner').innerHTML=
+      '<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">Select a project above</div>';
+    return;
+  }
+  document.getElementById('rr-inner').innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+
+  try{
+    var r=await Promise.all([
+      sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),
+      sbFetch('boq_subitems',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'}),
+      sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&exec_type=eq.planned',order:'created_at.asc'}),
+      sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})
+    ]);
+    RR_PLAN_ITEMS=Array.isArray(r[0])?r[0]:[];
+    RR_PLAN_SUBS =Array.isArray(r[1])?r[1]:[];
+    RR_PLAN_RES  =Array.isArray(r[2])?r[2]:[];
+    RR_ITEMS     =Array.isArray(r[3])?r[3]:[];
+  }catch(e){
+    RR_PLAN_ITEMS=[]; RR_PLAN_SUBS=[]; RR_PLAN_RES=[]; RR_ITEMS=[];
+    document.getElementById('rr-inner').innerHTML='<div style="text-align:center;padding:30px;color:#C62828;">Error: '+e.message+'</div>';
+    return;
   }
   rrRender();
 }
 
 function rrRender(){
-  var el=document.getElementById('rr-content'); if(!el)return;
-  var planSel=document.getElementById('plan-proj-sel');
-  var projId=(planSel||{}).value||'';
-  var projName=(planSel&&planSel.options[planSel.selectedIndex]?planSel.options[planSel.selectedIndex].text:'');
+  var el=document.getElementById('rr-inner'); if(!el)return;
+  var rrSel=document.getElementById('rr-proj-sel');
+  var rrVis=document.getElementById('rr-proj-sel-vis');
+  var projId=(rrSel||{}).value||(rrVis||{}).value||'';
+  var selEl=rrVis||rrSel;
+  var projName=(selEl&&selEl.options&&selEl.selectedIndex>=0?selEl.options[selEl.selectedIndex].text:'');
 
   var statusColors={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var statusLabels={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
@@ -1078,7 +1145,7 @@ function rrRender(){
   el.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'+
       '<div style="font-size:13px;font-weight:800;color:#00838F;">&#128203; Resource Requisitions</div>'+
-      '<div style="font-size:11px;color:var(--text3);">'+projName+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);font-weight:700;">'+projName+'</div>'+
     '</div>'+
     (Object.values(counts).some(function(v){return v>0;})?summaryBar:'')+
     (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">No planned resources found. Add resources in Planning tab first.</div>');
