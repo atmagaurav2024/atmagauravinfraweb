@@ -917,7 +917,6 @@ function waSubTab(tab){ WA_SUBTAB=tab; execRenderSubTab(); }
 var RR_ITEMS=[], RR_PLAN_ITEMS=[], RR_PLAN_SUBS=[], RR_PLAN_RES=[];
 
 function rrEnsureContainer(){
-  // Inject rr-content div if not in HTML
   if(!document.getElementById('rr-content')){
     var div=document.createElement('div');
     div.id='rr-content';
@@ -925,37 +924,31 @@ function rrEnsureContainer(){
     var appProj=document.getElementById('app-projects');
     if(appProj) appProj.appendChild(div);
   }
-  if(!document.getElementById('rr-proj-sel')){
-    // Create a hidden project selector synced from plan-proj-sel
-    var sel=document.createElement('select');
-    sel.id='rr-proj-sel'; sel.style.display='none';
-    document.body.appendChild(sel);
-  }
 }
 
 async function rrLoadItems(){
   rrEnsureContainer();
   var el=document.getElementById('rr-content'); if(!el)return;
 
-  // Load project list into RR selector if not already loaded
-  var rrSel=document.getElementById('rr-proj-sel');
-  if(rrSel&&(!rrSel.options||rrSel.options.length<=1)){
+  // Render shell first (creates rr-proj-sel-vis if not present)
+  if(!document.getElementById('rr-inner')) rrRenderShell();
+
+  var vis=document.getElementById('rr-proj-sel-vis');
+  // Load project list if empty
+  if(vis&&(!vis.options||vis.options.length<=1)){
     try{
       var projs=await sbFetch('projects',{select:'id,name',order:'name.asc'});
-      rrSel.innerHTML='<option value="">— Select Project —</option>'+
+      vis.innerHTML='<option value="">— Select Project —</option>'+
         (Array.isArray(projs)?projs:[]).map(function(p){
           return '<option value="'+p.id+'">'+p.name+'</option>';
         }).join('');
     }catch(e){}
   }
 
-  var projId=(rrSel||{}).value||'';
-  // Render the selector bar + content
-  rrRenderShell(projId);
-
+  var projId=(vis||{}).value||'';
   if(!projId){
-    document.getElementById('rr-inner').innerHTML=
-      '<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">Select a project above to view requisitions</div>';
+    var inner=document.getElementById('rr-inner');
+    if(inner) inner.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">Select a project above to view requisitions</div>';
     return;
   }
 
@@ -981,32 +974,27 @@ async function rrLoadItems(){
   rrRender();
 }
 
-function rrRenderShell(projId){
+function rrRenderShell(){
   var el=document.getElementById('rr-content'); if(!el)return;
-  var rrSel=document.getElementById('rr-proj-sel');
-  var selectorHtml='<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
-    '<label style="font-size:11px;font-weight:800;color:#00838F;white-space:nowrap;">Project</label>'+
-    '<select id="rr-proj-sel-vis" class="fsel" onchange="rrOnProjChange(this.value)" style="flex:1;">'+
-      (rrSel?rrSel.innerHTML:'<option value="">Loading...</option>')+
-    '</select>'+
-    '<button onclick="rrLoadItems()" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">&#8635; Refresh</button>'+
-  '</div>'+
-  '<div id="rr-inner"></div>';
+  if(document.getElementById('rr-inner')) return; // already rendered
+  el.innerHTML=
+    '<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
+      '<label style="font-size:11px;font-weight:800;color:#00838F;white-space:nowrap;">Project</label>'+
+      '<select id="rr-proj-sel-vis" class="fsel" onchange="rrOnProjChange(this.value)" style="flex:1;">'+
+        '<option value="">— Select Project —</option>'+
+      '</select>'+
+      '<button onclick="rrReloadCurrent()" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">&#8635; Refresh</button>'+
+    '</div>'+
+    '<div id="rr-inner"></div>';
+}
 
-  // Only set innerHTML if shell not already rendered (avoid losing dropdown selection)
-  if(!document.getElementById('rr-inner')){
-    el.innerHTML=selectorHtml;
-    // Sync visible selector to selected project
-    var vis=document.getElementById('rr-proj-sel-vis');
-    if(vis&&projId) vis.value=projId;
-  }
+async function rrReloadCurrent(){
+  var vis=document.getElementById('rr-proj-sel-vis');
+  var projId=(vis||{}).value||'';
+  if(projId) await rrOnProjChange(projId);
 }
 
 async function rrOnProjChange(projId){
-  // Update hidden selector value and reload
-  var rrSel=document.getElementById('rr-proj-sel');
-  if(rrSel) rrSel.value=projId;
-  // Sync visible selector
   var vis=document.getElementById('rr-proj-sel-vis');
   if(vis) vis.value=projId;
 
@@ -1038,11 +1026,9 @@ async function rrOnProjChange(projId){
 
 function rrRender(){
   var el=document.getElementById('rr-inner'); if(!el)return;
-  var rrSel=document.getElementById('rr-proj-sel');
-  var rrVis=document.getElementById('rr-proj-sel-vis');
-  var projId=(rrSel||{}).value||(rrVis||{}).value||'';
-  var selEl=rrVis||rrSel;
-  var projName=(selEl&&selEl.options&&selEl.selectedIndex>=0?selEl.options[selEl.selectedIndex].text:'');
+  var vis=document.getElementById('rr-proj-sel-vis');
+  var projId=(vis||{}).value||'';
+  var projName=(vis&&vis.options&&vis.selectedIndex>=0?vis.options[vis.selectedIndex].text:'');
 
   var statusColors={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var statusLabels={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
