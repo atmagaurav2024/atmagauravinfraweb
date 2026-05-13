@@ -865,10 +865,17 @@ function execSwitchTab(){
     return;
   }
   if(projId === WA_LOADED_PROJ){
-    // Data already loaded for this project — just re-render the new subtab instantly
-    execRenderSubTab();
+    // Data cached — re-render instantly
+    // But always ensure approved RRs are loaded (they may have been approved since last load)
+    if(!WA_APPROVED_RRS.length){
+      sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'})
+        .then(function(r){WA_APPROVED_RRS=Array.isArray(r)?r:[];execRenderSubTab();})
+        .catch(function(){execRenderSubTab();});
+    } else {
+      execRenderSubTab();
+    }
   } else {
-    // Different project selected — must fetch fresh
+    // Different project — full fetch
     execLoadItems();
   }
 }
@@ -1296,8 +1303,18 @@ function rrDownloadPDF(rrId, projName){
 }
 
 
-function execRenderSubTab(){
-  if(WA_SUBTAB==='allot') execRender();
+async function execRenderSubTab(){
+  // Always refresh approved RRs before rendering allot tab — they change in RR tab
+  if(WA_SUBTAB==='allot'){
+    var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+    if(projId){
+      try{
+        var rrs=await sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'});
+        WA_APPROVED_RRS=Array.isArray(rrs)?rrs:[];
+      }catch(e){ console.warn('RR fetch:',e.message); }
+    }
+    execRender();
+  }
   else if(WA_SUBTAB==='allotted') execRenderAllotted();
   else if(WA_SUBTAB==='daily') execRenderDaily();
   else if(WA_SUBTAB==='bills') execRenderBills();
