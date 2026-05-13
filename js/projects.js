@@ -930,29 +930,13 @@ async function rrLoadItems(){
   rrEnsureContainer();
   var el=document.getElementById('rr-content'); if(!el)return;
 
-  // Render shell first (creates rr-proj-sel-vis if not present)
-  if(!document.getElementById('rr-inner')) rrRenderShell();
-
-  var vis=document.getElementById('rr-proj-sel-vis');
-  // Load project list if empty
-  if(vis&&(!vis.options||vis.options.length<=1)){
-    try{
-      var projs=await sbFetch('projects',{select:'id,name',order:'name.asc'});
-      vis.innerHTML='<option value="">— Select Project —</option>'+
-        (Array.isArray(projs)?projs:[]).map(function(p){
-          return '<option value="'+p.id+'">'+p.name+'</option>';
-        }).join('');
-    }catch(e){}
-  }
-
-  var projId=(vis||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||'';
   if(!projId){
-    var inner=document.getElementById('rr-inner');
-    if(inner) inner.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">Select a project above to view requisitions</div>';
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">Select a project from the dropdown above</div>';
     return;
   }
 
-  document.getElementById('rr-inner').innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+  el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
 
   try{
     var r=await Promise.all([
@@ -967,68 +951,17 @@ async function rrLoadItems(){
     RR_ITEMS     =Array.isArray(r[3])?r[3]:[];
   }catch(e){
     RR_PLAN_ITEMS=[]; RR_PLAN_SUBS=[]; RR_PLAN_RES=[]; RR_ITEMS=[];
-    console.warn('RR load error:',e.message);
-    document.getElementById('rr-inner').innerHTML='<div style="text-align:center;padding:30px;color:#C62828;">Error loading data: '+e.message+'</div>';
-    return;
-  }
-  rrRender();
-}
-
-function rrRenderShell(){
-  var el=document.getElementById('rr-content'); if(!el)return;
-  if(document.getElementById('rr-inner')) return; // already rendered
-  el.innerHTML=
-    '<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
-      '<label style="font-size:11px;font-weight:800;color:#00838F;white-space:nowrap;">Project</label>'+
-      '<select id="rr-proj-sel-vis" class="fsel" onchange="rrOnProjChange(this.value)" style="flex:1;">'+
-        '<option value="">— Select Project —</option>'+
-      '</select>'+
-      '<button onclick="rrReloadCurrent()" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">&#8635; Refresh</button>'+
-    '</div>'+
-    '<div id="rr-inner"></div>';
-}
-
-async function rrReloadCurrent(){
-  var vis=document.getElementById('rr-proj-sel-vis');
-  var projId=(vis||{}).value||'';
-  if(projId) await rrOnProjChange(projId);
-}
-
-async function rrOnProjChange(projId){
-  var vis=document.getElementById('rr-proj-sel-vis');
-  if(vis) vis.value=projId;
-
-  if(!projId){
-    document.getElementById('rr-inner').innerHTML=
-      '<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">Select a project above</div>';
-    return;
-  }
-  document.getElementById('rr-inner').innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
-
-  try{
-    var r=await Promise.all([
-      sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),
-      sbFetch('boq_subitems',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'}),
-      sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&exec_type=eq.planned',order:'created_at.asc'}),
-      sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})
-    ]);
-    RR_PLAN_ITEMS=Array.isArray(r[0])?r[0]:[];
-    RR_PLAN_SUBS =Array.isArray(r[1])?r[1]:[];
-    RR_PLAN_RES  =Array.isArray(r[2])?r[2]:[];
-    RR_ITEMS     =Array.isArray(r[3])?r[3]:[];
-  }catch(e){
-    RR_PLAN_ITEMS=[]; RR_PLAN_SUBS=[]; RR_PLAN_RES=[]; RR_ITEMS=[];
-    document.getElementById('rr-inner').innerHTML='<div style="text-align:center;padding:30px;color:#C62828;">Error: '+e.message+'</div>';
+    el.innerHTML='<div style="text-align:center;padding:30px;color:#C62828;">Error: '+e.message+'</div>';
     return;
   }
   rrRender();
 }
 
 function rrRender(){
-  var el=document.getElementById('rr-inner'); if(!el)return;
-  var vis=document.getElementById('rr-proj-sel-vis');
-  var projId=(vis||{}).value||'';
-  var projName=(vis&&vis.options&&vis.selectedIndex>=0?vis.options[vis.selectedIndex].text:'');
+  var el=document.getElementById('rr-content'); if(!el)return;
+  var projId=PROJ_MOD_SEL_ID||'';
+  var projSel=document.getElementById('proj-mod-sel');
+  var projName=(projSel&&projSel.options&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'');
 
   var statusColors={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var statusLabels={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
