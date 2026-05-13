@@ -1146,10 +1146,18 @@ async function rrSave(itemId, planResId, partyName, partyType, maxQty, unit, pro
 
 async function rrApprove(rrId){
   try{
-    var res=await sbUpdate('resource_requisitions',rrId,{status:'approved'});
+    await sbUpdate('resource_requisitions',rrId,{status:'approved'});
     var idx=RR_ITEMS.findIndex(function(r){return r.id===rrId;});
-    if(idx>-1) RR_ITEMS[idx].status='approved';
-    toast('RR approved','success');
+    if(idx>-1){
+      RR_ITEMS[idx].status='approved';
+      // Also add to WA_APPROVED_RRS so work allotment tab sees it immediately
+      var approvedRR = RR_ITEMS[idx];
+      var already = WA_APPROVED_RRS.some(function(r){return r.id===rrId;});
+      if(!already) WA_APPROVED_RRS.push(approvedRR);
+    }
+    // Force exec tab to reload from DB next open
+    WA_LOADED_PROJ='';
+    toast('RR approved — Work Allotment tab updated','success');
     rrRender();
   }catch(e){toast('Error: '+e.message,'error');}
 }
@@ -1161,6 +1169,9 @@ async function rrReject(rrId){
     var res=await sbUpdate('resource_requisitions',rrId,{status:'rejected',rejection_reason:reason||null});
     var idx=RR_ITEMS.findIndex(function(r){return r.id===rrId;});
     if(idx>-1){RR_ITEMS[idx].status='rejected';RR_ITEMS[idx].rejection_reason=reason||null;}
+    // Remove from WA_APPROVED_RRS if it was previously approved
+    WA_APPROVED_RRS=WA_APPROVED_RRS.filter(function(r){return r.id!==rrId;});
+    WA_LOADED_PROJ='';
     toast('RR rejected','info');
     rrRender();
   }catch(e){toast('Error: '+e.message,'error');}
@@ -1191,9 +1202,11 @@ async function rrAllot(rrId, projId){
     await sbUpdate('resource_requisitions',rrId,{status:'allotted',allotment_id:res&&res[0]?res[0].id:null});
     var idx=RR_ITEMS.findIndex(function(r){return r.id===rrId;});
     if(idx>-1) RR_ITEMS[idx].status='allotted';
-    // Add to WA_ALLOT so work allotment tab picks it up
+    // Add to WA_ALLOT so work allotment tab picks it up immediately
     if(res&&res[0]) WA_ALLOT.push(res[0]);
-    WA_LOADED_PROJ=''; // force reload next time exec tab opens
+    // Remove from WA_APPROVED_RRS since it's now allotted
+    WA_APPROVED_RRS=WA_APPROVED_RRS.filter(function(r){return r.id!==rrId;});
+    WA_LOADED_PROJ=''; // force full reload next time exec tab opens
     toast('Work allotted successfully!','success');
     rrRender();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
