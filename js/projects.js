@@ -840,7 +840,7 @@ async function planDelRes(id){
 
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
-var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[];
+var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[];
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_SUBTAB='allot'; // allot | allotted | daily | bills
 
@@ -889,7 +889,8 @@ async function execLoadItems(){
       safe(sbFetch('work_bills',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
       safe(sbFetch('work_payments',{select:'*',filter:'project_id=eq.'+projId,order:'payment_date.desc'})),
       safe(sbFetch('work_orders',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
-      safe(sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'}))
+      safe(sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'})),
+      safe(sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'}))
     ]);
     WA_ITEMS=Array.isArray(r[0])?r[0]:[];
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -901,6 +902,7 @@ async function execLoadItems(){
     WA_PAYMENTS=Array.isArray(r[5])?r[5]:[];
     WA_ORDERS=Array.isArray(r[6])?r[6]:[];
     WA_JMS=Array.isArray(r[7])?r[7]:[];
+    WA_APPROVED_RRS=Array.isArray(r[8])?r[8]:[];
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
   execRenderSubTab();
@@ -1337,9 +1339,13 @@ function execRender(){
     var noSubRes=iRes.filter(function(r){return !r.boq_subitem_id;});
     var noSubHtml=noSubRes.map(function(res){return resRow(res,item.unit,tCol,tLbl);}).join('');
     var itemHasUnallotted = iRes.some(function(res){
-      var rAllot=WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;});
-      var totalAllotted=rAllot.reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
-      return (parseFloat(res.qty)||0) > totalAllotted;
+      // Only show Allot Work button if there's an approved RR with remaining balance
+      var rrApproved = WA_APPROVED_RRS.filter(function(rr){return rr.plan_res_id===res.id;})
+        .reduce(function(s,rr){return s+(parseFloat(rr.qty)||0);},0);
+      if(rrApproved<=0) return false; // no approved RR
+      var totalAllotted=WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;})
+        .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
+      return rrApproved > totalAllotted;
     });
     return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:#FFF3E0;display:flex;align-items:center;justify-content:space-between;">'+
@@ -1369,9 +1375,16 @@ function execRender(){
           '<div style="flex:1;">'+
             '<div style="font-size:12px;font-weight:800;">'+res.party_name+'</div>'+
             '<div style="font-size:10px;color:var(--text3);">'+
-              'Planned: '+(res.qty||0)+' '+(res.unit||itemUnit)+
-              (res.rate?' @ ₹'+res.rate:'')+'  |  Allotted: '+totalAllotted+
-              '  |  <b style="color:'+(bal>0?'#E65100':'#2E7D32')+'">Bal: '+bal.toFixed(3).replace(/\.?0+$/,'')+'</b>'+
+              (function(){
+                var rrApproved = WA_APPROVED_RRS.filter(function(rr){return rr.plan_res_id===res.id;})
+                  .reduce(function(s,rr){return s+(parseFloat(rr.qty)||0);},0);
+                var rrBal = Math.max(0, rrApproved - totalAllotted);
+                return 'Planned: '+(res.qty||0)+' '+(res.unit||itemUnit)+
+                  (res.rate?' @ ₹'+res.rate:'')+
+                  '  |  RR Approved: <b style="color:#2E7D32;">'+rrApproved+'</b>'+
+                  '  |  Allotted: '+totalAllotted+
+                  '  |  <b style="color:'+(rrBal>0?'#E65100':'#2E7D32')+'">RR Bal: '+rrBal.toFixed(3).replace(/\.?0+$/,'')+'</b>';
+              })()+
             '</div>'+
           '</div>'+
           (bal<=0?'<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:5px;font-weight:700;">&#10003; Done</span>':'')+
@@ -1401,12 +1414,39 @@ async function execOpenAllot(itemId){
   var itemRes = WA_PLANNED.filter(function(r){
     return r.boq_item_id===itemId || (r.boq_subitem_id && itemSubIds.includes(r.boq_subitem_id));
   });
-  var pendingRes = itemRes.filter(function(res){
-    var allotted = WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;})
-      .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
-    return (parseFloat(res.qty)||0) > allotted;
+
+  // Build one row per INDIVIDUAL approved RR (not per planned resource)
+  // Each RR can only be allotted up to its own approved qty
+  var pendingRes = [];
+  itemRes.forEach(function(res){
+    var approvedRRs = WA_APPROVED_RRS.filter(function(rr){return rr.plan_res_id===res.id;});
+    approvedRRs.forEach(function(rr){
+      // How much already allotted against THIS specific RR
+      var allottedForRR = WA_ALLOT.filter(function(a){return a.rr_id===rr.id;})
+        .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
+      var rrBalance = Math.max(0,(parseFloat(rr.qty)||0) - allottedForRR);
+      if(rrBalance > 0){
+        pendingRes.push({
+          res:res,
+          rr:rr,
+          rrApprovedQty:parseFloat(rr.qty)||0,
+          allottedForRR:allottedForRR,
+          rrBalance:rrBalance
+        });
+      }
+    });
   });
-  if(!pendingRes.length){toast('All resources for this item are fully allotted','info');return;}
+
+  if(!pendingRes.length){
+    var hasAnyRR = itemRes.some(function(res){
+      return WA_APPROVED_RRS.some(function(rr){return rr.plan_res_id===res.id;});
+    });
+    toast(hasAnyRR
+      ? 'All approved RR qty has been allotted for this item'
+      : 'No approved Resource Requisitions. Raise and approve an RR first.',
+      hasAnyRR?'info':'warning');
+    return;
+  }
 
   // ── STEP 1: Party details (shared for all selected resources) ──
   var partySection =
@@ -1452,24 +1492,31 @@ async function execOpenAllot(itemId){
       '</div>'+
     '</div>';
 
-  // ── STEP 2: Resource rows with checkbox + qty/rate only ──
-  var resRowsHtml = pendingRes.map(function(res){
-    var allotted = WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;})
-      .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
-    var bal = Math.max(0,(parseFloat(res.qty)||0)-allotted);
+  // ── STEP 2: One checkbox row per individual approved RR ──
+  var resRowsHtml = pendingRes.map(function(x){
+    var res = x.res;
+    var rr  = x.rr;
+    var bal = x.rrBalance; // max = this RR's remaining qty only
+    var rrApprovedQty = x.rrApprovedQty;
+    var alreadyAllotted = x.allottedForRR;
+    var rrNums = rr.rr_number;
     var uomOpts = buildUomOpts(res.unit||item.unit||'');
     return '<div class="wa-res-row" data-res-id="'+res.id+'" style="border:1px solid var(--border);border-radius:10px;margin-bottom:6px;overflow:hidden;">'+
       '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#FAFAFA;">'+
-        '<input type="checkbox" class="wa-res-chk" data-res-id="'+res.id+'" style="width:16px;height:16px;accent-color:#E65100;flex-shrink:0;">'+
+        '<input type="checkbox" class="wa-res-chk" data-res-id="'+res.id+'" data-rr-id="'+rr.id+'" data-rr-max="'+bal+'" style="width:16px;height:16px;accent-color:#E65100;flex-shrink:0;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:12px;font-weight:800;">'+res.party_name+'</div>'+
-          '<div style="font-size:10px;color:var(--text3);">Planned: '+(res.qty||0)+' '+(res.unit||'')+
-          ' &nbsp;|&nbsp; Balance: <b style="color:#E65100;">'+bal.toFixed(3).replace(/\.?0+$/,'')+'</b></div>'+
+          '<div style="font-size:10px;color:var(--text3);">'+
+            'RR Approved: <b style="color:#2E7D32;">'+rrApprovedQty+' '+(res.unit||'')+'</b>'+
+            ' &nbsp;|&nbsp; Already Allotted: '+alreadyAllotted+
+            ' &nbsp;|&nbsp; Available: <b style="color:#E65100;">'+bal.toFixed(3).replace(/\.?0+$/,'')+'</b>'+
+          '</div>'+
+          (rrNums?'<div style="font-size:9px;color:#00838F;font-weight:700;">RR: '+rrNums+'</div>':'')+
         '</div>'+
         '<div class="wa-res-inputs" style="display:none;align-items:center;gap:6px;">'+
           '<div style="text-align:center;">'+
             '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty</div>'+
-            '<input class="wa-qty-inp finp" data-res-id="'+res.id+'" type="number" step="0.001" max="'+bal+'" placeholder="'+bal+'" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
+            '<input class="wa-qty-inp finp" data-res-id="'+res.id+'" type="number" step="0.001" max="'+bal+'" value="'+bal+'" placeholder="'+bal+'" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
           '</div>'+
           '<div style="text-align:center;">'+
             '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Unit</div>'+
@@ -1677,6 +1724,8 @@ async function execSaveAllot(itemId, projId){
   checkedRows.forEach(function(chk){
     var resId = chk.getAttribute('data-res-id');
     var row = chk.closest('.wa-res-row');
+    var rrId = chk.getAttribute('data-rr-id')||null;
+    var rrMax = parseFloat(chk.getAttribute('data-rr-max'))||0;
     var qty  = parseFloat(row&&row.querySelector('.wa-qty-inp')?row.querySelector('.wa-qty-inp').value:0)||0;
     var rate = parseFloat(row&&row.querySelector('.wa-rate-inp')?row.querySelector('.wa-rate-inp').value:0)||0;
     var unit = row&&row.querySelector('.wa-unit-sel')?row.querySelector('.wa-unit-sel').value:null;
@@ -1684,10 +1733,15 @@ async function execSaveAllot(itemId, projId){
 
     if(!qty){toast('Enter qty for all selected resources','warning');allValid=false;return;}
     if(!rate){toast('Enter rate for all selected resources','warning');allValid=false;return;}
+    if(qty > rrMax){
+      toast('Qty ('+qty+') exceeds this RR approved qty ('+rrMax+')','warning');
+      allValid=false; return;
+    }
 
     var planRes = WA_PLANNED.find(function(r){return r.id===resId;})||{};
     toSave.push({resId:resId, planRes:planRes, type:type, party:party, qty:qty, rate:rate,
-      unit:unit||null, scope:scope||null, spec:spec||null, start:start||null, end:end||null, docType:docType});
+      unit:unit||null, scope:scope||null, spec:spec||null, start:start||null, end:end||null,
+      docType:docType, rrId:rrId});
   });
 
   if(!allValid) return;
@@ -1712,7 +1766,8 @@ async function execSaveAllot(itemId, projId){
         scope: s.scope, start_date: s.start, end_date: s.end,
         doc_type: s.docType==='none'?null:s.docType,
         specification: s.spec||null,
-        batch_id: batchId
+        batch_id: batchId,
+        rr_id: s.rrId||null
       });
       if(res&&res[0]) WA_ALLOT.push(res[0]);
       saved++;
