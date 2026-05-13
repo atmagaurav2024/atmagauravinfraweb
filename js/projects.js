@@ -47,6 +47,7 @@ function projModLoadTab(){
     boq:      {cont:'boq-content',  sel:'boq-proj-sel',  fn: function(){ boqLoadItems(); }},
     jm:       {cont:'jm-content',   sel:'jm-proj-sel',   fn: function(){ jmLoadItems(); }},
     planning: {cont:'plan-content', sel:'plan-proj-sel',  fn: function(){ planLoadItems(); }},
+    rr:       {cont:'rr-content',   sel:'rr-proj-sel',    fn: function(){ rrLoadItems(); }},
     execution:{cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allot'; execSwitchTab(); }},
     allotted: {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allotted'; execSwitchTab(); }},
     daily:    {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='daily'; execSwitchTab(); }},
@@ -87,6 +88,18 @@ function projModAdd(){
 }
 
 function initProjects(){
+  // Inject RR tab button after Planning if not already present
+  if(!document.getElementById('pmt-rr')){
+    var planBtn=document.getElementById('pmt-planning');
+    if(planBtn){
+      var rrBtn=document.createElement('button');
+      rrBtn.id='pmt-rr';
+      rrBtn.onclick=function(){projModTab('rr',rrBtn);};
+      rrBtn.style.cssText='padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);';
+      rrBtn.innerHTML='&#128203; RR';
+      planBtn.parentNode.insertBefore(rrBtn, planBtn.nextSibling);
+    }
+  }
   ['projects','boq','jm','planning','execution','allotted','daily','bills','orders'].forEach(function(t){
     var b = document.getElementById('pmt-'+t);
     if(!b) return;
@@ -96,12 +109,13 @@ function initProjects(){
                     canAccess('proj-execution','view'); // daily & bills share execution permission
     b.style.display = hasAccess ? '' : 'none';
   });
-  var tabs = ['projects','boq','jm','planning','execution','allotted','daily','bills','orders'];
+  var tabs = ['projects','boq','jm','planning','rr','execution','allotted','daily','bills','orders'];
   var firstTab = tabs.find(function(t){
     return (currentUser && currentUser.role==='admin') ||
            !Object.keys(USER_PERMISSIONS).length ||
            canAccess('proj-'+t,'view') ||
-           (t==='daily'||t==='bills') && canAccess('proj-execution','view');
+           (t==='daily'||t==='bills') && canAccess('proj-execution','view') ||
+           t==='rr' && (canAccess('proj-planning','view')||canAccess('proj-execution','view'));
   }) || 'projects';
   projModTab(firstTab, document.getElementById('pmt-'+firstTab));
   projModLoadProjects();
@@ -135,6 +149,7 @@ function renderProjList(list){
     'under-dlp':{label:'Under DLP',col:'#F57F17'},
     'fully-completed':{label:'Completed',col:'#2E7D32'},
     'planning':{label:'Planning',col:'#6A1B9A'},
+    'rr':      {label:'RR',col:'#00838F'},
     'active':{label:'Active',col:'#1565C0'}
   };
   el.innerHTML = list.map(function(p){
@@ -894,6 +909,390 @@ async function execLoadItems(){
 function execRenderShell(){ execRenderSubTab(); }
 
 function waSubTab(tab){ WA_SUBTAB=tab; execRenderSubTab(); }
+
+
+// ════════════════════════════════════════════════════════════════
+// RESOURCE REQUISITION (RR) MODULE
+// ════════════════════════════════════════════════════════════════
+var RR_ITEMS=[], RR_PLAN_ITEMS=[], RR_PLAN_SUBS=[], RR_PLAN_RES=[];
+
+function rrEnsureContainer(){
+  // Inject rr-content div if not in HTML
+  if(!document.getElementById('rr-content')){
+    var div=document.createElement('div');
+    div.id='rr-content';
+    div.style.cssText='padding:12px;';
+    var appProj=document.getElementById('app-projects');
+    if(appProj) appProj.appendChild(div);
+  }
+  if(!document.getElementById('rr-proj-sel')){
+    // Create a hidden project selector synced from plan-proj-sel
+    var sel=document.createElement('select');
+    sel.id='rr-proj-sel'; sel.style.display='none';
+    document.body.appendChild(sel);
+  }
+}
+
+async function rrLoadItems(){
+  rrEnsureContainer();
+  // Sync project selector from planning tab
+  var planSel=document.getElementById('plan-proj-sel');
+  var rrSel=document.getElementById('rr-proj-sel');
+  if(planSel&&rrSel) rrSel.innerHTML=planSel.innerHTML;
+
+  var el=document.getElementById('rr-content'); if(!el)return;
+  el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+
+  var projId=(planSel||{}).value||'';
+  if(!projId){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project in the Planning tab first</div>';
+    return;
+  }
+
+  try{
+    var r=await Promise.all([
+      sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),
+      sbFetch('boq_subitems',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'}),
+      sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&exec_type=eq.planned',order:'created_at.asc'}),
+      sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})
+    ]);
+    RR_PLAN_ITEMS=Array.isArray(r[0])?r[0]:[];
+    RR_PLAN_SUBS =Array.isArray(r[1])?r[1]:[];
+    RR_PLAN_RES  =Array.isArray(r[2])?r[2]:[];
+    RR_ITEMS     =Array.isArray(r[3])?r[3]:[];
+  }catch(e){
+    // resource_requisitions table may not exist yet
+    RR_PLAN_ITEMS=PLAN_ITEMS.length?PLAN_ITEMS:[];
+    RR_PLAN_SUBS =PLAN_SUBS.length?PLAN_SUBS:[];
+    RR_PLAN_RES  =PLAN_RES.length?PLAN_RES:[];
+    RR_ITEMS=[];
+    console.warn('RR table error:',e.message);
+  }
+  rrRender();
+}
+
+function rrRender(){
+  var el=document.getElementById('rr-content'); if(!el)return;
+  var planSel=document.getElementById('plan-proj-sel');
+  var projId=(planSel||{}).value||'';
+  var projName=(planSel&&planSel.options[planSel.selectedIndex]?planSel.options[planSel.selectedIndex].text:'');
+
+  var statusColors={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
+  var statusLabels={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
+
+  // Summary counts
+  var counts={pending:0,approved:0,rejected:0,allotted:0};
+  RR_ITEMS.forEach(function(r){counts[r.status]=(counts[r.status]||0)+1;});
+
+  var summaryBar=
+    '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">'+
+      Object.keys(counts).filter(function(k){return counts[k]>0;}).map(function(k){
+        return '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid '+statusColors[k]+';flex:1;min-width:80px;">'+
+          '<div style="font-size:18px;font-weight:900;color:'+statusColors[k]+';">'+counts[k]+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);font-weight:700;">'+statusLabels[k]+'</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+
+  // Group RR by BOQ item
+  var rrByItem={};
+  RR_ITEMS.forEach(function(r){
+    var key=r.boq_item_id||'misc';
+    if(!rrByItem[key]) rrByItem[key]=[];
+    rrByItem[key].push(r);
+  });
+
+  // BOQ item cards with their planned resources and RRs
+  var itemCards=RR_PLAN_ITEMS.map(function(item){
+    var iSubs=RR_PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
+    var iRes=RR_PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
+    var itemRRs=rrByItem[item.id]||[];
+
+    if(!iRes.length) return ''; // skip items with no planned resources
+
+    var resRows=iRes.map(function(res){
+      // How much already raised for this planned resource
+      var raised=RR_ITEMS.filter(function(r){return r.plan_res_id===res.id;})
+        .reduce(function(s,r){return s+(parseFloat(r.qty)||0);},0);
+      var planQty=parseFloat(res.qty)||0;
+      var remaining=Math.max(0,planQty-raised);
+      var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+      var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+      var col=tCol[res.exec_type]||'#555';
+
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid #F5F5F5;">'+
+        '<div style="flex:1;">'+
+          '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+col+'15;color:'+col+';">'+(tLbl[res.exec_type]||res.exec_type)+'</span>'+
+          '<span style="font-size:12px;font-weight:800;margin-left:6px;">'+res.party_name+'</span>'+
+          '<div style="font-size:10px;color:var(--text3);">Planned: '+planQty+' '+(res.unit||'')+' | Raised: '+raised.toFixed(2)+' | Available: '+remaining.toFixed(2)+'</div>'+
+        '</div>'+
+        (remaining>0
+          ? '<button onclick="rrOpenForm(\''+item.id+'\',\''+res.id+'\',\''+res.party_name+'\',\''+res.exec_type+'\','+remaining+',\''+( res.unit||'')+'\',\''+projId+'\',\''+projName+'\')" '+
+              'style="background:#00838F;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Raise RR</button>'
+          : '<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:5px;font-weight:700;">Fully Raised</span>')+
+      '</div>';
+    }).join('');
+
+    // RR list for this item
+    var rrList=itemRRs.length
+      ? itemRRs.map(function(r){
+          var sc=statusColors[r.status]||'#555';
+          var sl=statusLabels[r.status]||r.status;
+          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #F0F0F0;background:#FAFAFA;">'+
+            '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+sc+'20;color:'+sc+';">'+sl+'</span>'+
+            '<div style="flex:1;font-size:11px;">'+
+              '<b>'+r.party_name+'</b> — '+r.qty+' '+(r.unit||'')+
+              '<div style="font-size:9px;color:var(--text3);">'+r.rr_number+' | '+( r.remarks||'')+'</div>'+
+            '</div>'+
+            '<div style="display:flex;gap:4px;flex-shrink:0;">'+
+              '<button onclick="rrDownloadPDF(\''+r.id+'\',\''+projName+'\')" title="Download PDF" style="background:#00838F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;">&#11015; PDF</button>'+
+              (r.status==='pending'
+                ? '<button onclick="rrApprove(\''+r.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#10003; Approve</button>'+
+                  '<button onclick="rrReject(\''+r.id+'\')" style="background:#C62828;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#10005; Reject</button>'
+                : r.status==='approved'
+                  ? '<button onclick="rrAllot(\''+r.id+'\',\''+projId+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#128203; Allot Work</button>'
+                  : '')+
+              '<button onclick="rrDelete(\''+r.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+            '</div>'+
+          '</div>';
+        }).join('')
+      : '';
+
+    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+      '<div style="padding:9px 14px;background:#E0F7FA;border-bottom:1px solid var(--border);">'+
+        '<span style="font-size:10px;font-family:monospace;background:#B2EBF2;color:#00838F;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
+        '<span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span>'+
+      '</div>'+
+      '<div style="padding:4px 0;border-bottom:1px solid var(--border);">'+
+        '<div style="padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">PLANNED RESOURCES</div>'+
+        resRows+
+      '</div>'+
+      (rrList?
+        '<div>'+
+          '<div style="padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">REQUISITIONS</div>'+
+          rrList+
+        '</div>':'')
+    +'</div>';
+  }).filter(Boolean).join('');
+
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'+
+      '<div style="font-size:13px;font-weight:800;color:#00838F;">&#128203; Resource Requisitions</div>'+
+      '<div style="font-size:11px;color:var(--text3);">'+projName+'</div>'+
+    '</div>'+
+    (Object.values(counts).some(function(v){return v>0;})?summaryBar:'')+
+    (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">No planned resources found. Add resources in Planning tab first.</div>');
+}
+
+// Open RR form
+function rrOpenForm(itemId, planResId, partyName, partyType, maxQty, unit, projId, projName){
+  rrEnsureContainer();
+  var shTitle=document.getElementById('exec-sheet-title');
+  var shBody =document.getElementById('exec-sheet-body');
+  var shFoot =document.getElementById('exec-sheet-foot');
+  if(!shTitle||!shBody||!shFoot) return;
+
+  shTitle.textContent='Raise Resource Requisition';
+  shBody.innerHTML=
+    '<div style="background:#E0F7FA;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+      '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:8px;">Resource Details</div>'+
+      '<div style="font-size:12px;font-weight:800;">'+partyName+'</div>'+
+      '<div style="font-size:10px;color:var(--text3);">Max qty available: '+maxQty+' '+(unit||'')+'</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+      '<div><label class="flbl">Required Date *</label><input id="rr-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+      '<div><label class="flbl">Qty Required *</label>'+
+        '<div style="display:flex;gap:6px;align-items:center;">'+
+          '<input id="rr-qty" class="finp" type="number" step="0.001" max="'+maxQty+'" placeholder="max '+maxQty+'" style="flex:1;">'+
+          '<span style="font-size:12px;font-weight:700;color:var(--text3);">'+(unit||'')+'</span>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="margin-bottom:8px;"><label class="flbl">Purpose / Remarks</label>'+
+      '<textarea id="rr-remarks" class="ftxt" rows="2" placeholder="Purpose of requisition, special requirements..."></textarea>'+
+    '</div>'+
+    '<div><label class="flbl">Requested By</label><input id="rr-by" class="finp" placeholder="Name of requester" value="'+(typeof currentUser!=='undefined'&&currentUser?currentUser.name||'':'')+'"></div>';
+
+  shFoot.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#00838F;color:white;';
+  sb.innerHTML='&#10003; Submit RR';
+  sb.onclick=function(){rrSave(itemId,planResId,partyName,partyType,maxQty,unit,projId);};
+  shFoot.appendChild(cb); shFoot.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function rrSave(itemId, planResId, partyName, partyType, maxQty, unit, projId){
+  var date=gv('rr-date'), qty=parseFloat(gv('rr-qty'))||0;
+  var remarks=gv('rr-remarks'), reqBy=gv('rr-by');
+  if(!date){toast('Required date is needed','warning');return;}
+  if(!qty||qty<=0){toast('Enter qty required','warning');return;}
+  if(qty>maxQty){toast('Qty exceeds available limit ('+maxQty+')','warning');return;}
+
+  // Generate RR number
+  var rrNo='RR/'+projId.slice(-4).toUpperCase()+'/'+new Date().getFullYear()+'/'+
+    String((RR_ITEMS.length+1)).padStart(4,'0');
+
+  try{
+    var res=await sbInsert('resource_requisitions',{
+      project_id:projId,
+      boq_item_id:itemId,
+      plan_res_id:planResId,
+      party_name:partyName,
+      party_type:partyType,
+      qty:qty,
+      unit:unit||null,
+      required_date:date,
+      remarks:remarks||null,
+      requested_by:reqBy||null,
+      rr_number:rrNo,
+      status:'pending'
+    });
+    if(res&&res[0]) RR_ITEMS.push(res[0]);
+    toast('RR '+rrNo+' submitted!','success');
+    closeSheet('ov-exec','sh-exec');
+    rrRender();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+async function rrApprove(rrId){
+  try{
+    var res=await sbUpdate('resource_requisitions',rrId,{status:'approved'});
+    var idx=RR_ITEMS.findIndex(function(r){return r.id===rrId;});
+    if(idx>-1) RR_ITEMS[idx].status='approved';
+    toast('RR approved','success');
+    rrRender();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function rrReject(rrId){
+  var reason=prompt('Reason for rejection (optional):');
+  if(reason===null) return; // cancelled
+  try{
+    var res=await sbUpdate('resource_requisitions',rrId,{status:'rejected',rejection_reason:reason||null});
+    var idx=RR_ITEMS.findIndex(function(r){return r.id===rrId;});
+    if(idx>-1){RR_ITEMS[idx].status='rejected';RR_ITEMS[idx].rejection_reason=reason||null;}
+    toast('RR rejected','info');
+    rrRender();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function rrAllot(rrId, projId){
+  // Approved RR → create actual work allotment (adds to boq_exec_resources)
+  var rr=RR_ITEMS.find(function(r){return r.id===rrId;});
+  if(!rr){toast('RR not found','error');return;}
+  if(!confirm('Allot work for this RR? This will create an allotment entry.')) return;
+
+  var batchId='rr-batch-'+Date.now();
+  try{
+    var res=await sbInsert('boq_exec_resources',{
+      project_id:projId,
+      boq_item_id:rr.boq_item_id,
+      boq_exec_resource_id:rr.plan_res_id,
+      date:new Date().toISOString().slice(0,10),
+      exec_type:rr.party_type,
+      party_name:rr.party_name,
+      qty:rr.qty,
+      unit:rr.unit||null,
+      scope:rr.remarks||null,
+      batch_id:batchId,
+      rr_id:rrId
+    });
+    // Mark RR as allotted
+    await sbUpdate('resource_requisitions',rrId,{status:'allotted',allotment_id:res&&res[0]?res[0].id:null});
+    var idx=RR_ITEMS.findIndex(function(r){return r.id===rrId;});
+    if(idx>-1) RR_ITEMS[idx].status='allotted';
+    // Add to WA_ALLOT so work allotment tab picks it up
+    if(res&&res[0]) WA_ALLOT.push(res[0]);
+    WA_LOADED_PROJ=''; // force reload next time exec tab opens
+    toast('Work allotted successfully!','success');
+    rrRender();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+async function rrDelete(rrId){
+  var rr=RR_ITEMS.find(function(r){return r.id===rrId;});
+  if(!rr) return;
+  if(rr.status==='allotted'){toast('Cannot delete an allotted RR','warning');return;}
+  if(!confirm('Delete this RR?')) return;
+  RR_ITEMS=RR_ITEMS.filter(function(r){return r.id!==rrId;});
+  rrRender();
+  try{await sbDelete('resource_requisitions',rrId);}catch(e){console.error(e);}
+}
+
+function rrDownloadPDF(rrId, projName){
+  var rr=RR_ITEMS.find(function(r){return r.id===rrId;});
+  if(!rr){toast('RR not found','error');return;}
+  var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+  var item=RR_PLAN_ITEMS.find(function(i){return i.id===rr.boq_item_id;})||{};
+  var planRes=RR_PLAN_RES.find(function(r){return r.id===rr.plan_res_id;})||{};
+  function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
+  var stLbl={pending:'PENDING',approved:'APPROVED',rejected:'REJECTED',allotted:'ALLOTTED'};
+  var sc=stCol[rr.status]||'#555';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Resource Requisition — '+rr.rr_number+'</title>'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:28px;}'+
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #00838F;padding-bottom:12px;margin-bottom:16px;}'+
+    '.co-name{font-size:16px;font-weight:900;color:#00838F;}.co-info{font-size:10px;color:#555;margin-top:3px;}'+
+    '.rr-title{font-size:20px;font-weight:900;color:#00838F;}.rr-no{font-size:12px;color:#555;margin-top:4px;}'+
+    '.status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:900;font-size:11px;color:white;background:'+sc+';}'+
+    '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:16px;}'+
+    '.info-cell{padding:10px 14px;}.info-cell+.info-cell{border-left:1px solid #DDD;}.info-cell.full{grid-column:span 2;border-top:1px solid #DDD;}'+
+    '.lbl{font-size:9px;font-weight:800;text-transform:uppercase;color:#888;letter-spacing:.5px;margin-bottom:3px;}'+
+    '.val{font-size:13px;font-weight:800;}.val-sub{font-size:10px;color:#555;margin-top:2px;}'+
+    '.detail-box{background:#E0F7FA;border-radius:8px;padding:14px;margin-bottom:16px;border-left:4px solid #00838F;}'+
+    '.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:40px;}'+
+    '.sig-box{border-top:1.5px solid #333;padding-top:6px;text-align:center;font-size:10px;color:#555;}'+
+    '@media print{button{display:none;}}</style></head><body>'+
+    '<button onclick="window.print()" style="background:#00838F;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:18px;font-family:Arial;font-weight:700;font-size:12px;">&#128438; Print / Save PDF</button>'+
+
+    '<div class="hdr">'+
+      '<div>'+
+        '<div class="co-name">'+(co.name||'Company Name')+'</div>'+
+        '<div class="co-info">'+(co.address||'')+(co.gstin?'<br>GSTIN: '+co.gstin:'')+'</div>'+
+      '</div>'+
+      '<div style="text-align:right;">'+
+        '<div class="rr-title">RESOURCE REQUISITION</div>'+
+        '<div class="rr-no">'+rr.rr_number+'</div>'+
+        '<div style="margin-top:6px;"><span class="status-badge">'+(stLbl[rr.status]||rr.status)+'</span></div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="info-grid">'+
+      '<div class="info-cell"><div class="lbl">Project</div><div class="val">'+projName+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Date of Requisition</div><div class="val">'+fmtD(rr.created_at?rr.created_at.slice(0,10):'')+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Required By Date</div><div class="val" style="color:#E65100;">'+fmtD(rr.required_date)+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Requested By</div><div class="val">'+(rr.requested_by||'—')+'</div></div>'+
+    '</div>'+
+
+    '<div class="detail-box">'+
+      '<div style="font-size:12px;font-weight:800;color:#00838F;margin-bottom:10px;">Resource Details</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'+
+        '<div><div class="lbl">BOQ Item</div><div class="val" style="font-size:12px;">'+(item.item_code?'['+item.item_code+'] ':'')+( item.short_name||item.description||'—')+'</div></div>'+
+        '<div><div class="lbl">Party Name</div><div class="val" style="font-size:12px;">'+rr.party_name+'</div><div class="val-sub">'+(tLbl[rr.party_type]||rr.party_type||'')+'</div></div>'+
+        '<div><div class="lbl">Quantity Required</div><div class="val" style="font-size:18px;color:#00838F;">'+rr.qty+' <span style="font-size:12px;font-weight:400;">'+(rr.unit||'')+'</span></div>'+
+          '<div class="val-sub">Planned: '+(planRes.qty||'—')+' '+(planRes.unit||'')+'</div></div>'+
+      '</div>'+
+      (rr.remarks?'<div style="margin-top:10px;"><div class="lbl">Purpose / Remarks</div><div style="font-size:11px;color:#333;margin-top:3px;">'+rr.remarks+'</div></div>':'')+
+    '</div>'+
+
+    (rr.rejection_reason?'<div style="background:#FFEBEE;border-radius:8px;padding:12px 14px;margin-bottom:16px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="font-size:11px;margin-top:3px;">'+rr.rejection_reason+'</div></div>':'')+
+
+    '<div class="sig-grid">'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(rr.requested_by||'Requester')+'</div><div>Requested By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Site Engineer / PM</div><div>Verified By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Approved By</div></div>'+
+    '</div>'+
+
+    '</body></html>';
+
+  var w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Allow popups to open PDF','warning');
+}
 
 
 function execRenderSubTab(){
