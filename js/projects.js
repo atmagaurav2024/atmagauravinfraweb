@@ -1222,9 +1222,13 @@ async function rrAllot(rrId, projId){
 async function rrDelete(rrId){
   var rr=RR_ITEMS.find(function(r){return r.id===rrId;});
   if(!rr) return;
-  if(rr.status==='allotted'){toast('Cannot delete an allotted RR','warning');return;}
-  if(!confirm('Delete this RR?')) return;
+  if(rr.status==='allotted'){
+    if(!confirm('This RR has been allotted. Deleting will NOT remove the allotment from Work Allotment tab.\nDelete RR record only?')) return;
+  } else {
+    if(!confirm('Delete this RR?')) return;
+  }
   RR_ITEMS=RR_ITEMS.filter(function(r){return r.id!==rrId;});
+  WA_APPROVED_RRS=WA_APPROVED_RRS.filter(function(r){return r.id!==rrId;});
   rrRender();
   try{await sbDelete('resource_requisitions',rrId);}catch(e){console.error(e);}
 }
@@ -1869,34 +1873,49 @@ async function execUpdateAllotted(id){
 }
 
 async function execDelAllotted(id){
+  var allot=WA_ALLOT.find(function(a){return a.id===id;})||{};
   var hasOrder=WA_ORDERS.some(function(o){return o.allot_id===id;});
   var msg=hasOrder
-    ? 'This allotment has WO/PO(s) generated.\nDeleting will also delete those order records (the printed documents are unaffected).\n\nDelete allotment and related orders?'
+    ? 'This allotment has WO/PO(s) generated.\nDeleting will also delete those order records.\n\nDelete allotment and related orders?'
     : 'Delete this allotment?';
   if(!confirm(msg)) return;
-  // Delete related WO/POs from DB and memory
   var relOrds=WA_ORDERS.filter(function(o){return o.allot_id===id;});
   for(var i=0;i<relOrds.length;i++) try{await sbDelete('work_orders',relOrds[i].id);}catch(e){}
   WA_ORDERS=WA_ORDERS.filter(function(o){return o.allot_id!==id;});
   WA_ALLOT=WA_ALLOT.filter(function(a){return a.id!==id;});
-  // Re-render both allotted and allot tabs so deleted item disappears everywhere
+  // Reset linked RR back to approved so it can be re-allotted
+  if(allot.rr_id){
+    try{await sbUpdate('resource_requisitions',allot.rr_id,{status:'approved',allotment_id:null});}catch(e){}
+    var rrIdx=RR_ITEMS.findIndex(function(r){return r.id===allot.rr_id;});
+    if(rrIdx>-1){RR_ITEMS[rrIdx].status='approved';RR_ITEMS[rrIdx].allotment_id=null;}
+    // Add back to WA_APPROVED_RRS
+    var rr=RR_ITEMS[rrIdx];
+    if(rr&&!WA_APPROVED_RRS.some(function(r){return r.id===rr.id;})) WA_APPROVED_RRS.push(rr);
+  }
   if(WA_SUBTAB==='allotted') execRenderAllotted();
   else if(WA_SUBTAB==='allot') execRender();
   else execRenderSubTab();
   try{await sbDelete('boq_exec_resources',id);}catch(e){console.error(e);}
-  toast('Allotment and related orders deleted','success');
+  toast('Allotment deleted','success');
 }
 
 async function execDelAllot(id){
+  var allot=WA_ALLOT.find(function(a){return a.id===id;})||{};
   if(!confirm('Delete this allotment?\n'+(WA_ORDERS.some(function(o){return o.allot_id===id;})
     ?'Related WO/PO records will also be deleted.':'')
   )) return;
-  // Delete related orders
   var relOrds=WA_ORDERS.filter(function(o){return o.allot_id===id;});
   for(var i=0;i<relOrds.length;i++) try{await sbDelete('work_orders',relOrds[i].id);}catch(e){}
   WA_ORDERS=WA_ORDERS.filter(function(o){return o.allot_id!==id;});
   WA_ALLOT=WA_ALLOT.filter(function(a){return a.id!==id;});
-  // Re-render current subtab — allot tab recalculates balances immediately
+  // Reset linked RR back to approved
+  if(allot.rr_id){
+    try{await sbUpdate('resource_requisitions',allot.rr_id,{status:'approved',allotment_id:null});}catch(e){}
+    var rrIdx=RR_ITEMS.findIndex(function(r){return r.id===allot.rr_id;});
+    if(rrIdx>-1){RR_ITEMS[rrIdx].status='approved';RR_ITEMS[rrIdx].allotment_id=null;}
+    var rr=RR_ITEMS[rrIdx];
+    if(rr&&!WA_APPROVED_RRS.some(function(r){return r.id===rr.id;})) WA_APPROVED_RRS.push(rr);
+  }
   execRenderSubTab();
   try{await sbDelete('boq_exec_resources',id);}catch(e){console.error(e);}
   toast('Allotment deleted','success');
