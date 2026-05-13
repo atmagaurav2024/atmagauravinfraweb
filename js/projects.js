@@ -1794,7 +1794,10 @@ async function execDelAllotted(id){
   for(var i=0;i<relOrds.length;i++) try{await sbDelete('work_orders',relOrds[i].id);}catch(e){}
   WA_ORDERS=WA_ORDERS.filter(function(o){return o.allot_id!==id;});
   WA_ALLOT=WA_ALLOT.filter(function(a){return a.id!==id;});
-  execRenderAllotted();
+  // Re-render both allotted and allot tabs so deleted item disappears everywhere
+  if(WA_SUBTAB==='allotted') execRenderAllotted();
+  else if(WA_SUBTAB==='allot') execRender();
+  else execRenderSubTab();
   try{await sbDelete('boq_exec_resources',id);}catch(e){console.error(e);}
   toast('Allotment and related orders deleted','success');
 }
@@ -1808,8 +1811,10 @@ async function execDelAllot(id){
   for(var i=0;i<relOrds.length;i++) try{await sbDelete('work_orders',relOrds[i].id);}catch(e){}
   WA_ORDERS=WA_ORDERS.filter(function(o){return o.allot_id!==id;});
   WA_ALLOT=WA_ALLOT.filter(function(a){return a.id!==id;});
-  execRender();
+  // Re-render current subtab — allot tab recalculates balances immediately
+  execRenderSubTab();
   try{await sbDelete('boq_exec_resources',id);}catch(e){console.error(e);}
+  toast('Allotment deleted','success');
 }
 
 function execGenCombinedDoc(t){var cc=Array.from(document.querySelectorAll(".wa-sel-chk:checked")).map(function(c){return c.getAttribute("data-allot-id");});if(!cc.length){toast("Check at least one resource row","warning");return;}var aa=cc.map(function(id){return WA_ALLOT.find(function(a){return a.id===id;});}).filter(Boolean);if(!aa.length)return;if(t==="wo")generateCombinedDoc(aa,"WORK ORDER","#E65100","#FFF3E0");else generateCombinedDoc(aa,"PURCHASE ORDER","#1565C0","#E3F2FD");}
