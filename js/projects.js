@@ -2747,6 +2747,9 @@ function execRenderDailyContent(){
     var col      = tCol[a.exec_type]||'#555';
     var bal      = Math.max(0,allotQty-usedQty);
     var overused = usedQty>allotQty;
+    // Get planned resource name (what resource it is)
+    var planRes  = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+    var resName  = planRes.party_name||(planRes.resource_category||'');
     // Get BOQ item for this allotment
     var boqItem  = WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
     var itemLabel= boqItem.item_code?'['+boqItem.item_code+']':'';
@@ -2756,8 +2759,11 @@ function execRenderDailyContent(){
       '<td style="padding:7px 10px;">'+
         '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+col+'15;color:'+col+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
       '</td>'+
-      '<td style="padding:7px 10px;font-size:11px;font-weight:800;">'+a.party_name+
-        (itemLabel?' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+itemLabel+'</span>':'')+
+      '<td style="padding:7px 10px;font-size:11px;">'+
+        (resName?'<div style="font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+
+        '<div style="font-weight:700;color:#333;'+(resName?'font-size:10px;':'font-size:11px;font-weight:800;')+'">'+a.party_name+
+          (itemLabel?' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+itemLabel+'</span>':'')+
+        '</div>'+
         (a.scope?'<div style="font-size:9px;color:var(--text3);font-style:italic;">'+a.scope+'</div>':'')+
       '</td>'+
       '<td style="'+td2+'">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span></td>'+
