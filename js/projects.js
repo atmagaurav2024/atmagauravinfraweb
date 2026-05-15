@@ -2949,8 +2949,14 @@ async function execOpenDailyEntry(itemId){
     var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
     return pl.party_name||pl.resource_category||a.scope||'';
   }
-  // Match store item by resource name (item_name in store = planned resource name)
-  function findStoreMatch(rn){
+  // Match store item by allot_id (most reliable) or by boq_item_id+name
+  function findStoreMatch(a, rn){
+    // First try exact allot_id match
+    var byAllot=STORE_ITEMS.find(function(s){
+      return s.allot_id===a.id && (parseFloat(s.qty_in_hand)||0)>0;
+    });
+    if(byAllot) return byAllot;
+    // Fallback: match by item_name + project
     if(!rn) return null;
     return STORE_ITEMS.find(function(s){
       return s.project_id===projId &&
@@ -2961,13 +2967,18 @@ async function execOpenDailyEntry(itemId){
 
   // Split allotments: in-store vs outside-store
   var inStoreAllots=[], outStoreAllots=[];
+  var seenStoreNames={}; // prevent duplicates
   itemAllots.forEach(function(a){
     var rn=getResName(a);
-    var storeMatch=findStoreMatch(rn);
-    if(storeMatch) inStoreAllots.push({allot:a, storeItem:storeMatch, resName:rn});
-    else outStoreAllots.push({allot:a, resName:rn});
+    var storeMatch=findStoreMatch(a, rn);
+    if(storeMatch && !seenStoreNames[storeMatch.id]){
+      seenStoreNames[storeMatch.id]=true;
+      inStoreAllots.push({allot:a, storeItem:storeMatch, resName:rn||storeMatch.item_name});
+    } else {
+      outStoreAllots.push({allot:a, resName:rn});
+    }
   });
-  // No duplicates — remove from outside-store if resource name already in store
+  // No duplicates by resource name
   var inStoreNames=inStoreAllots.map(function(x){return x.resName;});
   outStoreAllots=outStoreAllots.filter(function(x){return !x.resName||!inStoreNames.includes(x.resName);});
 
@@ -3180,9 +3191,12 @@ async function execEditDailyEntry(entryId, itemId){
   }
 
   var inStoreE=[], outStoreE=[];
+  var seenStoreNamesE={};
   itemAllots.forEach(function(a){
     var rn=getEditResName(a);
-    var sm=STORE_ITEMS.find(function(s){return s.project_id===projId&&s.item_name===rn&&(parseFloat(s.qty_in_hand)||0)>0;});
+    // Match by allot_id first, then by name
+    var sm=STORE_ITEMS.find(function(s){return s.allot_id===a.id&&(parseFloat(s.qty_in_hand)||0)>0;})||
+           (rn?STORE_ITEMS.find(function(s){return s.project_id===projId&&s.item_name===rn&&(parseFloat(s.qty_in_hand)||0)>0;}):null);
     if(sm) inStoreE.push({allot:a,storeItem:sm,resName:rn});
     else outStoreE.push({allot:a,resName:rn});
   });
@@ -3862,47 +3876,61 @@ async function grnAddToStore(grnId){
   var grn=GRN_ITEMS.find(function(g){return g.id===grnId;});
   if(!grn||grn.store_updated){return;}
   var allot=GRN_ALLOTS.find(function(a){return a.id===grn.allot_id;})||{};
-  // Get planned resource — try WA_PLANNED first, then fetch from DB
-  var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
-  if(!planRes.id && allot.boq_exec_resource_id){
+
+  // Always fetch planned resource from DB to get correct material name
+  var planRes={};
+  if(allot.boq_exec_resource_id){
     try{
-      var pr=await sbFetch('boq_exec_resources',{select:'*',filter:'id=eq.'+allot.boq_exec_resource_id});
+      var pr=await sbFetch('boq_exec_resources',{select:'*',filter:'id=eq.'+allot.boq_exec_resource_id+'&exec_type=eq.planned'});
       planRes=(Array.isArray(pr)&&pr[0])?pr[0]:{};
-    }catch(e){}
+    }catch(e){ console.warn('planRes fetch:',e.message); }
   }
-  // resName = planned resource name (what the material IS), NOT vendor name
-  var resName=planRes.party_name||planRes.resource_category||'';
-  // If still empty, try the scope or description fields
-  if(!resName) resName=allot.scope||allot.party_name||'Unknown Material';
+
+  // Material name = planned resource party_name (what the material IS)
+  // NOT the vendor/allotment party_name
+  var resName = planRes.party_name || planRes.resource_category || '';
+  if(!resName){
+    toast('Cannot determine material name — planned resource not found','warning');
+    console.warn('planRes empty for allot:',allot);
+    return;
+  }
+
+  var boqItemId = allot.boq_item_id || planRes.boq_item_id || null;
 
   try{
-    // Insert into store_inventory
+    // Check if store record already exists for this project + material + unit
     var existing=await sbFetch('store_inventory',{
       select:'*',
-      filter:'project_id=eq.'+grn.project_id+'&item_name=eq.'+encodeURIComponent(resName)+'&unit=eq.'+(grn.unit||''),
+      filter:'project_id=eq.'+grn.project_id+'&allot_id=eq.'+allot.id
     });
-    var existRec=Array.isArray(existing)?existing[0]:null;
+    var existRec=Array.isArray(existing)&&existing.length?existing[0]:null;
     if(existRec){
-      // Update qty
-      await sbUpdate('store_inventory',existRec.id,{qty_in_hand:existRec.qty_in_hand+(parseFloat(grn.qty_received)||0)});
-    } else {
-      // Insert new
-      await sbInsert('store_inventory',{
-        project_id:grn.project_id,
-        item_name:resName,
-        allot_id:grn.allot_id,
-        grn_id:grnId,
-        unit:grn.unit||null,
-        qty_in_hand:parseFloat(grn.qty_received)||0,
-        qty_issued:0,
+      await sbUpdate('store_inventory',existRec.id,{
+        qty_in_hand:(parseFloat(existRec.qty_in_hand)||0)+(parseFloat(grn.qty_received)||0),
         last_grn_date:grn.grn_date
       });
+    } else {
+      await sbInsert('store_inventory',{
+        project_id: grn.project_id,
+        item_name:  resName,           // planned resource name (material)
+        allot_id:   grn.allot_id,
+        grn_id:     grnId,
+        boq_item_id: boqItemId,        // BOQ item reference for daily progress matching
+        unit:       grn.unit||null,
+        qty_in_hand: parseFloat(grn.qty_received)||0,
+        qty_issued:  0,
+        last_grn_date: grn.grn_date
+      });
     }
-    // Mark GRN as store updated
     await sbUpdate('grn_entries',grnId,{store_updated:true});
     var idx=GRN_ITEMS.findIndex(function(g){return g.id===grnId;});
     if(idx>-1) GRN_ITEMS[idx].store_updated=true;
-    toast('Material added to store','success');
+    // Refresh STORE_ITEMS in memory
+    try{
+      var si=await sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+grn.project_id,order:'item_name.asc'});
+      STORE_ITEMS=Array.isArray(si)?si:STORE_ITEMS;
+    }catch(e){}
+    toast('Material "'+resName+'" added to store','success');
     grnRender();
   }catch(e){toast('Error updating store: '+e.message,'error');console.error(e);}
 }
