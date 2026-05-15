@@ -2824,6 +2824,7 @@ function execRenderDailyContent(){
           '<span style="font-size:10px;color:var(--text3);flex-shrink:0;">&#128197; '+(d.date?d.date.split('-').reverse().join('/'):'-')+'</span>'+
           '<span style="font-size:12px;font-weight:800;color:#E65100;">'+d.qty_done+' '+(d.unit||item.unit||'')+'</span>'+
           (d.remarks?'<span style="font-size:10px;color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+d.remarks+'</span>':'<span style="flex:1;"></span>')+
+          '<button onclick="execEditDailyEntry(\''+d.id+'\',\''+item.id+'\')" style="background:#E3F2FD;border:none;color:#1565C0;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">&#9998;</button>'+
           '<button onclick="execDelDaily(\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;flex-shrink:0;">&#215;</button>'+
         '</div>'+
         (resources.length?
@@ -3050,6 +3051,162 @@ async function execDelDaily(id){
   WA_DAILY=WA_DAILY.filter(function(d){return d.id!==id;});
   execRenderDaily();
   try{await sbDelete('work_daily_progress',id);}catch(e){console.error(e);}
+}
+
+async function execEditDailyEntry(entryId, itemId){
+  var d=WA_DAILY.find(function(x){return x.id===entryId;});
+  if(!d){toast('Entry not found','warning');return;}
+  var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+
+  // Get allotted resources for this item
+  var itemSubIds=WA_SUBS.filter(function(s){return s.boq_item_id===itemId;}).map(function(s){return s.id;});
+  var itemAllots=WA_ALLOT.filter(function(a){
+    return a.boq_item_id===itemId||(a.boq_subitem_id&&itemSubIds.includes(a.boq_subitem_id));
+  });
+
+  // Parse existing resources_used
+  var existingRes=[];try{existingRes=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
+
+  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+
+  var resourceRows=itemAllots.map(function(a){
+    var col=tCol[a.exec_type]||'#37474F';
+    // Find existing usage for this allotment in this entry
+    var existingUse=existingRes.find(function(r){return r.allot_id===a.id;});
+    var existingQty=existingUse?existingUse.qty||'':'';
+    // Compute balance (excluding current entry's contribution)
+    var allotQ=parseFloat(a.qty)||0;
+    var usedExcludingThis=0;
+    WA_DAILY.forEach(function(dd){
+      if(dd.id===entryId) return; // exclude current entry
+      var rr=[];try{rr=dd.resources_used?JSON.parse(dd.resources_used):[];}catch(e){}
+      rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)usedExcludingThis+=parseFloat(r.qty)||0;});
+    });
+    var balQ=Math.max(0,allotQ-usedExcludingThis);
+
+    return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:#FAFAFA;">'+
+      '<input type="checkbox" class="dp-res-chk" '+
+        'data-allot-id="'+a.id+'" data-name="'+a.party_name+'" data-type="'+a.exec_type+'" data-unit="'+(a.unit||'')+'" '+
+        (existingUse?'checked':'')+' '+
+        'style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
+      '<div style="flex:1;min-width:0;">'+
+        '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+col+'15;color:'+col+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
+        '<span style="font-size:12px;font-weight:800;margin-left:6px;">'+a.party_name+'</span>'+
+        '<div style="font-size:9px;color:var(--text3);">Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b></div>'+
+      '</div>'+
+      '<div class="dp-res-qty-wrap" style="display:'+(existingUse?'flex':'none')+';align-items:center;gap:4px;">'+
+        '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
+        '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" max="'+balQ+'" value="'+existingQty+'" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;"></div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  // BOQ qty balance excluding this entry
+  var jmQ=WA_JMS.filter(function(j){return j.boq_item_id===itemId;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+  var boqQ=parseFloat(item.boq_qty||item.qty)||0;
+  var limQ=jmQ||boqQ;
+  var doneExcl=WA_DAILY.filter(function(dd){return dd.boq_item_id===itemId&&dd.id!==entryId;}).reduce(function(s,dd){return s+(parseFloat(dd.qty_done)||0);},0);
+  var remQ=Math.max(0,limQ-doneExcl);
+
+  document.getElementById('exec-sheet-title').textContent='Edit Daily Entry';
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#FFF3E0;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+      '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Progress</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+        '<div><label class="flbl">Date *</label><input id="dp-date" class="finp" type="date" value="'+(d.date||new Date().toISOString().slice(0,10))+'"></div>'+
+        '<div><label class="flbl">Qty Completed *</label>'+
+          '<div style="display:flex;gap:6px;align-items:center;">'+
+            '<input id="dp-qty" class="finp" type="number" step="0.001" max="'+remQ+'" value="'+(d.qty_done||'')+'" style="flex:1;">'+
+            '<span style="font-size:12px;font-weight:700;color:var(--text3);">'+(item.unit||'')+'</span>'+
+          '</div>'+
+          '<div style="font-size:9px;color:#E65100;margin-top:2px;">'+(jmQ?'JM':'BOQ')+' balance: '+remQ.toFixed(2)+' '+(item.unit||'')+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div><label class="flbl">Remarks</label><input id="dp-remarks" class="finp" value="'+(d.remarks||'')+'" placeholder="Weather, issues, notes..."></div>'+
+    '</div>'+
+    (itemAllots.length?
+      '<div style="font-size:11px;font-weight:800;color:#1565C0;margin-bottom:8px;">&#9313; Resources Utilised</div>'+resourceRows
+      :'');
+
+  var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#1565C0;color:white;';
+  sb.innerHTML='&#10003; Update Entry';
+  sb.onclick=function(){execUpdateDailyEntry(entryId,itemId,projId);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+
+  // Wire checkboxes
+  setTimeout(function(){
+    var body=document.getElementById('exec-sheet-body');
+    if(!body)return;
+    body.addEventListener('change',function(e){
+      var chk=e.target;
+      if(chk.classList&&chk.classList.contains('dp-res-chk')){
+        var row=chk.closest('.dp-res-row');if(!row)return;
+        var qw=row.querySelector('.dp-res-qty-wrap');
+        if(qw)qw.style.display=chk.checked?'flex':'none';
+      }
+    });
+  },100);
+}
+
+async function execUpdateDailyEntry(entryId, itemId, projId){
+  var date=gv('dp-date'),qty=parseFloat(gv('dp-qty'))||0;
+  if(!date){toast('Date required','warning');return;}
+  if(!qty){toast('Enter qty completed','warning');return;}
+
+  var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
+
+  // Validate qty against JM/BOQ balance (excluding this entry)
+  var jmQ=WA_JMS.filter(function(j){return j.boq_item_id===itemId;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+  var boqQ=parseFloat(item.boq_qty||item.qty)||0;
+  var limQ=jmQ||boqQ;
+  var doneExcl=WA_DAILY.filter(function(dd){return dd.boq_item_id===itemId&&dd.id!==entryId;}).reduce(function(s,dd){return s+(parseFloat(dd.qty_done)||0);},0);
+  var remQ=Math.max(0,limQ-doneExcl);
+  if(limQ>0&&qty>remQ){
+    toast('Qty ('+ qty+') exceeds '+(jmQ?'JM':'BOQ')+' balance ('+remQ.toFixed(2)+')','warning');
+    return;
+  }
+
+  // Collect resources
+  var resources=[];var resValid=true;
+  document.querySelectorAll('.dp-res-chk:checked').forEach(function(chk){
+    var row=chk.closest('.dp-res-row');
+    var qtyInp=row&&row.querySelector('.dp-res-qty');
+    var resQty=parseFloat(qtyInp&&qtyInp.value)||null;
+    var allotId=chk.getAttribute('data-allot-id');
+    var resName=chk.getAttribute('data-name');
+    var resUnit=chk.getAttribute('data-unit')||null;
+    if(resQty&&allotId){
+      var allot=WA_ALLOT.find(function(a){return a.id===allotId;})||{};
+      var allotQ=parseFloat(allot.qty)||0;
+      var usedExcl=0;
+      WA_DAILY.forEach(function(dd){
+        if(dd.id===entryId)return;
+        var rr=[];try{rr=dd.resources_used?JSON.parse(dd.resources_used):[];}catch(e){}
+        rr.forEach(function(r){if(r.allot_id===allotId&&r.qty)usedExcl+=parseFloat(r.qty)||0;});
+      });
+      var resRem=Math.max(0,allotQ-usedExcl);
+      if(resQty>resRem){toast(resName+': qty ('+resQty+') exceeds allotted balance ('+resRem.toFixed(2)+')','warning');resValid=false;return;}
+    }
+    resources.push({allot_id:allotId,name:resName,type:chk.getAttribute('data-type'),unit:resUnit,qty:resQty});
+  });
+  if(!resValid)return;
+
+  var updateData={date:date,qty_done:qty,remarks:gv('dp-remarks')||null,resources_used:resources.length?JSON.stringify(resources):null};
+  try{
+    await sbUpdate('work_daily_progress',entryId,updateData);
+    var idx=WA_DAILY.findIndex(function(d){return d.id===entryId;});
+    if(idx>-1) WA_DAILY[idx]=Object.assign(WA_DAILY[idx],updateData);
+    toast('Entry updated!','success');
+    closeSheet('ov-exec','sh-exec');
+    execRenderDaily();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 // ── Bills & Payments ────────────────────────────────────────────────────
 function execRenderBills(){
