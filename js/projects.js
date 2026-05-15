@@ -858,10 +858,14 @@ async function execLoadProjs(){
 
 // Called on tab switch — only fetch if project changed, otherwise just re-render
 function execSwitchTab(){
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  // Use global project selector first, then fallback to hidden exec-proj-sel
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var el=document.getElementById('exec-content');
   if(!projId){
-    if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';
+    if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">'+
+      '<div style="font-size:32px;">&#128203;</div>'+
+      '<div style="font-weight:700;margin-top:8px;">Select a project first</div>'+
+      '<div style="font-size:11px;margin-top:6px;">Use the project dropdown at the top</div></div>';
     return;
   }
   if(projId === WA_LOADED_PROJ){
@@ -882,7 +886,7 @@ function execSwitchTab(){
 
 // Full fetch — called on project change or after save/delete to refresh data
 async function execLoadItems(){
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var el=document.getElementById('exec-content');
   if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';return;}
   if(el) el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
@@ -1310,7 +1314,7 @@ function rrDownloadPDF(rrId, projName){
 async function execRenderSubTab(){
   // Always refresh approved RRs before rendering allot tab — they change in RR tab
   if(WA_SUBTAB==='allot'){
-    var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+    var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
     if(projId){
       try{
         var rrs=await sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'});
@@ -1442,7 +1446,7 @@ function execRender(){
 
 async function execOpenAllot(itemId){
   await loadUomIfNeeded();
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var item = WA_ITEMS.find(function(i){return i.id===itemId;})||{};
   var itemSubIds = WA_SUBS.filter(function(s){return s.boq_item_id===itemId;}).map(function(s){return s.id;});
   var itemRes = WA_PLANNED.filter(function(r){
@@ -1822,7 +1826,7 @@ async function execEditAllotted(id){
   if(!a){toast('Allotment not found','warning');return;}
   await loadUomIfNeeded();
   var uomOpts=buildUomOpts(a.unit||'');
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
 
   document.getElementById('exec-sheet-title').textContent='Edit Allotment — '+a.party_name;
@@ -2245,7 +2249,7 @@ async function execGenPartyDoc(partyKey, docType){
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var parts=partyKey.split('::');
   var partyType=parts[0], partyName=parts.slice(1).join('::');
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   // Collect checked allotments for this party
   var container=document.getElementById('allotted-'+partyKey.replace(/[^a-z0-9]/gi,'-'));
   if(!container){toast('Party card not found','warning');return;}
@@ -2341,7 +2345,7 @@ async function execGenPartyDoc(partyKey, docType){
 
 
 async function execGenBatchDoc(batchKey, docType){
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
   var co=COMPANY_DATA||{};
   var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
@@ -2876,7 +2880,7 @@ function execRenderDailyContent(){
     itemCards;
 }
 async function execOpenDailyEntry(itemId){
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
 
   // Get allotted resources for this item (via boq_item_id or sub-item)
@@ -3008,7 +3012,7 @@ async function execDelDaily(id){
 // ── Bills & Payments ────────────────────────────────────────────────────
 function execRenderBills(){
   var el=document.getElementById('exec-content');if(!el)return;
-  var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
 
   // Group by party
   var parties={};
@@ -3212,4 +3216,3 @@ async function execDelPayment(id){
   execRenderBills();
   try{await sbDelete('work_payments',id);}catch(e){console.error(e);}
 }
-
