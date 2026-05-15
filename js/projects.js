@@ -2612,24 +2612,52 @@ function execRenderDaily(){
   var el=document.getElementById('exec-content');if(!el)return;
 
   if(!WA_ITEMS.length){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128197;</div><div style="font-weight:700;margin-top:8px;">No BOQ items found</div></div>';
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128197;</div><div style="font-weight:700;margin-top:8px;">No BOQ items found</div><div style="font-size:11px;margin-top:6px;">Add BOQ items first, then come back to record daily progress</div></div>';
     return;
   }
 
-  // Render the date picker shell, then fill content
+  // Render date picker + New Entry button at top
   el.innerHTML=
-    '<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
-      '<div style="font-size:12px;font-weight:800;color:#1565C0;">&#128197; View Date</div>'+
+    '<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
+      '<div style="font-size:12px;font-weight:800;color:#1565C0;">&#128197;</div>'+
       '<input id="dp-view-date" type="date" value="'+WA_DAILY_DATE+'" '+
         'style="border:1.5px solid #1565C0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:#1565C0;outline:none;cursor:pointer;" '+
         'onchange="execDailyDateChange()">'+
-      '<div style="flex:1;font-size:10px;color:var(--text3);">Showing entries for selected date &amp; cumulative upto that date</div>'+
       '<button onclick="WA_DAILY_DATE=new Date().toISOString().slice(0,10);document.getElementById(\'dp-view-date\').value=WA_DAILY_DATE;execRenderDailyContent();" '+
-        'style="font-size:10px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">Today</button>'+
+        'style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">Today</button>'+
+      '<div style="flex:1;"></div>'+
+      '<button onclick="execOpenDailyEntryPicker()" style="background:#E65100;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;">+ New Entry</button>'+
     '</div>'+
     '<div id="dp-daily-content"></div>';
 
   execRenderDailyContent();
+}
+
+// Show BOQ item picker then open entry form
+function execOpenDailyEntryPicker(){
+  if(!WA_ITEMS.length){toast('No BOQ items found','warning');return;}
+  var opts=WA_ITEMS.map(function(item){
+    return '<option value="'+item.id+'">['+item.item_code+'] '+(item.short_name||item.description)+'</option>';
+  }).join('');
+  document.getElementById('exec-sheet-title').textContent='Select BOQ Item';
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<label class="flbl">BOQ Item *</label>'+
+    '<select id="dp-item-pick" class="fsel" style="margin-bottom:0;">'+
+      '<option value="">— Select Item —</option>'+opts+
+    '</select>';
+  var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#E65100;color:white;';
+  sb.innerHTML='Next &#8594;';
+  sb.onclick=function(){
+    var itemId=document.getElementById('dp-item-pick').value;
+    if(!itemId){toast('Select a BOQ item','warning');return;}
+    closeSheet('ov-exec','sh-exec');
+    setTimeout(function(){execOpenDailyEntry(itemId);},200);
+  };
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
 }
 
 function execRenderDailyContent(){
