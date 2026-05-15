@@ -3578,6 +3578,9 @@ function grnRender(){
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">'+
             '<span style="font-size:10px;font-weight:700;">'+g.grn_number+'</span>'+
             '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:'+stCol+'20;color:'+stCol+';">'+stLbl+'</span>'+
+            (g.approval_status==='approved'
+              ? '<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 6px;border-radius:4px;font-weight:700;">&#10003; Admin Approved</span>'
+              : '<span style="font-size:9px;background:#FFF3E0;color:#E65100;padding:1px 6px;border-radius:4px;font-weight:700;">&#9203; Pending Approval</span>')+
           '</div>'+
           '<div style="font-size:12px;font-weight:800;">'+resName+'</div>'+
           '<div style="font-size:10px;color:var(--text3);">'+
@@ -3591,10 +3594,16 @@ function grnRender(){
         '</div>'+
         '<div style="display:flex;gap:4px;flex-shrink:0;">'+
           '<button onclick="grnDownloadPDF(\''+g.id+'\')" style="background:#558B2F;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#11015; PDF</button>'+
-          (g.status!=='accepted'?'':(g.store_updated?
-            '<span style="font-size:9px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:4px;font-weight:700;">&#10003; In Store</span>':
-            '<button onclick="grnAddToStore(\''+g.id+'\')" style="background:#6A1B9A;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">+ Store</button>'))+
-          '<button onclick="grnDelete(\''+g.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+          (g.status==='accepted'?(
+            g.store_updated
+              ? '<span style="font-size:9px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:4px;font-weight:700;">&#10003; In Store</span>'
+              : (g.approval_status==='approved'
+                  ? '<button onclick="grnAddToStore(\''+g.id+'\')" style="background:#6A1B9A;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">+ Store</button>'
+                  : (currentUser&&currentUser.role==='admin'
+                      ? '<button onclick="grnApprove(\''+g.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#10003; Approve &amp; Store</button>'
+                      : '<span style="font-size:9px;background:#FFF3E0;color:#E65100;padding:3px 8px;border-radius:4px;font-weight:700;">&#9203; Pending Admin Approval</span>')
+                  )
+          ):'')+''+
         '</div>'+
       '</div>';
     }).join('');
@@ -3749,14 +3758,14 @@ async function grnSave(allotId, projId){
       status:status,
       challan_no:challan||null, invoice_no:invoice||null,
       remarks:remarks||null, rejection_reason:rejection||null,
-      store_updated:false
+      store_updated:false,
+      approval_status:'pending'
     });
     if(res&&res[0]) GRN_ITEMS.push(res[0]);
-    toast(grnNo+' saved!','success');
+    toast(grnNo+' saved! Awaiting admin approval to add to store.','success');
     grnCloseSheet(); closeSheet('ov-exec','sh-exec');
     grnRender();
-    // Auto-add to store if accepted
-    if(status==='accepted'&&res&&res[0]) await grnAddToStore(res[0].id);
+    // Do NOT auto-add to store — admin must approve first
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
@@ -3797,6 +3806,19 @@ async function grnAddToStore(grnId){
     toast('Material added to store','success');
     grnRender();
   }catch(e){toast('Error updating store: '+e.message,'error');console.error(e);}
+}
+
+async function grnApprove(grnId){
+  if(!currentUser||currentUser.role!=='admin'){toast('Only admin can approve GRN','warning');return;}
+  try{
+    await sbUpdate('grn_entries',grnId,{approval_status:'approved',approved_by:currentUser.name||currentUser.email||'admin'});
+    var idx=GRN_ITEMS.findIndex(function(g){return g.id===grnId;});
+    if(idx>-1){GRN_ITEMS[idx].approval_status='approved';}
+    toast('GRN approved — now add to store','success');
+    grnRender();
+    // Auto-add to store after approval
+    await grnAddToStore(grnId);
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
 async function grnDelete(grnId){
