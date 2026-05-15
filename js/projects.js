@@ -2925,11 +2925,19 @@ async function execOpenDailyEntry(itemId){
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
         '<div><label class="flbl">Date *</label><input id="dp-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
         '<div><label class="flbl">Qty Completed *</label>'+
-          '<div style="display:flex;gap:6px;align-items:center;">'+
-            '<input id="dp-qty" class="finp" type="number" step="0.001" placeholder="0" style="flex:1;">'+
+        (function(){
+          var jmQ=WA_JMS.filter(function(j){return j.boq_item_id===itemId;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+          var boqQ=parseFloat(item.boq_qty||item.qty)||0;
+          var limQ=jmQ||boqQ;
+          var doneQ=WA_DAILY.filter(function(d){return d.boq_item_id===itemId;}).reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+          var remQ=Math.max(0,limQ-doneQ);
+          return '<div style="display:flex;gap:6px;align-items:center;">'+
+            '<input id="dp-qty" class="finp" type="number" step="0.001" max="'+remQ+'" placeholder="max '+remQ+'" style="flex:1;">'+
             '<span style="font-size:12px;font-weight:700;color:var(--text3);padding-top:2px;">'+(item.unit||'')+'</span>'+
           '</div>'+
-        '</div>'+
+          '<div style="font-size:9px;color:#E65100;margin-top:2px;">'+(jmQ?'JM':'BOQ')+' balance: '+remQ.toFixed(2)+' '+(item.unit||'')+'</div>';
+        })()+
+      '</div>'+
       '</div>'+
       '<div><label class="flbl">Remarks / Observations</label><input id="dp-remarks" class="finp" placeholder="Weather, issues, notes..."></div>'+
     '</div>'+
@@ -2971,21 +2979,55 @@ async function execSaveDailyEntry(projId,itemId){
   if(!date){toast('Date required','warning');return;}
   if(!qty){toast('Enter qty completed','warning');return;}
 
-  // Collect checked resources with qty
+  var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
+
+  // ── Validation 1: qty ≤ JM qty (or BOQ qty) minus already done ──
+  var jmQty  = WA_JMS.filter(function(j){return j.boq_item_id===itemId;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+  var boqQty = parseFloat(item.boq_qty||item.qty)||0;
+  var limitQty = jmQty||boqQty; // use JM if available, else BOQ
+  var alreadyDone = WA_DAILY.filter(function(d){return d.boq_item_id===itemId;}).reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
+  var remaining = Math.max(0, limitQty - alreadyDone);
+  if(limitQty>0 && qty>remaining){
+    toast('Qty ('+ qty+') exceeds '+(jmQty?'JM':'BOQ')+' balance ('+remaining.toFixed(2)+' '+( item.unit||'')+' remaining)','warning');
+    return;
+  }
+
+  // ── Collect checked resources ──
   var resources=[];
+  var resValid=true;
   document.querySelectorAll('.dp-res-chk:checked').forEach(function(chk){
     var row=chk.closest('.dp-res-row');
     var qtyInp=row&&row.querySelector('.dp-res-qty');
+    var resQty=parseFloat(qtyInp&&qtyInp.value)||null;
+    var allotId=chk.getAttribute('data-allot-id');
+    var resName=chk.getAttribute('data-name');
+    var resUnit=chk.getAttribute('data-unit')||null;
+
+    // ── Validation 2: resource qty ≤ allotted minus already utilised ──
+    if(resQty&&allotId){
+      var allot=WA_ALLOT.find(function(a){return a.id===allotId;})||{};
+      var allotQty=parseFloat(allot.qty)||0;
+      var alreadyUsed=0;
+      WA_DAILY.forEach(function(d){
+        var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
+        rr.forEach(function(r){if(r.allot_id===allotId&&r.qty)alreadyUsed+=parseFloat(r.qty)||0;});
+      });
+      var resRemaining=Math.max(0,allotQty-alreadyUsed);
+      if(resQty>resRemaining){
+        toast(resName+': qty ('+resQty+') exceeds allotted balance ('+resRemaining.toFixed(2)+' '+(resUnit||'')+')', 'warning');
+        resValid=false; return;
+      }
+    }
+
     resources.push({
-      allot_id:chk.getAttribute('data-allot-id'),
-      name:chk.getAttribute('data-name'),
+      allot_id:allotId,
+      name:resName,
       type:chk.getAttribute('data-type'),
-      unit:chk.getAttribute('data-unit')||null,
-      qty:parseFloat(qtyInp&&qtyInp.value)||null
+      unit:resUnit,
+      qty:resQty
     });
   });
-
-  var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
+  if(!resValid) return;
   try{
     var res=await sbInsert('work_daily_progress',{
       project_id:projId,
