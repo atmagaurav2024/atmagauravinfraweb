@@ -3607,6 +3607,7 @@ function grnRender(){
                   : '<button onclick="grnApprove(\''+g.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#10003; Approve &amp; Store</button>'
                   )
           ):'')+''+
+          '<button onclick="grnDelete(\''+g.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;" title="Delete GRN">&#215;</button>'+
         '</div>'+
       '</div>';
     }).join('');
