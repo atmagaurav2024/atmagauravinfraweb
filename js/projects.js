@@ -2206,13 +2206,16 @@ function execRenderAllotted(){
     });
     var hasOrder = batchOrders.length>0;
 
-    // Batch header — show all party names if multiple
-    var partyNames = items.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;});
-    var headerLabel = partyNames.length===1
-      ? partyNames[0]
-      : partyNames.length+' parties';
+    // Batch header — show resource names as primary, vendor as secondary
     var firstType = items[0].exec_type||'';
     var col = tCol[firstType]||'#37474F';
+    var resNames = items.map(function(a){
+      var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
+      return pl.party_name||pl.resource_category||'';
+    }).filter(function(v,i,arr){return v&&arr.indexOf(v)===i;});
+    var partyNames = items.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;});
+    var headerLabel = resNames.length ? resNames.join(', ') : (partyNames[0]||'');
+    var headerVendor = partyNames.join(', ');
 
     // Resource rows
     var itemRows = items.map(function(a){
@@ -2224,7 +2227,8 @@ function execRenderAllotted(){
         '<div style="flex:1;min-width:0;">'+
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">'+
             '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+aCol+'20;color:'+aCol+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
-            '<span style="font-size:12px;font-weight:800;">'+a.party_name+'</span>'+
+            (planRes.party_name||planRes.resource_category?'<span style="font-size:12px;font-weight:800;color:#1B5E20;">'+( planRes.party_name||planRes.resource_category)+'</span>':'')+
+            '<span style="font-size:11px;font-weight:600;color:#555;margin-left:3px;">&#8594; '+a.party_name+'</span>'+
           '</div>'+
           (boqItem.item_code?'<div style="font-size:9px;color:var(--text3);">BOQ: '+boqItem.item_code+' '+(boqItem.short_name||boqItem.description||'')+'</div>':'')+
           '<div style="font-size:10px;color:var(--text3);">'+a.qty+' '+(a.unit||'')+(a.rate?' @ '+inr(a.rate):'')+(a.scope?' | '+a.scope:'')+'</div>'+
@@ -2262,7 +2266,7 @@ function execRenderAllotted(){
       '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:13px;font-weight:800;">'+headerLabel+'</div>'+
-          '<div style="font-size:10px;color:var(--text3);">'+items.length+' resource'+(items.length>1?'s':'')+' | Allotted: '+(batchDate?batchDate.slice(0,10):'')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);">Vendor: <b>'+headerVendor+'</b> | '+items.length+' resource'+(items.length>1?'s':'')+' | Allotted: '+(batchDate?batchDate.slice(0,10):'')+'</div>'+
         '</div>'+
         '<div style="font-size:13px;font-weight:800;color:'+col+';">'+inr(totalAmt)+'</div>'+
       '</div>'+
@@ -3579,7 +3583,7 @@ function grnRender(){
             '<span style="font-size:10px;font-weight:700;">'+g.grn_number+'</span>'+
             '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:'+stCol+'20;color:'+stCol+';">'+stLbl+'</span>'+
             (g.approval_status==='approved'
-              ? '<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 6px;border-radius:4px;font-weight:700;">&#10003; Admin Approved</span>'
+              ? '<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 6px;border-radius:4px;font-weight:700;">&#10003; Approved</span>'
               : '<span style="font-size:9px;background:#FFF3E0;color:#E65100;padding:1px 6px;border-radius:4px;font-weight:700;">&#9203; Pending Approval</span>')+
           '</div>'+
           '<div style="font-size:12px;font-weight:800;">'+resName+'</div>'+
@@ -3599,9 +3603,7 @@ function grnRender(){
               ? '<span style="font-size:9px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:4px;font-weight:700;">&#10003; In Store</span>'
               : (g.approval_status==='approved'
                   ? '<button onclick="grnAddToStore(\''+g.id+'\')" style="background:#6A1B9A;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">+ Store</button>'
-                  : (currentUser&&currentUser.role==='admin'
-                      ? '<button onclick="grnApprove(\''+g.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#10003; Approve &amp; Store</button>'
-                      : '<span style="font-size:9px;background:#FFF3E0;color:#E65100;padding:3px 8px;border-radius:4px;font-weight:700;">&#9203; Pending Admin Approval</span>')
+                  : '<button onclick="grnApprove(\''+g.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#10003; Approve &amp; Store</button>'
                   )
           ):'')+''+
         '</div>'+
@@ -3809,7 +3811,7 @@ async function grnAddToStore(grnId){
 }
 
 async function grnApprove(grnId){
-  if(!currentUser||currentUser.role!=='admin'){toast('Only admin can approve GRN','warning');return;}
+  if(!currentUser){toast('Please log in','warning');return;}
   try{
     await sbUpdate('grn_entries',grnId,{approval_status:'approved',approved_by:currentUser.name||currentUser.email||'admin'});
     var idx=GRN_ITEMS.findIndex(function(g){return g.id===grnId;});
