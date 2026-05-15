@@ -2774,9 +2774,7 @@ function execRenderDailyContent(){
     cumulByItem[key].push(d);
   });
 
-  var itemCards=WA_ITEMS.filter(function(item){
-    return (todayByItem[item.id]||[]).length>0||(cumulByItem[item.id]||[]).length>0;
-  }).map(function(item){
+  var itemCards=WA_ITEMS.map(function(item){  // show ALL items so + Entry is always available
     var todayItemEntries=(todayByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
     var cumulItemEntries=(cumulByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
     var doneToday2=todayItemEntries.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
@@ -2840,20 +2838,14 @@ function execRenderDailyContent(){
     '</div>';
   }).join('');
 
-  var noEntries = WA_ITEMS.every(function(item){
-    return (todayByItem[item.id]||[]).length===0&&(cumulByItem[item.id]||[]).length===0;
-  });
-
   el.innerHTML=
     summaryTable+
     resTable+
     '<div style="font-size:11px;font-weight:800;color:var(--text3);margin-bottom:8px;">'+
       '&#128203; Entries for '+(selDate.split('-').reverse().join('/'))+
-      ' &nbsp;<span style="font-size:9px;font-weight:400;">and cumulative upto this date</span>'+
+      ' &nbsp;<span style="font-size:9px;font-weight:400;">and cumulative upto this date &nbsp;|&nbsp; Click <b>+ Entry</b> to record progress</span>'+
     '</div>'+
-    (noEntries
-      ? '<div style="text-align:center;padding:20px;color:var(--text3);background:white;border-radius:12px;">No entries found upto '+selDate.split('-').reverse().join('/')+'</div>'
-      : itemCards);
+    itemCards;
 }
 async function execOpenDailyEntry(itemId){
   var projId=(document.getElementById('exec-proj-sel')||{}).value||'';
