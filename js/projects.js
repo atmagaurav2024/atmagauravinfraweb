@@ -3828,11 +3828,35 @@ async function grnApprove(grnId){
 async function grnDelete(grnId){
   var grn=GRN_ITEMS.find(function(g){return g.id===grnId;});
   if(!grn)return;
-  if(grn.store_updated){toast('Cannot delete — material already added to store','warning');return;}
-  if(!confirm('Delete this GRN?'))return;
+  var msg=grn.store_updated
+    ? 'This GRN has been added to store.\nDeleting will also reverse the store quantity.\n\nDelete GRN and reverse store entry?'
+    : 'Delete this GRN?';
+  if(!confirm(msg))return;
+
+  // If store was updated, reverse the qty in store_inventory
+  if(grn.store_updated&&grn.qty_received){
+    try{
+      var allot=GRN_ALLOTS.find(function(a){return a.id===grn.allot_id;})||{};
+      var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+      var resName=planRes.party_name||planRes.resource_category||allot.party_name||'';
+      var storeRecs=await sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+grn.project_id+'&grn_id=eq.'+grnId});
+      if(!Array.isArray(storeRecs)||!storeRecs.length){
+        // Try by item name
+        storeRecs=await sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+grn.project_id+'&item_name=eq.'+encodeURIComponent(resName)});
+      }
+      if(Array.isArray(storeRecs)&&storeRecs.length){
+        var s=storeRecs[0];
+        var newQty=Math.max(0,(parseFloat(s.qty_in_hand)||0)-(parseFloat(grn.qty_received)||0));
+        await sbUpdate('store_inventory',s.id,{qty_in_hand:newQty});
+        // Remove store item if qty reaches 0
+        if(newQty<=0) await sbDelete('store_inventory',s.id);
+      }
+    }catch(e){console.warn('Store reversal error:',e.message);}
+  }
+
   GRN_ITEMS=GRN_ITEMS.filter(function(g){return g.id!==grnId;});
   grnRender();
-  try{await sbDelete('grn_entries',grnId);}catch(e){console.error(e);}
+  try{await sbDelete('grn_entries',grnId);toast('GRN deleted','success');}catch(e){console.error(e);}
 }
 
 function grnDownloadPDF(grnId){
@@ -3978,6 +4002,7 @@ function storeRender(){
       '<td style="padding:9px 10px;">'+
         '<div style="display:flex;gap:4px;">'+
           '<button onclick="storeIssue(\''+item.id+'\')" style="background:#6A1B9A;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">Issue</button>'+
+           '<button onclick="storeDelete(\''+item.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;" title="Delete">&#215;</button>'+
         '</div>'+
       '</td>'+
     '</tr>';
@@ -4034,4 +4059,22 @@ function storeIssue(itemId){
       issued_to:issuedTo||null, issue_date:new Date().toISOString().slice(0,10)
     }).catch(function(){});
   }).catch(function(e){toast('Error: '+e.message,'error');});
+}
+
+async function storeDelete(itemId){
+  var item=STORE_ITEMS.find(function(i){return i.id===itemId;});
+  if(!item)return;
+  if(!confirm('Delete store entry for "'+item.item_name+'"?\n\nNote: This will only remove the store record. The GRN will remain.')) return;
+  STORE_ITEMS=STORE_ITEMS.filter(function(i){return i.id!==itemId;});
+  storeRender();
+  try{
+    await sbDelete('store_inventory',itemId);
+    // Also mark the linked GRN as store_updated=false so it can be re-added
+    if(item.grn_id){
+      await sbUpdate('grn_entries',item.grn_id,{store_updated:false});
+      var grnIdx=GRN_ITEMS.findIndex(function(g){return g.id===item.grn_id;});
+      if(grnIdx>-1) GRN_ITEMS[grnIdx].store_updated=false;
+    }
+    toast('Store entry deleted','success');
+  }catch(e){console.error(e);toast('Error: '+e.message,'error');}
 }
