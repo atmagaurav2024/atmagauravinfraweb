@@ -2965,42 +2965,54 @@ async function execOpenDailyEntry(itemId){
     })||null;
   }
 
-  // Split allotments: in-store vs outside-store
+  // Split allotments: in-store AND outside-store independently
+  // An allotment can appear in BOTH:
+  //   - In Store: for qty currently available in store (e.g. 50 bags received)
+  //   - Outside Store: for remaining allotted qty not yet in store (e.g. 150 bags ordered but not received)
   var inStoreAllots=[], outStoreAllots=[];
-  var seenStoreNames={}; // prevent duplicates
+  var seenStoreIds={};
   itemAllots.forEach(function(a){
     var rn=getResName(a);
     var storeMatch=findStoreMatch(a, rn);
-    if(storeMatch && !seenStoreNames[storeMatch.id]){
-      seenStoreNames[storeMatch.id]=true;
+    var allotQty=parseFloat(a.qty)||0;
+    var storeQty=storeMatch?(parseFloat(storeMatch.qty_in_hand)||0):0;
+
+    if(storeMatch && storeQty>0 && !seenStoreIds[storeMatch.id]){
+      seenStoreIds[storeMatch.id]=true;
       inStoreAllots.push({allot:a, storeItem:storeMatch, resName:rn||storeMatch.item_name});
-    } else {
-      outStoreAllots.push({allot:a, resName:rn});
+    }
+    // Also show as outside-store if there's remaining qty NOT yet in store
+    var outsideQty=Math.max(0, allotQty-storeQty);
+    if(outsideQty>0){
+      outStoreAllots.push({allot:a, resName:rn, outsideQty:outsideQty});
     }
   });
-  // No duplicates by resource name
-  var inStoreNames=inStoreAllots.map(function(x){return x.resName;});
-  outStoreAllots=outStoreAllots.filter(function(x){return !x.resName||!inStoreNames.includes(x.resName);});
 
-  function makeResRow(a, col, rn, storeItem, fromStore){
+  function makeResRow(a, col, rn, storeItem, fromStore, outsideQty){
     var inHand=storeItem?parseFloat(storeItem.qty_in_hand)||0:null;
-    return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid '+(fromStore?'#C8E6C9':tCol[a.exec_type]||'var(--border)')+';border-radius:8px;margin-bottom:6px;background:'+(fromStore?'#F1FBF4':'#FAFAFA')+';">'+
+    var maxQty=fromStore&&inHand!==null?inHand:(outsideQty||null);
+    return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid '+(fromStore?'#C8E6C9':'#FFE0B2')+';border-radius:8px;margin-bottom:6px;background:'+(fromStore?'#F1FBF4':'#FFF8F5')+';">'+
       '<input type="checkbox" class="dp-res-chk" '+
         'data-allot-id="'+a.id+'" data-name="'+a.party_name+'" data-type="'+a.exec_type+'" data-unit="'+(a.unit||'')+'" '+
-        'style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
+        (fromStore?'data-from-store="1" ':'')+
+        'style="width:15px;height:15px;accent-color:'+(fromStore?'#2E7D32':col)+';flex-shrink:0;">'+
       '<div style="flex:1;min-width:0;">'+
-        (fromStore?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>':
-          '<span style="font-size:9px;font-weight:800;padding:1px 6px;background:'+col+'15;color:'+col+';border-radius:3px;margin-right:4px;">'+(tLbl[a.exec_type]||a.exec_type)+'</span>')+
+        (fromStore
+          ?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>'
+          :'<span style="font-size:9px;font-weight:800;background:#FFE0B2;color:#E65100;padding:1px 6px;border-radius:3px;margin-right:4px;">&#128666; Direct</span>')+
         (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#888;">&#8594;</span>':'')+
         ' <span style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</span>'+
-        (fromStore&&inHand!==null?'<div style="font-size:9px;color:#2E7D32;font-weight:700;">In Store: '+inHand.toFixed(2)+' '+(a.unit||'')+'</div>':'')+ 
+        '<div style="font-size:9px;font-weight:700;margin-top:2px;">'+
+          (fromStore&&inHand!==null?'<span style="color:#2E7D32;">Available in Store: '+inHand.toFixed(2)+' '+(a.unit||'')+'</span>':
+           outsideQty?'<span style="color:#E65100;">Not in store — Allotted: '+a.qty+' | Outside balance: '+outsideQty.toFixed(2)+' '+(a.unit||'')+'</span>':'')+
+        '</div>'+
         (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
       '</div>'+
       '<div class="dp-res-qty-wrap" style="display:none;align-items:center;gap:4px;">'+
         '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
           '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" '+
-            (fromStore&&inHand?'max="'+inHand+'" ':'')+
-            'placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
+            (maxQty?'max="'+maxQty+'" placeholder="max '+maxQty+'"':'placeholder="qty"')+
+            ' style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
         '</div>'+
         '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
       '</div>'+
@@ -3014,7 +3026,7 @@ async function execOpenDailyEntry(itemId){
 
   var outStoreRows = outStoreAllots.map(function(x){
     var col=tCol[x.allot.exec_type]||'#37474F';
-    return makeResRow(x.allot, col, x.resName, null, false);
+    return makeResRow(x.allot, col, x.resName, null, false, x.outsideQty);
   }).join('');
 
   var resourceRows = itemAllots.length
@@ -3025,7 +3037,7 @@ async function execOpenDailyEntry(itemId){
         ? '<div style="margin-top:10px;">'+
             '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">'+
               '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
-              '<span style="font-size:10px;font-weight:800;color:#E65100;">Use resources not in store ('+outStoreAllots.length+')</span>'+
+              '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Use resources outside store / direct use ('+outStoreAllots.length+')</span>'+
             '</label>'+
             '<div id="dp-outside-rows" style="display:none;">'+outStoreRows+'</div>'+
           '</div>'
@@ -3191,19 +3203,19 @@ async function execEditDailyEntry(entryId, itemId){
   }
 
   var inStoreE=[], outStoreE=[];
-  var seenStoreNamesE={};
+  var seenStoreIdsE={};
   itemAllots.forEach(function(a){
     var rn=getEditResName(a);
-    // Match by allot_id first, then by name
     var sm=STORE_ITEMS.find(function(s){return s.allot_id===a.id&&(parseFloat(s.qty_in_hand)||0)>0;})||
            (rn?STORE_ITEMS.find(function(s){return s.project_id===projId&&s.item_name===rn&&(parseFloat(s.qty_in_hand)||0)>0;}):null);
-    if(sm) inStoreE.push({allot:a,storeItem:sm,resName:rn});
-    else outStoreE.push({allot:a,resName:rn});
+    var allotQty=parseFloat(a.qty)||0;
+    var storeQty=sm?(parseFloat(sm.qty_in_hand)||0):0;
+    var outsideQty=Math.max(0,allotQty-storeQty);
+    if(sm&&!seenStoreIdsE[sm.id]){seenStoreIdsE[sm.id]=true;inStoreE.push({allot:a,storeItem:sm,resName:rn||sm.item_name});}
+    if(outsideQty>0) outStoreE.push({allot:a,resName:rn,outsideQty:outsideQty});
   });
-  var inStoreNamesE=inStoreE.map(function(x){return x.resName;});
-  outStoreE=outStoreE.filter(function(x){return !inStoreNamesE.includes(x.resName);});
 
-  function makeEditResRow(a, col, rn, storeItem, fromStore){
+  function makeEditResRow(a, col, rn, storeItem, fromStore, outsideQty){
     var existingUse=existingRes.find(function(r){return r.allot_id===a.id;});
     var existingQty=existingUse?existingUse.qty||'':'';
     var allotQ=parseFloat(a.qty)||0;
@@ -3215,7 +3227,7 @@ async function execEditDailyEntry(entryId, itemId){
     });
     var balQ=Math.max(0,allotQ-usedExcl);
     var inHand=storeItem?parseFloat(storeItem.qty_in_hand)||0:null;
-    var maxQ=fromStore&&inHand!==null?inHand:balQ;
+    var maxQ=fromStore&&inHand!==null?inHand:(outsideQty||balQ);
 
     return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid '+(fromStore?'#C8E6C9':col);+';border-radius:8px;margin-bottom:6px;background:'+(fromStore?'#F1FBF4':'#FAFAFA')+';">'+
       '<input type="checkbox" class="dp-res-chk" data-allot-id="'+a.id+'" data-name="'+a.party_name+'" data-type="'+a.exec_type+'" data-unit="'+(a.unit||'')+'" '+(existingUse?'checked':'')+' style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
@@ -3248,7 +3260,7 @@ async function execEditDailyEntry(entryId, itemId){
               '<span style="font-size:10px;font-weight:800;color:#E65100;">Use resources not in store ('+outStoreE.length+')</span>'+
             '</label>'+
             '<div id="dp-outside-rows" style="display:'+(existingRes.some(function(r){return outStoreE.some(function(x){return x.allot.id===r.allot_id;})})?'block':'none')+';">'+
-              outStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,null,false);}).join('')+
+              outStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,null,false,x.outsideQty);}).join('')+
             '</div>'+
           '</div>'
         : '')
