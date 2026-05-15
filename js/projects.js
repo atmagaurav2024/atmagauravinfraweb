@@ -2829,7 +2829,17 @@ function execRenderDailyContent(){
         '</div>'+
         (resources.length?
           '<div style="display:flex;flex-wrap:wrap;gap:4px;">'+
-            resources.map(function(r){var col=tCol[r.type]||'#555';return '<span style="font-size:9px;background:'+col+'15;color:'+col+';border:1px solid '+col+'30;border-radius:4px;padding:2px 6px;font-weight:700;">'+(tLbl[r.type]||r.type)+': '+r.name+(r.qty?' \u00d7 '+fmt(r.qty)+(r.unit?' '+r.unit:''):'')+  '</span>';}).join('')+
+            resources.map(function(r){
+                var col=tCol[r.type]||'#555';
+                // Show planned resource name if available
+                var allot=WA_ALLOT.find(function(a){return a.id===r.allot_id;})||{};
+                var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+                var resLabel=planRes.party_name||planRes.resource_category||'';
+                var label=(resLabel?resLabel+' &#8594; ':'')+r.name;
+                return '<span style="font-size:9px;background:'+col+'15;color:'+col+';border:1px solid '+col+'30;border-radius:4px;padding:2px 6px;font-weight:700;">'+
+                  (tLbl[r.type]||r.type)+': '+label+(r.qty?' \u00d7 '+fmt(r.qty)+(r.unit?' '+r.unit:''):'')+
+                '</span>';
+              }).join('')+
           '</div>':'')+
       '</div>';
     }
@@ -2905,7 +2915,7 @@ async function execOpenDailyEntry(itemId){
             'style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
           '<div style="flex:1;min-width:0;">'+
             '<span style="font-size:9px;font-weight:800;padding:1px 6px;background:'+col+'15;color:'+col+';border-radius:3px;margin-right:4px;">'+(tLbl[a.exec_type]||a.exec_type)+'</span>'+
-            '<span style="font-size:12px;font-weight:800;">'+a.party_name+'</span>'+
+            (function(){var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};var rn=pl.party_name||(pl.resource_category||'');return (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#888;">&#8594;</span>':'')+' <span style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</span>';})()+
             (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
           '</div>'+
           '<div class="dp-res-qty-wrap" style="display:none;align-items:center;gap:4px;">'+
@@ -3092,9 +3102,14 @@ async function execEditDailyEntry(entryId, itemId){
         (existingUse?'checked':'')+' '+
         'style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
       '<div style="flex:1;min-width:0;">'+
-        '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+col+'15;color:'+col+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
-        '<span style="font-size:12px;font-weight:800;margin-left:6px;">'+a.party_name+'</span>'+
-        '<div style="font-size:9px;color:var(--text3);">Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b></div>'+
+        (function(){
+          var planRes=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
+          var resLabel=planRes.party_name||(planRes.resource_category||'');
+          return '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+col+'15;color:'+col+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
+            (resLabel?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-left:4px;">'+resLabel+'</span>':'')+
+            '<span style="font-size:11px;font-weight:700;margin-left:4px;color:#555;">&#8594; '+a.party_name+'</span>'+
+            '<div style="font-size:9px;color:var(--text3);">Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b></div>';
+        })()+
       '</div>'+
       '<div class="dp-res-qty-wrap" style="display:'+(existingUse?'flex':'none')+';align-items:center;gap:4px;">'+
         '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
