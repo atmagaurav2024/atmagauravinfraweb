@@ -3592,6 +3592,7 @@ function grnRender(){
             'Ordered: '+(allot.qty||'?')+' '+(allot.unit||'')+' | '+
             'Received: <b style="color:#2E7D32;">'+g.qty_received+' '+(g.unit||allot.unit||'')+'</b>'+
             ' | Date: '+(g.grn_date?g.grn_date.split('-').reverse().join('/'):'-')+
+            (g.created_by?' | Created by: <b>'+g.created_by+'</b>':'')+
           '</div>'+
           (g.remarks?'<div style="font-size:9px;color:var(--text3);font-style:italic;">'+g.remarks+'</div>':'')+
           (g.rejection_reason?'<div style="font-size:9px;color:#C62828;">Reason: '+g.rejection_reason+'</div>':'')+
@@ -3761,7 +3762,8 @@ async function grnSave(allotId, projId){
       challan_no:challan||null, invoice_no:invoice||null,
       remarks:remarks||null, rejection_reason:rejection||null,
       store_updated:false,
-      approval_status:'pending'
+      approval_status:'pending',
+      created_by:(typeof currentUser!=='undefined'&&currentUser&&(currentUser.name||currentUser.email))||null
     });
     if(res&&res[0]) GRN_ITEMS.push(res[0]);
     toast(grnNo+' saved! Awaiting admin approval to add to store.','success');
@@ -3875,6 +3877,7 @@ function grnDownloadPDF(grnId){
       '<div class="info-cell"><div class="lbl">Quantity Received</div><div class="val" style="color:#558B2F;font-size:16px;">'+grn.qty_received+' '+(grn.unit||'')+'</div></div>'+
       (grn.challan_no?'<div class="info-cell full"><div class="lbl">Challan / Vehicle No</div><div class="val">'+grn.challan_no+'</div></div>':'')+
       (grn.invoice_no?'<div class="info-cell"><div class="lbl">Invoice No</div><div class="val">'+grn.invoice_no+'</div></div>':'')+
+      (grn.created_by?'<div class="info-cell"><div class="lbl">GRN Created By</div><div class="val">'+grn.created_by+'</div></div>':'')+
     '</div>'+
     '<div class="mat-box">'+
       '<div style="font-size:12px;font-weight:800;color:#558B2F;margin-bottom:8px;">Material Details</div>'+
@@ -3887,7 +3890,7 @@ function grnDownloadPDF(grnId){
     (grn.remarks?'<div style="margin-bottom:12px;padding:10px 14px;background:#F8FAFC;border-radius:8px;"><div class="lbl">Quality Remarks</div><div style="margin-top:4px;">'+grn.remarks+'</div></div>':'')+
     (grn.rejection_reason?'<div style="margin-bottom:12px;padding:10px 14px;background:#FFEBEE;border-radius:8px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="margin-top:4px;">'+grn.rejection_reason+'</div></div>':'')+
     '<div class="sig-grid">'+
-      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Store Keeper</div><div>Received By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(grn.created_by||'Store Keeper')+'</div><div>GRN Created By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Quality Inspector</div><div>Inspected By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Authorized By</div></div>'+
     '</div></body></html>';
