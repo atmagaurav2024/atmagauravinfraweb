@@ -2944,23 +2944,32 @@ async function execOpenDailyEntry(itemId){
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
 
-  // Build resource name → store item mapping
-  function getResName(a){var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};return pl.party_name||pl.resource_category||'';}
+  // Build resource name — from planned resource (what material it IS)
+  function getResName(a){
+    var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
+    return pl.party_name||pl.resource_category||a.scope||'';
+  }
+  // Match store item by resource name (item_name in store = planned resource name)
+  function findStoreMatch(rn){
+    if(!rn) return null;
+    return STORE_ITEMS.find(function(s){
+      return s.project_id===projId &&
+             s.item_name===rn &&
+             (parseFloat(s.qty_in_hand)||0)>0;
+    })||null;
+  }
 
   // Split allotments: in-store vs outside-store
   var inStoreAllots=[], outStoreAllots=[];
   itemAllots.forEach(function(a){
     var rn=getResName(a);
-    // Check if this resource has stock in STORE_ITEMS for this project
-    var storeMatch=STORE_ITEMS.find(function(s){
-      return s.project_id===projId && s.item_name===rn && (parseFloat(s.qty_in_hand)||0)>0;
-    });
+    var storeMatch=findStoreMatch(rn);
     if(storeMatch) inStoreAllots.push({allot:a, storeItem:storeMatch, resName:rn});
     else outStoreAllots.push({allot:a, resName:rn});
   });
-  // Remove from outStore any resource that appears in inStore (no duplicates)
+  // No duplicates — remove from outside-store if resource name already in store
   var inStoreNames=inStoreAllots.map(function(x){return x.resName;});
-  outStoreAllots=outStoreAllots.filter(function(x){return !inStoreNames.includes(x.resName);});
+  outStoreAllots=outStoreAllots.filter(function(x){return !x.resName||!inStoreNames.includes(x.resName);});
 
   function makeResRow(a, col, rn, storeItem, fromStore){
     var inHand=storeItem?parseFloat(storeItem.qty_in_hand)||0:null;
@@ -3165,7 +3174,10 @@ async function execEditDailyEntry(entryId, itemId){
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
 
   // Store-aware resource rows for edit — same logic as new entry
-  function getEditResName(a){var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};return pl.party_name||pl.resource_category||'';}
+  function getEditResName(a){
+    var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
+    return pl.party_name||pl.resource_category||a.scope||'';
+  }
 
   var inStoreE=[], outStoreE=[];
   itemAllots.forEach(function(a){
@@ -3657,9 +3669,10 @@ function grnRender(){
               ? '<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 6px;border-radius:4px;font-weight:700;">&#10003; Approved</span>'
               : '<span style="font-size:9px;background:#FFF3E0;color:#E65100;padding:1px 6px;border-radius:4px;font-weight:700;">&#9203; Pending Approval</span>')+
           '</div>'+
-          '<div style="font-size:12px;font-weight:800;">'+resName+'</div>'+
+          (resName?'<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+''+
+          '<div style="font-size:11px;font-weight:700;color:#333;">'+allot.party_name+'</div>'+
           '<div style="font-size:10px;color:var(--text3);">'+
-            'Supplier: '+allot.party_name+' | '+
+            'Ordered: '+(allot.qty||'?')+' '+(allot.unit||'')+' | '+
             'Ordered: '+(allot.qty||'?')+' '+(allot.unit||'')+' | '+
             'Received: <b style="color:#2E7D32;">'+g.qty_received+' '+(g.unit||allot.unit||'')+'</b>'+
             ' | Date: '+(g.grn_date?g.grn_date.split('-').reverse().join('/'):'-')+
@@ -3849,8 +3862,18 @@ async function grnAddToStore(grnId){
   var grn=GRN_ITEMS.find(function(g){return g.id===grnId;});
   if(!grn||grn.store_updated){return;}
   var allot=GRN_ALLOTS.find(function(a){return a.id===grn.allot_id;})||{};
+  // Get planned resource — try WA_PLANNED first, then fetch from DB
   var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
-  var resName=planRes.party_name||planRes.resource_category||allot.party_name||'';
+  if(!planRes.id && allot.boq_exec_resource_id){
+    try{
+      var pr=await sbFetch('boq_exec_resources',{select:'*',filter:'id=eq.'+allot.boq_exec_resource_id});
+      planRes=(Array.isArray(pr)&&pr[0])?pr[0]:{};
+    }catch(e){}
+  }
+  // resName = planned resource name (what the material IS), NOT vendor name
+  var resName=planRes.party_name||planRes.resource_category||'';
+  // If still empty, try the scope or description fields
+  if(!resName) resName=allot.scope||allot.party_name||'Unknown Material';
 
   try{
     // Insert into store_inventory
