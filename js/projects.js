@@ -927,7 +927,8 @@ async function execLoadItems(){
       safe(sbFetch('work_payments',{select:'*',filter:'project_id=eq.'+projId,order:'payment_date.desc'})),
       safe(sbFetch('work_orders',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
       safe(sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'})),
-      safe(sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'}))
+      safe(sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'})),
+      safe(sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+projId,order:'item_name.asc'}))
     ]);
     WA_ITEMS=Array.isArray(r[0])?r[0]:[];
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -940,6 +941,8 @@ async function execLoadItems(){
     WA_ORDERS=Array.isArray(r[6])?r[6]:[];
     WA_JMS=Array.isArray(r[7])?r[7]:[];
     WA_APPROVED_RRS=Array.isArray(r[8])?r[8]:[];
+    STORE_ITEMS=Array.isArray(r[9])?r[9]:[];
+    STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
   execRenderSubTab();
@@ -2941,30 +2944,72 @@ async function execOpenDailyEntry(itemId){
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
 
-  var resourceRows=itemAllots.length
-    ? itemAllots.map(function(a){
-        var col=tCol[a.exec_type]||'#37474F';
-        return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:#FAFAFA;">'+
-          '<input type="checkbox" class="dp-res-chk" '+
-            'data-allot-id="'+a.id+'" '+
-            'data-name="'+a.party_name+'" '+
-            'data-type="'+a.exec_type+'" '+
-            'data-unit="'+(a.unit||'')+'" '+
-            'style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
-          '<div style="flex:1;min-width:0;">'+
-            '<span style="font-size:9px;font-weight:800;padding:1px 6px;background:'+col+'15;color:'+col+';border-radius:3px;margin-right:4px;">'+(tLbl[a.exec_type]||a.exec_type)+'</span>'+
-            (function(){var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};var rn=pl.party_name||(pl.resource_category||'');return (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#888;">&#8594;</span>':'')+' <span style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</span>';})()+
-            (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
-          '</div>'+
-          '<div class="dp-res-qty-wrap" style="display:none;align-items:center;gap:4px;">'+
-            '<div>'+
-              '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
-              '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
-            '</div>'+
-            '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
-          '</div>'+
-        '</div>';
-      }).join('')
+  // Build resource name → store item mapping
+  function getResName(a){var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};return pl.party_name||pl.resource_category||'';}
+
+  // Split allotments: in-store vs outside-store
+  var inStoreAllots=[], outStoreAllots=[];
+  itemAllots.forEach(function(a){
+    var rn=getResName(a);
+    // Check if this resource has stock in STORE_ITEMS for this project
+    var storeMatch=STORE_ITEMS.find(function(s){
+      return s.project_id===projId && s.item_name===rn && (parseFloat(s.qty_in_hand)||0)>0;
+    });
+    if(storeMatch) inStoreAllots.push({allot:a, storeItem:storeMatch, resName:rn});
+    else outStoreAllots.push({allot:a, resName:rn});
+  });
+  // Remove from outStore any resource that appears in inStore (no duplicates)
+  var inStoreNames=inStoreAllots.map(function(x){return x.resName;});
+  outStoreAllots=outStoreAllots.filter(function(x){return !inStoreNames.includes(x.resName);});
+
+  function makeResRow(a, col, rn, storeItem, fromStore){
+    var inHand=storeItem?parseFloat(storeItem.qty_in_hand)||0:null;
+    return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid '+(fromStore?'#C8E6C9':tCol[a.exec_type]||'var(--border)')+';border-radius:8px;margin-bottom:6px;background:'+(fromStore?'#F1FBF4':'#FAFAFA')+';">'+
+      '<input type="checkbox" class="dp-res-chk" '+
+        'data-allot-id="'+a.id+'" data-name="'+a.party_name+'" data-type="'+a.exec_type+'" data-unit="'+(a.unit||'')+'" '+
+        'style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
+      '<div style="flex:1;min-width:0;">'+
+        (fromStore?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>':
+          '<span style="font-size:9px;font-weight:800;padding:1px 6px;background:'+col+'15;color:'+col+';border-radius:3px;margin-right:4px;">'+(tLbl[a.exec_type]||a.exec_type)+'</span>')+
+        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#888;">&#8594;</span>':'')+
+        ' <span style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</span>'+
+        (fromStore&&inHand!==null?'<div style="font-size:9px;color:#2E7D32;font-weight:700;">In Store: '+inHand.toFixed(2)+' '+(a.unit||'')+'</div>':'')+ 
+        (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
+      '</div>'+
+      '<div class="dp-res-qty-wrap" style="display:none;align-items:center;gap:4px;">'+
+        '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
+          '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" '+
+            (fromStore&&inHand?'max="'+inHand+'" ':'')+
+            'placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  var inStoreRows = inStoreAllots.map(function(x){
+    var col=tCol[x.allot.exec_type]||'#37474F';
+    return makeResRow(x.allot, col, x.resName, x.storeItem, true);
+  }).join('');
+
+  var outStoreRows = outStoreAllots.map(function(x){
+    var col=tCol[x.allot.exec_type]||'#37474F';
+    return makeResRow(x.allot, col, x.resName, null, false);
+  }).join('');
+
+  var resourceRows = itemAllots.length
+    ? (inStoreRows
+        ? '<div style="font-size:10px;font-weight:800;color:#1B5E20;margin-bottom:6px;">&#127981; From Store</div>'+inStoreRows
+        : '<div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-style:italic;">No matching store items for this BOQ item</div>')+
+      (outStoreRows
+        ? '<div style="margin-top:10px;">'+
+            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">'+
+              '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
+              '<span style="font-size:10px;font-weight:800;color:#E65100;">Use resources not in store ('+outStoreAllots.length+')</span>'+
+            '</label>'+
+            '<div id="dp-outside-rows" style="display:none;">'+outStoreRows+'</div>'+
+          '</div>'
+        : '')
     : '<div style="font-size:11px;color:var(--text3);padding:8px 0;font-style:italic;">No resources allotted for this item yet.</div>';
 
   document.getElementById('exec-sheet-title').textContent='Daily Progress — '+(item.item_code?item.item_code+' ':'')+(item.short_name||item.description||'');
@@ -3119,43 +3164,69 @@ async function execEditDailyEntry(entryId, itemId){
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
 
-  var resourceRows=itemAllots.map(function(a){
-    var col=tCol[a.exec_type]||'#37474F';
-    // Find existing usage for this allotment in this entry
+  // Store-aware resource rows for edit — same logic as new entry
+  function getEditResName(a){var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};return pl.party_name||pl.resource_category||'';}
+
+  var inStoreE=[], outStoreE=[];
+  itemAllots.forEach(function(a){
+    var rn=getEditResName(a);
+    var sm=STORE_ITEMS.find(function(s){return s.project_id===projId&&s.item_name===rn&&(parseFloat(s.qty_in_hand)||0)>0;});
+    if(sm) inStoreE.push({allot:a,storeItem:sm,resName:rn});
+    else outStoreE.push({allot:a,resName:rn});
+  });
+  var inStoreNamesE=inStoreE.map(function(x){return x.resName;});
+  outStoreE=outStoreE.filter(function(x){return !inStoreNamesE.includes(x.resName);});
+
+  function makeEditResRow(a, col, rn, storeItem, fromStore){
     var existingUse=existingRes.find(function(r){return r.allot_id===a.id;});
     var existingQty=existingUse?existingUse.qty||'':'';
-    // Compute balance (excluding current entry's contribution)
     var allotQ=parseFloat(a.qty)||0;
-    var usedExcludingThis=0;
+    var usedExcl=0;
     WA_DAILY.forEach(function(dd){
-      if(dd.id===entryId) return; // exclude current entry
+      if(dd.id===entryId)return;
       var rr=[];try{rr=dd.resources_used?JSON.parse(dd.resources_used):[];}catch(e){}
-      rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)usedExcludingThis+=parseFloat(r.qty)||0;});
+      rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)usedExcl+=parseFloat(r.qty)||0;});
     });
-    var balQ=Math.max(0,allotQ-usedExcludingThis);
+    var balQ=Math.max(0,allotQ-usedExcl);
+    var inHand=storeItem?parseFloat(storeItem.qty_in_hand)||0:null;
+    var maxQ=fromStore&&inHand!==null?inHand:balQ;
 
-    return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:#FAFAFA;">'+
-      '<input type="checkbox" class="dp-res-chk" '+
-        'data-allot-id="'+a.id+'" data-name="'+a.party_name+'" data-type="'+a.exec_type+'" data-unit="'+(a.unit||'')+'" '+
-        (existingUse?'checked':'')+' '+
-        'style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
+    return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid '+(fromStore?'#C8E6C9':col);+';border-radius:8px;margin-bottom:6px;background:'+(fromStore?'#F1FBF4':'#FAFAFA')+';">'+
+      '<input type="checkbox" class="dp-res-chk" data-allot-id="'+a.id+'" data-name="'+a.party_name+'" data-type="'+a.exec_type+'" data-unit="'+(a.unit||'')+'" '+(existingUse?'checked':'')+' style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
       '<div style="flex:1;min-width:0;">'+
-        (function(){
-          var planRes=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
-          var resLabel=planRes.party_name||(planRes.resource_category||'');
-          return '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+col+'15;color:'+col+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
-            (resLabel?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-left:4px;">'+resLabel+'</span>':'')+
-            '<span style="font-size:11px;font-weight:700;margin-left:4px;color:#555;">&#8594; '+a.party_name+'</span>'+
-            '<div style="font-size:9px;color:var(--text3);">Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b></div>';
-        })()+
+        (fromStore?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>':
+          '<span style="font-size:9px;font-weight:800;padding:1px 6px;background:'+col+'15;color:'+col+';border-radius:3px;margin-right:4px;">'+(tLbl[a.exec_type]||a.exec_type)+'</span>')+
+        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#888;">&#8594;</span>':'')+
+        ' <span style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</span>'+
+        '<div style="font-size:9px;color:var(--text3);">'+
+          (fromStore&&inHand!==null?'In Store: <b style="color:#2E7D32;">'+inHand.toFixed(2)+'</b> | ':'')+'Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b>'+
+        '</div>'+
       '</div>'+
       '<div class="dp-res-qty-wrap" style="display:'+(existingUse?'flex':'none')+';align-items:center;gap:4px;">'+
         '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
-        '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" max="'+balQ+'" value="'+existingQty+'" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;"></div>'+
+          '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" max="'+maxQ+'" value="'+existingQty+'" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;"></div>'+
         '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
       '</div>'+
     '</div>';
-  }).join('');
+  }
+
+  var resourceRows = itemAllots.length
+    ? (inStoreE.length
+        ? '<div style="font-size:10px;font-weight:800;color:#1B5E20;margin-bottom:6px;">&#127981; From Store</div>'+
+          inStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,x.storeItem,true);}).join('')
+        : '<div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-style:italic;">No matching store items</div>')+
+      (outStoreE.length
+        ? '<div style="margin-top:10px;">'+
+            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">'+
+              '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;"'+(existingRes.some(function(r){return outStoreE.some(function(x){return x.allot.id===r.allot_id;})})?'checked':'')+'>'+
+              '<span style="font-size:10px;font-weight:800;color:#E65100;">Use resources not in store ('+outStoreE.length+')</span>'+
+            '</label>'+
+            '<div id="dp-outside-rows" style="display:'+(existingRes.some(function(r){return outStoreE.some(function(x){return x.allot.id===r.allot_id;})})?'block':'none')+';">'+
+              outStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,null,false);}).join('')+
+            '</div>'+
+          '</div>'
+        : '')
+    : '<div style="font-size:11px;color:var(--text3);padding:8px 0;font-style:italic;">No resources allotted for this item yet.</div>';
 
   // BOQ qty balance excluding this entry
   var jmQ=WA_JMS.filter(function(j){return j.boq_item_id===itemId;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
