@@ -52,7 +52,9 @@ function projModLoadTab(){
     allotted: {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allotted'; execSwitchTab(); }},
     daily:    {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='daily'; execSwitchTab(); }},
     bills:    {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills'; execSwitchTab(); }},
-    orders:   {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders'; execSwitchTab(); }}
+    orders:   {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders'; execSwitchTab(); }},
+    grn:      {cont:'grn-content',  sel:'grn-proj-sel',   fn: function(){ grnLoadItems(); }},
+    store:    {cont:'store-content',sel:'store-proj-sel',  fn: function(){ storeLoadItems(); }}
   };
   var cfg = configs[PROJ_MOD_TAB];
   if(!cfg) return;
@@ -71,7 +73,7 @@ function projModTab(tab, btn){
     }
   }
   PROJ_MOD_TAB = tab;
-  ['projects','boq','jm','planning','execution','allotted','daily','bills','orders'].forEach(function(t){
+  ['projects','boq','jm','planning','execution','allotted','daily','bills','orders','grn','store'].forEach(function(t){
     var b = document.getElementById('pmt-'+t);
     if(b){ b.style.background = t===tab?'rgba(255,255,255,.2)':'transparent'; b.style.color = t===tab?'white':'rgba(255,255,255,.6)'; }
   });
@@ -100,7 +102,31 @@ function initProjects(){
       planBtn.parentNode.insertBefore(rrBtn, planBtn.nextSibling);
     }
   }
-  ['projects','boq','jm','planning','execution','allotted','daily','bills','orders'].forEach(function(t){
+  // Inject GRN tab button after Allotted tab
+  if(!document.getElementById('pmt-grn')){
+    var allottedBtn=document.getElementById('pmt-allotted');
+    if(allottedBtn){
+      var grnBtn=document.createElement('button');
+      grnBtn.id='pmt-grn';
+      grnBtn.onclick=function(){projModTab('grn',grnBtn);};
+      grnBtn.style.cssText='padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);';
+      grnBtn.innerHTML='&#128230; GRN';
+      allottedBtn.parentNode.insertBefore(grnBtn, allottedBtn.nextSibling);
+    }
+  }
+  // Inject Store tab button after GRN
+  if(!document.getElementById('pmt-store')){
+    var grnB=document.getElementById('pmt-grn');
+    if(grnB){
+      var storeBtn=document.createElement('button');
+      storeBtn.id='pmt-store';
+      storeBtn.onclick=function(){projModTab('store',storeBtn);};
+      storeBtn.style.cssText='padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);';
+      storeBtn.innerHTML='&#127981; Store';
+      grnB.parentNode.insertBefore(storeBtn, grnB.nextSibling);
+    }
+  }
+  ['projects','boq','jm','planning','execution','allotted','daily','bills','orders','grn','store'].forEach(function(t){
     var b = document.getElementById('pmt-'+t);
     if(!b) return;
     var hasAccess = (currentUser && currentUser.role==='admin') ||
@@ -109,7 +135,7 @@ function initProjects(){
                     canAccess('proj-execution','view'); // daily & bills share execution permission
     b.style.display = hasAccess ? '' : 'none';
   });
-  var tabs = ['projects','boq','jm','planning','rr','execution','allotted','daily','bills','orders'];
+  var tabs = ['projects','boq','jm','planning','rr','execution','allotted','daily','bills','orders','grn','store'];
   var firstTab = tabs.find(function(t){
     return (currentUser && currentUser.role==='admin') ||
            !Object.keys(USER_PERMISSIONS).length ||
@@ -1327,6 +1353,8 @@ async function execRenderSubTab(){
   else if(WA_SUBTAB==='daily') execRenderDaily();
   else if(WA_SUBTAB==='bills') execRenderBills();
   else if(WA_SUBTAB==='orders') execRenderOrders();
+  else if(WA_SUBTAB==='grn') grnRender();
+  else if(WA_SUBTAB==='store') storeRender();
 }
 
 
@@ -3435,4 +3463,548 @@ async function execDelPayment(id){
   WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.id!==id;});
   execRenderBills();
   try{await sbDelete('work_payments',id);}catch(e){console.error(e);}
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// GRN (Goods Received Note) MODULE
+// ════════════════════════════════════════════════════════════════
+var GRN_ITEMS=[], GRN_ALLOTS=[], GRN_PROJ_ID='';
+
+function grnEnsureContainer(){
+  if(!document.getElementById('grn-content')){
+    var div=document.createElement('div');
+    div.id='grn-content'; div.style.cssText='padding:12px;';
+    var ap=document.getElementById('app-projects');
+    if(ap) ap.appendChild(div);
+  }
+}
+
+async function grnLoadItems(){
+  grnEnsureContainer();
+  var el=document.getElementById('grn-content'); if(!el) return;
+  var projId=PROJ_MOD_SEL_ID||'';
+  if(!projId){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project from the dropdown above</div>';
+    return;
+  }
+  GRN_PROJ_ID=projId;
+  el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+  try{
+    var r=await Promise.all([
+      sbFetch('grn_entries',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'}),
+      sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&exec_type=eq.vendor',order:'created_at.desc'})
+    ]);
+    GRN_ITEMS  = Array.isArray(r[0])?r[0]:[];
+    GRN_ALLOTS = Array.isArray(r[1])?r[1]:[];
+  }catch(e){
+    GRN_ITEMS=[]; GRN_ALLOTS=[];
+    console.warn('GRN load:',e.message);
+  }
+  grnRender();
+}
+
+function grnRender(){
+  var el=document.getElementById('grn-content'); if(!el) return;
+  var projId=GRN_PROJ_ID||PROJ_MOD_SEL_ID;
+  var projSel=document.getElementById('proj-mod-sel');
+  var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
+
+  // Summary
+  var totalGRNs=GRN_ITEMS.length;
+  var pendingAllots=GRN_ALLOTS.filter(function(a){
+    return !GRN_ITEMS.some(function(g){return g.allot_id===a.id&&g.status==='accepted';});
+  }).length;
+
+  var summaryBar=
+    '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
+      '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #558B2F;flex:1;">'+
+        '<div style="font-size:18px;font-weight:900;color:#558B2F;">'+totalGRNs+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);font-weight:700;">GRNs Created</div></div>'+
+      '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #E65100;flex:1;">'+
+        '<div style="font-size:18px;font-weight:900;color:#E65100;">'+pendingAllots+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);font-weight:700;">Pending GRN</div></div>'+
+    '</div>';
+
+  // Pending allotments (vendor type, no accepted GRN yet)
+  var pendingSection='';
+  var pending=GRN_ALLOTS.filter(function(a){
+    var accepted=GRN_ITEMS.filter(function(g){return g.allot_id===a.id&&g.status==='accepted';})
+      .reduce(function(s,g){return s+(parseFloat(g.qty_received)||0);},0);
+    return accepted < (parseFloat(a.qty)||0);
+  });
+
+  if(pending.length){
+    var pendingRows=pending.map(function(a){
+      var accepted=GRN_ITEMS.filter(function(g){return g.allot_id===a.id&&g.status==='accepted';})
+        .reduce(function(s,g){return s+(parseFloat(g.qty_received)||0);},0);
+      var bal=Math.max(0,(parseFloat(a.qty)||0)-accepted);
+      var boqItem=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
+      var planRes=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
+      var resName=planRes.party_name||planRes.resource_category||'';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #F5F5F5;background:white;">'+
+        '<div style="flex:1;">'+
+          (resName?'<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+''+
+          '<div style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);">'+(boqItem.item_code?'['+boqItem.item_code+'] ':'')+
+            'Ordered: '+a.qty+' '+(a.unit||'')+' | Received: '+accepted.toFixed(2)+' | <b style="color:#E65100;">Pending: '+bal.toFixed(2)+'</b></div>'+
+        '</div>'+
+        '<button onclick="grnOpenForm(\''+a.id+'\',\''+projId+'\')" '+
+          'style="background:#558B2F;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Create GRN</button>'+
+      '</div>';
+    }).join('');
+
+    pendingSection=
+      '<div style="background:white;border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
+        '<div style="padding:10px 14px;background:#F1FBF4;border-bottom:2px solid #C8E6C9;">'+
+          '<div style="font-size:12px;font-weight:800;color:#558B2F;">&#128230; Pending Material Receipt</div>'+
+          '<div style="font-size:10px;color:var(--text3);">Materials ordered but GRN not yet created</div>'+
+        '</div>'+
+        pendingRows+
+      '</div>';
+  }
+
+  // GRN list
+  var grnList='';
+  if(GRN_ITEMS.length){
+    var grnRows=GRN_ITEMS.map(function(g){
+      var stCol={accepted:'#2E7D32',rejected:'#C62828',partial:'#F57F17'}[g.status]||'#555';
+      var stLbl={accepted:'Accepted',rejected:'Rejected',partial:'Partial'}[g.status]||g.status;
+      var allot=GRN_ALLOTS.find(function(a){return a.id===g.allot_id;})||{};
+      var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+      var resName=planRes.party_name||planRes.resource_category||allot.party_name||'';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
+        '<div style="flex:1;">'+
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">'+
+            '<span style="font-size:10px;font-weight:700;">'+g.grn_number+'</span>'+
+            '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:'+stCol+'20;color:'+stCol+';">'+stLbl+'</span>'+
+          '</div>'+
+          '<div style="font-size:12px;font-weight:800;">'+resName+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);">'+
+            'Supplier: '+allot.party_name+' | '+
+            'Ordered: '+(allot.qty||'?')+' '+(allot.unit||'')+' | '+
+            'Received: <b style="color:#2E7D32;">'+g.qty_received+' '+(g.unit||allot.unit||'')+'</b>'+
+            ' | Date: '+(g.grn_date?g.grn_date.split('-').reverse().join('/'):'-')+
+          '</div>'+
+          (g.remarks?'<div style="font-size:9px;color:var(--text3);font-style:italic;">'+g.remarks+'</div>':'')+
+          (g.rejection_reason?'<div style="font-size:9px;color:#C62828;">Reason: '+g.rejection_reason+'</div>':'')+
+        '</div>'+
+        '<div style="display:flex;gap:4px;flex-shrink:0;">'+
+          '<button onclick="grnDownloadPDF(\''+g.id+'\')" style="background:#558B2F;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#11015; PDF</button>'+
+          (g.status!=='accepted'?'':(g.store_updated?
+            '<span style="font-size:9px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:4px;font-weight:700;">&#10003; In Store</span>':
+            '<button onclick="grnAddToStore(\''+g.id+'\')" style="background:#6A1B9A;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">+ Store</button>'))+
+          '<button onclick="grnDelete(\''+g.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    grnList=
+      '<div style="background:white;border-radius:14px;overflow:hidden;">'+
+        '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #DDD;">'+
+          '<div style="font-size:12px;font-weight:800;color:#333;">&#128196; GRN Records</div>'+
+        '</div>'+grnRows+
+      '</div>';
+  }
+
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'+
+      '<div style="font-size:13px;font-weight:800;color:#558B2F;">&#128230; Goods Received Notes — '+projName+'</div>'+
+    '</div>'+
+    summaryBar+pendingSection+
+    (grnList||(!pending.length?'<div style="text-align:center;padding:30px;color:var(--text3);background:white;border-radius:12px;">No vendor allotments found for this project</div>':''));
+}
+
+function grnOpenForm(allotId, projId){
+  grnEnsureContainer();
+  var allot=GRN_ALLOTS.find(function(a){return a.id===allotId;})||{};
+  var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+  var resName=planRes.party_name||planRes.resource_category||allot.party_name||'';
+  var accepted=GRN_ITEMS.filter(function(g){return g.allot_id===allotId&&g.status==='accepted';})
+    .reduce(function(s,g){return s+(parseFloat(g.qty_received)||0);},0);
+  var bal=Math.max(0,(parseFloat(allot.qty)||0)-accepted);
+
+  var shTitle=document.getElementById('exec-sheet-title');
+  var shBody =document.getElementById('exec-sheet-body');
+  var shFoot =document.getElementById('exec-sheet-foot');
+  if(!shTitle||!shBody||!shFoot){
+    // Use grn sheet instead
+    grnEnsureContainer();
+    if(!document.getElementById('grn-sheet-overlay')){
+      var ov=document.createElement('div');
+      ov.id='grn-sheet-overlay';
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:none;';
+      ov.onclick=function(){grnCloseSheet();};
+      document.body.appendChild(ov);
+      var sh=document.createElement('div');
+      sh.id='grn-sheet';
+      sh.style.cssText='position:fixed;bottom:0;left:0;right:0;background:white;border-radius:20px 20px 0 0;z-index:9999;display:none;max-height:85vh;overflow-y:auto;';
+      sh.innerHTML='<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div id="grn-sheet-title" style="font-size:14px;font-weight:800;"></div><span onclick="grnCloseSheet()" style="cursor:pointer;font-size:18px;color:var(--text3);">&#10005;</span></div><div id="grn-sheet-body" style="padding:14px;"></div><div id="grn-sheet-foot" style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;"></div>';
+      document.body.appendChild(sh);
+    }
+    shTitle=document.getElementById('grn-sheet-title');
+    shBody =document.getElementById('grn-sheet-body');
+    shFoot =document.getElementById('grn-sheet-foot');
+    document.getElementById('grn-sheet-overlay').style.display='block';
+    document.getElementById('grn-sheet').style.display='block';
+  } else {
+    openSheet('ov-exec','sh-exec');
+  }
+
+  shTitle.textContent='Create GRN';
+  shBody.innerHTML=
+    '<div style="background:#F1FBF4;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+      '<div style="font-size:12px;font-weight:800;color:#558B2F;margin-bottom:4px;">Material Details</div>'+
+      '<div style="font-size:13px;font-weight:800;">'+resName+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);">Supplier: '+allot.party_name+
+        ' | Ordered: '+allot.qty+' '+(allot.unit||'')+
+        ' | Pending: <b style="color:#E65100;">'+bal.toFixed(2)+'</b></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+      '<div><label class="flbl">GRN Date *</label><input id="grn-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+      '<div><label class="flbl">Qty Received *</label>'+
+        '<div style="display:flex;gap:6px;align-items:center;">'+
+          '<input id="grn-qty" class="finp" type="number" step="0.001" max="'+bal+'" placeholder="max '+bal.toFixed(2)+'" style="flex:1;">'+
+          '<span style="font-size:12px;font-weight:700;color:var(--text3);">'+(allot.unit||'')+'</span>'+
+        '</div></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+      '<div><label class="flbl">Vehicle / Challan No</label><input id="grn-challan" class="finp" placeholder="Vehicle no / delivery challan"></div>'+
+      '<div><label class="flbl">Invoice No</label><input id="grn-invoice" class="finp" placeholder="Supplier invoice number"></div>'+
+    '</div>'+
+    '<div style="margin-bottom:8px;"><label class="flbl">Quality Check *</label>'+
+      '<div style="display:flex;gap:6px;margin-top:4px;">'+
+        '<label style="display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid #C8E6C9;border-radius:8px;cursor:pointer;flex:1;">'+
+          '<input type="radio" name="grn-status" value="accepted" checked style="accent-color:#2E7D32;">'+
+          '<span style="font-size:11px;font-weight:800;color:#2E7D32;">&#10003; Accepted</span></label>'+
+        '<label style="display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid #FFE0B2;border-radius:8px;cursor:pointer;flex:1;">'+
+          '<input type="radio" name="grn-status" value="partial" style="accent-color:#F57F17;">'+
+          '<span style="font-size:11px;font-weight:800;color:#F57F17;">&#9888; Partial</span></label>'+
+        '<label style="display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid #FFCDD2;border-radius:8px;cursor:pointer;flex:1;">'+
+          '<input type="radio" name="grn-status" value="rejected" style="accent-color:#C62828;">'+
+          '<span style="font-size:11px;font-weight:800;color:#C62828;">&#10005; Rejected</span></label>'+
+      '</div>'+
+    '</div>'+
+    '<div><label class="flbl">Remarks / Quality Notes</label><textarea id="grn-remarks" class="ftxt" rows="2" placeholder="Quality observations, condition of material..."></textarea></div>'+
+    '<div id="grn-rejection-div" style="display:none;margin-top:8px;"><label class="flbl">Rejection Reason *</label><input id="grn-rejection" class="finp" placeholder="Reason for rejection or partial acceptance"></div>';
+
+  // Show rejection reason field when rejected or partial
+  setTimeout(function(){
+    document.querySelectorAll('input[name="grn-status"]').forEach(function(r){
+      r.addEventListener('change',function(){
+        var d=document.getElementById('grn-rejection-div');
+        if(d) d.style.display=(this.value==='rejected'||this.value==='partial')?'block':'none';
+      });
+    });
+  },100);
+
+  shFoot.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){grnCloseSheet();closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#558B2F;color:white;';
+  sb.innerHTML='&#10003; Save GRN';
+  sb.onclick=function(){grnSave(allotId,projId);};
+  shFoot.appendChild(cb);shFoot.appendChild(sb);
+}
+
+function grnCloseSheet(){
+  var ov=document.getElementById('grn-sheet-overlay');
+  var sh=document.getElementById('grn-sheet');
+  if(ov)ov.style.display='none';
+  if(sh)sh.style.display='none';
+}
+
+async function grnSave(allotId, projId){
+  var date=document.getElementById('grn-date')?document.getElementById('grn-date').value:'';
+  var qty=parseFloat(document.getElementById('grn-qty')?document.getElementById('grn-qty').value:0)||0;
+  var statusEl=document.querySelector('input[name="grn-status"]:checked');
+  var status=statusEl?statusEl.value:'accepted';
+  var challan=(document.getElementById('grn-challan')||{}).value||'';
+  var invoice=(document.getElementById('grn-invoice')||{}).value||'';
+  var remarks=(document.getElementById('grn-remarks')||{}).value||'';
+  var rejection=(document.getElementById('grn-rejection')||{}).value||'';
+
+  if(!date){toast('GRN date required','warning');return;}
+  if(!qty&&status!=='rejected'){toast('Enter quantity received','warning');return;}
+  if((status==='rejected'||status==='partial')&&!rejection){toast('Enter rejection/partial reason','warning');return;}
+
+  // Validate qty against pending balance
+  var allot=GRN_ALLOTS.find(function(a){return a.id===allotId;})||{};
+  var accepted=GRN_ITEMS.filter(function(g){return g.allot_id===allotId&&g.status==='accepted';})
+    .reduce(function(s,g){return s+(parseFloat(g.qty_received)||0);},0);
+  var bal=Math.max(0,(parseFloat(allot.qty)||0)-accepted);
+  if(status!=='rejected'&&qty>bal){
+    toast('Qty ('+qty+') exceeds pending balance ('+bal.toFixed(2)+')','warning');return;
+  }
+
+  // Generate GRN number
+  var grnNo='GRN/'+new Date().getFullYear()+'/'+String(GRN_ITEMS.length+1).padStart(4,'0');
+
+  try{
+    var res=await sbInsert('grn_entries',{
+      project_id:projId, allot_id:allotId,
+      grn_number:grnNo, grn_date:date,
+      qty_received:status==='rejected'?0:qty,
+      unit:allot.unit||null,
+      status:status,
+      challan_no:challan||null, invoice_no:invoice||null,
+      remarks:remarks||null, rejection_reason:rejection||null,
+      store_updated:false
+    });
+    if(res&&res[0]) GRN_ITEMS.push(res[0]);
+    toast(grnNo+' saved!','success');
+    grnCloseSheet(); closeSheet('ov-exec','sh-exec');
+    grnRender();
+    // Auto-add to store if accepted
+    if(status==='accepted'&&res&&res[0]) await grnAddToStore(res[0].id);
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+async function grnAddToStore(grnId){
+  var grn=GRN_ITEMS.find(function(g){return g.id===grnId;});
+  if(!grn||grn.store_updated){return;}
+  var allot=GRN_ALLOTS.find(function(a){return a.id===grn.allot_id;})||{};
+  var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+  var resName=planRes.party_name||planRes.resource_category||allot.party_name||'';
+
+  try{
+    // Insert into store_inventory
+    var existing=await sbFetch('store_inventory',{
+      select:'*',
+      filter:'project_id=eq.'+grn.project_id+'&item_name=eq.'+encodeURIComponent(resName)+'&unit=eq.'+(grn.unit||''),
+    });
+    var existRec=Array.isArray(existing)?existing[0]:null;
+    if(existRec){
+      // Update qty
+      await sbUpdate('store_inventory',existRec.id,{qty_in_hand:existRec.qty_in_hand+(parseFloat(grn.qty_received)||0)});
+    } else {
+      // Insert new
+      await sbInsert('store_inventory',{
+        project_id:grn.project_id,
+        item_name:resName,
+        allot_id:grn.allot_id,
+        grn_id:grnId,
+        unit:grn.unit||null,
+        qty_in_hand:parseFloat(grn.qty_received)||0,
+        qty_issued:0,
+        last_grn_date:grn.grn_date
+      });
+    }
+    // Mark GRN as store updated
+    await sbUpdate('grn_entries',grnId,{store_updated:true});
+    var idx=GRN_ITEMS.findIndex(function(g){return g.id===grnId;});
+    if(idx>-1) GRN_ITEMS[idx].store_updated=true;
+    toast('Material added to store','success');
+    grnRender();
+  }catch(e){toast('Error updating store: '+e.message,'error');console.error(e);}
+}
+
+async function grnDelete(grnId){
+  var grn=GRN_ITEMS.find(function(g){return g.id===grnId;});
+  if(!grn)return;
+  if(grn.store_updated){toast('Cannot delete — material already added to store','warning');return;}
+  if(!confirm('Delete this GRN?'))return;
+  GRN_ITEMS=GRN_ITEMS.filter(function(g){return g.id!==grnId;});
+  grnRender();
+  try{await sbDelete('grn_entries',grnId);}catch(e){console.error(e);}
+}
+
+function grnDownloadPDF(grnId){
+  var grn=GRN_ITEMS.find(function(g){return g.id===grnId;});
+  if(!grn){toast('GRN not found','error');return;}
+  var allot=GRN_ALLOTS.find(function(a){return a.id===grn.allot_id;})||{};
+  var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+  var resName=planRes.party_name||planRes.resource_category||allot.party_name||'';
+  var boqItem=WA_ITEMS.find(function(i){return i.id===allot.boq_item_id;})||{};
+  var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+  var projSel=document.getElementById('proj-mod-sel');
+  var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
+  function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var stCol={accepted:'#2E7D32',rejected:'#C62828',partial:'#F57F17'}[grn.status]||'#555';
+  var stLbl={accepted:'ACCEPTED',rejected:'REJECTED',partial:'PARTIAL'}[grn.status]||grn.status.toUpperCase();
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GRN — '+grn.grn_number+'</title>'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;padding:24px;color:#1a1a1a;}'+
+    '.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #558B2F;padding-bottom:10px;margin-bottom:14px;}'+
+    '.co-name{font-size:16px;font-weight:900;color:#558B2F;}.co-info{font-size:10px;color:#555;margin-top:3px;}'+
+    '.grn-title{font-size:18px;font-weight:900;color:#558B2F;}.grn-no{font-size:12px;color:#555;margin-top:4px;}'+
+    '.status{display:inline-block;padding:4px 14px;border-radius:20px;font-weight:900;font-size:11px;color:white;background:'+stCol+';margin-top:6px;}'+
+    '.info-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:14px;}'+
+    '.info-cell{padding:10px 14px;}.info-cell+.info-cell{border-left:1px solid #DDD;}.info-cell.full{grid-column:span 2;border-top:1px solid #DDD;}'+
+    '.lbl{font-size:9px;font-weight:800;text-transform:uppercase;color:#888;margin-bottom:3px;}.val{font-size:13px;font-weight:800;}'+
+    '.mat-box{background:#F1FBF4;border-radius:8px;padding:14px;margin-bottom:14px;border-left:4px solid #558B2F;}'+
+    '.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:40px;}'+
+    '.sig-box{border-top:1.5px solid #333;padding-top:6px;text-align:center;font-size:10px;color:#555;}'+
+    '@media print{button{display:none;}}</style></head><body>'+
+    '<button onclick="window.print()" style="background:#558B2F;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-family:Arial;font-weight:700;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div><div class="co-name">'+(co.name||'Company Name')+'</div>'+
+        '<div class="co-info">'+(co.address||'')+'<br>'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div style="text-align:right;"><div class="grn-title">GOODS RECEIVED NOTE</div>'+
+        '<div class="grn-no">'+grn.grn_number+'</div>'+
+        '<div><span class="status">'+stLbl+'</span></div></div>'+
+    '</div>'+
+    '<div class="info-grid">'+
+      '<div class="info-cell"><div class="lbl">Project</div><div class="val">'+projName+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">GRN Date</div><div class="val">'+fmtD(grn.grn_date)+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Supplier</div><div class="val">'+allot.party_name+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Quantity Received</div><div class="val" style="color:#558B2F;font-size:16px;">'+grn.qty_received+' '+(grn.unit||'')+'</div></div>'+
+      (grn.challan_no?'<div class="info-cell full"><div class="lbl">Challan / Vehicle No</div><div class="val">'+grn.challan_no+'</div></div>':'')+
+      (grn.invoice_no?'<div class="info-cell"><div class="lbl">Invoice No</div><div class="val">'+grn.invoice_no+'</div></div>':'')+
+    '</div>'+
+    '<div class="mat-box">'+
+      '<div style="font-size:12px;font-weight:800;color:#558B2F;margin-bottom:8px;">Material Details</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">'+
+        '<div><div class="lbl">Material / Resource</div><div class="val">'+resName+'</div></div>'+
+        '<div><div class="lbl">BOQ Item</div><div class="val" style="font-size:11px;">'+(boqItem.item_code?'['+boqItem.item_code+'] ':'')+( boqItem.short_name||boqItem.description||'—')+'</div></div>'+
+        '<div><div class="lbl">Total Ordered</div><div class="val">'+allot.qty+' '+(allot.unit||'')+'</div></div>'+
+      '</div>'+
+    '</div>'+
+    (grn.remarks?'<div style="margin-bottom:12px;padding:10px 14px;background:#F8FAFC;border-radius:8px;"><div class="lbl">Quality Remarks</div><div style="margin-top:4px;">'+grn.remarks+'</div></div>':'')+
+    (grn.rejection_reason?'<div style="margin-bottom:12px;padding:10px 14px;background:#FFEBEE;border-radius:8px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="margin-top:4px;">'+grn.rejection_reason+'</div></div>':'')+
+    '<div class="sig-grid">'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Store Keeper</div><div>Received By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Quality Inspector</div><div>Inspected By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Authorized By</div></div>'+
+    '</div></body></html>';
+
+  var w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Allow popups','warning');
+}
+
+// ════════════════════════════════════════════════════════════════
+// STORE MODULE
+// ════════════════════════════════════════════════════════════════
+var STORE_ITEMS=[], STORE_PROJ_ID='';
+
+function storeEnsureContainer(){
+  if(!document.getElementById('store-content')){
+    var div=document.createElement('div');
+    div.id='store-content'; div.style.cssText='padding:12px;';
+    var ap=document.getElementById('app-projects');
+    if(ap) ap.appendChild(div);
+  }
+}
+
+async function storeLoadItems(){
+  storeEnsureContainer();
+  var el=document.getElementById('store-content'); if(!el) return;
+  var projId=PROJ_MOD_SEL_ID||'';
+  if(!projId){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project from the dropdown above</div>';
+    return;
+  }
+  STORE_PROJ_ID=projId;
+  el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+  try{
+    var r=await sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+projId,order:'item_name.asc'});
+    STORE_ITEMS=Array.isArray(r)?r:[];
+  }catch(e){STORE_ITEMS=[];console.warn('Store load:',e.message);}
+  storeRender();
+}
+
+function storeRender(){
+  var el=document.getElementById('store-content'); if(!el) return;
+  var projSel=document.getElementById('proj-mod-sel');
+  var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
+
+  if(!STORE_ITEMS.length){
+    el.innerHTML=
+      '<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">'+
+        '<div style="font-size:36px;margin-bottom:10px;">&#127981;</div>'+
+        '<div style="font-weight:700;">Store is empty</div>'+
+        '<div style="font-size:11px;margin-top:6px;">Materials are added to store when GRN is accepted</div>'+
+      '</div>';
+    return;
+  }
+
+  // Summary totals
+  var totalItems=STORE_ITEMS.length;
+  var totalIn=STORE_ITEMS.reduce(function(s,i){return s+(parseFloat(i.qty_in_hand)||0);},0);
+  var lowStock=STORE_ITEMS.filter(function(i){return (parseFloat(i.qty_in_hand)||0)<=(parseFloat(i.min_qty)||0);}).length;
+
+  var summaryBar=
+    '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
+      '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #6A1B9A;flex:1;">'+
+        '<div style="font-size:18px;font-weight:900;color:#6A1B9A;">'+totalItems+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);font-weight:700;">Items in Store</div></div>'+
+      (lowStock>0?'<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #C62828;flex:1;">'+
+        '<div style="font-size:18px;font-weight:900;color:#C62828;">'+lowStock+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);font-weight:700;">Low Stock</div></div>':'')+''+
+    '</div>';
+
+  // Store table
+  var rows=STORE_ITEMS.map(function(item,i){
+    var inHand=parseFloat(item.qty_in_hand)||0;
+    var issued=parseFloat(item.qty_issued)||0;
+    var minQty=parseFloat(item.min_qty)||0;
+    var isLow=inHand<=minQty&&minQty>0;
+    return '<tr style="border-bottom:1px solid #F0F0F0;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
+      '<td style="padding:9px 10px;font-size:12px;font-weight:800;">'+item.item_name+
+        (isLow?'<span style="font-size:9px;background:#FFEBEE;color:#C62828;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:5px;">Low Stock</span>':'')+
+      '</td>'+
+      '<td style="padding:9px 10px;font-size:11px;text-align:right;font-weight:800;color:#558B2F;">'+inHand.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(item.unit||'')+'</span></td>'+
+      '<td style="padding:9px 10px;font-size:11px;text-align:right;color:#E65100;">'+issued.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(item.unit||'')+'</span></td>'+
+      '<td style="padding:9px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+(inHand+issued).toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(item.unit||'')+'</span></td>'+
+      '<td style="padding:9px 10px;font-size:10px;color:var(--text3);">'+(item.last_grn_date?item.last_grn_date.split('-').reverse().join('/'):'—')+'</td>'+
+      '<td style="padding:9px 10px;">'+
+        '<div style="display:flex;gap:4px;">'+
+          '<button onclick="storeIssue(\''+item.id+'\')" style="background:#6A1B9A;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">Issue</button>'+
+        '</div>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'+
+      '<div style="font-size:13px;font-weight:800;color:#6A1B9A;">&#127981; Store — '+projName+'</div>'+
+    '</div>'+
+    summaryBar+
+    '<div style="background:white;border-radius:14px;overflow:hidden;">'+
+      '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
+        '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
+          '<thead><tr style="background:#6A1B9A;color:white;">'+
+            '<th style="padding:8px 10px;font-size:9px;text-align:left;">MATERIAL</th>'+
+            '<th style="padding:8px 10px;font-size:9px;text-align:right;color:#E8F5E9;">IN HAND</th>'+
+            '<th style="padding:8px 10px;font-size:9px;text-align:right;color:#FFE0B2;">ISSUED</th>'+
+            '<th style="padding:8px 10px;font-size:9px;text-align:right;">TOTAL IN</th>'+
+            '<th style="padding:8px 10px;font-size:9px;text-align:left;">LAST GRN</th>'+
+            '<th style="padding:8px 10px;font-size:9px;text-align:left;">ACTION</th>'+
+          '</tr></thead>'+
+          '<tbody>'+rows+'</tbody>'+
+        '</table>'+
+      '</div>'+
+    '</div>';
+}
+
+function storeIssue(itemId){
+  var item=STORE_ITEMS.find(function(i){return i.id===itemId;});
+  if(!item){toast('Item not found','error');return;}
+  var inHand=parseFloat(item.qty_in_hand)||0;
+
+  // Use a simple prompt for quick issue
+  var qtyStr=prompt('Issue from Store\n\nMaterial: '+item.item_name+'\nIn Hand: '+inHand+' '+(item.unit||'')+'\n\nEnter qty to issue:');
+  if(qtyStr===null) return;
+  var qty=parseFloat(qtyStr)||0;
+  if(!qty||qty<=0){toast('Enter valid qty','warning');return;}
+  if(qty>inHand){toast('Cannot issue more than in-hand ('+inHand+')','warning');return;}
+  var issuedTo=prompt('Issued to (name/location):');
+  if(issuedTo===null) return;
+
+  sbUpdate('store_inventory',itemId,{
+    qty_in_hand:inHand-qty,
+    qty_issued:(parseFloat(item.qty_issued)||0)+qty
+  }).then(function(){
+    var idx=STORE_ITEMS.findIndex(function(i){return i.id===itemId;});
+    if(idx>-1){STORE_ITEMS[idx].qty_in_hand=inHand-qty;STORE_ITEMS[idx].qty_issued=(parseFloat(item.qty_issued)||0)+qty;}
+    toast('Issued '+qty+' '+(item.unit||'')+' of '+item.item_name,'success');
+    storeRender();
+    // Save issue log
+    sbInsert('store_issue_log',{
+      store_id:itemId, project_id:STORE_PROJ_ID,
+      item_name:item.item_name, qty_issued:qty, unit:item.unit||null,
+      issued_to:issuedTo||null, issue_date:new Date().toISOString().slice(0,10)
+    }).catch(function(){});
+  }).catch(function(e){toast('Error: '+e.message,'error');});
 }
