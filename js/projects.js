@@ -866,7 +866,7 @@ async function planDelRes(id){
 
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
-var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[];
+var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[];
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_SUBTAB='allot'; // allot | allotted | daily | bills
 
@@ -928,7 +928,8 @@ async function execLoadItems(){
       safe(sbFetch('work_orders',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
       safe(sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'})),
       safe(sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'})),
-      safe(sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+projId,order:'item_name.asc'}))
+      safe(sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+projId,order:'item_name.asc'})),
+      safe(sbFetch('store_issue_log',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.available',order:'issue_date.desc'}))
     ]);
     WA_ITEMS=Array.isArray(r[0])?r[0]:[];
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -942,6 +943,7 @@ async function execLoadItems(){
     WA_JMS=Array.isArray(r[7])?r[7]:[];
     WA_APPROVED_RRS=Array.isArray(r[8])?r[8]:[];
     STORE_ITEMS=Array.isArray(r[9])?r[9]:[];
+    STORE_ISSUE_LOG=Array.isArray(r[10])?r[10]:[];
     STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
@@ -2949,62 +2951,69 @@ async function execOpenDailyEntry(itemId){
     var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
     return pl.party_name||pl.resource_category||a.scope||'';
   }
-  // Match store item by allot_id (most reliable) or by boq_item_id+name
-  function findStoreMatch(a, rn){
-    // First try exact allot_id match
-    var byAllot=STORE_ITEMS.find(function(s){
-      return s.allot_id===a.id && (parseFloat(s.qty_in_hand)||0)>0;
-    });
-    if(byAllot) return byAllot;
-    // Fallback: match by item_name + project
-    if(!rn) return null;
-    return STORE_ITEMS.find(function(s){
-      return s.project_id===projId &&
-             s.item_name===rn &&
-             (parseFloat(s.qty_in_hand)||0)>0;
-    })||null;
+  // For store material: only ISSUED qty is available for daily progress use
+  // Find issue log entries for this item (by allot_id or item_name)
+  function getIssuedQty(a, rn){
+    // Sum all available issue log entries for this allotment
+    return STORE_ISSUE_LOG.filter(function(log){
+      return log.allot_id===a.id || (log.item_name===rn && log.project_id===projId);
+    }).reduce(function(s,log){return s+(parseFloat(log.qty_issued)||0);},0);
   }
 
-  // Split allotments: in-store AND outside-store independently
-  // An allotment can appear in BOTH:
-  //   - In Store: for qty currently available in store (e.g. 50 bags received)
-  //   - Outside Store: for remaining allotted qty not yet in store (e.g. 150 bags ordered but not received)
+  function findStoreItem(a, rn){
+    return STORE_ITEMS.find(function(s){return s.allot_id===a.id;})||
+           (rn?STORE_ITEMS.find(function(s){return s.project_id===projId&&s.item_name===rn;}):null)||null;
+  }
+
+  // Split allotments
   var inStoreAllots=[], outStoreAllots=[];
   var seenStoreIds={};
   itemAllots.forEach(function(a){
     var rn=getResName(a);
-    var storeMatch=findStoreMatch(a, rn);
+    var storeItem=findStoreItem(a, rn);
+    var inHand=storeItem?(parseFloat(storeItem.qty_in_hand)||0):0;
+    var issuedQty=storeItem?getIssuedQty(a, rn):0;
     var allotQty=parseFloat(a.qty)||0;
-    var storeQty=storeMatch?(parseFloat(storeMatch.qty_in_hand)||0):0;
 
-    if(storeMatch && storeQty>0 && !seenStoreIds[storeMatch.id]){
-      seenStoreIds[storeMatch.id]=true;
-      inStoreAllots.push({allot:a, storeItem:storeMatch, resName:rn||storeMatch.item_name});
+    if(storeItem && inHand>0 && !seenStoreIds[storeItem.id]){
+      seenStoreIds[storeItem.id]=true;
+      // Show in store section — only issued qty can be used
+      inStoreAllots.push({allot:a, storeItem:storeItem, resName:rn||storeItem.item_name, issuedQty:issuedQty, inHand:inHand});
     }
-    // Also show as outside-store if there's remaining qty NOT yet in store
-    var outsideQty=Math.max(0, allotQty-storeQty);
+    // Outside-store: qty allotted but not yet in store
+    var outsideQty=Math.max(0, allotQty-inHand-(storeItem?0:0));
+    // If no store item at all, full allotted qty is outside
+    if(!storeItem) outsideQty=allotQty;
     if(outsideQty>0){
       outStoreAllots.push({allot:a, resName:rn, outsideQty:outsideQty});
     }
   });
 
-  function makeResRow(a, col, rn, storeItem, fromStore, outsideQty){
+  function makeResRow(a, col, rn, storeItem, fromStore, outsideQty, issuedQty){
     var inHand=storeItem?parseFloat(storeItem.qty_in_hand)||0:null;
-    var maxQty=fromStore&&inHand!==null?inHand:(outsideQty||null);
+    issuedQty=issuedQty||0;
+    // For store material: max = issued qty (must be issued first to use)
+    // For outside-store: max = outsideQty (allotted balance)
+    var maxQty=fromStore?(issuedQty>0?issuedQty:0):(outsideQty||null);
     return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid '+(fromStore?'#C8E6C9':'#FFE0B2')+';border-radius:8px;margin-bottom:6px;background:'+(fromStore?'#F1FBF4':'#FFF8F5')+';">'+
       '<input type="checkbox" class="dp-res-chk" '+
         'data-allot-id="'+a.id+'" data-name="'+a.party_name+'" data-type="'+a.exec_type+'" data-unit="'+(a.unit||'')+'" '+
         (fromStore?'data-from-store="1" ':'')+
-        'style="width:15px;height:15px;accent-color:'+(fromStore?'#2E7D32':col)+';flex-shrink:0;">'+
+        (fromStore&&issuedQty<=0?'disabled title="Issue from Store tab first" ':'')+
+        'style="width:15px;height:15px;accent-color:'+(fromStore?'#2E7D32':col)+';flex-shrink:0;'+(fromStore&&issuedQty<=0?'opacity:0.4;cursor:not-allowed;':'')+'">'+
       '<div style="flex:1;min-width:0;">'+
         (fromStore
           ?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>'
           :'<span style="font-size:9px;font-weight:800;background:#FFE0B2;color:#E65100;padding:1px 6px;border-radius:3px;margin-right:4px;">&#128666; Direct</span>')+
         (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#888;">&#8594;</span>':'')+
         ' <span style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</span>'+
-        '<div style="font-size:9px;font-weight:700;margin-top:2px;">'+
-          (fromStore&&inHand!==null?'<span style="color:#2E7D32;">Available in Store: '+inHand.toFixed(2)+' '+(a.unit||'')+'</span>':
-           outsideQty?'<span style="color:#E65100;">Not in store — Allotted: '+a.qty+' | Outside balance: '+outsideQty.toFixed(2)+' '+(a.unit||'')+'</span>':'')+
+        (fromStore?
+          '<div style="font-size:9px;font-weight:700;margin-top:2px;">'+
+          '<span style="color:#2E7D32;">In Store: '+(inHand!==null?parseFloat(inHand).toFixed(2):'?')+' '+(a.unit||'')+'</span>'+
+          (issuedQty>0?'<span style="color:#1565C0;margin-left:6px;">&#10003; Issued: '+parseFloat(issuedQty).toFixed(2)+'</span>':
+            '<span style="color:#E65100;margin-left:6px;">&#9888; Not issued — issue from Store tab first</span>')+
+          '</div>':
+          (outsideQty?'<span style="font-size:9px;color:#E65100;font-weight:700;">Not in store — Allotted: '+a.qty+' | Outside: '+outsideQty.toFixed(2)+' '+(a.unit||'')+'</span>':''))+
         '</div>'+
         (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
       '</div>'+
@@ -3021,7 +3030,7 @@ async function execOpenDailyEntry(itemId){
 
   var inStoreRows = inStoreAllots.map(function(x){
     var col=tCol[x.allot.exec_type]||'#37474F';
-    return makeResRow(x.allot, col, x.resName, x.storeItem, true);
+    return makeResRow(x.allot, col, x.resName, x.storeItem, true, 0, x.issuedQty);
   }).join('');
 
   var outStoreRows = outStoreAllots.map(function(x){
@@ -4169,31 +4178,91 @@ function storeIssue(itemId){
   var item=STORE_ITEMS.find(function(i){return i.id===itemId;});
   if(!item){toast('Item not found','error');return;}
   var inHand=parseFloat(item.qty_in_hand)||0;
+  if(inHand<=0){toast('No stock available to issue','warning');return;}
 
-  // Use a simple prompt for quick issue
-  var qtyStr=prompt('Issue from Store\n\nMaterial: '+item.item_name+'\nIn Hand: '+inHand+' '+(item.unit||'')+'\n\nEnter qty to issue:');
-  if(qtyStr===null) return;
-  var qty=parseFloat(qtyStr)||0;
-  if(!qty||qty<=0){toast('Enter valid qty','warning');return;}
-  if(qty>inHand){toast('Cannot issue more than in-hand ('+inHand+')','warning');return;}
-  var issuedTo=prompt('Issued to (name/location):');
-  if(issuedTo===null) return;
+  // Use exec sheet for proper form
+  var shTitle=document.getElementById('exec-sheet-title');
+  var shBody =document.getElementById('exec-sheet-body');
+  var shFoot =document.getElementById('exec-sheet-foot');
+  if(!shTitle||!shBody||!shFoot) return;
 
-  sbUpdate('store_inventory',itemId,{
-    qty_in_hand:inHand-qty,
-    qty_issued:(parseFloat(item.qty_issued)||0)+qty
-  }).then(function(){
+  // BOQ item options
+  var boqOpts='<option value="">— Select BOQ Item (optional) —</option>'+
+    WA_ITEMS.map(function(i){return '<option value="'+i.id+'">['+i.item_code+'] '+(i.short_name||i.description)+'</option>';}).join('');
+
+  shTitle.textContent='Issue Material from Store';
+  shBody.innerHTML=
+    '<div style="background:#F3E5F5;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+      '<div style="font-size:12px;font-weight:800;color:#6A1B9A;margin-bottom:4px;">'+item.item_name+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);">In Stock: <b style="color:#2E7D32;">'+inHand.toFixed(2)+' '+(item.unit||'')+'</b></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+      '<div><label class="flbl">Issue Date *</label><input id="si-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+      '<div><label class="flbl">Qty to Issue *</label>'+
+        '<div style="display:flex;gap:6px;align-items:center;">'+
+          '<input id="si-qty" class="finp" type="number" step="0.001" max="'+inHand+'" placeholder="max '+inHand.toFixed(2)+'" style="flex:1;">'+
+          '<span style="font-size:12px;font-weight:700;color:var(--text3);">'+(item.unit||'')+'</span>'+
+        '</div></div>'+
+    '</div>'+
+    '<div style="margin-bottom:8px;"><label class="flbl">Issued To (name / location) *</label>'+
+      '<input id="si-to" class="finp" placeholder="e.g. Site Engineer, Block A, Labour Gang 1"></div>'+
+    '<div style="margin-bottom:8px;"><label class="flbl">BOQ Item / Purpose</label>'+
+      '<select id="si-boq" class="fsel">'+boqOpts+'</select></div>'+
+    '<div><label class="flbl">Description of Use *</label>'+
+      '<textarea id="si-desc" class="ftxt" rows="2" placeholder="Where and how this material will be used..."></textarea></div>';
+
+  shFoot.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#6A1B9A;color:white;';
+  sb.innerHTML='&#10003; Issue Material';
+  sb.onclick=function(){storeSaveIssue(itemId);};
+  shFoot.appendChild(cb);shFoot.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function storeSaveIssue(itemId){
+  var item=STORE_ITEMS.find(function(i){return i.id===itemId;});
+  if(!item)return;
+  var date=gv('si-date');
+  var qty=parseFloat(gv('si-qty'))||0;
+  var issuedTo=(gv('si-to')||'').trim();
+  var boqId=gv('si-boq')||null;
+  var desc=(gv('si-desc')||'').trim();
+  var inHand=parseFloat(item.qty_in_hand)||0;
+
+  if(!date){toast('Issue date required','warning');return;}
+  if(!qty||qty<=0){toast('Enter qty to issue','warning');return;}
+  if(qty>inHand){toast('Cannot issue more than in-hand ('+inHand.toFixed(2)+')','warning');return;}
+  if(!issuedTo){toast('Enter issued to name/location','warning');return;}
+  if(!desc){toast('Enter description of use','warning');return;}
+
+  try{
+    // Save issue log with boq_item_id for daily progress linkage
+    var logRes=await sbInsert('store_issue_log',{
+      store_id:itemId,
+      project_id:STORE_PROJ_ID||item.project_id,
+      item_name:item.item_name,
+      qty_issued:qty,
+      unit:item.unit||null,
+      issued_to:issuedTo,
+      issue_date:date,
+      boq_item_id:boqId||item.boq_item_id||null,
+      purpose:desc,
+      allot_id:item.allot_id||null,
+      status:'available' // available for daily progress use
+    });
+    // Update store qty
+    await sbUpdate('store_inventory',itemId,{
+      qty_in_hand:inHand-qty,
+      qty_issued:(parseFloat(item.qty_issued)||0)+qty
+    });
     var idx=STORE_ITEMS.findIndex(function(i){return i.id===itemId;});
     if(idx>-1){STORE_ITEMS[idx].qty_in_hand=inHand-qty;STORE_ITEMS[idx].qty_issued=(parseFloat(item.qty_issued)||0)+qty;}
-    toast('Issued '+qty+' '+(item.unit||'')+' of '+item.item_name,'success');
+    toast('Issued '+qty+' '+(item.unit||'')+' — available for daily progress','success');
+    closeSheet('ov-exec','sh-exec');
     storeRender();
-    // Save issue log
-    sbInsert('store_issue_log',{
-      store_id:itemId, project_id:STORE_PROJ_ID,
-      item_name:item.item_name, qty_issued:qty, unit:item.unit||null,
-      issued_to:issuedTo||null, issue_date:new Date().toISOString().slice(0,10)
-    }).catch(function(){});
-  }).catch(function(e){toast('Error: '+e.message,'error');});
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
 async function storeDelete(itemId){
