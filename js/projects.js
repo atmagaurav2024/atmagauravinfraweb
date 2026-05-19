@@ -3450,6 +3450,7 @@ function execRenderBills(){
                 '<div style="font-size:10px;color:'+(bBal>0?'#C62828':'#2E7D32')+';">Bal: &#8377;'+Math.round(bBal).toLocaleString('en-IN')+'</div>'+
               '</div>'+
               '<button onclick="execOpenPayment(\''+b.id+'\',\''+key+'\',\''+projId+'\','+bBal+')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 7px;font-size:9px;font-weight:800;cursor:pointer;">+ Pay</button>'+
+              '<button onclick="execDelBill(\''+b.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;" title="Delete Bill">&#215;</button>'+
             '</div>';
           }).join('')+
         '</div>':'')+
@@ -3578,6 +3579,20 @@ async function execSavePayment(billId,partyType,partyName,projId){
     closeSheet('ov-exec','sh-exec');
     execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+async function execDelBill(id){
+  var hasPaid=WA_PAYMENTS.some(function(p){return p.bill_id===id;});
+  var msg=hasPaid?'This bill has payments.\nDeleting will also delete all related payments. Continue?':'Delete this bill?';
+  if(!confirm(msg))return;
+  if(hasPaid){
+    var relPays=WA_PAYMENTS.filter(function(p){return p.bill_id===id;});
+    for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);}catch(e){}
+    WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
+  }
+  WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
+  execRenderBills();
+  try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
 }
 
 async function execDelPayment(id){
