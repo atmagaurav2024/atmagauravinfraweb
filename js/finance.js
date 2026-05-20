@@ -160,8 +160,7 @@ function pcRenderList(){
       '</div>'+
       '<div style="text-align:right;">'+
         '<div style="font-size:15px;font-weight:900;color:'+col+';">'+(isIn?'+':'-')+pcFmt(item.amount)+'</div>'+
-        (currentUser&&(currentUser.role==='admin'||currentUser.role==='pm')?
-          '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:5px;background:transparent;cursor:pointer;color:var(--red);margin-top:3px;">Delete</button>':'') +
+        '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;" title="Delete">&#215;</button>'+
       '</div>'+
     '</div>';
   }).join('');
