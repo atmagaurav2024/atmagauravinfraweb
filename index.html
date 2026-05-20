@@ -2271,19 +2271,8 @@ function showApp(name){
         return;
       }
       checkKey = null; // already checked
-    } else if(name==='projects'||name==='boq'||name==='jm'||name==='planning'||name==='execution'){
-      // For project module entry point, check if any project tab is accessible
-      var projTabs2=['projects','boq','jm','planning','execution'];
-      if(name==='projects'){
-        // Opening the module — allow if any tab accessible
-        if(!projTabs2.some(function(t){return canAccess('proj-'+t,'view');})){
-          toast('Access denied — no permission for Project Module','warning');
-          return;
-        }
-        checkKey = null;
-      } else {
-        checkKey = 'proj-'+name;
-      }
+    } else if(['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'].indexOf(name)>-1){
+      checkKey = null; // initProjects handles its own permission checks
     }
     if(checkKey && !canAccess(checkKey,'view')){
       toast('Access denied — you do not have permission to view this module','warning');
@@ -2294,8 +2283,8 @@ function showApp(name){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.app-screen').forEach(function(s){s.classList.remove('on');});
   // Project sub-modules all live inside app-projects now
-  var projTabs = {projects:'projects', boq:'boq', jm:'jm', planning:'planning', execution:'execution'};
-  var isProjectTab = projTabs[name];
+  var allProjTabs = ['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
+  var isProjectTab = allProjTabs.indexOf(name) > -1;
   var target = isProjectTab
     ? document.getElementById('app-projects')
     : document.getElementById('app-'+name);
@@ -2313,7 +2302,7 @@ function showApp(name){
   if(name==='dashboard'&&!window._coLoaded){window._coLoaded=true;preloadCompanyData();}
   if(name==='registry'){initRegistry();startSync();}
   else if(name==='employees'){initEmpMgmt();}
-  else if(isProjectTab){ projModTab(name, document.getElementById('pmt-'+name)); }
+  else if(isProjectTab){ initProjects(); }
   else if(name==='petty-cash'){initPettyCash();}
   else if(name==='accounts'){initAccounts();}
   else if(name==='access'){acInitModule();}
@@ -14133,17 +14122,7 @@ async function storeDelete(itemId){
 }
 
 
-async function initPettyCash(){
-  var el=document.getElementById('pc-main');if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:#9CA3AF;">&#9203; Loading...</div>';
-  var fab=document.getElementById('pc-fab');if(fab)fab.style.display='none';
-  try{var r=await sbFetch('petty_cash_in',{select:'*',order:'date.desc'});PC_IN=Array.isArray(r)?r:[];}catch(e){PC_IN=[];}
-  try{var r=await sbFetch('petty_cash_expense',{select:'*',order:'date.desc'});PC_EXP=Array.isArray(r)?r:[];}catch(e){PC_EXP=[];}
-  try{var r=await sbFetch('employees',{select:'id,first_name,last_name',filter:'status=eq.active',order:'first_name.asc'});PC_EMPS=Array.isArray(r)?r:[];}catch(e){PC_EMPS=[];}
-  try{var r=await sbFetch('projects',{select:'id,name',order:'name.asc'});PC_PROJS=Array.isArray(r)?r:[];}catch(e){PC_PROJS=[];}
-  if(!PC_ACTIVE&&PC_PROJS.length)PC_ACTIVE=PC_PROJS[0];
-  if(fab)fab.style.display='';
-  pcRenderTabs();pcRefresh();
-}
+// initPettyCash defined in finance.js
 function pcRenderTabs(){var c=document.getElementById('pc-site-tabs');if(!c)return;c.innerHTML='';PC_PROJS.forEach(function(p){var sel=PC_ACTIVE&&p.id===PC_ACTIVE.id;var t=document.createElement('div');t.style.cssText='flex-shrink:0;padding:10px 20px;border-radius:50px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;border:1.5px solid '+(sel?'#E07820':'#E2DDD5')+';background:'+(sel?'#E07820':'#fff')+';color:'+(sel?'#fff':'#1E2547')+';';t.textContent=p.name;t.onclick=function(){PC_ACTIVE=p;pcRenderTabs();pcRefresh();};c.appendChild(t);});}
 function pcRefresh(){
   var el=document.getElementById('pc-main');if(!el)return;
@@ -17154,4 +17133,6 @@ function annDownloadPDF(){
   else{toast('Allow popups to download PDF','warning');}
 }
 </script>
+<script src="js/finance.js"></script>
+<script src="js/projects.js"></script>
 </html>
