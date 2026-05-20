@@ -929,7 +929,7 @@ async function execLoadItems(){
       safe(sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'})),
       safe(sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'})),
       safe(sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+projId,order:'item_name.asc'})),
-      safe(sbFetch('store_issue_log',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.available',order:'issue_date.desc'}))
+      safe(sbFetch('store_issue_log',{select:'*',filter:'project_id=eq.'+projId,order:'issue_date.desc'}))
     ]);
     WA_ITEMS=Array.isArray(r[0])?r[0]:[];
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -2954,9 +2954,15 @@ async function execOpenDailyEntry(itemId){
   // For store material: only ISSUED qty is available for daily progress use
   // Find issue log entries for this item (by allot_id or item_name)
   function getIssuedQty(a, rn){
-    // Sum all available issue log entries for this allotment
+    // Find the store item for this allotment
+    var si=STORE_ITEMS.find(function(s){return s.allot_id===a.id;})||
+           (rn?STORE_ITEMS.find(function(s){return s.item_name===rn&&s.project_id===projId;}):null);
+    var siId=si?si.id:null;
+    // Sum issue log by store_id OR allot_id OR item_name
     return STORE_ISSUE_LOG.filter(function(log){
-      return log.allot_id===a.id || (log.item_name===rn && log.project_id===projId);
+      return (siId&&log.store_id===siId) ||
+             (a.id&&log.allot_id===a.id) ||
+             (rn&&log.item_name===rn&&log.project_id===projId);
     }).reduce(function(s,log){return s+(parseFloat(log.qty_issued)||0);},0);
   }
 
