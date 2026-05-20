@@ -86,19 +86,31 @@ function pcRenderList(){
   var cont=document.getElementById('pc-list');if(!cont)return;
   var tab=PC_CAT;
   if(tab==='by-emp'){
-    var empIds=[...new Set(PC_EXP.map(function(e){return e.emp_id;}).filter(Boolean))];
-    cont.innerHTML=empIds.map(function(empId){
-      var bal=pcEmpBal(empId);
-      return '<div class="card">'+
+    // Include ALL employees who appear in either funded (PC_IN) or expenses (PC_EXP)
+    var allEmpIds=[...new Set([
+      ...PC_IN.map(function(i){return i.emp_id;}).filter(Boolean),
+      ...PC_EXP.map(function(e){return e.emp_id;}).filter(Boolean)
+    ])];
+    // Also include all active employees so balance shows even with no transactions
+    PC_EMPS.forEach(function(e){if(e.empId&&!allEmpIds.includes(e.empId))allEmpIds.push(e.empId);});
+
+    cont.innerHTML=allEmpIds.map(function(empId){
+      var funded=PC_IN.filter(function(i){return i.emp_id===empId;}).reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
+      var spent=PC_EXP.filter(function(e){return e.emp_id===empId;}).reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);
+      var bal=funded-spent;
+      if(funded===0&&spent===0) return ''; // skip employees with no transactions
+      return '<div class="card" style="margin-bottom:8px;">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;">'+
-          '<div style="font-weight:800;">'+pcEmpName(empId)+'</div>'+
-          '<div style="font-weight:900;color:'+(bal>=0?'var(--green)':'var(--red)')+';font-size:15px;">'+pcFmt(bal)+'</div>'+
+          '<div style="font-weight:800;font-size:13px;">'+pcEmpName(empId)+'</div>'+
+          '<div style="font-weight:900;color:'+(bal>=0?'var(--green)':'var(--red)')+';font-size:16px;">'+pcFmt(bal)+'</div>'+
         '</div>'+
-        '<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+
-          'Funded: '+pcFmt(PC_IN.filter(function(i){return i.emp_id===empId;}).reduce(function(s,i){return s+(i.amount||0);},0))+' · '+
-          'Spent: '+pcFmt(PC_EXP.filter(function(e){return e.emp_id===empId;}).reduce(function(s,e){return s+(e.amount||0);},0))+
-        '</div></div>';
-    }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No data</div>';
+        '<div style="display:flex;gap:16px;font-size:11px;color:var(--text3);margin-top:5px;">'+
+          '<span style="color:#2E7D32;font-weight:700;">&#8593; Funded: '+pcFmt(funded)+'</span>'+
+          '<span style="color:#C62828;font-weight:700;">&#8595; Spent: '+pcFmt(spent)+'</span>'+
+          '<span style="color:'+(bal>=0?'#1565C0':'#C62828')+';font-weight:800;">Balance: '+pcFmt(bal)+'</span>'+
+        '</div>'+
+      '</div>';
+    }).filter(Boolean).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No transactions yet</div>';
     return;
   }
   var list=tab==='cash-in'?PC_IN:tab==='expenses'?PC_EXP:[...PC_IN.map(function(i){return Object.assign({},i,{_type:'in'});}),...PC_EXP.map(function(e){return Object.assign({},e,{_type:'exp'});})];
@@ -145,7 +157,8 @@ async function pcSaveCashIn(){
   if(!emp){toast('Select employee','warning');return;}
   if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
   try{
-    await sbInsert('petty_cash_in',{emp_id:emp,amount:amount,project:gv('pci-proj')||'All Projects',purpose:gv('pci-purpose'),remarks:gv('pci-remarks')});
+    var today=new Date().toISOString().slice(0,10);
+    await sbInsert('petty_cash_in',{emp_id:emp,amount:amount,date:today,project:gv('pci-proj')||'All Projects',purpose:gv('pci-purpose'),remarks:gv('pci-remarks')});
     closeSheet('ov-pc','sh-pc');await initPettyCash();toast('Employee funded: '+pcFmt(amount),'success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
