@@ -3588,12 +3588,14 @@ async function execOpenBill(partyKey,projId){
   var partyType=parts[0],partyName=parts[1];
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
 
-  // Calculate payable from daily progress
+  // Build work rows for this party with checkboxes
   var partyAllots=WA_ALLOT.filter(function(a){return a.party_name===partyName&&a.exec_type===partyType;});
   var workRows=partyAllots.map(function(a){
     var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var resName=planRes.party_name||planRes.resource_category||a.party_name;
+    var boqItem=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
     var allotRate=parseFloat(a.rate)||0;
+    var allotQty=parseFloat(a.qty)||0;
     var doneQty=0;
     WA_DAILY.forEach(function(d){
       var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
@@ -3604,45 +3606,84 @@ async function execOpenBill(partyKey,projId){
         .forEach(function(d){doneQty+=(parseFloat(d.qty_done)||0);});
     }
     var doneAmt=Math.round(doneQty*allotRate);
-    // Already billed for this allotment
-    var alreadyBilled=WA_BILLS.filter(function(b){return b.party_name===partyName&&b.party_type===partyType;})
-      .reduce(function(s,b){return s+(b.allot_id===a.id?parseFloat(b.bill_amount)||0:0);},0);
-    var unbilled=Math.max(0,doneAmt-alreadyBilled);
-    return {a:a,resName:resName,doneQty:doneQty,doneAmt:doneAmt,unbilled:unbilled};
+    var prevBilled=WA_BILLS.reduce(function(s,b){
+      if(b.party_name!==partyName||b.party_type!==partyType) return s;
+      var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+      return s+si.filter(function(x){return x.allot_id===a.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+    },0);
+    var unbilled=Math.max(0,doneAmt-prevBilled);
+    return {a:a,resName:resName,boqItem:boqItem,allotQty:allotQty,allotRate:allotRate,doneQty:doneQty,doneAmt:doneAmt,prevBilled:prevBilled,unbilled:unbilled};
   });
-  var suggestedTotal=workRows.reduce(function(s,w){return s+w.unbilled;},0);
+
   var nextBillNo=(WA_BILLS.filter(function(b){return b.party_name===partyName&&b.party_type===partyType;}).length)+1;
 
-  var workDetail=workRows.map(function(w){
-    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0F0F0;font-size:11px;">'+
-      '<div style="flex:1;"><b>'+w.resName+'</b><div style="font-size:9px;color:var(--text3);">Done: '+w.doneQty.toFixed(2)+' | Total Payable: '+inr(w.doneAmt)+'</div></div>'+
-      '<div style="text-align:right;"><div style="font-weight:800;color:#1565C0;">Unbilled: '+inr(w.unbilled)+'</div></div>'+
+  // Work selection rows
+  var workSelRows=workRows.map(function(w,i){
+    var chkId='bl-work-'+i;
+    return '<div class="bl-work-row" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#FAFAFA;">'+
+      '<div style="display:flex;align-items:flex-start;gap:8px;">'+
+        '<input type="checkbox" id="'+chkId+'" class="bl-work-chk" data-idx="'+i+'" '+(w.unbilled>0?'checked':'')+' '+
+          'style="width:15px;height:15px;accent-color:#1565C0;flex-shrink:0;margin-top:3px;" onchange="blUpdateTotal()">'+
+        '<div style="flex:1;">'+
+          '<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+w.resName+'</div>'+
+          '<div style="font-size:10px;color:#555;">'+w.a.party_name+(w.boqItem.item_code?' | ['+w.boqItem.item_code+'] '+(w.boqItem.short_name||w.boqItem.description||''):'')+'</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:5px;font-size:10px;">'+
+            '<div><div style="color:var(--text3);">Allotted</div><b>'+allotQty+' @ \u20b9'+allotRate+'</b></div>'+
+            '<div><div style="color:var(--text3);">Done</div><b style="color:#1565C0;">'+w.doneQty.toFixed(2)+'</b></div>'+
+            '<div><div style="color:var(--text3);">Prev Billed</div><b style="color:#E65100;">'+inr(w.prevBilled)+'</b></div>'+
+            '<div><div style="color:var(--text3);">Unbilled</div><b style="color:#2E7D32;">'+inr(w.unbilled)+'</b></div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="text-align:right;flex-shrink:0;">'+
+          '<div style="font-size:9px;color:var(--text3);">Bill Amount</div>'+
+          '<input class="finp bl-work-amt" data-idx="'+i+'" type="number" value="'+w.unbilled+'" '+
+            'style="width:100px;text-align:right;padding:4px 6px;font-size:12px;font-weight:800;" onchange="blUpdateTotal()">'+
+        '</div>'+
+      '</div>'+
     '</div>';
+
+    function allotQty(){return w.allotQty;}
+    function allotRate(){return w.allotRate;}
   }).join('');
+
+  // Store workRows for save
+  window._blWorkRows=workRows;
 
   document.getElementById('exec-sheet-title').textContent='Generate Bill — '+partyName;
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#E3F2FD;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
-      '<div style="font-size:11px;font-weight:800;color:#1565C0;margin-bottom:6px;">Work Progress Summary</div>'+
-      workDetail+
-      '<div style="margin-top:8px;display:flex;justify-content:space-between;font-weight:800;font-size:12px;">'+
-        '<span>Suggested Bill Amount</span><span style="color:#1565C0;">'+inr(suggestedTotal)+'</span>'+
-      '</div>'+
+    // Party info
+    '<div style="background:#E3F2FD;border-radius:10px;padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">'+
+      '<div style="flex:1;font-size:13px;font-weight:800;color:#1565C0;">'+partyName+'</div>'+
+      '<span style="font-size:10px;color:var(--text3);">Bill #'+nextBillNo+'</span>'+
     '</div>'+
+    // Work selection
+    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">'+
+      '&#9312; Select Works to Include in this Bill'+
+    '</div>'+
+    (workRows.length?workSelRows:'<div style="font-size:11px;color:var(--text3);padding:8px 0;">No work allotments found for this party.</div>')+
+    // Bill details
+    '<div style="font-size:11px;font-weight:800;color:#333;margin:12px 0 8px;">&#9313; Bill Details</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
       '<div><label class="flbl">Bill Date *</label><input id="bl-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
       '<div><label class="flbl">Bill Number</label><input id="bl-no" class="finp" value="'+nextBillNo+'"></div>'+
     '</div>'+
-    '<div style="margin-bottom:8px;"><label class="flbl">Gross Bill Amount (₹) *</label>'+
-      '<input id="bl-amount" class="finp" type="number" value="'+suggestedTotal+'"></div>'+
-    '<div id="bl-deductions">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'+
-        '<label class="flbl" style="margin:0;">Deductions</label>'+
-        '<button onclick="blAddDeduction()" style="font-size:10px;padding:3px 8px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:5px;cursor:pointer;font-weight:700;">+ Add</button>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+      '<div>'+
+        '<label class="flbl">Gross Bill Amount (₹) *</label>'+
+        '<input id="bl-amount" class="finp" type="number" style="font-weight:800;" readonly>'+
+        '<div style="font-size:9px;color:var(--text3);margin-top:2px;">Auto-calculated from selected works</div>'+
       '</div>'+
-      '<div id="bl-ded-list"></div>'+
+      '<div><label class="flbl">Description</label><input id="bl-desc" class="finp" placeholder="e.g. RA Bill No.1 for work done upto..."></div>'+
     '</div>'+
-    '<div><label class="flbl">Description</label><input id="bl-desc" class="finp" placeholder="e.g. RA Bill No.1 for work done upto..."></div>';
+    // Deductions
+    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">&#9314; Deductions (optional)</div>'+
+    '<div id="bl-deductions">'+
+      '<div id="bl-ded-list"></div>'+
+      '<button onclick="blAddDeduction()" style="font-size:10px;padding:4px 10px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:5px;cursor:pointer;font-weight:700;">+ Add Deduction</button>'+
+    '</div>';
+
+  // Calculate initial total
+  setTimeout(function(){blUpdateTotal();},50);
 
   var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
   var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
@@ -3652,6 +3693,19 @@ async function execOpenBill(partyKey,projId){
   sb.onclick=function(){execSaveBill(partyType,partyName,projId,nextBillNo);};
   sf.appendChild(cb);sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
+}
+
+function blUpdateTotal(){
+  var total=0;
+  document.querySelectorAll('.bl-work-chk').forEach(function(chk){
+    if(chk.checked){
+      var idx=parseInt(chk.getAttribute('data-idx'));
+      var amtInp=document.querySelector('.bl-work-amt[data-idx="'+idx+'"]');
+      total+=parseFloat(amtInp&&amtInp.value)||0;
+    }
+  });
+  var amtEl=document.getElementById('bl-amount');
+  if(amtEl) amtEl.value=Math.round(total);
 }
 
 var BL_DEDUCTIONS=[];
@@ -3676,7 +3730,30 @@ function blRemoveDeduction(id){
 
 async function execSaveBill(partyType,partyName,projId,billNo){
   var date=gv('bl-date'),amount=parseFloat(gv('bl-amount'))||0;
-  if(!date||!amount){toast('Date and amount required','warning');return;}
+  if(!date){toast('Bill date required','warning');return;}
+
+  // Collect selected work items
+  var selectedItems=[];
+  document.querySelectorAll('.bl-work-chk:checked').forEach(function(chk){
+    var idx=parseInt(chk.getAttribute('data-idx'));
+    var amtInp=document.querySelector('.bl-work-amt[data-idx="'+idx+'"]');
+    var amt=parseFloat(amtInp&&amtInp.value)||0;
+    var w=window._blWorkRows&&window._blWorkRows[idx];
+    if(w&&amt>0){
+      selectedItems.push({
+        allot_id:w.a.id,
+        res_name:w.resName,
+        done_qty:w.doneQty,
+        rate:w.allotRate,
+        amount:amt
+      });
+    }
+  });
+  if(!selectedItems.length){toast('Select at least one work item','warning');return;}
+
+  // Recalculate total from selected items
+  amount=selectedItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  if(!amount){toast('Bill amount cannot be zero','warning');return;}
 
   // Collect deductions
   var deductions=[];
@@ -3690,13 +3767,15 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     var res=await sbInsert('work_bills',{
       project_id:projId,party_type:partyType,party_name:partyName,
       bill_number:parseInt(gv('bl-no'))||billNo,
-      bill_date:date,bill_amount:amount,
+      bill_date:date,bill_amount:Math.round(amount),
+      selected_items:JSON.stringify(selectedItems),
       deductions:deductions.length?JSON.stringify(deductions):null,
       description:gv('bl-desc')||null
     });
     if(res&&res[0]) WA_BILLS.push(res[0]);
-    toast('Bill #'+(parseInt(gv('bl-no'))||billNo)+' generated!','success');
+    toast('Bill #'+(parseInt(gv('bl-no'))||billNo)+' generated — '+selectedItems.length+' work items','success');
     BL_DEDUCTIONS=[];
+    window._blWorkRows=null;
     closeSheet('ov-exec','sh-exec');
     execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
