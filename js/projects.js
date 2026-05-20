@@ -205,24 +205,191 @@ function searchProj(q){
   }));
 }
 
+// ── Auto-generate project code ──────────────────────────────
+function genProjCode(){
+  var prefix='AIPL';
+  var existing=PROJ_DATA.map(function(p){
+    var m=(p.code||'').match(/^[A-Z]+-(\d+)$/);
+    return m?parseInt(m[1]):0;
+  });
+  var next=existing.length?Math.max.apply(null,existing)+1:1;
+  return prefix+'-'+String(next).padStart(3,'0');
+}
+
+// ── Coordinate helpers ───────────────────────────────────────
+var PF_COORDS=[]; // [{lat,lng,label}]
+
+function pfAddCoord(){
+  var lat=(document.getElementById('pf-new-lat')||{value:''}).value.trim();
+  var lng=(document.getElementById('pf-new-lng')||{value:''}).value.trim();
+  var lbl=(document.getElementById('pf-new-lbl')||{value:''}).value.trim();
+  if(!lat||!lng){toast('Enter latitude and longitude','warning');return;}
+  if(isNaN(parseFloat(lat))||isNaN(parseFloat(lng))){toast('Invalid coordinates','warning');return;}
+  PF_COORDS.push({lat:parseFloat(lat).toFixed(6),lng:parseFloat(lng).toFixed(6),label:lbl||'Point '+(PF_COORDS.length+1)});
+  document.getElementById('pf-new-lat').value='';
+  document.getElementById('pf-new-lng').value='';
+  document.getElementById('pf-new-lbl').value='';
+  pfRenderCoords();
+}
+function pfRemoveCoord(i){PF_COORDS.splice(i,1);pfRenderCoords();}
+function pfRenderCoords(){
+  var el=document.getElementById('pf-coord-list');if(!el)return;
+  if(!PF_COORDS.length){el.innerHTML='<div style="font-size:10px;color:var(--text3);padding:4px 0;">No coordinates added yet</div>';return;}
+  el.innerHTML=PF_COORDS.map(function(c,i){
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#F0F4FF;border-radius:6px;margin-bottom:4px;font-size:10px;">'+
+      '<span style="font-size:16px;">&#128205;</span>'+
+      '<div style="flex:1;"><b>'+c.label+'</b><div style="color:var(--text3);">'+c.lat+', '+c.lng+'</div></div>'+
+      '<button onclick="pfRemoveCoord('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+    '</div>';
+  }).join('');
+}
+
+// ── Contract price auto-calc ─────────────────────────────────
+function pfCalcContract(){
+  var tender=parseFloat((document.getElementById('pf-tender')||{value:''}).value)||0;
+  var pct=parseFloat((document.getElementById('pf-pct')||{value:''}).value)||0;
+  var contract=Math.round(tender*(1+pct/100));
+  var el=document.getElementById('pf-contract');
+  if(el&&tender) el.value=contract;
+}
+
+// ── File attachments ─────────────────────────────────────────
+var PF_FILES=[]; // [{name, file, url}] — url only for existing
+
+function pfAddFile(){
+  var nameEl=document.getElementById('pf-file-name');
+  var fileEl=document.getElementById('pf-file-input');
+  if(!nameEl||!fileEl)return;
+  var name=(nameEl.value||'').trim();
+  var file=fileEl.files&&fileEl.files[0];
+  if(!name){toast('Enter file name/description','warning');return;}
+  if(!file){toast('Select a file','warning');return;}
+  PF_FILES.push({name:name,file:file,size:file.size,type:file.type});
+  nameEl.value='';
+  fileEl.value='';
+  pfRenderFiles();
+}
+function pfRemoveFile(i){PF_FILES.splice(i,1);pfRenderFiles();}
+function pfRenderFiles(){
+  var el=document.getElementById('pf-file-list');if(!el)return;
+  var allFiles=[...PF_FILES];
+  if(!allFiles.length){el.innerHTML='<div style="font-size:10px;color:var(--text3);padding:4px 0;">No files attached yet</div>';return;}
+  el.innerHTML=allFiles.map(function(f,i){
+    var icon=f.type&&f.type.includes('pdf')?'&#128196;':f.type&&f.type.includes('image')?'&#128247;':'&#128196;';
+    var sz=f.size?(f.size>1024*1024?(f.size/1024/1024).toFixed(1)+'MB':(f.size/1024).toFixed(0)+'KB'):'';
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#F8FAFC;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:10px;">'+
+      '<span style="font-size:16px;">'+icon+'</span>'+
+      '<div style="flex:1;min-width:0;"><b>'+f.name+'</b><div style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(f.file?f.file.name:'')+(sz?' ('+sz+')':'')+'</div></div>'+
+      '<button onclick="pfRemoveFile('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+    '</div>';
+  }).join('');
+}
+
 function openProjForm(id){
   var p = id ? (PROJ_DATA.find(function(x){return x.id===id;})||{}) : {};
+  PF_COORDS = [];
+  PF_FILES  = [];
+
+  // Load existing coordinates
+  if(p.coordinates){
+    try{PF_COORDS=JSON.parse(p.coordinates);}catch(e){}
+  }
+  // Load existing files metadata
+  var existFiles=[];
+  if(p.attachments){try{existFiles=JSON.parse(p.attachments);}catch(e){}}
+  existFiles.forEach(function(f){PF_FILES.push({name:f.name,file:null,url:f.url,size:0,type:''});});
+
+  // Auto-generate code for new project
+  var autoCode = id ? (p.code||'') : genProjCode();
+
   var statusOpts = ['in-progress','under-dlp','fully-completed','planning','active'].map(function(s){
     var labels={'in-progress':'In Progress','under-dlp':'Under DLP','fully-completed':'Completed','planning':'Planning','active':'Active'};
     return '<option value="'+s+'"'+(p.status===s?' selected':'')+'>'+labels[s]+'</option>';
   }).join('');
+
   var html =
-    '<div class="g2"><div><label class="flbl">Project Name *</label><input id="pf-name" class="finp" value="'+esc(p.name||'')+'"></div>'+
-    '<div><label class="flbl">Project Code</label><input id="pf-code" class="finp" value="'+esc(p.code||'')+'"></div></div>'+
-    '<div class="g2"><div><label class="flbl">Client / Owner</label><input id="pf-client" class="finp" value="'+esc(p.client||'')+'"></div>'+
-    '<div><label class="flbl">Status</label><select id="pf-status" class="fsel">'+statusOpts+'</select></div></div>'+
-    '<label class="flbl">Location / Site</label><input id="pf-location" class="finp" value="'+esc(p.location||'')+'">'+
-    '<div class="g2"><div><label class="flbl">Start Date</label><input id="pf-start" class="finp" type="date" value="'+esc(p.start_date||'')+'"></div>'+
-    '<div><label class="flbl">End Date</label><input id="pf-end" class="finp" type="date" value="'+esc(p.end_date||'')+'"></div></div>'+
-    '<label class="flbl">Contract Value (₹)</label><input id="pf-value" class="finp" type="number" value="'+(p.contract_value||'')+'">'+
-    '<label class="flbl">Description</label><textarea id="pf-desc" class="ftxt">'+esc(p.description||'')+'</textarea>';
+    // ── Row 1: Code + Name ──
+    '<div class="g2" style="margin-bottom:8px;">'+
+      '<div><label class="flbl">Project Code</label>'+
+        '<input id="pf-code" class="finp" value="'+esc(autoCode)+'" placeholder="Auto-generated">'+
+      '</div>'+
+      '<div><label class="flbl">Project Name *</label>'+
+        '<input id="pf-name" class="finp" value="'+esc(p.name||'')+'">'+
+      '</div>'+
+    '</div>'+
+    // ── Row 2: Length ──
+    '<div class="g2" style="margin-bottom:8px;">'+
+      '<div><label class="flbl">Project Length (km)</label>'+
+        '<input id="pf-length" class="finp" type="number" step="0.001" value="'+(p.project_length||'')+'" placeholder="e.g. 42.5">'+
+      '</div>'+
+      '<div><label class="flbl">Project Location / Route</label>'+
+        '<input id="pf-location" class="finp" value="'+esc(p.location||'')+'" placeholder="e.g. NH-48 Km 120 to 162">'+
+      '</div>'+
+    '</div>'+
+    // ── Coordinates ──
+    '<div style="margin-bottom:10px;">'+
+      '<label class="flbl">GPS Coordinates <span style="font-size:9px;font-weight:400;color:var(--text3);">(for attendance geofencing — add multiple for highway)</span></label>'+
+      '<div id="pf-coord-list" style="margin-bottom:6px;"></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;">'+
+        '<input id="pf-new-lat" class="finp" placeholder="Latitude (e.g. 22.5726)" style="margin:0;">'+
+        '<input id="pf-new-lng" class="finp" placeholder="Longitude (e.g. 88.3639)" style="margin:0;">'+
+        '<input id="pf-new-lbl" class="finp" placeholder="Label (e.g. Km 120)" style="margin:0;">'+
+        '<button onclick="pfAddCoord()" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Add</button>'+
+      '</div>'+
+    '</div>'+
+    // ── Cost section ──
+    '<div style="background:#F8FAFC;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
+      '<div style="font-size:10px;font-weight:800;color:#1565C0;margin-bottom:8px;">CONTRACT FINANCIALS</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
+        '<div><label class="flbl">Cost Put to Tender (₹)</label>'+
+          '<input id="pf-tender" class="finp" type="number" step="1" value="'+(p.tender_cost||'')+'" placeholder="0" oninput="pfCalcContract()"></div>'+
+        '<div><label class="flbl">% Above / Below Tender</label>'+
+          '<div style="display:flex;gap:6px;align-items:center;">'+
+            '<input id="pf-pct" class="finp" type="number" step="0.01" value="'+(p.tender_pct||'0')+'" placeholder="e.g. -5 for 5% below" style="flex:1;" oninput="pfCalcContract()">'+
+            '<span style="font-size:10px;color:var(--text3);white-space:nowrap;padding-top:2px;">%</span>'+
+          '</div></div>'+
+        '<div><label class="flbl">Contract Price (₹) <span style="font-size:9px;font-weight:400;">auto / editable</span></label>'+
+          '<input id="pf-contract" class="finp" type="number" step="1" value="'+(p.contract_value||'')+'" placeholder="Auto-calculated"></div>'+
+      '</div>'+
+    '</div>'+
+    // ── Status + Client ──
+    '<div class="g2" style="margin-bottom:8px;">'+
+      '<div><label class="flbl">Status</label><select id="pf-status" class="fsel">'+statusOpts+'</select></div>'+
+      '<div><label class="flbl">Client / Owner</label><input id="pf-client" class="finp" value="'+esc(p.client||'')+'"></div>'+
+    '</div>'+
+    // ── Dates ──
+    '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
+      '<div style="font-size:10px;font-weight:800;color:#E65100;margin-bottom:8px;">KEY DATES</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
+        '<div><label class="flbl">LOA Date</label><input id="pf-loa" class="finp" type="date" value="'+(p.loa_date||'')+'"></div>'+
+        '<div><label class="flbl">Work Order Date</label><input id="pf-wo-date" class="finp" type="date" value="'+(p.wo_date||'')+'"></div>'+
+        '<div><label class="flbl">Schedule Completion Date</label><input id="pf-completion" class="finp" type="date" value="'+(p.completion_date||'')+'"></div>'+
+      '</div>'+
+    '</div>'+
+    // ── Description ──
+    '<div style="margin-bottom:10px;"><label class="flbl">Description / Scope</label>'+
+      '<textarea id="pf-desc" class="ftxt" rows="2">'+esc(p.description||'')+'</textarea></div>'+
+    // ── File attachments ──
+    '<div style="background:#F8FAFC;border-radius:10px;padding:10px 12px;margin-bottom:4px;">'+
+      '<div style="font-size:10px;font-weight:800;color:#2E7D32;margin-bottom:8px;">&#128196; FILE ATTACHMENTS</div>'+
+      '<div id="pf-file-list" style="margin-bottom:8px;"></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;">'+
+        '<input id="pf-file-name" class="finp" placeholder="File description (e.g. LOA Letter)" style="margin:0;">'+
+        '<input id="pf-file-input" class="finp" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" style="margin:0;padding:5px;">'+
+        '<button onclick="pfAddFile()" style="background:#2E7D32;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Attach</button>'+
+      '</div>'+
+      '<div style="font-size:9px;color:var(--text3);margin-top:4px;">Accepts PDF, images, Word, Excel</div>'+
+    '</div>';
+
   document.getElementById('proj-sheet-title').textContent = id ? 'Edit Project' : 'New Project';
   document.getElementById('proj-sheet-body').innerHTML = html;
+
+  // Render existing coords and files
+  pfRenderCoords();
+  pfRenderFiles();
+  // Auto-calc contract if values exist
+  if(p.tender_cost) pfCalcContract();
+
   var foot = document.getElementById('proj-sheet-foot');
   foot.innerHTML = '';
   if(id){
@@ -243,16 +410,46 @@ function closeProjSheet(){ closeSheet('ov-proj','sh-proj'); }
 async function saveProjForm(editId){
   var name = (document.getElementById('pf-name')||{value:''}).value.trim();
   if(!name){toast('Project name required','warning');return;}
+
+  // File upload (base64 encode for storage — small files only)
+  var attachments=[];
+  // Existing files (from edit)
+  PF_FILES.forEach(function(f){
+    if(f.url) attachments.push({name:f.name,url:f.url}); // already stored
+  });
+  // New files — encode as base64 data URLs
+  var newFiles=PF_FILES.filter(function(f){return f.file;});
+  if(newFiles.length){
+    try{
+      await Promise.all(newFiles.map(function(f){
+        return new Promise(function(resolve){
+          var reader=new FileReader();
+          reader.onload=function(e){
+            attachments.push({name:f.name,url:e.target.result,fileName:f.file.name,type:f.type});
+            resolve();
+          };
+          reader.readAsDataURL(f.file);
+        });
+      }));
+    }catch(e){console.warn('File encode:',e);}
+  }
+
   var data = {
     name:name,
     code:(document.getElementById('pf-code')||{value:''}).value.trim()||null,
     client:(document.getElementById('pf-client')||{value:''}).value.trim()||null,
     status:(document.getElementById('pf-status')||{value:'active'}).value||'active',
     location:(document.getElementById('pf-location')||{value:''}).value.trim()||null,
-    start_date:(document.getElementById('pf-start')||{value:''}).value||null,
-    end_date:(document.getElementById('pf-end')||{value:''}).value||null,
-    contract_value:parseFloat((document.getElementById('pf-value')||{value:''}).value)||null,
-    description:(document.getElementById('pf-desc')||{value:''}).value.trim()||null
+    project_length:parseFloat((document.getElementById('pf-length')||{value:''}).value)||null,
+    coordinates:PF_COORDS.length?JSON.stringify(PF_COORDS):null,
+    tender_cost:parseFloat((document.getElementById('pf-tender')||{value:''}).value)||null,
+    tender_pct:parseFloat((document.getElementById('pf-pct')||{value:'0'}).value)||0,
+    contract_value:parseFloat((document.getElementById('pf-contract')||{value:''}).value)||null,
+    loa_date:(document.getElementById('pf-loa')||{value:''}).value||null,
+    wo_date:(document.getElementById('pf-wo-date')||{value:''}).value||null,
+    completion_date:(document.getElementById('pf-completion')||{value:''}).value||null,
+    description:(document.getElementById('pf-desc')||{value:''}).value.trim()||null,
+    attachments:attachments.length?JSON.stringify(attachments):null
   };
   try{
     if(editId){
@@ -281,7 +478,6 @@ async function deleteProjItem(id){
     toast('Project deleted','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
-
 
 function openBOQSheet(){openSheet('ov-boq','sh-boq');}
 function closeBOQSheet(){closeSheet('ov-boq','sh-boq');}
