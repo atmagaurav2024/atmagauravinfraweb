@@ -8934,31 +8934,22 @@ async function empSavePay(){
     <div id="proj-mod-sel-badge" style="flex-shrink:0;"></div>
     <button class="tb-btn" id="proj-mod-add-btn" onclick="projModAdd()" style="font-size:20px;">&#43;</button>
   </div>
-  <!-- Hidden project selector (kept for compatibility) -->
   <select id="proj-mod-sel" style="display:none;" onchange="projModSelChange()">
     <option value="">— Select Project —</option>
   </select>
-  <!-- Dynamic grouped tab nav bar (rendered by projModRenderNav) -->
   <div id="proj-mod-nav-bar" style="display:flex;overflow-x:auto;background:#155724;padding:6px 14px 8px;flex-shrink:0;scrollbar-width:none;gap:4px;align-items:center;-webkit-overflow-scrolling:touch;"></div>
-  <!-- Content area -->
   <div id="proj-mod-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 90px;"></div>
+  <div class="sh-overlay" id="ov-proj" onclick="closeProjSheet()"></div>
+  <div class="sheet" id="sh-proj"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="proj-sheet-title">New Project</div><span class="sh-close" onclick="closeProjSheet()">&#10005;</span></div><div class="sh-body" id="proj-sheet-body"></div><div class="sh-foot" id="proj-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-boq" onclick="closeBOQSheet()"></div>
+  <div class="sheet" id="sh-boq"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="boq-sheet-title">New BOQ Item</div><span class="sh-close" onclick="closeBOQSheet()">&#10005;</span></div><div class="sh-body" id="boq-sheet-body"></div><div class="sh-foot" id="boq-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-jm" onclick="closeSheet('ov-jm','sh-jm')"></div>
+  <div class="sheet" id="sh-jm"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="jm-sheet-title">Add JM</div><span class="sh-close" onclick="closeSheet('ov-jm','sh-jm')">&#10005;</span></div><div class="sh-body" id="jm-sheet-body"></div><div class="sh-foot" id="jm-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-plan" onclick="closeSheet('ov-plan','sh-plan')"></div>
+  <div class="sheet" id="sh-plan"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="plan-sheet-title">Add Plan</div><span class="sh-close" onclick="closeSheet('ov-plan','sh-plan')">&#10005;</span></div><div class="sh-body" id="plan-sheet-body"></div><div class="sh-foot" id="plan-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-exec" onclick="closeSheet('ov-exec','sh-exec')"></div>
+  <div class="sheet" id="sh-exec"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="exec-sheet-title">Work Allotment</div><span class="sh-close" onclick="closeSheet('ov-exec','sh-exec')">&#10005;</span></div><div class="sh-body" id="exec-sheet-body"></div><div class="sh-foot" id="exec-sheet-foot"></div></div>
 </div>
-
-<!-- Sheets for all project sub-modules (kept as-is, just combined) -->
-<div class="sh-overlay" id="ov-proj"  onclick="closeProjSheet()"></div>
-<div class="sheet" id="sh-proj" ><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="proj-sheet-title">New Project</div><span class="sh-close" onclick="closeProjSheet()">&#10005;</span></div><div class="sh-body" id="proj-sheet-body"></div><div class="sh-foot" id="proj-sheet-foot"></div></div>
-
-<div class="sh-overlay" id="ov-boq"   onclick="closeBOQSheet()"></div>
-<div class="sheet" id="sh-boq"  ><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="boq-sheet-title">New BOQ Item</div><span class="sh-close" onclick="closeBOQSheet()">&#10005;</span></div><div class="sh-body" id="boq-sheet-body"></div><div class="sh-foot" id="boq-sheet-foot"></div></div>
-
-<div class="sh-overlay" id="ov-jm"    onclick="closeSheet('ov-jm','sh-jm')"></div>
-<div class="sheet" id="sh-jm"   ><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="jm-sheet-title">Add JM</div><span class="sh-close" onclick="closeSheet('ov-jm','sh-jm')">&#10005;</span></div><div class="sh-body" id="jm-sheet-body"></div><div class="sh-foot" id="jm-sheet-foot"></div></div>
-
-<div class="sh-overlay" id="ov-plan"  onclick="closeSheet('ov-plan','sh-plan')"></div>
-<div class="sheet" id="sh-plan" ><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="plan-sheet-title">Add Plan</div><span class="sh-close" onclick="closeSheet('ov-plan','sh-plan')">&#10005;</span></div><div class="sh-body" id="plan-sheet-body"></div><div class="sh-foot" id="plan-sheet-foot"></div></div>
-
-<div class="sh-overlay" id="ov-exec"  onclick="closeSheet('ov-exec','sh-exec')"></div>
-<div class="sheet" id="sh-exec" ><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="exec-sheet-title">Work Allotment</div><span class="sh-close" onclick="closeSheet('ov-exec','sh-exec')">&#10005;</span></div><div class="sh-body" id="exec-sheet-body"></div><div class="sh-foot" id="exec-sheet-foot"></div></div>
 
 <!-- PETTY CASH -->
 <div class="app-screen" id="app-petty-cash" style="background:#EFEBE4;overflow:hidden;">
