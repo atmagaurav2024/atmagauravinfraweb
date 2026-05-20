@@ -3142,9 +3142,12 @@ async function execSaveDailyEntry(projId,itemId){
   var resValid=true;
   document.querySelectorAll('.dp-res-chk:checked').forEach(function(chk){
     var row=chk.closest('.dp-res-row');
-    var qtyInp=row&&row.querySelector('.dp-res-qty');
-    var resQty=parseFloat(qtyInp&&qtyInp.value)||0;
     var allotId=chk.getAttribute('data-allot-id');
+    // Find qty input by data-allot-id attribute (most reliable)
+    var qtyInp=document.querySelector('.dp-res-qty[data-allot-id="'+allotId+'"]')||
+               (row&&row.querySelector('.dp-res-qty'));
+    var resQty=parseFloat(qtyInp&&qtyInp.value)||0;
+    console.log('Resource:',chk.getAttribute('data-name'),'allot:',allotId,'qty:',resQty,'input found:',!!qtyInp);
     var resName=chk.getAttribute('data-name');
     var resUnit=chk.getAttribute('data-unit')||null;
 
