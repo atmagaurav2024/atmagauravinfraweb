@@ -5,6 +5,7 @@
 // ── PETTY CASH ────────────────────────────────────────────
 var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
+var PC_EMP_FILTER='all'; // 'all' or empId
 
 var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
 
@@ -36,10 +37,32 @@ function pcFmt(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFract
 
 function pcRefresh(){
   var cont=document.getElementById('pc-main');if(!cont)return;
-  var totalIn=PC_IN.reduce(function(s,i){return s+(i.amount||0);},0);
-  var totalOut=PC_EXP.reduce(function(s,e){return s+(e.amount||0);},0);
+
+  // Filter data by selected employee
+  var pcInF  = PC_EMP_FILTER==='all' ? PC_IN  : PC_IN.filter(function(i){return i.emp_id===PC_EMP_FILTER;});
+  var pcExpF = PC_EMP_FILTER==='all' ? PC_EXP : PC_EXP.filter(function(e){return e.emp_id===PC_EMP_FILTER;});
+  var totalIn=pcInF.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
+  var totalOut=pcExpF.reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);
   var balance=totalIn-totalOut;
+
+  // Employee dropdown options
+  var empOpts='<option value="all">All Employees</option>'+
+    PC_EMPS.filter(function(e){
+      return PC_IN.some(function(i){return i.emp_id===e.empId||i.emp_id===e.id;})||
+             PC_EXP.some(function(x){return x.emp_id===e.empId||x.emp_id===e.id;});
+    }).map(function(e){
+      return '<option value="'+e.empId+'"'+(PC_EMP_FILTER===e.empId?' selected':'')+'>'+e.name+'</option>';
+    }).join('');
+
   var html=
+    // Employee filter dropdown
+    '<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
+      '<label style="font-size:11px;font-weight:800;color:var(--navy);white-space:nowrap;">&#128101; Employee</label>'+
+      '<select onchange="pcSetEmpFilter(this.value)" style="flex:1;border:1.5px solid var(--navy);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:var(--navy);outline:none;cursor:pointer;">'+
+        empOpts+
+      '</select>'+
+      (PC_EMP_FILTER!=='all'?'<button onclick="pcSetEmpFilter(\'all\')" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">&#10005; Clear</button>':'')+
+    '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#1B5E20,#2E7D32);border:none;">'+
         '<div style="font-size:11px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.5px;">Total Funded</div>'+
@@ -82,17 +105,22 @@ function pcRenderSiteTabs(){
 
 function pcFilterSite(proj){PC_SITE_TAB=proj;pcRenderList();}
 
+function pcSetEmpFilter(empId){PC_EMP_FILTER=empId;pcRefresh();}
+
 function pcRenderList(){
   var cont=document.getElementById('pc-list');if(!cont)return;
   var tab=PC_CAT;
   if(tab==='by-emp'){
-    // Include ALL employees who appear in either funded (PC_IN) or expenses (PC_EXP)
-    var allEmpIds=[...new Set([
-      ...PC_IN.map(function(i){return i.emp_id;}).filter(Boolean),
-      ...PC_EXP.map(function(e){return e.emp_id;}).filter(Boolean)
-    ])];
-    // Also include all active employees so balance shows even with no transactions
-    PC_EMPS.forEach(function(e){if(e.empId&&!allEmpIds.includes(e.empId))allEmpIds.push(e.empId);});
+    var allEmpIds;
+    if(PC_EMP_FILTER!=='all'){
+      allEmpIds=[PC_EMP_FILTER];
+    } else {
+      allEmpIds=[...new Set([
+        ...PC_IN.map(function(i){return i.emp_id;}).filter(Boolean),
+        ...PC_EXP.map(function(e){return e.emp_id;}).filter(Boolean)
+      ])];
+      PC_EMPS.forEach(function(e){if(e.empId&&!allEmpIds.includes(e.empId))allEmpIds.push(e.empId);});
+    }
 
     cont.innerHTML=allEmpIds.map(function(empId){
       var funded=PC_IN.filter(function(i){return i.emp_id===empId;}).reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
@@ -113,7 +141,9 @@ function pcRenderList(){
     }).filter(Boolean).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No transactions yet</div>';
     return;
   }
-  var list=tab==='cash-in'?PC_IN:tab==='expenses'?PC_EXP:[...PC_IN.map(function(i){return Object.assign({},i,{_type:'in'});}),...PC_EXP.map(function(e){return Object.assign({},e,{_type:'exp'});})];
+  var pcInSrc  = PC_EMP_FILTER==='all'?PC_IN :PC_IN.filter(function(i){return i.emp_id===PC_EMP_FILTER;});
+  var pcExpSrc = PC_EMP_FILTER==='all'?PC_EXP:PC_EXP.filter(function(e){return e.emp_id===PC_EMP_FILTER;});
+  var list=tab==='cash-in'?pcInSrc:tab==='expenses'?pcExpSrc:[...pcInSrc.map(function(i){return Object.assign({},i,{_type:'in'});}),...pcExpSrc.map(function(e){return Object.assign({},e,{_type:'exp'});})];
   list=list.sort(function(a,b){return new Date(b.created_at||b.date||0)-new Date(a.created_at||a.date||0);});
   if(PC_SITE_TAB!=='all')list=list.filter(function(i){return (i.project||'').toLowerCase().includes(PC_SITE_TAB.toLowerCase());});
   if(!list.length){cont.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">No records</div>';return;}
