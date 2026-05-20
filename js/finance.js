@@ -86,14 +86,28 @@ function pcRefresh(){
 }
 
 function pcRenderTabs(){
-  return '<div style="display:flex;gap:4px;background:white;border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:10px;width:fit-content;">'+
-    ['all','cash-in','expenses','by-emp'].map(function(t){
-      return '<button onclick="pcSwitchTab(\''+t+'\')" style="padding:7px 14px;border-radius:6px;border:none;font-family:Nunito;font-size:12px;font-weight:700;cursor:pointer;background:'+(PC_CAT===t?'var(--navy)':'transparent')+';color:'+(PC_CAT===t?'white':'var(--text2)')+';">'+
-        {all:'All',cashin:'Cash In','cash-in':'Cash In',expenses:'Expenses','by-emp':'By Employee'}[t]+'</button>';
-    }).join('')+'</div>';
+  return '<div id="pc-tab-bar" style="display:flex;gap:4px;background:white;border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:10px;width:fit-content;">'+
+    pcRenderTabButtons()+
+  '</div>';
 }
 
-function pcSwitchTab(tab){PC_CAT=tab;var list=document.getElementById('pc-list');if(list)pcRenderList();}
+function pcSwitchTab(tab){
+  PC_CAT=tab;
+  // Re-render tab bar so active tab gets correct background
+  var tabBar=document.getElementById('pc-tab-bar');
+  if(tabBar) tabBar.innerHTML=pcRenderTabButtons();
+  var list=document.getElementById('pc-list');
+  if(list) pcRenderList();
+}
+
+function pcRenderTabButtons(){
+  return ['all','cash-in','expenses','by-emp'].map(function(t){
+    var active=PC_CAT===t;
+    return '<button onclick="pcSwitchTab(\''+t+'\')" style="padding:7px 14px;border-radius:6px;border:none;font-family:Nunito;font-size:12px;font-weight:700;cursor:pointer;'+
+      'background:'+(active?'var(--navy)':'transparent')+';color:'+(active?'white':'var(--text2)')+';transition:background .2s;">'+
+      {all:'All','cash-in':'Cash In',expenses:'Expenses','by-emp':'By Employee'}[t]+'</button>';
+  }).join('');
+}
 
 function pcRenderSiteTabs(){
   var wrap=document.getElementById('pc-site-tabs');if(!wrap)return;
