@@ -1,15 +1,20 @@
-// ════ PROJECTS ════════════════════════════════════════════
-var PROJ_DATA=[],PROJ_EDIT_ID=null;
-var PROJ_MOD_TAB = 'projects';
-var PROJ_MOD_SEL_ID = '';
+// ════ PROJECTS — Navigation ═════════════════════════════
+var PROJ_DATA=[], PROJ_EDIT_ID=null;
+var PROJ_MOD_TAB = 'projects';      // current main tab
+var PROJ_MOD_SUB = '';              // current sub-tab (for grouped tabs)
+var PROJ_MOD_SEL_ID = '';           // selected project id
 
-function projModSelChange(){
-  var sel = document.getElementById('proj-mod-sel');
-  PROJ_MOD_SEL_ID = sel ? sel.value : '';
-  WA_LOADED_PROJ = ''; // clear cache so next exec tab switch fetches fresh
-  projModLoadTab();
-}
+// ── Group map ─────────────────────────────────────────────
+// Main tabs: projects | preconstruction | construction | bills | orders
+// Sub-tabs of preconstruction: boq | jm | planning
+// Sub-tabs of construction: rr | execution | allotted | daily | grn | store
 
+var PMT_GROUPS = {
+  preconstruction: ['boq','jm','planning'],
+  construction:    ['rr','execution','allotted','daily','grn','store']
+};
+
+// ── Project selector (hidden, kept for compat) ────────────
 async function projModLoadProjects(){
   var sel = document.getElementById('proj-mod-sel');
   if(!sel) return;
@@ -26,62 +31,175 @@ async function projModLoadProjects(){
         (p.name||'Unnamed')+(p.code?' ('+p.code+')':'')+
       '</option>';
     }).join('');
+  if(prev) sel.value = prev;
 }
 
+function projModSelChange(){
+  var sel = document.getElementById('proj-mod-sel');
+  PROJ_MOD_SEL_ID = sel ? sel.value : '';
+  WA_LOADED_PROJ = '';
+  projModRenderNav();
+  projModLoadTab();
+}
+
+// ── Main entry: called from showApp ───────────────────────
+function initProjects(){
+  // Load projects data
+  if(!PROJ_DATA.length){
+    sbFetch('projects',{select:'*',order:'name.asc'})
+      .then(function(rows){
+        PROJ_DATA = Array.isArray(rows) ? rows : [];
+        projModLoadProjects();
+        projModRenderNav();
+        projModLoadTab();
+      }).catch(function(){ projModRenderNav(); projModLoadTab(); });
+  } else {
+    projModLoadProjects();
+    projModRenderNav();
+    projModLoadTab();
+  }
+}
+
+// ── Render the grouped tab nav bar ────────────────────────
+function projModRenderNav(){
+  var bar = document.getElementById('proj-mod-nav-bar');
+  if(!bar) return;
+  var hasProjId = !!PROJ_MOD_SEL_ID;
+  var projName  = '';
+  if(hasProjId){
+    var pp = PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
+    projName = pp ? (pp.code||pp.name) : '';
+  }
+  var tabs = [
+    {id:'projects', label:'&#127959; Projects', group:false},
+    {id:'preconstruction', label:'&#128196; Pre-construction', group:true, sub:['boq','jm','planning']},
+    {id:'construction',    label:'&#128736; Construction',     group:true, sub:['rr','execution','allotted','daily','grn','store']},
+    {id:'bills',   label:'&#128203; Bills', group:false},
+    {id:'orders',  label:'&#128196; Orders', group:false}
+  ];
+  var subLabels = {boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
+
+  bar.innerHTML = tabs.map(function(t){
+    var isActive = (PROJ_MOD_TAB === t.id) || (t.group && PMT_GROUPS[t.id] && PMT_GROUPS[t.id].indexOf(PROJ_MOD_TAB)>-1);
+    var disabled = t.id !== 'projects' && !hasProjId;
+    var baseCss = 'border:none;font-family:Nunito,sans-serif;font-size:12px;font-weight:800;cursor:'+(disabled?'not-allowed':'pointer')+';border-radius:8px;white-space:nowrap;transition:all .15s;';
+
+    if(!t.group){
+      return '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
+        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
+        t.label+'</button>';
+    }
+
+    // Group with sub-tabs dropdown
+    var subHtml = '';
+    if(isActive && !disabled){
+      subHtml = '<div style="display:flex;gap:2px;background:rgba(255,255,255,.1);border-radius:7px;padding:3px;margin-left:4px;">'+
+        t.sub.map(function(s){
+          var sa = PROJ_MOD_TAB === s;
+          return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+t.id+'\',\''+s+'\')" '+
+            'style="'+baseCss+'padding:4px 9px;font-size:11px;background:'+(sa?'white':'transparent')+';color:'+(sa?'var(--navy)':'rgba(255,255,255,.75)')+';">'+
+            subLabels[s]+'</button>';
+        }).join('')+
+      '</div>';
+    }
+
+    return '<div id="pmt-grp-'+t.id+'" style="display:flex;align-items:center;">'+
+      '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
+        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
+        t.label+'</button>'+
+      subHtml+
+    '</div>';
+  }).join('');
+
+  // Project badge when one is selected
+  var badge = document.getElementById('proj-mod-sel-badge');
+  if(badge){
+    badge.innerHTML = hasProjId
+      ? '<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">&#128207; '+projName+'</span>'
+      : '';
+  }
+
+  // Add button visibility
+  var addBtn = document.getElementById('proj-mod-add-btn');
+  if(addBtn) addBtn.style.display = (PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq') ? '' : 'none';
+}
+
+// ── Switch main tab ───────────────────────────────────────
+function projModTab(tab){
+  var prevTab = PROJ_MOD_TAB;
+  PROJ_MOD_TAB = tab;
+
+  // For group tabs: remember last sub or default to first sub
+  if(PMT_GROUPS[tab]){
+    var lastSub = PROJ_MOD_SUB;
+    var validSub = PMT_GROUPS[tab].indexOf(lastSub) > -1 ? lastSub : PMT_GROUPS[tab][0];
+    PROJ_MOD_TAB = validSub;
+  }
+
+  projModRenderNav();
+  projModLoadTab();
+}
+
+// ── Switch sub-tab within a group ─────────────────────────
+function projModSubTab(group, sub){
+  PROJ_MOD_TAB = sub;
+  PROJ_MOD_SUB = sub;
+  projModRenderNav();
+  projModLoadTab();
+}
+
+// ── Select project from card click ───────────────────────
+function projSelectAndGo(projId){
+  PROJ_MOD_SEL_ID = projId;
+  WA_LOADED_PROJ  = '';
+  // Update hidden selector
+  var sel = document.getElementById('proj-mod-sel');
+  if(sel) sel.value = projId;
+  // Go to BOQ (first pre-construction sub-tab)
+  PROJ_MOD_TAB = 'boq';
+  PROJ_MOD_SUB = 'boq';
+  projModRenderNav();
+  projModLoadTab();
+}
+
+// ── Load content for current tab ─────────────────────────
 function projModLoadTab(){
   var el = document.getElementById('proj-mod-content');
   if(!el) return;
   var projId = PROJ_MOD_SEL_ID;
+  var tab = PROJ_MOD_TAB;
 
-  if(PROJ_MOD_TAB === 'projects'){
+  if(tab === 'projects'){
     el.innerHTML = '<div style="padding:0 0 6px;"><div class="search-bar"><span style="font-size:16px;color:var(--text3);">&#128269;</span><input type="text" id="proj-search" placeholder="Search projects..." oninput="searchProj(this.value)"></div></div><div id="proj-list"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>';
-    loadProjData(); return;
-  }
-  if(!projId){
-    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text3);"><div style="font-size:36px;margin-bottom:10px;">&#128207;</div><div style="font-weight:700;font-size:14px;">Select a project above</div></div>';
+    loadProjData();
     return;
   }
 
-  // Inject hidden selector then call load function
+  if(!projId){
+    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text3);"><div style="font-size:40px;margin-bottom:12px;">&#128207;</div><div style="font-weight:800;font-size:14px;">No project selected</div><div style="font-size:12px;margin-top:6px;">Go to the <b>Projects</b> tab and click a project to begin</div></div>';
+    return;
+  }
+
   var configs = {
-    boq:      {cont:'boq-content',  sel:'boq-proj-sel',  fn: function(){ boqLoadItems(); }},
-    jm:       {cont:'jm-content',   sel:'jm-proj-sel',   fn: function(){ jmLoadItems(); }},
-    planning: {cont:'plan-content', sel:'plan-proj-sel',  fn: function(){ planLoadItems(); }},
-    rr:       {cont:'rr-content',   sel:'rr-proj-sel',    fn: function(){ rrLoadItems(); }},
-    execution:{cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allot'; execSwitchTab(); }},
-    allotted: {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allotted'; execSwitchTab(); }},
-    daily:    {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='daily'; execSwitchTab(); }},
-    bills:    {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills'; execSwitchTab(); }},
-    orders:   {cont:'exec-content', sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders'; execSwitchTab(); }},
-    grn:      {cont:'grn-content',  sel:'grn-proj-sel',   fn: function(){ grnLoadItems(); }},
-    store:    {cont:'store-content',sel:'store-proj-sel',  fn: function(){ storeLoadItems(); }}
+    boq:       {cont:'boq-content',   sel:'boq-proj-sel',   fn: function(){ boqLoadItems(); }},
+    jm:        {cont:'jm-content',    sel:'jm-proj-sel',    fn: function(){ jmLoadItems(); }},
+    planning:  {cont:'plan-content',  sel:'plan-proj-sel',  fn: function(){ planLoadItems(); }},
+    rr:        {cont:'rr-content',    sel:'rr-proj-sel',    fn: function(){ rrLoadItems(); }},
+    execution: {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allot';    execSwitchTab(); }},
+    allotted:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allotted'; execSwitchTab(); }},
+    daily:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='daily';    execSwitchTab(); }},
+    grn:       {cont:'grn-content',   sel:'grn-proj-sel',   fn: function(){ grnLoadItems(); }},
+    store:     {cont:'store-content', sel:'store-proj-sel', fn: function(){ storeLoadItems(); }},
+    bills:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills';    execSwitchTab(); }},
+    orders:    {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders';   execSwitchTab(); }}
   };
-  var cfg = configs[PROJ_MOD_TAB];
-  if(!cfg) return;
+
+  var cfg = configs[tab];
+  if(!cfg){ el.innerHTML=''; return; }
+
   el.innerHTML = '<select id="'+cfg.sel+'" style="display:none;"><option value="'+projId+'" selected></option></select>'+
                  '<div id="'+cfg.cont+'"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>';
   cfg.fn();
-}
-
-function projModTab(tab, btn){
-  // Permission check
-  if(currentUser && currentUser.role!=='admin'){
-    var key = (tab==='daily'||tab==='bills') ? 'proj-'+tab : 'proj-'+tab;
-    if(!canAccess(key,'view') && !canAccess('proj-execution','view')){
-      toast('Access denied — no permission for '+tab,'warning');
-      return;
-    }
-  }
-  PROJ_MOD_TAB = tab;
-  ['projects','boq','jm','planning','execution','allotted','daily','bills','orders','grn','store'].forEach(function(t){
-    var b = document.getElementById('pmt-'+t);
-    if(b){ b.style.background = t===tab?'rgba(255,255,255,.2)':'transparent'; b.style.color = t===tab?'white':'rgba(255,255,255,.6)'; }
-  });
-  var addBtn = document.getElementById('proj-mod-add-btn');
-  if(addBtn) addBtn.style.display = (tab==='projects'||tab==='boq') ? '' : 'none';
-  var selRow = document.getElementById('proj-mod-sel-row');
-  if(selRow) selRow.style.display = tab==='projects' ? 'none' : '';
-  projModLoadTab();
 }
 
 function projModAdd(){
@@ -89,63 +207,6 @@ function projModAdd(){
   else if(PROJ_MOD_TAB==='boq') boqOpenAddItem(null);
 }
 
-function initProjects(){
-  // Inject RR tab button after Planning if not already present
-  if(!document.getElementById('pmt-rr')){
-    var planBtn=document.getElementById('pmt-planning');
-    if(planBtn){
-      var rrBtn=document.createElement('button');
-      rrBtn.id='pmt-rr';
-      rrBtn.onclick=function(){projModTab('rr',rrBtn);};
-      rrBtn.style.cssText='padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);';
-      rrBtn.innerHTML='&#128203; RR';
-      planBtn.parentNode.insertBefore(rrBtn, planBtn.nextSibling);
-    }
-  }
-  // Inject GRN tab button after Allotted tab
-  if(!document.getElementById('pmt-grn')){
-    var allottedBtn=document.getElementById('pmt-allotted');
-    if(allottedBtn){
-      var grnBtn=document.createElement('button');
-      grnBtn.id='pmt-grn';
-      grnBtn.onclick=function(){projModTab('grn',grnBtn);};
-      grnBtn.style.cssText='padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);';
-      grnBtn.innerHTML='&#128230; GRN';
-      allottedBtn.parentNode.insertBefore(grnBtn, allottedBtn.nextSibling);
-    }
-  }
-  // Inject Store tab button after GRN
-  if(!document.getElementById('pmt-store')){
-    var grnB=document.getElementById('pmt-grn');
-    if(grnB){
-      var storeBtn=document.createElement('button');
-      storeBtn.id='pmt-store';
-      storeBtn.onclick=function(){projModTab('store',storeBtn);};
-      storeBtn.style.cssText='padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);';
-      storeBtn.innerHTML='&#127981; Store';
-      grnB.parentNode.insertBefore(storeBtn, grnB.nextSibling);
-    }
-  }
-  ['projects','boq','jm','planning','execution','allotted','daily','bills','orders','grn','store'].forEach(function(t){
-    var b = document.getElementById('pmt-'+t);
-    if(!b) return;
-    var hasAccess = (currentUser && currentUser.role==='admin') ||
-                    !Object.keys(USER_PERMISSIONS).length ||
-                    canAccess('proj-'+t,'view') ||
-                    canAccess('proj-execution','view'); // daily & bills share execution permission
-    b.style.display = hasAccess ? '' : 'none';
-  });
-  var tabs = ['projects','boq','jm','planning','rr','execution','allotted','daily','bills','orders','grn','store'];
-  var firstTab = tabs.find(function(t){
-    return (currentUser && currentUser.role==='admin') ||
-           !Object.keys(USER_PERMISSIONS).length ||
-           canAccess('proj-'+t,'view') ||
-           (t==='daily'||t==='bills') && canAccess('proj-execution','view') ||
-           t==='rr' && (canAccess('proj-planning','view')||canAccess('proj-execution','view'));
-  }) || 'projects';
-  projModTab(firstTab, document.getElementById('pmt-'+firstTab));
-  projModLoadProjects();
-}
 
 // ── PROJECT LIST ──────────────────────────────────────────────────────
 async function loadProjData(){
@@ -180,16 +241,42 @@ function renderProjList(list){
   };
   el.innerHTML = list.map(function(p){
     var st = statusMap[p.status]||{label:p.status||'Active',col:'#1565C0'};
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;cursor:pointer;" onclick="openProjForm(\''+p.id+'\')">'+
-      '<div style="padding:12px 14px;display:flex;align-items:center;gap:12px;">'+
+    var inrFmt=function(n){return n?'\u20b9'+Number(n).toLocaleString('en-IN'):'';};
+    var coords=[];try{coords=p.coordinates?JSON.parse(p.coordinates):[];}catch(e){}
+    var files=[];try{files=p.attachments?JSON.parse(p.attachments):[];}catch(e){}
+    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+      // ── Header row (click to select + go to BOQ) ──
+      '<div style="padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="projSelectAndGo(\''+p.id+'\')" title="Click to open project">'+
         '<div style="width:44px;height:44px;border-radius:12px;background:'+st.col+'20;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">&#127959;</div>'+
         '<div style="flex:1;min-width:0;">'+
           '<div style="font-size:14px;font-weight:800;color:var(--navy);">'+esc(p.name||'Unnamed')+'</div>'+
-          '<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+(p.code||'—')+' &bull; '+(p.client||'—')+'</div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+(p.code||'—')+
+            (p.client?' &bull; '+esc(p.client):'')+
+            (p.project_length?' &bull; '+p.project_length+' km':'')+
+          '</div>'+
         '</div>'+
         '<span style="font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;background:'+st.col+'15;color:'+st.col+';">'+st.label+'</span>'+
       '</div>'+
-      (p.location?'<div style="padding:0 14px 10px;font-size:11px;color:var(--text3);">&#128205; '+esc(p.location)+'</div>':'')+
+      // ── Details row ──
+      '<div style="padding:0 14px 8px;display:flex;flex-wrap:wrap;gap:10px;font-size:10px;color:var(--text3);">'+
+        (p.location?'<span>&#128205; '+esc(p.location)+'</span>':'')+
+        (p.contract_value?'<span>&#128200; '+inrFmt(p.contract_value)+'</span>':'')+
+        (p.completion_date?'<span>&#128197; '+p.completion_date.split('-').reverse().join('/')+'</span>':'')+
+        (coords.length?'<span>&#128204; '+coords.length+' GPS point'+(coords.length>1?'s':'')+'</span>':'')+
+        (files.length?'<span>&#128206; '+files.length+' file'+(files.length>1?'s':'')+'</span>':'')+
+      '</div>'+
+      // ── Action buttons ──
+      '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F5F5F5;">'+
+        '<button onclick="event.stopPropagation();projSelectAndGo(\''+p.id+'\')" '+
+          'style="flex:1;background:var(--navy);color:white;border:none;border-radius:7px;padding:6px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          '&#128203; Open Project</button>'+
+        '<button onclick="event.stopPropagation();openProjForm(\''+p.id+'\')" '+
+          'style="background:#E3F2FD;color:#1565C0;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          '&#9998; Edit</button>'+
+        '<button onclick="event.stopPropagation();if(confirm(\'Delete this project?\')) deleteProjItem(\''+p.id+'\')" '+
+          'style="background:#FFEBEE;color:#C62828;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          '&#128465;</button>'+
+      '</div>'+
     '</div>';
   }).join('');
 }
