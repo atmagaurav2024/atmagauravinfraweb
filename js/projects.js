@@ -3506,6 +3506,7 @@ function execRenderBills(){
           (b.description?'<span style="font-size:10px;color:var(--text3);flex:1;">'+b.description+'</span>':'<span style="flex:1;"></span>')+
           '<button onclick="execOpenPayment(\''+b.id+'\',\''+key+'\',\''+projId+'\','+bBal+')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">+ Pay</button>'+
           '<button onclick="execAddDeduction(\''+b.id+'\')" style="background:#E65100;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">- Deduction</button>'+
+          '<button onclick="execDownloadBillPDF(\''+b.id+'\')" style="background:#558B2F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:700;" title="Download PDF">&#11015; PDF</button>'+
           '<button onclick="execDelBill(\''+b.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;" title="Delete">&#215;</button>'+
         '</div>'+
         // Bill amounts grid
@@ -3878,6 +3879,173 @@ async function execSavePayment(billId,partyType,partyName,projId){
     closeSheet('ov-exec','sh-exec');
     execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+function execDownloadBillPDF(billId){
+  var b=WA_BILLS.find(function(x){return x.id===billId;});
+  if(!b){toast('Bill not found','error');return;}
+
+  var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+  var projSel=document.getElementById('proj-mod-sel');
+  var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+  function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+
+  // Deductions
+  var deductions=[];try{deductions=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+  var activeDed=deductions.filter(function(d){return !d.released;});
+  var relDed=deductions.filter(function(d){return d.released;});
+  var totalDed=activeDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var totalRel=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var grossAmt=parseFloat(b.bill_amount)||0;
+  var netPayable=grossAmt-totalDed;
+
+  // Selected work items
+  var selItems=[];try{selItems=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+
+  // Payments for this bill
+  var billPays=WA_PAYMENTS.filter(function(p){return p.bill_id===b.id;});
+  var totalPaid=billPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+  var balDue=Math.max(0,netPayable-totalPaid);
+
+  // Work items table rows
+  var workRows=selItems.length
+    ? selItems.map(function(si,i){
+        var allot=WA_ALLOT.find(function(a){return a.id===si.allot_id;})||{};
+        var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
+        var resName=planRes.party_name||planRes.resource_category||si.res_name||'';
+        var boqItem=WA_ITEMS.find(function(x){return x.id===allot.boq_item_id;})||{};
+        return '<tr><td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+(i+1)+'</td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;font-weight:700;">'+(resName||si.res_name||'—')+'<br>'+
+            '<small style="font-weight:400;color:#555;">'+(boqItem.item_code?'['+boqItem.item_code+'] '+(boqItem.short_name||boqItem.description||''):'')+'</small></td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+( si.done_qty?si.done_qty.toFixed(2):'—')+'</td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+inr(si.rate||0)+'</td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:800;">'+inr(si.amount)+'</td>'+
+        '</tr>';
+      }).join('')
+    : '<tr><td colspan="5" style="padding:10px;color:#888;text-align:center;">No work items recorded</td></tr>';
+
+  // Deduction rows
+  var dedRows=activeDed.length
+    ? activeDed.map(function(d){
+        return '<tr><td colspan="4" style="padding:6px 10px;border-bottom:1px solid #EEE;">'+d.head+'</td>'+
+          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;color:#E65100;font-weight:700;">('+inr(d.amount)+')</td></tr>';
+      }).join('') : '';
+
+  var relRows=relDed.length
+    ? relDed.map(function(d){
+        return '<tr><td colspan="4" style="padding:5px 10px;color:#2E7D32;font-size:10px;border-bottom:1px solid #F5F5F5;">'+
+          d.head+' <span style="font-size:9px;">(Released: '+fmtD(d.released_date)+')</span></td>'+
+          '<td style="padding:5px 10px;text-align:right;color:#2E7D32;font-size:10px;">Released</td></tr>';
+      }).join('') : '';
+
+  // Payment rows
+  var payRows=billPays.length
+    ? billPays.map(function(p){
+        return '<tr>'+
+          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;">'+fmtD(p.payment_date)+'</td>'+
+          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;">'+(p.payment_mode||'—')+'</td>'+
+          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;">'+(p.reference||'—')+'</td>'+
+          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:800;color:#2E7D32;">'+inr(p.amount)+'</td>'+
+        '</tr>';
+      }).join('')
+    : '<tr><td colspan="4" style="padding:10px;color:#888;text-align:center;">No payments recorded</td></tr>';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<title>Bill #'+b.bill_number+' — '+b.party_name+'</title>'+
+    '<style>'+
+      '*{box-sizing:border-box;margin:0;padding:0;}'+
+      'body{font-family:Arial,sans-serif;font-size:11px;padding:24px;color:#1a1a1a;}'+
+      '.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #1565C0;padding-bottom:10px;margin-bottom:14px;}'+
+      '.co-name{font-size:16px;font-weight:900;color:#1565C0;}.co-info{font-size:10px;color:#555;margin-top:3px;}'+
+      '.bill-title{font-size:20px;font-weight:900;color:#1565C0;}.bill-no{font-size:12px;color:#555;margin-top:4px;}'+
+      'table{width:100%;border-collapse:collapse;margin-bottom:14px;}'+
+      'th{background:#1565C0;color:white;padding:7px 10px;font-size:10px;text-align:left;}'+
+      '.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:14px;}'+
+      '.sum-cell{padding:10px 12px;text-align:center;border-right:1px solid #DDD;}'+
+      '.sum-cell:last-child{border-right:none;}'+
+      '.sum-lbl{font-size:9px;font-weight:800;color:#888;text-transform:uppercase;margin-bottom:3px;}'+
+      '.sum-val{font-size:14px;font-weight:900;}'+
+      '.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:40px;}'+
+      '.sig-box{border-top:1.5px solid #333;padding-top:6px;text-align:center;font-size:10px;color:#555;}'+
+      '@media print{button{display:none;}}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="background:#1565C0;color:white;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-family:Arial;font-weight:700;">Print / Save PDF</button>'+
+
+    // Header
+    '<div class="hdr">'+
+      '<div><div class="co-name">'+(co.name||'Company Name')+'</div>'+
+        '<div class="co-info">'+(co.address||'')+(co.gstin?'<br>GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div style="text-align:right;">'+
+        '<div class="bill-title">BILL / INVOICE</div>'+
+        '<div class="bill-no">Bill #'+b.bill_number+'</div>'+
+        '<div style="font-size:10px;color:#555;margin-top:3px;">Date: '+fmtD(b.bill_date)+'</div>'+
+      '</div>'+
+    '</div>'+
+
+    // Party + Project info
+    '<div style="display:grid;grid-template-columns:1fr 1fr;border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:14px;">'+
+      '<div style="padding:10px 14px;border-right:1px solid #DDD;">'+
+        '<div style="font-size:9px;font-weight:800;color:#888;margin-bottom:3px;">PARTY</div>'+
+        '<div style="font-size:14px;font-weight:800;">'+b.party_name+'</div>'+
+        '<div style="font-size:10px;color:#555;">'+(b.party_type||'')+'</div>'+
+      '</div>'+
+      '<div style="padding:10px 14px;">'+
+        '<div style="font-size:9px;font-weight:800;color:#888;margin-bottom:3px;">PROJECT</div>'+
+        '<div style="font-size:12px;font-weight:800;">'+projName+'</div>'+
+        (b.description?'<div style="font-size:10px;color:#555;margin-top:3px;">'+b.description+'</div>':'')+
+      '</div>'+
+    '</div>'+
+
+    // Summary bar
+    '<div class="summary-grid">'+
+      '<div class="sum-cell"><div class="sum-lbl">Gross Amount</div><div class="sum-val" style="color:#1565C0;">'+inr(grossAmt)+'</div></div>'+
+      '<div class="sum-cell"><div class="sum-lbl">Deductions</div><div class="sum-val" style="color:#E65100;">'+inr(totalDed)+'</div></div>'+
+      '<div class="sum-cell"><div class="sum-lbl">Net Payable</div><div class="sum-val" style="color:#1565C0;">'+inr(netPayable)+'</div></div>'+
+      '<div class="sum-cell"><div class="sum-lbl">Balance Due</div><div class="sum-val" style="color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
+    '</div>'+
+
+    // Work items table
+    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:6px;">Work / Resource Details</div>'+
+    '<table>'+
+      '<thead><tr><th style="width:30px;">#</th><th>Resource / Work</th><th style="text-align:right;width:80px;">Qty</th><th style="text-align:right;width:80px;">Rate</th><th style="text-align:right;width:100px;">Amount</th></tr></thead>'+
+      '<tbody>'+workRows+'</tbody>'+
+      '<tfoot>'+
+        '<tr style="background:#EFF6FF;"><td colspan="4" style="padding:7px 10px;font-weight:900;text-align:right;">Gross Total</td>'+
+          '<td style="padding:7px 10px;font-weight:900;text-align:right;color:#1565C0;">'+inr(grossAmt)+'</td></tr>'+
+        (dedRows?dedRows:'')+
+        (relRows?relRows:'')+
+        (activeDed.length?'<tr style="background:#FFF3E0;"><td colspan="4" style="padding:7px 10px;font-weight:900;text-align:right;">Net Payable (after deductions)</td>'+
+          '<td style="padding:7px 10px;font-weight:900;text-align:right;color:#1565C0;">'+inr(netPayable)+'</td></tr>':'')+
+      '</tfoot>'+
+    '</table>'+
+
+    // Payments table
+    (billPays.length?
+      '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:6px;">Payment History</div>'+
+      '<table>'+
+        '<thead><tr><th>Date</th><th>Mode</th><th>Reference</th><th style="text-align:right;">Amount</th></tr></thead>'+
+        '<tbody>'+payRows+'</tbody>'+
+        '<tfoot><tr style="background:#E8F5E9;">'+
+          '<td colspan="3" style="padding:7px 10px;font-weight:900;text-align:right;">Total Paid</td>'+
+          '<td style="padding:7px 10px;font-weight:900;text-align:right;color:#2E7D32;">'+inr(totalPaid)+'</td>'+
+        '</tr><tr style="background:'+(balDue>0?'#FFEBEE':'#E8F5E9')+';"><td colspan="3" style="padding:7px 10px;font-weight:900;text-align:right;">Balance Due</td>'+
+          '<td style="padding:7px 10px;font-weight:900;text-align:right;color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</td>'+
+        '</tr></tfoot>'+
+      '</table>'
+    :'')+
+
+    // Signatures
+    '<div class="sig-grid">'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+b.party_name+'</div><div>Party Signature</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Site Engineer</div><div>Verified By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Authorized By</div></div>'+
+    '</div>'+
+  '</body></html>';
+
+  var w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Allow popups to download PDF','warning');
 }
 
 async function execDelBill(id){
