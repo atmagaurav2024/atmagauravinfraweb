@@ -3024,7 +3024,7 @@ async function execOpenDailyEntry(itemId){
         (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
       '</div>'+
       '<div class="dp-res-qty-wrap" style="display:flex;align-items:center;gap:4px;">'+
-        '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
+        '<div><div style="font-size:9px;color:#E65100;font-weight:700;margin-bottom:2px;">Qty Used *</div>'+
           '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" '+
             (maxQty?'max="'+maxQty+'" placeholder="max '+maxQty+'"':'placeholder="qty"')+
             ' style="width:80px;padding:4px 6px;font-size:12px;text-align:center;'+(fromStore&&maxQty<=0?'background:#F5F5F5;color:#CCC;':'')+'"'+
@@ -3143,10 +3143,18 @@ async function execSaveDailyEntry(projId,itemId){
   document.querySelectorAll('.dp-res-chk:checked').forEach(function(chk){
     var row=chk.closest('.dp-res-row');
     var qtyInp=row&&row.querySelector('.dp-res-qty');
-    var resQty=parseFloat(qtyInp&&qtyInp.value)||null;
+    var resQty=parseFloat(qtyInp&&qtyInp.value)||0;
     var allotId=chk.getAttribute('data-allot-id');
     var resName=chk.getAttribute('data-name');
     var resUnit=chk.getAttribute('data-unit')||null;
+
+    // Qty is required when resource is checked
+    if(!resQty||resQty<=0){
+      toast('Enter qty used for: '+resName,'warning');
+      resValid=false;
+      if(qtyInp){qtyInp.style.border='2px solid #C62828';qtyInp.focus();}
+      return;
+    }
 
     // ── Validation 2: resource qty ≤ allotted minus already utilised ──
     if(resQty&&allotId){
@@ -3169,7 +3177,7 @@ async function execSaveDailyEntry(projId,itemId){
       name:resName,
       type:chk.getAttribute('data-type'),
       unit:resUnit,
-      qty:resQty
+      qty:resQty  // always a positive number now
     });
   });
   if(!resValid) return;
@@ -3260,7 +3268,7 @@ async function execEditDailyEntry(entryId, itemId){
         '</div>'+
       '</div>'+
       '<div class="dp-res-qty-wrap" style="display:flex;align-items:center;gap:4px;">'+
-        '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
+        '<div><div style="font-size:9px;color:#E65100;font-weight:700;margin-bottom:2px;">Qty Used *</div>'+
           '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" max="'+maxQ+'" value="'+existingQty+'" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;"></div>'+
         '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
       '</div>'+
