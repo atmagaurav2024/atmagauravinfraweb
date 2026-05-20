@@ -2283,8 +2283,8 @@ function showApp(name){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.app-screen').forEach(function(s){s.classList.remove('on');});
   // Project sub-modules all live inside app-projects now
-  var allProjTabs = ['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
-  var isProjectTab = allProjTabs.indexOf(name) > -1;
+  var allProjTabs=['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
+  var isProjectTab=allProjTabs.indexOf(name)>-1;
   var target = isProjectTab
     ? document.getElementById('app-projects')
     : document.getElementById('app-'+name);
@@ -3388,48 +3388,35 @@ const SUPABASE_URL = 'https://aywlauygsqkivdihbaut.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5d2xhdXlnc3FraXZkaWhiYXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODYxNjgsImV4cCI6MjA4OTY2MjE2OH0.NHMZTF6yCaZXW8bNw496Hd_t_NAIE__PUU4WsxZc3yw';
 
 async function sbFetch(table, options={}){
-  var url = SUPABASE_URL+'/rest/v1/'+table;
-  var params = [];
+  var url=SUPABASE_URL+'/rest/v1/'+table;
+  var params=[];
   if(options.select) params.push('select='+options.select);
   if(options.filter) params.push(options.filter);
-  if(options.order) params.push('order='+options.order);
-  if(params.length) url += '?'+params.join('&');
-  var token = (typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken) ? currentUser.accessToken : SUPABASE_ANON_KEY;
-  var res = await fetch(url,{
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}
-  });
-  if(!res.ok){var err=await res.json().catch(function(){return {};});throw Object.assign(new Error(err.message||res.statusText||'Fetch failed'),{status:res.status,data:err});}
+  if(options.order)  params.push('order='+options.order);
+  if(params.length)  url+='?'+params.join('&');
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
+  var res=await fetch(url,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}});
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
   return res.json();
 }
 
 async function sbInsert(table, data){
   var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
-    method:'POST',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify(data)
-  });
-  if(!res.ok){var e=await res.json().catch(function(){return {};});throw Object.assign(new Error(e.message||'Insert failed'),{status:res.status,data:e});}
+  var res=await fetch(SUPABASE_URL+'/rest/v1/'+table,{method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(data)});
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||'Insert failed'),{status:res.status,data:e});}
   return res.json();
 }
 
 async function sbUpdate(table, id, data){
   var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
-    method:'PATCH',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify(data)
-  });
-  if(!res.ok){var e=await res.json().catch(function(){return {};});throw Object.assign(new Error(e.message||'Update failed'),{status:res.status,data:e});}
+  var res=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(data)});
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||'Update failed'),{status:res.status,data:e});}
   return res.json();
 }
 
 async function sbDelete(table, id){
   var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
-    method:'DELETE',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}
-  });
+  var res=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}});
   return res.ok;
 }
 
@@ -15365,11 +15352,11 @@ async function acSavePermissions(){
     // Delete existing then insert fresh
     await fetch(SUPABASE_URL+'/rest/v1/access_permissions?'+filter,{
       method:'DELETE',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY)}
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=\'undefined\'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY)}
     });
     var res = await fetch(SUPABASE_URL+'/rest/v1/access_permissions',{
       method:'POST',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=\'undefined\'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(inserts)
     });
     if(!res.ok){
