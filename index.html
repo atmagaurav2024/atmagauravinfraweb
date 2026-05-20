@@ -3394,34 +3394,41 @@ async function sbFetch(table, options={}){
   if(options.filter) params.push(options.filter);
   if(options.order) params.push('order='+options.order);
   if(params.length) url += '?'+params.join('&');
+  var token = (typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken) ? currentUser.accessToken : SUPABASE_ANON_KEY;
   var res = await fetch(url,{
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json'}
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}
   });
+  if(!res.ok){var err=await res.json().catch(function(){return {};});throw Object.assign(new Error(err.message||res.statusText||'Fetch failed'),{status:res.status,data:err});}
   return res.json();
 }
 
 async function sbInsert(table, data){
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
   var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
     method:'POST',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
     body:JSON.stringify(data)
   });
+  if(!res.ok){var e=await res.json().catch(function(){return {};});throw Object.assign(new Error(e.message||'Insert failed'),{status:res.status,data:e});}
   return res.json();
 }
 
 async function sbUpdate(table, id, data){
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
   var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
     body:JSON.stringify(data)
   });
+  if(!res.ok){var e=await res.json().catch(function(){return {};});throw Object.assign(new Error(e.message||'Update failed'),{status:res.status,data:e});}
   return res.json();
 }
 
 async function sbDelete(table, id){
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
   var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json'}
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}
   });
   return res.ok;
 }
@@ -15358,11 +15365,11 @@ async function acSavePermissions(){
     // Delete existing then insert fresh
     await fetch(SUPABASE_URL+'/rest/v1/access_permissions?'+filter,{
       method:'DELETE',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY}
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY)}
     });
     var res = await fetch(SUPABASE_URL+'/rest/v1/access_permissions',{
       method:'POST',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(inserts)
     });
     if(!res.ok){
