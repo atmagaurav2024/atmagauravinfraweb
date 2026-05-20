@@ -3023,11 +3023,12 @@ async function execOpenDailyEntry(itemId){
         '</div>'+
         (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
       '</div>'+
-      '<div class="dp-res-qty-wrap" style="display:none;align-items:center;gap:4px;">'+
+      '<div class="dp-res-qty-wrap" style="display:flex;align-items:center;gap:4px;">'+
         '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
           '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" '+
             (maxQty?'max="'+maxQty+'" placeholder="max '+maxQty+'"':'placeholder="qty"')+
-            ' style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
+            ' style="width:80px;padding:4px 6px;font-size:12px;text-align:center;'+(fromStore&&maxQty<=0?'background:#F5F5F5;color:#CCC;':'')+'"'+
+            (fromStore&&maxQty<=0?' disabled':'')+'>'+
         '</div>'+
         '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
       '</div>'+
@@ -3097,7 +3098,7 @@ async function execOpenDailyEntry(itemId){
   sf.appendChild(cb);sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
 
-  // Wire checkboxes → show qty input
+  // Wire checkboxes → highlight row when checked, clear qty when unchecked
   setTimeout(function(){
     var body=document.getElementById('exec-sheet-body');
     if(!body)return;
@@ -3106,8 +3107,11 @@ async function execOpenDailyEntry(itemId){
       if(chk.classList&&chk.classList.contains('dp-res-chk')){
         var row=chk.closest('.dp-res-row');
         if(!row)return;
-        var qw=row.querySelector('.dp-res-qty-wrap');
-        if(qw)qw.style.display=chk.checked?'flex':'none';
+        var qtyInp=row.querySelector('.dp-res-qty');
+        if(!chk.checked&&qtyInp) qtyInp.value=''; // clear qty if unchecked
+        // Highlight border on check
+        row.style.borderColor=chk.checked?'#1565C0':'var(--border)';
+        row.style.background=chk.checked?'#EFF6FF':'#FAFAFA';
       }
     });
   },100);
@@ -3255,7 +3259,7 @@ async function execEditDailyEntry(entryId, itemId){
           (fromStore&&inHand!==null?'In Store: <b style="color:#2E7D32;">'+inHand.toFixed(2)+'</b> | ':'')+'Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b>'+
         '</div>'+
       '</div>'+
-      '<div class="dp-res-qty-wrap" style="display:'+(existingUse?'flex':'none')+';align-items:center;gap:4px;">'+
+      '<div class="dp-res-qty-wrap" style="display:flex;align-items:center;gap:4px;">'+
         '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty Used</div>'+
           '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" max="'+maxQ+'" value="'+existingQty+'" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;"></div>'+
         '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
@@ -3419,19 +3423,14 @@ function execRenderBills(){
       var allotRate=parseFloat(a.rate)||0;
       var allotAmt=Math.round(allotQty*allotRate);
 
-      // Completed qty from daily progress for this allotment
+      // Use resource utilisation qty from daily entries (resources_used JSON) × allotment rate
       var doneQty=0;
       WA_DAILY.forEach(function(d){
         var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
         rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)doneQty+=parseFloat(r.qty)||0;});
       });
-      // Also count BOQ qty done if party matches
-      if(!doneQty){
-        WA_DAILY.filter(function(d){return d.boq_item_id===a.boq_item_id;})
-          .forEach(function(d){doneQty+=(parseFloat(d.qty_done)||0);});
-      }
       var doneAmt=Math.round(doneQty*allotRate);
-      var pct=allotQty>0?Math.min(100,Math.round(doneQty/allotQty*100)):0;
+      var pct=allotQty>0?Math.min(100,Math.round(doneQty/allotQty*100)):0; // utilised/allotted%
       var pctCol=pct>=100?'#2E7D32':pct>=50?'#1565C0':'#E65100';
 
       return '<tr style="border-bottom:1px solid #F5F5F5;">'+
@@ -3442,7 +3441,7 @@ function execRenderBills(){
         '</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+allotQty+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span></td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+inr(allotAmt)+'</td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;color:'+pctCol+';font-weight:700;">'+doneQty.toFixed(2)+' <span style="font-size:9px;font-weight:400;">('+pct+'%)</span></td>'+
+        '<td style="padding:7px 10px;font-size:11px;text-align:right;color:'+pctCol+';font-weight:700;">'+doneQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span><div style="font-size:9px;color:'+pctCol+';">('+pct+'% of allotted)</div></td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+inr(doneAmt)+'</td>'+
       '</tr>';
     }).join('');
@@ -3457,10 +3456,6 @@ function execRenderBills(){
         var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
         rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)doneQty+=parseFloat(r.qty)||0;});
       });
-      if(!doneQty){
-        WA_DAILY.filter(function(d){return d.boq_item_id===a.boq_item_id;})
-          .forEach(function(d){doneQty+=(parseFloat(d.qty_done)||0);});
-      }
       totDoneAmt+=Math.round(doneQty*allotRate);
     });
 
@@ -3560,8 +3555,8 @@ function execRenderBills(){
           '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">RESOURCE / WORK</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED QTY</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED AMT</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;">COMPLETED</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">PAYABLE AMT</th>'+
+          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;">UTILISED QTY</th>'+
+          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">PAYABLE AMT<div style="font-size:8px;font-weight:400;">(Util Qty × Rate)</div></th>'+
         '</tr></thead>'+
         '<tbody>'+allotRows+'</tbody>'+
         '<tfoot><tr style="background:#EFF6FF;border-top:2px solid #1565C0;">'+
@@ -3602,15 +3597,12 @@ async function execOpenBill(partyKey,projId){
     var boqItem=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
     var allotRate=parseFloat(a.rate)||0;
     var allotQty=parseFloat(a.qty)||0;
+    // Use ONLY resource utilisation qty (resources_used in daily entries) × allotment rate
     var doneQty=0;
     WA_DAILY.forEach(function(d){
       var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
       rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)doneQty+=parseFloat(r.qty)||0;});
     });
-    if(!doneQty){
-      WA_DAILY.filter(function(d){return d.boq_item_id===a.boq_item_id;})
-        .forEach(function(d){doneQty+=(parseFloat(d.qty_done)||0);});
-    }
     var doneAmt=Math.round(doneQty*allotRate);
     var prevBilled=WA_BILLS.reduce(function(s,b){
       if(b.party_name!==partyName||b.party_type!==partyType) return s;
