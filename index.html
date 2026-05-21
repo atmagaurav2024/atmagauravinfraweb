@@ -9023,6 +9023,16 @@ async function empSavePay(){
 
 <script>
 
+// Early declarations to prevent ReferenceError
+var USER_PERMISSIONS = {};
+var COMPANY_DATA = {};
+async function preloadCompanyData(){
+  try{
+    var rows = await sbFetch('company_details',{select:'*',order:'id.asc'});
+    COMPANY_DATA = (Array.isArray(rows)&&rows.length) ? rows[0] : {};
+  }catch(e){ COMPANY_DATA = {}; }
+}
+
 // ════ HELPERS ════════════════════════════════════════════
 function gv(id){var el=document.getElementById(id);return el?el.value.trim():'';}
 function fmtINR(n){if(!n&&n!==0)return '\u20b90';return '\u20b9'+parseFloat(n).toLocaleString('en-IN',{maximumFractionDigits:0});}
