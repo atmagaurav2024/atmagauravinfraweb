@@ -15094,11 +15094,11 @@ async function acSavePermissions(){
     // Delete existing then insert fresh
     await fetch(SUPABASE_URL+'/rest/v1/access_permissions?'+filter,{
       method:'DELETE',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=\'undefined\'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY)}
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY)}
     });
     var res = await fetch(SUPABASE_URL+'/rest/v1/access_permissions',{
       method:'POST',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=\'undefined\'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(inserts)
     });
     if(!res.ok){
