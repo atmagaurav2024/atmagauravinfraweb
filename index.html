@@ -9130,67 +9130,75 @@ function initProjects(){
 
 // ── Render the grouped tab nav bar ────────────────────────
 function projModRenderNav(){
-  var bar = document.getElementById('proj-mod-nav-bar');
+  var bar=document.getElementById('proj-mod-nav-bar');
   if(!bar) return;
-  var hasProjId = !!PROJ_MOD_SEL_ID;
-  var projName  = '';
-  if(hasProjId){
-    var pp = PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
-    projName = pp ? (pp.code||pp.name) : '';
-  }
-  var tabs = [
-    {id:'projects', label:'&#127959; Projects', group:false},
-    {id:'preconstruction', label:'&#128196; Pre-construction', group:true, sub:['boq','jm','planning']},
-    {id:'construction',    label:'&#128736; Construction',     group:true, sub:['rr','execution','allotted','daily','grn','store']},
-    {id:'bills',   label:'&#128203; Bills', group:false},
-    {id:'orders',  label:'&#128196; Orders', group:false}
+  var hasProjId=!!PROJ_MOD_SEL_ID;
+
+  var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
+  var activeGroup='';
+  if(PMT_GROUPS.preconstruction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='preconstruction';
+  else if(PMT_GROUPS.construction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='construction';
+
+  var mainTabs=[
+    {id:'projects',        label:'Projects'},
+    {id:'preconstruction', label:'Pre-construction', group:true},
+    {id:'construction',    label:'Construction',     group:true},
+    {id:'bills',           label:'Bills & Payments'},
+    {id:'orders',          label:'Orders'}
   ];
-  var subLabels = {boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
 
-  bar.innerHTML = tabs.map(function(t){
-    var isActive = (PROJ_MOD_TAB === t.id) || (t.group && PMT_GROUPS[t.id] && PMT_GROUPS[t.id].indexOf(PROJ_MOD_TAB)>-1);
-    var disabled = t.id !== 'projects' && !hasProjId;
-    var baseCss = 'border:none;font-family:Nunito,sans-serif;font-size:12px;font-weight:800;cursor:'+(disabled?'not-allowed':'pointer')+';border-radius:8px;white-space:nowrap;transition:all .15s;';
+  // ── Main tab row ──
+  var mainRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 10px 6px;gap:4px;">'+
+    mainTabs.map(function(t){
+      var isActive=(PROJ_MOD_TAB===t.id)||(t.group&&activeGroup===t.id);
+      var disabled=t.id!=='projects'&&!hasProjId;
+      return '<button id="pmt-'+t.id+'" '+
+        'onclick="'+(disabled?'void(0)':t.group?'projModTab(\''+t.id+'\')':'projModTab(\''+t.id+'\')')+'" '+
+        'style="flex-shrink:0;padding:7px 14px;font-size:12px;font-weight:800;border:none;border-radius:8px;'+
+        'font-family:Nunito,sans-serif;white-space:nowrap;transition:all .15s;'+
+        'cursor:'+(disabled?'not-allowed':'pointer')+';'+
+        'background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';'+
+        'color:'+(isActive?'white':(disabled?'rgba(255,255,255,.2)':'rgba(255,255,255,.6)'))+';'+
+        '">'
+        +t.label+'</button>';
+    }).join('')+
+  '</div>';
 
-    if(!t.group){
-      return '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
-        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
-        t.label+'</button>';
-    }
-
-    // Group with sub-tabs dropdown
-    var subHtml = '';
-    if(isActive && !disabled){
-      subHtml = '<div style="display:flex;gap:2px;background:rgba(255,255,255,.1);border-radius:7px;padding:3px;margin-left:4px;">'+
-        t.sub.map(function(s){
-          var sa = PROJ_MOD_TAB === s;
-          return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+t.id+'\',\''+s+'\')" '+
-            'style="'+baseCss+'padding:4px 9px;font-size:11px;background:'+(sa?'white':'transparent')+';color:'+(sa?'var(--navy)':'rgba(255,255,255,.75)')+';">'+
-            subLabels[s]+'</button>';
-        }).join('')+
-      '</div>';
-    }
-
-    return '<div id="pmt-grp-'+t.id+'" style="display:flex;align-items:center;">'+
-      '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
-        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
-        t.label+'</button>'+
-      subHtml+
+  // ── Sub-tab row (only when group active and project selected) ──
+  var subRow='';
+  if(hasProjId&&activeGroup){
+    subRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;'+
+      'padding:0 10px 8px;gap:4px;border-top:1px solid rgba(255,255,255,.1);">'+
+      PMT_GROUPS[activeGroup].map(function(s){
+        var sa=PROJ_MOD_TAB===s;
+        return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
+          'style="flex-shrink:0;padding:5px 12px;font-size:11px;font-weight:800;border:none;border-radius:7px;'+
+          'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
+          'background:'+(sa?'rgba(255,255,255,.22)':'transparent')+';'+
+          'color:'+(sa?'white':'rgba(255,255,255,.55)')+';'+
+          '">'+subLabels[s]+'</button>';
+      }).join('')+
     '</div>';
-  }).join('');
-
-  // Project badge when one is selected
-  var badge = document.getElementById('proj-mod-sel-badge');
-  if(badge){
-    badge.innerHTML = hasProjId
-      ? '<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">&#128207; '+projName+'</span>'
-      : '';
   }
 
-  // Add button visibility
-  var addBtn = document.getElementById('proj-mod-add-btn');
-  if(addBtn) addBtn.style.display = (PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq') ? '' : 'none';
+  bar.innerHTML=mainRow+subRow;
+
+  // Badge
+  var badge=document.getElementById('proj-mod-sel-badge');
+  if(badge){
+    if(hasProjId){
+      var pp=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
+      var pname=pp?(pp.code||pp.name):'';
+      badge.innerHTML='<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">'+pname+'</span>';
+    }else{
+      badge.innerHTML='';
+    }
+  }
+
+  var addBtn=document.getElementById('proj-mod-add-btn');
+  if(addBtn) addBtn.style.display=(PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq')?'':'none';
 }
+
 
 // ── Switch main tab ───────────────────────────────────────
 function projModTab(tab){
