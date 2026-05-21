@@ -8928,7 +8928,7 @@ async function empSavePay(){
   <select id="proj-mod-sel" style="display:none;" onchange="projModSelChange()">
     <option value="">— Select Project —</option>
   </select>
-  <div id="proj-mod-nav-bar" style="display:flex;flex-direction:column;background:#155724;flex-shrink:0;overflow:hidden;"></div>
+  <div id="proj-mod-nav-bar" style="display:flex;flex-direction:column;background:white;flex-shrink:0;overflow:hidden;border-bottom:1px solid #E5E7EB;"></div>
   <div id="proj-mod-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 90px;"></div>
   <div class="sh-overlay" id="ov-proj" onclick="closeProjSheet()"></div>
   <div class="sheet" id="sh-proj"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="proj-sheet-title">New Project</div><span class="sh-close" onclick="closeProjSheet()">&#10005;</span></div><div class="sh-body" id="proj-sheet-body"></div><div class="sh-foot" id="proj-sheet-foot"></div></div>
@@ -9133,6 +9133,7 @@ function projModRenderNav(){
   var bar=document.getElementById('proj-mod-nav-bar');
   if(!bar) return;
   var hasProjId=!!PROJ_MOD_SEL_ID;
+  var onProjects=PROJ_MOD_TAB==='projects';
 
   var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
   var activeGroup='';
@@ -9148,34 +9149,34 @@ function projModRenderNav(){
   ];
 
   // ── Main tab row ──
-  var mainRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 10px 6px;gap:4px;">'+
+  // Non-project tabs only shown when a project is selected
+  var mainRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 10px;gap:4px;background:white;">'+
     mainTabs.map(function(t){
       var isActive=(PROJ_MOD_TAB===t.id)||(t.group&&activeGroup===t.id);
-      var disabled=t.id!=='projects'&&!hasProjId;
+      // Hide non-project tabs when no project selected OR when on Projects tab
+      if(t.id!=='projects'&&(onProjects||!hasProjId)) return '';
       return '<button id="pmt-'+t.id+'" '+
-        'onclick="'+(disabled?'void(0)':t.group?'projModTab(\''+t.id+'\')':'projModTab(\''+t.id+'\')')+'" '+
+        'onclick="projModTab(\''+t.id+'\')" '+
         'style="flex-shrink:0;padding:7px 14px;font-size:12px;font-weight:800;border:none;border-radius:8px;'+
-        'font-family:Nunito,sans-serif;white-space:nowrap;transition:all .15s;'+
-        'cursor:'+(disabled?'not-allowed':'pointer')+';'+
-        'background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';'+
-        'color:'+(isActive?'white':(disabled?'rgba(255,255,255,.2)':'rgba(255,255,255,.6)'))+';'+
-        '">'
-        +t.label+'</button>';
+        'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
+        'background:'+(isActive?'#111827':'transparent')+';'+
+        'color:'+(isActive?'white':'#6B7280')+';'+
+        '">'+t.label+'</button>';
     }).join('')+
   '</div>';
 
-  // ── Sub-tab row (only when group active and project selected) ──
+  // ── Sub-tab row ──
   var subRow='';
-  if(hasProjId&&activeGroup){
+  if(hasProjId&&activeGroup&&!onProjects){
     subRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;'+
-      'padding:0 10px 8px;gap:4px;border-top:1px solid rgba(255,255,255,.1);">'+
+      'padding:0 10px 8px;gap:4px;background:white;border-top:1px solid #F3F4F6;">'+
       PMT_GROUPS[activeGroup].map(function(s){
         var sa=PROJ_MOD_TAB===s;
         return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
           'style="flex-shrink:0;padding:5px 12px;font-size:11px;font-weight:800;border:none;border-radius:7px;'+
           'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
-          'background:'+(sa?'rgba(255,255,255,.22)':'transparent')+';'+
-          'color:'+(sa?'white':'rgba(255,255,255,.55)')+';'+
+          'background:'+(sa?'#111827':'transparent')+';'+
+          'color:'+(sa?'white':'#9CA3AF')+';'+
           '">'+subLabels[s]+'</button>';
       }).join('')+
     '</div>';
@@ -9186,7 +9187,7 @@ function projModRenderNav(){
   // Badge
   var badge=document.getElementById('proj-mod-sel-badge');
   if(badge){
-    if(hasProjId){
+    if(hasProjId&&!onProjects){
       var pp=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
       var pname=pp?(pp.code||pp.name):'';
       badge.innerHTML='<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">'+pname+'</span>';
@@ -9200,17 +9201,18 @@ function projModRenderNav(){
 }
 
 
+
 // ── Switch main tab ───────────────────────────────────────
 function projModTab(tab){
-  var prevTab = PROJ_MOD_TAB;
   PROJ_MOD_TAB = tab;
 
-  // For group tabs: remember last sub or default to first sub
+  // For group tabs: default to first sub-tab
   if(PMT_GROUPS[tab]){
-    var lastSub = PROJ_MOD_SUB;
-    var validSub = PMT_GROUPS[tab].indexOf(lastSub) > -1 ? lastSub : PMT_GROUPS[tab][0];
-    PROJ_MOD_TAB = validSub;
+    PROJ_MOD_TAB = PMT_GROUPS[tab][0];
   }
+
+  // When going back to Projects tab, hide other tabs by clearing selection display
+  // (PROJ_MOD_SEL_ID is kept so user can return to same project)
 
   projModRenderNav();
   projModLoadTab();
@@ -9341,16 +9343,13 @@ function renderProjList(list){
         (coords.length?'<span>&#128204; '+coords.length+' GPS point'+(coords.length>1?'s':'')+'</span>':'')+
         (files.length?'<span>&#128206; '+files.length+' file'+(files.length>1?'s':'')+'</span>':'')+
       '</div>'+
-      // ── Action buttons ──
-      '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F5F5F5;">'+
-        '<button onclick="event.stopPropagation();projSelectAndGo(\''+p.id+'\')" '+
-          'style="flex:1;background:var(--navy);color:white;border:none;border-radius:7px;padding:6px;font-size:11px;font-weight:800;cursor:pointer;">'+
-          '&#128203; Open Project</button>'+
+      // ── Action buttons (Edit + Delete only, no Open Project) ──
+      '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F3F4F6;">'+
         '<button onclick="event.stopPropagation();openProjForm(\''+p.id+'\')" '+
-          'style="background:#E3F2FD;color:#1565C0;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          'style="background:#F3F4F6;color:#374151;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#9998; Edit</button>'+
         '<button onclick="event.stopPropagation();if(confirm(\'Delete this project?\')) deleteProjItem(\''+p.id+'\')" '+
-          'style="background:#FFEBEE;color:#C62828;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          'style="background:#FEE2E2;color:#C62828;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#128465;</button>'+
       '</div>'+
     '</div>';
