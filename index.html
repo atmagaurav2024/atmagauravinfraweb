@@ -8919,7 +8919,7 @@ async function empSavePay(){
   <select id="proj-mod-sel" style="display:none;" onchange="projModSelChange()">
     <option value="">— Select Project —</option>
   </select>
-  <div id="proj-mod-nav-bar" style="display:flex;flex-direction:column;background:#155724;flex-shrink:0;overflow:hidden;"></div>
+  <div id="proj-mod-nav-bar" style="display:flex;overflow-x:auto;background:#155724;padding:6px 14px 8px;flex-shrink:0;scrollbar-width:none;gap:4px;align-items:center;-webkit-overflow-scrolling:touch;"></div>
   <div id="proj-mod-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 90px;"></div>
   <div class="sh-overlay" id="ov-proj" onclick="closeProjSheet()"></div>
   <div class="sheet" id="sh-proj"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="proj-sheet-title">New Project</div><span class="sh-close" onclick="closeProjSheet()">&#10005;</span></div><div class="sh-body" id="proj-sheet-body"></div><div class="sh-foot" id="proj-sheet-foot"></div></div>
@@ -9023,16 +9023,6 @@ async function empSavePay(){
 
 <script>
 
-// Early declarations to prevent ReferenceError
-var USER_PERMISSIONS = {};
-var COMPANY_DATA = {};
-async function preloadCompanyData(){
-  try{
-    var rows = await sbFetch('company_details',{select:'*',order:'id.asc'});
-    COMPANY_DATA = (Array.isArray(rows)&&rows.length) ? rows[0] : {};
-  }catch(e){ COMPANY_DATA = {}; }
-}
-
 // ════ HELPERS ════════════════════════════════════════════
 function gv(id){var el=document.getElementById(id);return el?el.value.trim():'';}
 function fmtINR(n){if(!n&&n!==0)return '\u20b90';return '\u20b9'+parseFloat(n).toLocaleString('en-IN',{maximumFractionDigits:0});}
@@ -9131,85 +9121,66 @@ function initProjects(){
 
 // ── Render the grouped tab nav bar ────────────────────────
 function projModRenderNav(){
-  var bar=document.getElementById('proj-mod-nav-bar');
-  if(!bar)return;
-  var hasProjId=!!PROJ_MOD_SEL_ID;
-  var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
-
-  // Determine active group
-  var activeGroup='';
-  if(PMT_GROUPS.preconstruction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='preconstruction';
-  else if(PMT_GROUPS.construction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='construction';
-
-  // Main tab definitions
-  var mainTabs=[
-    {id:'projects',       label:'&#127959; Projects'},
-    {id:'preconstruction',label:'&#128196; Pre-construction', group:true},
-    {id:'construction',   label:'&#128736; Construction',     group:true},
-    {id:'bills',          label:'&#128203; Bills'},
-    {id:'orders',         label:'&#128196; Orders'}
-  ];
-
-  // Active state for main tabs
-  function isMainActive(t){
-    if(t.id===PROJ_MOD_TAB) return true;
-    if(t.group && activeGroup===t.id) return true;
-    return false;
+  var bar = document.getElementById('proj-mod-nav-bar');
+  if(!bar) return;
+  var hasProjId = !!PROJ_MOD_SEL_ID;
+  var projName  = '';
+  if(hasProjId){
+    var pp = PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
+    projName = pp ? (pp.code||pp.name) : '';
   }
+  var tabs = [
+    {id:'projects', label:'&#127959; Projects', group:false},
+    {id:'preconstruction', label:'&#128196; Pre-construction', group:true, sub:['boq','jm','planning']},
+    {id:'construction',    label:'&#128736; Construction',     group:true, sub:['rr','execution','allotted','daily','grn','store']},
+    {id:'bills',   label:'&#128203; Bills', group:false},
+    {id:'orders',  label:'&#128196; Orders', group:false}
+  ];
+  var subLabels = {boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
 
-  // Main tabs row
-  var mainHtml=mainTabs.map(function(t){
-    var active=isMainActive(t);
-    var disabled=t.id!=='projects'&&!hasProjId;
-    return '<button id="pmt-'+t.id+'" onclick="'+(disabled?'void(0)':'projModTab(\''+t.id+'\')')+'" '+
-      'style="padding:7px 14px;font-size:12px;font-weight:800;border:none;border-radius:8px;white-space:nowrap;font-family:Nunito,sans-serif;'+
-      'cursor:'+(disabled?'not-allowed':'pointer')+';'+
-      'background:'+(active?'rgba(255,255,255,.25)':'rgba(255,255,255,.07)')+';'+
-      'color:'+(active?'white':(disabled?'rgba(255,255,255,.25)':'rgba(255,255,255,.55)'))+';'+
-      'border:'+(active?'1.5px solid rgba(255,255,255,.5)':'1.5px solid transparent')+';'+
-      'transition:all .15s;">'+
-      t.label+'</button>';
+  bar.innerHTML = tabs.map(function(t){
+    var isActive = (PROJ_MOD_TAB === t.id) || (t.group && PMT_GROUPS[t.id] && PMT_GROUPS[t.id].indexOf(PROJ_MOD_TAB)>-1);
+    var disabled = t.id !== 'projects' && !hasProjId;
+    var baseCss = 'border:none;font-family:Nunito,sans-serif;font-size:12px;font-weight:800;cursor:'+(disabled?'not-allowed':'pointer')+';border-radius:8px;white-space:nowrap;transition:all .15s;';
+
+    if(!t.group){
+      return '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
+        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
+        t.label+'</button>';
+    }
+
+    // Group with sub-tabs dropdown
+    var subHtml = '';
+    if(isActive && !disabled){
+      subHtml = '<div style="display:flex;gap:2px;background:rgba(255,255,255,.1);border-radius:7px;padding:3px;margin-left:4px;">'+
+        t.sub.map(function(s){
+          var sa = PROJ_MOD_TAB === s;
+          return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+t.id+'\',\''+s+'\')" '+
+            'style="'+baseCss+'padding:4px 9px;font-size:11px;background:'+(sa?'white':'transparent')+';color:'+(sa?'var(--navy)':'rgba(255,255,255,.75)')+';">'+
+            subLabels[s]+'</button>';
+        }).join('')+
+      '</div>';
+    }
+
+    return '<div id="pmt-grp-'+t.id+'" style="display:flex;align-items:center;">'+
+      '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
+        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
+        t.label+'</button>'+
+      subHtml+
+    '</div>';
   }).join('');
 
-  // Sub-tabs row (only when a group is active and project selected)
-  var subHtml='';
-  if(hasProjId && activeGroup){
-    var subs=PMT_GROUPS[activeGroup];
-    subHtml='<div style="display:flex;gap:4px;padding:6px 14px 8px;background:rgba(0,0,0,.15);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;">'+
-      subs.map(function(s){
-        var sa=PROJ_MOD_TAB===s;
-        return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
-          'style="padding:5px 12px;font-size:11px;font-weight:800;border:none;border-radius:6px;white-space:nowrap;font-family:Nunito,sans-serif;cursor:pointer;'+
-          'background:'+(sa?'white':'rgba(255,255,255,.12)')+';'+
-          'color:'+(sa?'var(--navy)':'rgba(255,255,255,.7)')+';'+
-          'border:'+(sa?'1.5px solid white':'1.5px solid transparent')+';'+
-          'transition:all .15s;">'+
-          subLabels[s]+'</button>';
-      }).join('')+
-    '</div>';
-  }
-
-  bar.innerHTML=
-    '<div style="display:flex;gap:4px;padding:6px 14px 8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;width:100%;">'+
-      mainHtml+
-    '</div>'+
-    subHtml;
-
-  // Project badge
-  var badge=document.getElementById('proj-mod-sel-badge');
+  // Project badge when one is selected
+  var badge = document.getElementById('proj-mod-sel-badge');
   if(badge){
-    if(hasProjId){
-      var pp=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
-      var pname=pp?(pp.code||pp.name):'';
-      badge.innerHTML='<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">&#128207; '+pname+'</span>';
-    } else {
-      badge.innerHTML='';
-    }
+    badge.innerHTML = hasProjId
+      ? '<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">&#128207; '+projName+'</span>'
+      : '';
   }
 
-  // Add/+ button visibility
-  var addBtn=document.getElementById('proj-mod-add-btn');
-  if(addBtn) addBtn.style.display=(PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq')?'':'none';
+  // Add button visibility
+  var addBtn = document.getElementById('proj-mod-add-btn');
+  if(addBtn) addBtn.style.display = (PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq') ? '' : 'none';
 }
 
 // ── Switch main tab ───────────────────────────────────────
@@ -9355,12 +9326,15 @@ function renderProjList(list){
       '</div>'+
       // ── Action buttons ──
       '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F5F5F5;">'+
+        '<button onclick="event.stopPropagation();projSelectAndGo(\''+p.id+'\')" '+
+          'style="flex:1;background:var(--navy);color:white;border:none;border-radius:7px;padding:6px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          '&#128203; Open Project</button>'+
         '<button onclick="event.stopPropagation();openProjForm(\''+p.id+'\')" '+
-          'style="background:#E3F2FD;color:#1565C0;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          'style="background:#E3F2FD;color:#1565C0;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#9998; Edit</button>'+
         '<button onclick="event.stopPropagation();if(confirm(\'Delete this project?\')) deleteProjItem(\''+p.id+'\')" '+
           'style="background:#FFEBEE;color:#C62828;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
-          '&#128465; Delete</button>'+
+          '&#128465;</button>'+
       '</div>'+
     '</div>';
   }).join('');
