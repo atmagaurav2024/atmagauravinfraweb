@@ -62,79 +62,89 @@ function initProjects(){
 
 // ── Render the grouped tab nav bar ────────────────────────
 function projModRenderNav(){
-  var bar = document.getElementById('proj-mod-nav-bar');
+  var bar=document.getElementById('proj-mod-nav-bar');
   if(!bar) return;
-  var hasProjId = !!PROJ_MOD_SEL_ID;
-  var projName  = '';
-  if(hasProjId){
-    var pp = PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
-    projName = pp ? (pp.code||pp.name) : '';
-  }
-  var tabs = [
-    {id:'projects', label:'&#127959; Projects', group:false},
-    {id:'preconstruction', label:'&#128196; Pre-construction', group:true, sub:['boq','jm','planning']},
-    {id:'construction',    label:'&#128736; Construction',     group:true, sub:['rr','execution','allotted','daily','grn','store']},
-    {id:'bills',   label:'&#128203; Bills', group:false},
-    {id:'orders',  label:'&#128196; Orders', group:false}
+  var hasProjId=!!PROJ_MOD_SEL_ID;
+  var onProjects=PROJ_MOD_TAB==='projects';
+
+  var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
+  var activeGroup='';
+  if(PMT_GROUPS.preconstruction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='preconstruction';
+  else if(PMT_GROUPS.construction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='construction';
+
+  var mainTabs=[
+    {id:'projects',        label:'Projects'},
+    {id:'preconstruction', label:'Pre-construction', group:true},
+    {id:'construction',    label:'Construction',     group:true},
+    {id:'bills',           label:'Bills & Payments'},
+    {id:'orders',          label:'Orders'}
   ];
-  var subLabels = {boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
 
-  bar.innerHTML = tabs.map(function(t){
-    var isActive = (PROJ_MOD_TAB === t.id) || (t.group && PMT_GROUPS[t.id] && PMT_GROUPS[t.id].indexOf(PROJ_MOD_TAB)>-1);
-    var disabled = t.id !== 'projects' && !hasProjId;
-    var baseCss = 'border:none;font-family:Nunito,sans-serif;font-size:12px;font-weight:800;cursor:'+(disabled?'not-allowed':'pointer')+';border-radius:8px;white-space:nowrap;transition:all .15s;';
+  // ── Main tab row ──
+  // Non-project tabs only shown when a project is selected
+  var mainRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 10px;gap:4px;background:white;">'+
+    mainTabs.map(function(t){
+      var isActive=(PROJ_MOD_TAB===t.id)||(t.group&&activeGroup===t.id);
+      // Hide non-project tabs when no project selected OR when on Projects tab
+      if(t.id!=='projects'&&(onProjects||!hasProjId)) return '';
+      return '<button id="pmt-'+t.id+'" '+
+        'onclick="projModTab(\''+t.id+'\')" '+
+        'style="flex-shrink:0;padding:7px 14px;font-size:12px;font-weight:800;border:none;border-radius:8px;'+
+        'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
+        'background:'+(isActive?'#111827':'transparent')+';'+
+        'color:'+(isActive?'white':'#6B7280')+';'+
+        '">'+t.label+'</button>';
+    }).join('')+
+  '</div>';
 
-    if(!t.group){
-      return '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
-        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
-        t.label+'</button>';
-    }
-
-    // Group with sub-tabs dropdown
-    var subHtml = '';
-    if(isActive && !disabled){
-      subHtml = '<div style="display:flex;gap:2px;background:rgba(255,255,255,.1);border-radius:7px;padding:3px;margin-left:4px;">'+
-        t.sub.map(function(s){
-          var sa = PROJ_MOD_TAB === s;
-          return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+t.id+'\',\''+s+'\')" '+
-            'style="'+baseCss+'padding:4px 9px;font-size:11px;background:'+(sa?'white':'transparent')+';color:'+(sa?'var(--navy)':'rgba(255,255,255,.75)')+';">'+
-            subLabels[s]+'</button>';
-        }).join('')+
-      '</div>';
-    }
-
-    return '<div id="pmt-grp-'+t.id+'" style="display:flex;align-items:center;">'+
-      '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
-        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
-        t.label+'</button>'+
-      subHtml+
+  // ── Sub-tab row ──
+  var subRow='';
+  if(hasProjId&&activeGroup&&!onProjects){
+    subRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;'+
+      'padding:0 10px 8px;gap:4px;background:white;border-top:1px solid #F3F4F6;">'+
+      PMT_GROUPS[activeGroup].map(function(s){
+        var sa=PROJ_MOD_TAB===s;
+        return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
+          'style="flex-shrink:0;padding:5px 12px;font-size:11px;font-weight:800;border:none;border-radius:7px;'+
+          'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
+          'background:'+(sa?'#111827':'transparent')+';'+
+          'color:'+(sa?'white':'#9CA3AF')+';'+
+          '">'+subLabels[s]+'</button>';
+      }).join('')+
     '</div>';
-  }).join('');
-
-  // Project badge when one is selected
-  var badge = document.getElementById('proj-mod-sel-badge');
-  if(badge){
-    badge.innerHTML = hasProjId
-      ? '<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">&#128207; '+projName+'</span>'
-      : '';
   }
 
-  // Add button visibility
-  var addBtn = document.getElementById('proj-mod-add-btn');
-  if(addBtn) addBtn.style.display = (PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq') ? '' : 'none';
+  bar.innerHTML=mainRow+subRow;
+
+  // Badge
+  var badge=document.getElementById('proj-mod-sel-badge');
+  if(badge){
+    if(hasProjId&&!onProjects){
+      var pp=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
+      var pname=pp?(pp.code||pp.name):'';
+      badge.innerHTML='<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">'+pname+'</span>';
+    }else{
+      badge.innerHTML='';
+    }
+  }
+
+  var addBtn=document.getElementById('proj-mod-add-btn');
+  if(addBtn) addBtn.style.display=(PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq')?'':'none';
 }
+
+
 
 // ── Switch main tab ───────────────────────────────────────
 function projModTab(tab){
-  var prevTab = PROJ_MOD_TAB;
   PROJ_MOD_TAB = tab;
 
-  // For group tabs: remember last sub or default to first sub
+  // For group tabs: default to first sub-tab
   if(PMT_GROUPS[tab]){
-    var lastSub = PROJ_MOD_SUB;
-    var validSub = PMT_GROUPS[tab].indexOf(lastSub) > -1 ? lastSub : PMT_GROUPS[tab][0];
-    PROJ_MOD_TAB = validSub;
+    PROJ_MOD_TAB = PMT_GROUPS[tab][0];
   }
+
+  // When going back to Projects tab, hide other tabs by clearing selection display
+  // (PROJ_MOD_SEL_ID is kept so user can return to same project)
 
   projModRenderNav();
   projModLoadTab();
@@ -265,16 +275,13 @@ function renderProjList(list){
         (coords.length?'<span>&#128204; '+coords.length+' GPS point'+(coords.length>1?'s':'')+'</span>':'')+
         (files.length?'<span>&#128206; '+files.length+' file'+(files.length>1?'s':'')+'</span>':'')+
       '</div>'+
-      // ── Action buttons ──
-      '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F5F5F5;">'+
-        '<button onclick="event.stopPropagation();projSelectAndGo(\''+p.id+'\')" '+
-          'style="flex:1;background:var(--navy);color:white;border:none;border-radius:7px;padding:6px;font-size:11px;font-weight:800;cursor:pointer;">'+
-          '&#128203; Open Project</button>'+
+      // ── Action buttons (Edit + Delete only, no Open Project) ──
+      '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F3F4F6;">'+
         '<button onclick="event.stopPropagation();openProjForm(\''+p.id+'\')" '+
-          'style="background:#E3F2FD;color:#1565C0;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          'style="background:#F3F4F6;color:#374151;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#9998; Edit</button>'+
         '<button onclick="event.stopPropagation();if(confirm(\'Delete this project?\')) deleteProjItem(\''+p.id+'\')" '+
-          'style="background:#FFEBEE;color:#C62828;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          'style="background:#FEE2E2;color:#C62828;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#128465;</button>'+
       '</div>'+
     '</div>';
@@ -1149,7 +1156,7 @@ async function planDelRes(id){
 
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
-var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[];
+var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[];
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_SUBTAB='allot'; // allot | allotted | daily | bills
 
@@ -1212,7 +1219,8 @@ async function execLoadItems(){
       safe(sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'})),
       safe(sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'})),
       safe(sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+projId,order:'item_name.asc'})),
-      safe(sbFetch('store_issue_log',{select:'*',filter:'project_id=eq.'+projId,order:'issue_date.desc'}))
+      safe(sbFetch('store_issue_log',{select:'*',filter:'project_id=eq.'+projId,order:'issue_date.desc'})),
+      safe(sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'}))
     ]);
     WA_ITEMS=Array.isArray(r[0])?r[0]:[];
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -1227,6 +1235,7 @@ async function execLoadItems(){
     WA_APPROVED_RRS=Array.isArray(r[8])?r[8]:[];
     STORE_ITEMS=Array.isArray(r[9])?r[9]:[];
     STORE_ISSUE_LOG=Array.isArray(r[10])?r[10]:[];
+    WA_ADVANCES=Array.isArray(r[11])?r[11]:[];
     STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
@@ -3055,7 +3064,7 @@ function execRenderDailyContent(){
       '</div>'+
     '</div>';
 
-  // ── 2. RESOURCE UTILISATION TABLE — one row per allotment ───────────────
+  // ── 2. RESOURCE UTILISATION TABLE — grouped by resource name+vendor+unit ───
   // Build cumulative used qty per allot_id from daily entries
   var usedByAllot={};
   cumulEntries.forEach(function(d){
@@ -3066,37 +3075,41 @@ function execRenderDailyContent(){
     });
   });
 
-  // One row per allotment — keeps each resource separate
-  var resRows=WA_ALLOT.map(function(a){
-    var allotQty = parseFloat(a.qty)||0;
-    var usedQty  = usedByAllot[a.id]||0;
-    var pct      = allotQty>0?Math.round(usedQty/allotQty*100):0;
-    var col      = tCol[a.exec_type]||'#555';
-    var bal      = Math.max(0,allotQty-usedQty);
-    var overused = usedQty>allotQty;
-    // Get planned resource name (what resource it is)
-    var planRes  = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
-    var resName  = planRes.party_name||(planRes.resource_category||'');
-    // Get BOQ item for this allotment
-    var boqItem  = WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
-    var itemLabel= boqItem.item_code?'['+boqItem.item_code+']':'';
+  // Group allotments by resName+partyName+unit so same resource shows once
+  var resGroups={};
+  var resGroupOrder=[];
+  WA_ALLOT.forEach(function(a){
+    var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+    var resName=planRes.party_name||planRes.resource_category||'';
+    var key=(resName||a.party_name)+'__'+(a.unit||'')+'__'+a.exec_type;
+    if(!resGroups[key]){
+      resGroups[key]={resName:resName,partyName:a.party_name,unit:a.unit||'',execType:a.exec_type,allotQty:0,usedQty:0};
+      resGroupOrder.push(key);
+    }
+    resGroups[key].allotQty+=(parseFloat(a.qty)||0);
+    resGroups[key].usedQty +=(usedByAllot[a.id]||0);
+  });
 
+  var resRows=resGroupOrder.map(function(key){
+    var g=resGroups[key];
+    var allotQty=g.allotQty, usedQty=g.usedQty;
+    var pct=allotQty>0?Math.round(usedQty/allotQty*100):0;
+    var col=tCol[g.execType]||'#555';
+    var bal=Math.max(0,allotQty-usedQty);
+    var overused=usedQty>allotQty;
     var td2='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;';
     return '<tr style="border-bottom:1px solid #F0F0F0;">'+
       '<td style="padding:7px 10px;">'+
-        '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+col+'15;color:'+col+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
+        '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+col+'15;color:'+col+';">'+( tLbl[g.execType]||g.execType)+'</span>'+
       '</td>'+
       '<td style="padding:7px 10px;font-size:11px;">'+
-        (resName?'<div style="font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+
-        '<div style="font-weight:700;color:#333;'+(resName?'font-size:10px;':'font-size:11px;font-weight:800;')+'">'+a.party_name+
-          (itemLabel?' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+itemLabel+'</span>':'')+
-        '</div>'+
-        (a.scope?'<div style="font-size:9px;color:var(--text3);font-style:italic;">'+a.scope+'</div>':'')+
+        (g.resName?'<div style="font-weight:800;color:#1B5E20;">'+g.resName+'</div>':'')+
+        '<div style="font-weight:700;color:#333;'+(g.resName?'font-size:10px;':'font-size:11px;font-weight:800;')+'">'+g.partyName+'</div>'+
       '</td>'+
-      '<td style="'+td2+'">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span></td>'+
-      '<td style="'+td2+';color:'+(overused?'#C62828':col)+';font-weight:800;">'+fmt(usedQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+(a.unit||'')+'</span><span style="font-size:9px;color:'+(overused?'#C62828':col)+';"> ('+pct+'%)</span></td>'+
+      '<td style="'+td2+'">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
+      '<td style="'+td2+';color:'+(overused?'#C62828':col)+';font-weight:800;">'+fmt(usedQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+g.unit+'</span><span style="font-size:9px;color:'+(overused?'#C62828':col)+';"> ('+pct+'%)</span></td>'+
       '<td style="'+td2+';font-weight:800;color:'+(overused?'#C62828':bal<0.01?'#2E7D32':'#555')+';">'+
-        (overused?'+'+fmt(usedQty-allotQty)+' over':fmt(bal))+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+(a.unit||'')+'</span>'+
+        (overused?'+'+fmt(usedQty-allotQty)+' over':fmt(bal))+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+g.unit+'</span>'+
       '</td>'+
     '</tr>';
   }).join('');
@@ -3715,50 +3728,49 @@ function execRenderBills(){
     var p=parties[key];
     var col=tCol[p.type]||'#37474F';
 
-    // ── Per-allotment rows ──
-    var allotRows=p.allots.map(function(a){
+    // ── Per-allotment rows — grouped by resource name+unit ──
+    // Build groups: same resName+unit combined
+    var allotGroups={}, allotGroupOrder=[];
+    p.allots.forEach(function(a){
       var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
       var resName=planRes.party_name||planRes.resource_category||'';
-      var boqItem=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
-      var allotQty=parseFloat(a.qty)||0;
       var allotRate=parseFloat(a.rate)||0;
-      var allotAmt=Math.round(allotQty*allotRate);
-
-      // Use resource utilisation qty from daily entries (resources_used JSON) × allotment rate
+      var allotQty=parseFloat(a.qty)||0;
       var doneQty=0;
       WA_DAILY.forEach(function(d){
         var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
         rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)doneQty+=parseFloat(r.qty)||0;});
       });
-      var doneAmt=Math.round(doneQty*allotRate);
-      var pct=allotQty>0?Math.min(100,Math.round(doneQty/allotQty*100)):0; // utilised/allotted%
-      var pctCol=pct>=100?'#2E7D32':pct>=50?'#1565C0':'#E65100';
+      var key=(resName||a.party_name)+'__'+(a.unit||'');
+      if(!allotGroups[key]){
+        allotGroups[key]={resName:resName,partyName:a.party_name,unit:a.unit||'',allotQty:0,allotAmt:0,doneQty:0,doneAmt:0};
+        allotGroupOrder.push(key);
+      }
+      allotGroups[key].allotQty+=allotQty;
+      allotGroups[key].allotAmt+=Math.round(allotQty*allotRate);
+      allotGroups[key].doneQty+=doneQty;
+      allotGroups[key].doneAmt+=Math.round(doneQty*allotRate);
+    });
 
+    var allotRows=allotGroupOrder.map(function(key){
+      var g=allotGroups[key];
+      var pct=g.allotQty>0?Math.min(100,Math.round(g.doneQty/g.allotQty*100)):0;
+      var pctCol=pct>=100?'#2E7D32':pct>=50?'#1565C0':'#E65100';
       return '<tr style="border-bottom:1px solid #F5F5F5;">'+
         '<td style="padding:7px 10px;font-size:11px;">'+
-          (resName?'<div style="font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+''+
-          '<div style="font-size:10px;color:#555;">'+a.party_name+'</div>'+
-          (boqItem.item_code?'<div style="font-size:9px;color:var(--text3);">['+boqItem.item_code+'] '+(boqItem.short_name||boqItem.description||'')+'</div>':'')+
+          (g.resName?'<div style="font-weight:800;color:#1B5E20;">'+g.resName+'</div>':'')+
+          '<div style="font-size:10px;color:#555;">'+g.partyName+'</div>'+
         '</td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+allotQty+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span></td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+inr(allotAmt)+'</td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;color:'+pctCol+';font-weight:700;">'+doneQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span><div style="font-size:9px;color:'+pctCol+';">('+pct+'% of allotted)</div></td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+inr(doneAmt)+'</td>'+
+        '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+g.allotQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
+        '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+inr(g.allotAmt)+'</td>'+
+        '<td style="padding:7px 10px;font-size:11px;text-align:right;color:'+pctCol+';font-weight:700;">'+g.doneQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span><div style="font-size:9px;color:'+pctCol+';">('+pct+'% of allotted)</div></td>'+
+        '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+inr(g.doneAmt)+'</td>'+
       '</tr>';
     }).join('');
 
-    // ── Totals ──
-    var totAllotAmt=p.allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
-    var totDoneAmt=0;
-    p.allots.forEach(function(a){
-      var allotRate=parseFloat(a.rate)||0;
-      var doneQty=0;
-      WA_DAILY.forEach(function(d){
-        var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
-        rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)doneQty+=parseFloat(r.qty)||0;});
-      });
-      totDoneAmt+=Math.round(doneQty*allotRate);
-    });
+    // ── Totals — sum from groups ──
+    var totAllotAmt=Object.keys(allotGroups).reduce(function(s,k){return s+allotGroups[k].allotAmt;},0);
+    var totDoneAmt=Object.keys(allotGroups).reduce(function(s,k){return s+allotGroups[k].doneAmt;},0);
 
     // ── Bills summary ──
     var pBills=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;});
@@ -3850,6 +3862,7 @@ function execRenderBills(){
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
         '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
         '<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
+        '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:#F57F17;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128181; + Advance</button>'+
       '</div>'+
       // Allotment table
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">'+
@@ -3876,13 +3889,37 @@ function execRenderBills(){
         '<div style="padding:8px 10px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">NET PAYABLE</div><div style="font-size:13px;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</div></div>'+
         '<div style="padding:8px 10px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">PAID</div><div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
         '<div style="padding:8px 10px;text-align:center;"><div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE DUE</div><div style="font-size:13px;font-weight:900;color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
-      '</div>'+
+      '</div>';
+
+      // Advances section
+      var advancesList=pAdvances.length?
+        '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
+          '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:8px;">ADVANCE PAYMENTS</div>'+
+          pAdvances.map(function(adv){
+            var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
+            var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
+            var resLabel=planRes.party_name||planRes.resource_category||allot.scope||'';
+            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F5F5F5;font-size:11px;">'+
+              '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;">ADV</span>'+
+              '<div style="flex:1;">'+
+                (resLabel?'<b>'+resLabel+'</b> — ':'')+(adv.purpose||'')+
+                '<div style="font-size:9px;color:var(--text3);">'+adv.date+'  '+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+'</div>'+
+              '</div>'+
+              '<span style="font-weight:800;color:#F57F17;">'+inr(adv.amount)+'</span>'+
+              '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+            '</div>';
+          }).join('')+
+        '</div>':
+        '';
+
       // Bills section
+      (advancesList?advancesList:'')+
       (billsList?'<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
         '<div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:8px;">BILLS &amp; PAYMENTS</div>'+
         billsList+
-      '</div>':'')+
-    '</div>';
+      '</div>':'');
+
+    return billsHtml+'</div>';
   }).join('');
 }
 
@@ -3891,15 +3928,14 @@ async function execOpenBill(partyKey,projId){
   var partyType=parts[0],partyName=parts[1];
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
 
-  // Build work rows for this party with checkboxes
+  // Build work rows — grouped by resource name+unit
   var partyAllots=WA_ALLOT.filter(function(a){return a.party_name===partyName&&a.exec_type===partyType;});
-  var workRows=partyAllots.map(function(a){
+  var wrkGroups={}, wrkOrder=[];
+  partyAllots.forEach(function(a){
     var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var resName=planRes.party_name||planRes.resource_category||a.party_name;
-    var boqItem=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
     var allotRate=parseFloat(a.rate)||0;
     var allotQty=parseFloat(a.qty)||0;
-    // Use ONLY resource utilisation qty (resources_used in daily entries) × allotment rate
     var doneQty=0;
     WA_DAILY.forEach(function(d){
       var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
@@ -3911,8 +3947,25 @@ async function execOpenBill(partyKey,projId){
       var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
       return s+si.filter(function(x){return x.allot_id===a.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
     },0);
-    var unbilled=Math.max(0,doneAmt-prevBilled);
-    return {a:a,resName:resName,boqItem:boqItem,allotQty:allotQty,allotRate:allotRate,doneQty:doneQty,doneAmt:doneAmt,prevBilled:prevBilled,unbilled:unbilled};
+    var key=resName+'__'+(a.unit||'');
+    if(!wrkGroups[key]){
+      wrkGroups[key]={resName:resName,unit:a.unit||'',allotIds:[],allotQty:0,allotRate:allotRate,doneQty:0,doneAmt:0,prevBilled:0,unbilled:0};
+      wrkOrder.push(key);
+    }
+    wrkGroups[key].allotIds.push(a.id);
+    wrkGroups[key].allotQty+=allotQty;
+    wrkGroups[key].doneQty+=doneQty;
+    wrkGroups[key].doneAmt+=doneAmt;
+    wrkGroups[key].prevBilled+=prevBilled;
+  });
+  wrkOrder.forEach(function(k){
+    var g=wrkGroups[k];
+    g.unbilled=Math.max(0,g.doneAmt-g.prevBilled);
+  });
+  // workRows format compatible with existing save code
+  var workRows=wrkOrder.map(function(k){
+    var g=wrkGroups[k];
+    return {a:{id:g.allotIds[0]},resName:g.resName,boqItem:{},allotQty:g.allotQty,allotRate:g.allotRate,doneQty:g.doneQty,doneAmt:g.doneAmt,prevBilled:g.prevBilled,unbilled:g.unbilled,unit:g.unit,allotIds:g.allotIds};
   });
 
   var nextBillNo=(WA_BILLS.filter(function(b){return b.party_name===partyName&&b.party_type===partyType;}).length)+1;
@@ -3922,13 +3975,13 @@ async function execOpenBill(partyKey,projId){
     var chkId='bl-work-'+i;
     return '<div class="bl-work-row" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#FAFAFA;">'+
       '<div style="display:flex;align-items:flex-start;gap:8px;">'+
-        '<input type="checkbox" id="'+chkId+'" class="bl-work-chk" data-idx="'+i+'" '+(w.unbilled>0?'checked':'')+' '+
-          'style="width:15px;height:15px;accent-color:#1565C0;flex-shrink:0;margin-top:3px;" onchange="blUpdateTotal()">'+
+        '<input type="checkbox" id="'+chkId+'" class="bl-work-chk" data-idx="'+i+'" '+(w.unbilled>0?'checked':'')+
+          ' style="width:15px;height:15px;accent-color:#1565C0;flex-shrink:0;margin-top:3px;" onchange="blUpdateTotal()">'+
         '<div style="flex:1;">'+
           '<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+w.resName+'</div>'+
-          '<div style="font-size:10px;color:#555;">'+w.a.party_name+(w.boqItem.item_code?' | ['+w.boqItem.item_code+'] '+(w.boqItem.short_name||w.boqItem.description||''):'')+'</div>'+
+          '<div style="font-size:10px;color:#555;">'+(w.unit||'')+(w.allotIds&&w.allotIds.length>1?' | '+w.allotIds.length+' allotments combined':'')+'</div>'+
           '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:5px;font-size:10px;">'+
-            '<div><div style="color:var(--text3);">Allotted</div><b>'+allotQty+' @ \u20b9'+allotRate+'</b></div>'+
+            '<div><div style="color:var(--text3);">Allotted</div><b>'+w.allotQty.toFixed(2)+'</b></div>'+
             '<div><div style="color:var(--text3);">Done</div><b style="color:#1565C0;">'+w.doneQty.toFixed(2)+'</b></div>'+
             '<div><div style="color:var(--text3);">Prev Billed</div><b style="color:#E65100;">'+inr(w.prevBilled)+'</b></div>'+
             '<div><div style="color:var(--text3);">Unbilled</div><b style="color:#2E7D32;">'+inr(w.unbilled)+'</b></div>'+
@@ -3941,9 +3994,6 @@ async function execOpenBill(partyKey,projId){
         '</div>'+
       '</div>'+
     '</div>';
-
-    function allotQty(){return w.allotQty;}
-    function allotRate(){return w.allotRate;}
   }).join('');
 
   // Store workRows for save
@@ -4338,6 +4388,88 @@ function execDownloadBillPDF(billId){
   else toast('Allow popups to download PDF','warning');
 }
 
+
+async function execOpenAdvance(partyKey,projId){
+  var parts=partyKey.split('::');
+  var partyType=parts[0],partyName=parts[1];
+  var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
+
+  // Get allotments for this party
+  var partyAllots=WA_ALLOT.filter(function(a){return a.party_name===partyName&&a.exec_type===partyType;});
+  if(!partyAllots.length){toast('No allotments found for this party','warning');return;}
+
+  var allotOpts=partyAllots.map(function(a){
+    var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+    var resLabel=planRes.party_name||planRes.resource_category||a.scope||'Item';
+    var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
+    return '<option value="'+a.id+'">['+resLabel+'] '+a.qty+' '+(a.unit||'')+' @ \u20b9'+a.rate+' = '+inr(amt)+'</option>';
+  }).join('');
+
+  document.getElementById('exec-sheet-title').textContent='Record Advance — '+partyName;
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:11px;">'+
+      '<div style="font-weight:800;color:#F57F17;margin-bottom:4px;">&#128181; Advance Payment to '+partyName+'</div>'+
+      '<div style="color:var(--text3);">Advance will be deducted from future bill payments</div>'+
+    '</div>'+
+    '<div style="margin-bottom:8px;"><label class="flbl">Allotment / Work Order *</label>'+
+      '<select id="adv-allot" class="fsel">'+
+        '<option value="">— Select Allotment —</option>'+allotOpts+
+      '</select>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Payment Date *</label><input id="adv-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+      '<div><label class="flbl">Amount (₹) *</label><input id="adv-amount" class="finp" type="number" placeholder="0"></div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Payment Mode</label>'+
+        '<select id="adv-mode" class="fsel">'+
+          '<option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option>'+
+        '</select>'+
+      '</div>'+
+      '<div><label class="flbl">Reference / UTR</label><input id="adv-ref" class="finp" placeholder="UTR / Cheque no."></div>'+
+    '</div>'+
+    '<label class="flbl">Purpose / Remarks *</label>'+
+    '<input id="adv-purpose" class="finp" placeholder="e.g. Mobilization advance, Advance against PO-001">';
+
+  var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#F57F17;color:white;';
+  sb.innerHTML='&#128181; Record Advance';
+  sb.onclick=function(){execSaveAdvance(partyType,partyName,projId);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execSaveAdvance(partyType,partyName,projId){
+  var allotId=(document.getElementById('adv-allot')||{}).value||'';
+  var date=gv('adv-date'),amount=parseFloat(gv('adv-amount'))||0;
+  var purpose=(gv('adv-purpose')||'').trim();
+  if(!allotId){toast('Select an allotment','warning');return;}
+  if(!date||!amount){toast('Date and amount required','warning');return;}
+  if(!purpose){toast('Purpose/remarks required','warning');return;}
+  try{
+    var res=await sbInsert('work_advances',{
+      project_id:projId,party_type:partyType,party_name:partyName,
+      allot_id:allotId,date:date,amount:amount,
+      payment_mode:gv('adv-mode')||null,
+      reference:gv('adv-ref')||null,
+      purpose:purpose
+    });
+    if(res&&res[0]) WA_ADVANCES.push(res[0]);
+    toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
+    closeSheet('ov-exec','sh-exec');
+    execRenderBills();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+async function execDelAdvance(id){
+  if(!confirm('Delete this advance payment record?'))return;
+  WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
+  execRenderBills();
+  try{await sbDelete('work_advances',id);}catch(e){console.error(e);}
+  toast('Advance deleted','success');
+}
 async function execDelBill(id){
   var hasPaid=WA_PAYMENTS.some(function(p){return p.bill_id===id;});
   var msg=hasPaid?'This bill has payments.\\nDeleting will also delete all related payments. Continue?':'Delete this bill?';
@@ -4886,39 +5018,61 @@ function storeRender(){
     return;
   }
 
-  // Summary totals
-  var totalItems=STORE_ITEMS.length;
-  var totalIn=STORE_ITEMS.reduce(function(s,i){return s+(parseFloat(i.qty_in_hand)||0);},0);
-  var lowStock=STORE_ITEMS.filter(function(i){return (parseFloat(i.qty_in_hand)||0)<=(parseFloat(i.min_qty)||0);}).length;
+  // Group STORE_ITEMS by item_name + unit — combine duplicates
+  var grouped={}, groupOrder=[];
+  STORE_ITEMS.forEach(function(item){
+    var key=(item.item_name||'').toLowerCase()+'__'+(item.unit||'').toLowerCase();
+    if(!grouped[key]){
+      grouped[key]={
+        ids:[],item_name:item.item_name,unit:item.unit||'',
+        qty_in_hand:0,qty_issued:0,min_qty:parseFloat(item.min_qty)||0,
+        last_grn_date:item.last_grn_date||''
+      };
+      groupOrder.push(key);
+    }
+    grouped[key].ids.push(item.id);
+    grouped[key].qty_in_hand+=(parseFloat(item.qty_in_hand)||0);
+    grouped[key].qty_issued +=(parseFloat(item.qty_issued)||0);
+    // Use most recent GRN date
+    if(item.last_grn_date&&item.last_grn_date>grouped[key].last_grn_date)
+      grouped[key].last_grn_date=item.last_grn_date;
+  });
+
+  var uniqueCount=groupOrder.length;
+  var lowStock=groupOrder.filter(function(k){
+    var g=grouped[k];
+    return g.qty_in_hand<=g.min_qty&&g.min_qty>0;
+  }).length;
 
   var summaryBar=
     '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
       '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #6A1B9A;flex:1;">'+
-        '<div style="font-size:18px;font-weight:900;color:#6A1B9A;">'+totalItems+'</div>'+
+        '<div style="font-size:18px;font-weight:900;color:#6A1B9A;">'+uniqueCount+'</div>'+
         '<div style="font-size:10px;color:var(--text3);font-weight:700;">Items in Store</div></div>'+
       (lowStock>0?'<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #C62828;flex:1;">'+
         '<div style="font-size:18px;font-weight:900;color:#C62828;">'+lowStock+'</div>'+
         '<div style="font-size:10px;color:var(--text3);font-weight:700;">Low Stock</div></div>':'')+''+
     '</div>';
 
-  // Store table
-  var rows=STORE_ITEMS.map(function(item,i){
-    var inHand=parseFloat(item.qty_in_hand)||0;
-    var issued=parseFloat(item.qty_issued)||0;
-    var minQty=parseFloat(item.min_qty)||0;
-    var isLow=inHand<=minQty&&minQty>0;
+  var rows=groupOrder.map(function(key,i){
+    var g=grouped[key];
+    var inHand=g.qty_in_hand, issued=g.qty_issued;
+    var isLow=inHand<=g.min_qty&&g.min_qty>0;
+    // Use first id for issue/delete (covers single item); for grouped use all ids
+    var firstId=g.ids[0];
     return '<tr style="border-bottom:1px solid #F0F0F0;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
-      '<td style="padding:9px 10px;font-size:12px;font-weight:800;">'+item.item_name+
+      '<td style="padding:9px 10px;font-size:12px;font-weight:800;">'+g.item_name+
         (isLow?'<span style="font-size:9px;background:#FFEBEE;color:#C62828;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:5px;">Low Stock</span>':'')+
+        (g.ids.length>1?'<span style="font-size:9px;background:#E8F5E9;color:#2E7D32;padding:1px 5px;border-radius:3px;margin-left:4px;">'+g.ids.length+' entries</span>':'')+
       '</td>'+
-      '<td style="padding:9px 10px;font-size:11px;text-align:right;font-weight:800;color:#558B2F;">'+inHand.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(item.unit||'')+'</span></td>'+
-      '<td style="padding:9px 10px;font-size:11px;text-align:right;color:#E65100;">'+issued.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(item.unit||'')+'</span></td>'+
-      '<td style="padding:9px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+(inHand+issued).toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(item.unit||'')+'</span></td>'+
-      '<td style="padding:9px 10px;font-size:10px;color:var(--text3);">'+(item.last_grn_date?item.last_grn_date.split('-').reverse().join('/'):'—')+'</td>'+
+      '<td style="padding:9px 10px;font-size:11px;text-align:right;font-weight:800;color:#558B2F;">'+inHand.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
+      '<td style="padding:9px 10px;font-size:11px;text-align:right;color:#E65100;">'+issued.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
+      '<td style="padding:9px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+(inHand+issued).toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
+      '<td style="padding:9px 10px;font-size:10px;color:var(--text3);">'+(g.last_grn_date?g.last_grn_date.split('-').reverse().join('/'):'—')+'</td>'+
       '<td style="padding:9px 10px;">'+
         '<div style="display:flex;gap:4px;">'+
-          '<button onclick="storeIssue(\''+item.id+'\')" style="background:#6A1B9A;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">Issue</button>'+
-           '<button onclick="storeDelete(\''+item.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;" title="Delete">&#215;</button>'+
+          '<button onclick="storeIssue(\''+firstId+'\')" style="background:#6A1B9A;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;font-weight:700;">Issue</button>'+
+          '<button onclick="storeDelete(\''+firstId+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;" title="Delete">&#215;</button>'+
         '</div>'+
       '</td>'+
     '</tr>';
@@ -5054,3 +5208,15 @@ async function storeDelete(itemId){
     toast('Store entry deleted','success');
   }catch(e){console.error(e);toast('Error: '+e.message,'error');}
 }
+
+
+// ═══════════════════════════════════════════
+// FINANCE.JS — Petty Cash & Accounts
+// ═══════════════════════════════════════════
+
+// ── PETTY CASH ────────────────────────────────────────────
+var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
+var PC_SITE_TAB='all';
+var PC_EMP_FILTER='all'; // 'all' or empId
+
+var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
