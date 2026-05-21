@@ -12130,7 +12130,7 @@ function execRenderDailyContent(){
       '</div>'+
     '</div>';
 
-  // ── 2. RESOURCE UTILISATION TABLE — one row per allotment ───────────────
+  // ── 2. RESOURCE UTILISATION TABLE — grouped by resource name+vendor+unit ───
   // Build cumulative used qty per allot_id from daily entries
   var usedByAllot={};
   cumulEntries.forEach(function(d){
@@ -12141,37 +12141,41 @@ function execRenderDailyContent(){
     });
   });
 
-  // One row per allotment — keeps each resource separate
-  var resRows=WA_ALLOT.map(function(a){
-    var allotQty = parseFloat(a.qty)||0;
-    var usedQty  = usedByAllot[a.id]||0;
-    var pct      = allotQty>0?Math.round(usedQty/allotQty*100):0;
-    var col      = tCol[a.exec_type]||'#555';
-    var bal      = Math.max(0,allotQty-usedQty);
-    var overused = usedQty>allotQty;
-    // Get planned resource name (what resource it is)
-    var planRes  = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
-    var resName  = planRes.party_name||(planRes.resource_category||'');
-    // Get BOQ item for this allotment
-    var boqItem  = WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
-    var itemLabel= boqItem.item_code?'['+boqItem.item_code+']':'';
+  // Group allotments by resName+partyName+unit so same resource shows once
+  var resGroups={};
+  var resGroupOrder=[];
+  WA_ALLOT.forEach(function(a){
+    var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+    var resName=planRes.party_name||planRes.resource_category||'';
+    var key=(resName||a.party_name)+'__'+(a.unit||'')+'__'+a.exec_type;
+    if(!resGroups[key]){
+      resGroups[key]={resName:resName,partyName:a.party_name,unit:a.unit||'',execType:a.exec_type,allotQty:0,usedQty:0};
+      resGroupOrder.push(key);
+    }
+    resGroups[key].allotQty+=(parseFloat(a.qty)||0);
+    resGroups[key].usedQty +=(usedByAllot[a.id]||0);
+  });
 
+  var resRows=resGroupOrder.map(function(key){
+    var g=resGroups[key];
+    var allotQty=g.allotQty, usedQty=g.usedQty;
+    var pct=allotQty>0?Math.round(usedQty/allotQty*100):0;
+    var col=tCol[g.execType]||'#555';
+    var bal=Math.max(0,allotQty-usedQty);
+    var overused=usedQty>allotQty;
     var td2='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;';
     return '<tr style="border-bottom:1px solid #F0F0F0;">'+
       '<td style="padding:7px 10px;">'+
-        '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+col+'15;color:'+col+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
+        '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+col+'15;color:'+col+';">'+( tLbl[g.execType]||g.execType)+'</span>'+
       '</td>'+
       '<td style="padding:7px 10px;font-size:11px;">'+
-        (resName?'<div style="font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+
-        '<div style="font-weight:700;color:#333;'+(resName?'font-size:10px;':'font-size:11px;font-weight:800;')+'">'+a.party_name+
-          (itemLabel?' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+itemLabel+'</span>':'')+
-        '</div>'+
-        (a.scope?'<div style="font-size:9px;color:var(--text3);font-style:italic;">'+a.scope+'</div>':'')+
+        (g.resName?'<div style="font-weight:800;color:#1B5E20;">'+g.resName+'</div>':'')+
+        '<div style="font-weight:700;color:#333;'+(g.resName?'font-size:10px;':'font-size:11px;font-weight:800;')+'">'+g.partyName+'</div>'+
       '</td>'+
-      '<td style="'+td2+'">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+(a.unit||'')+'</span></td>'+
-      '<td style="'+td2+';color:'+(overused?'#C62828':col)+';font-weight:800;">'+fmt(usedQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+(a.unit||'')+'</span><span style="font-size:9px;color:'+(overused?'#C62828':col)+';"> ('+pct+'%)</span></td>'+
+      '<td style="'+td2+'">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
+      '<td style="'+td2+';color:'+(overused?'#C62828':col)+';font-weight:800;">'+fmt(usedQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+g.unit+'</span><span style="font-size:9px;color:'+(overused?'#C62828':col)+';"> ('+pct+'%)</span></td>'+
       '<td style="'+td2+';font-weight:800;color:'+(overused?'#C62828':bal<0.01?'#2E7D32':'#555')+';">'+
-        (overused?'+'+fmt(usedQty-allotQty)+' over':fmt(bal))+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+(a.unit||'')+'</span>'+
+        (overused?'+'+fmt(usedQty-allotQty)+' over':fmt(bal))+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+g.unit+'</span>'+
       '</td>'+
     '</tr>';
   }).join('');
