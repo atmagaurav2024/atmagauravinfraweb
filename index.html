@@ -2252,6 +2252,16 @@ input,select,textarea{font-size:16px !important;}
 <div class="toast-wrap" id="toast-wrap"></div>
 
 <script>
+// Early declarations needed by showApp and openDrawer
+var USER_PERMISSIONS = {};
+var COMPANY_DATA = {};
+async function preloadCompanyData(){
+  try{
+    var rows = await sbFetch('company_details',{select:'*',order:'id.asc'});
+    COMPANY_DATA = (Array.isArray(rows)&&rows.length)?rows[0]:{};
+  }catch(e){ COMPANY_DATA={}; }
+}
+
 // ═══════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════
@@ -2283,8 +2293,8 @@ function showApp(name){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.app-screen').forEach(function(s){s.classList.remove('on');});
   // Project sub-modules all live inside app-projects now
-  var allProjTabs = ['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
-  var isProjectTab = allProjTabs.indexOf(name) > -1;
+  var allProjTabs=['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
+  var isProjectTab=allProjTabs.indexOf(name)>-1;
   var target = isProjectTab
     ? document.getElementById('app-projects')
     : document.getElementById('app-'+name);
@@ -3388,48 +3398,35 @@ const SUPABASE_URL = 'https://aywlauygsqkivdihbaut.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5d2xhdXlnc3FraXZkaWhiYXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODYxNjgsImV4cCI6MjA4OTY2MjE2OH0.NHMZTF6yCaZXW8bNw496Hd_t_NAIE__PUU4WsxZc3yw';
 
 async function sbFetch(table, options={}){
-  var url = SUPABASE_URL+'/rest/v1/'+table;
-  var params = [];
+  var url=SUPABASE_URL+'/rest/v1/'+table;
+  var params=[];
   if(options.select) params.push('select='+options.select);
   if(options.filter) params.push(options.filter);
-  if(options.order) params.push('order='+options.order);
-  if(params.length) url += '?'+params.join('&');
-  var token = (typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken) ? currentUser.accessToken : SUPABASE_ANON_KEY;
-  var res = await fetch(url,{
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}
-  });
-  if(!res.ok){var err=await res.json().catch(function(){return {};});throw Object.assign(new Error(err.message||res.statusText||'Fetch failed'),{status:res.status,data:err});}
+  if(options.order)  params.push('order='+options.order);
+  if(params.length)  url+='?'+params.join('&');
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
+  var res=await fetch(url,{headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}});
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
   return res.json();
 }
 
 async function sbInsert(table, data){
   var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
-    method:'POST',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify(data)
-  });
-  if(!res.ok){var e=await res.json().catch(function(){return {};});throw Object.assign(new Error(e.message||'Insert failed'),{status:res.status,data:e});}
+  var res=await fetch(SUPABASE_URL+'/rest/v1/'+table,{method:'POST',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(data)});
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||'Insert failed'),{status:res.status,data:e});}
   return res.json();
 }
 
 async function sbUpdate(table, id, data){
   var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
-    method:'PATCH',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
-    body:JSON.stringify(data)
-  });
-  if(!res.ok){var e=await res.json().catch(function(){return {};});throw Object.assign(new Error(e.message||'Update failed'),{status:res.status,data:e});}
+  var res=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(data)});
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||'Update failed'),{status:res.status,data:e});}
   return res.json();
 }
 
 async function sbDelete(table, id){
   var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:SUPABASE_ANON_KEY;
-  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
-    method:'DELETE',
-    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}
-  });
+  var res=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'}});
   return res.ok;
 }
 
@@ -5599,6 +5596,16 @@ function closeDrawer(){
 
 
 function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[i]===String.fromCharCode(39)?'&#39;':s[i];}return r;}
+
+// ── Declare early so all script blocks can use them ──
+var USER_PERMISSIONS = {};
+var COMPANY_DATA = {};
+async function preloadCompanyData(){
+  try{
+    var rows = await sbFetch('company_details',{select:'*',order:'id.asc'});
+    COMPANY_DATA = (Array.isArray(rows)&&rows.length) ? rows[0] : {};
+  }catch(e){ COMPANY_DATA = {}; }
+}
 </script>
 
 <!-- PENDING APPROVALS SHEET -->
@@ -8932,7 +8939,7 @@ async function empSavePay(){
   <select id="proj-mod-sel" style="display:none;" onchange="projModSelChange()">
     <option value="">— Select Project —</option>
   </select>
-  <div id="proj-mod-nav-bar" style="display:flex;overflow-x:auto;background:#155724;padding:6px 14px 8px;flex-shrink:0;scrollbar-width:none;gap:4px;align-items:center;-webkit-overflow-scrolling:touch;"></div>
+  <div id="proj-mod-nav-bar" style="display:flex;flex-direction:column;background:#155724;flex-shrink:0;overflow:hidden;"></div>
   <div id="proj-mod-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 90px;"></div>
   <div class="sh-overlay" id="ov-proj" onclick="closeProjSheet()"></div>
   <div class="sheet" id="sh-proj"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="proj-sheet-title">New Project</div><span class="sh-close" onclick="closeProjSheet()">&#10005;</span></div><div class="sh-body" id="proj-sheet-body"></div><div class="sh-foot" id="proj-sheet-foot"></div></div>
@@ -9036,6 +9043,16 @@ async function empSavePay(){
 
 <script>
 
+// Early declarations to prevent ReferenceError
+var USER_PERMISSIONS = {};
+var COMPANY_DATA = {};
+async function preloadCompanyData(){
+  try{
+    var rows = await sbFetch('company_details',{select:'*',order:'id.asc'});
+    COMPANY_DATA = (Array.isArray(rows)&&rows.length) ? rows[0] : {};
+  }catch(e){ COMPANY_DATA = {}; }
+}
+
 // ════ HELPERS ════════════════════════════════════════════
 function gv(id){var el=document.getElementById(id);return el?el.value.trim():'';}
 function fmtINR(n){if(!n&&n!==0)return '\u20b90';return '\u20b9'+parseFloat(n).toLocaleString('en-IN',{maximumFractionDigits:0});}
@@ -9134,66 +9151,85 @@ function initProjects(){
 
 // ── Render the grouped tab nav bar ────────────────────────
 function projModRenderNav(){
-  var bar = document.getElementById('proj-mod-nav-bar');
-  if(!bar) return;
-  var hasProjId = !!PROJ_MOD_SEL_ID;
-  var projName  = '';
-  if(hasProjId){
-    var pp = PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
-    projName = pp ? (pp.code||pp.name) : '';
-  }
-  var tabs = [
-    {id:'projects', label:'&#127959; Projects', group:false},
-    {id:'preconstruction', label:'&#128196; Pre-construction', group:true, sub:['boq','jm','planning']},
-    {id:'construction',    label:'&#128736; Construction',     group:true, sub:['rr','execution','allotted','daily','grn','store']},
-    {id:'bills',   label:'&#128203; Bills', group:false},
-    {id:'orders',  label:'&#128196; Orders', group:false}
+  var bar=document.getElementById('proj-mod-nav-bar');
+  if(!bar)return;
+  var hasProjId=!!PROJ_MOD_SEL_ID;
+  var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
+
+  // Determine active group
+  var activeGroup='';
+  if(PMT_GROUPS.preconstruction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='preconstruction';
+  else if(PMT_GROUPS.construction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='construction';
+
+  // Main tab definitions
+  var mainTabs=[
+    {id:'projects',       label:'&#127959; Projects'},
+    {id:'preconstruction',label:'&#128196; Pre-construction', group:true},
+    {id:'construction',   label:'&#128736; Construction',     group:true},
+    {id:'bills',          label:'&#128203; Bills'},
+    {id:'orders',         label:'&#128196; Orders'}
   ];
-  var subLabels = {boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
 
-  bar.innerHTML = tabs.map(function(t){
-    var isActive = (PROJ_MOD_TAB === t.id) || (t.group && PMT_GROUPS[t.id] && PMT_GROUPS[t.id].indexOf(PROJ_MOD_TAB)>-1);
-    var disabled = t.id !== 'projects' && !hasProjId;
-    var baseCss = 'border:none;font-family:Nunito,sans-serif;font-size:12px;font-weight:800;cursor:'+(disabled?'not-allowed':'pointer')+';border-radius:8px;white-space:nowrap;transition:all .15s;';
+  // Active state for main tabs
+  function isMainActive(t){
+    if(t.id===PROJ_MOD_TAB) return true;
+    if(t.group && activeGroup===t.id) return true;
+    return false;
+  }
 
-    if(!t.group){
-      return '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
-        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
-        t.label+'</button>';
-    }
-
-    // Group with sub-tabs dropdown
-    var subHtml = '';
-    if(isActive && !disabled){
-      subHtml = '<div style="display:flex;gap:2px;background:rgba(255,255,255,.1);border-radius:7px;padding:3px;margin-left:4px;">'+
-        t.sub.map(function(s){
-          var sa = PROJ_MOD_TAB === s;
-          return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+t.id+'\',\''+s+'\')" '+
-            'style="'+baseCss+'padding:4px 9px;font-size:11px;background:'+(sa?'white':'transparent')+';color:'+(sa?'var(--navy)':'rgba(255,255,255,.75)')+';">'+
-            subLabels[s]+'</button>';
-        }).join('')+
-      '</div>';
-    }
-
-    return '<div id="pmt-grp-'+t.id+'" style="display:flex;align-items:center;">'+
-      '<button id="pmt-'+t.id+'" onclick="'+(disabled?'':'projModTab(\''+t.id+'\')')+'" '+
-        'style="'+baseCss+'padding:7px 13px;background:'+(isActive?'rgba(255,255,255,.22)':'transparent')+';color:'+(isActive?'white':(disabled?'rgba(255,255,255,.3)':'rgba(255,255,255,.65)'))+';opacity:'+(disabled?'.5':'1')+';">'+
-        t.label+'</button>'+
-      subHtml+
-    '</div>';
+  // Main tabs row
+  var mainHtml=mainTabs.map(function(t){
+    var active=isMainActive(t);
+    var disabled=t.id!=='projects'&&!hasProjId;
+    return '<button id="pmt-'+t.id+'" onclick="'+(disabled?'void(0)':'projModTab(\''+t.id+'\')')+'" '+
+      'style="padding:7px 14px;font-size:12px;font-weight:800;border:none;border-radius:8px;white-space:nowrap;font-family:Nunito,sans-serif;'+
+      'cursor:'+(disabled?'not-allowed':'pointer')+';'+
+      'background:'+(active?'rgba(255,255,255,.25)':'rgba(255,255,255,.07)')+';'+
+      'color:'+(active?'white':(disabled?'rgba(255,255,255,.25)':'rgba(255,255,255,.55)'))+';'+
+      'border:'+(active?'1.5px solid rgba(255,255,255,.5)':'1.5px solid transparent')+';'+
+      'transition:all .15s;">'+
+      t.label+'</button>';
   }).join('');
 
-  // Project badge when one is selected
-  var badge = document.getElementById('proj-mod-sel-badge');
-  if(badge){
-    badge.innerHTML = hasProjId
-      ? '<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">&#128207; '+projName+'</span>'
-      : '';
+  // Sub-tabs row (only when a group is active and project selected)
+  var subHtml='';
+  if(hasProjId && activeGroup){
+    var subs=PMT_GROUPS[activeGroup];
+    subHtml='<div style="display:flex;gap:4px;padding:6px 14px 8px;background:rgba(0,0,0,.15);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;">'+
+      subs.map(function(s){
+        var sa=PROJ_MOD_TAB===s;
+        return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
+          'style="padding:5px 12px;font-size:11px;font-weight:800;border:none;border-radius:6px;white-space:nowrap;font-family:Nunito,sans-serif;cursor:pointer;'+
+          'background:'+(sa?'white':'rgba(255,255,255,.12)')+';'+
+          'color:'+(sa?'var(--navy)':'rgba(255,255,255,.7)')+';'+
+          'border:'+(sa?'1.5px solid white':'1.5px solid transparent')+';'+
+          'transition:all .15s;">'+
+          subLabels[s]+'</button>';
+      }).join('')+
+    '</div>';
   }
 
-  // Add button visibility
-  var addBtn = document.getElementById('proj-mod-add-btn');
-  if(addBtn) addBtn.style.display = (PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq') ? '' : 'none';
+  bar.innerHTML=
+    '<div style="display:flex;gap:4px;padding:6px 14px 8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;width:100%;">'+
+      mainHtml+
+    '</div>'+
+    subHtml;
+
+  // Project badge
+  var badge=document.getElementById('proj-mod-sel-badge');
+  if(badge){
+    if(hasProjId){
+      var pp=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
+      var pname=pp?(pp.code||pp.name):'';
+      badge.innerHTML='<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">&#128207; '+pname+'</span>';
+    } else {
+      badge.innerHTML='';
+    }
+  }
+
+  // Add/+ button visibility
+  var addBtn=document.getElementById('proj-mod-add-btn');
+  if(addBtn) addBtn.style.display=(PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq')?'':'none';
 }
 
 // ── Switch main tab ───────────────────────────────────────
@@ -9339,15 +9375,12 @@ function renderProjList(list){
       '</div>'+
       // ── Action buttons ──
       '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F5F5F5;">'+
-        '<button onclick="event.stopPropagation();projSelectAndGo(\''+p.id+'\')" '+
-          'style="flex:1;background:var(--navy);color:white;border:none;border-radius:7px;padding:6px;font-size:11px;font-weight:800;cursor:pointer;">'+
-          '&#128203; Open Project</button>'+
         '<button onclick="event.stopPropagation();openProjForm(\''+p.id+'\')" '+
-          'style="background:#E3F2FD;color:#1565C0;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          'style="background:#E3F2FD;color:#1565C0;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#9998; Edit</button>'+
         '<button onclick="event.stopPropagation();if(confirm(\'Delete this project?\')) deleteProjItem(\''+p.id+'\')" '+
           'style="background:#FFEBEE;color:#C62828;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
-          '&#128465;</button>'+
+          '&#128465; Delete</button>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -15365,11 +15398,11 @@ async function acSavePermissions(){
     // Delete existing then insert fresh
     await fetch(SUPABASE_URL+'/rest/v1/access_permissions?'+filter,{
       method:'DELETE',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY)}
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=\'undefined\'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY)}
     });
     var res = await fetch(SUPABASE_URL+'/rest/v1/access_permissions',{
       method:'POST',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=\'undefined\'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(inserts)
     });
     if(!res.ok){
