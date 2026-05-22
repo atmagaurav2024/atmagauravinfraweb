@@ -3972,11 +3972,11 @@ function execRenderBills(){
         '';
 
       // Bills section
-      (advancesList?advancesList:'')+
-      (billsList?'<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
-        '<div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:8px;">BILLS &amp; PAYMENTS</div>'+
-        billsList+
-      '</div>':'');
+      var billsHtml=(advancesList?advancesList:'')+
+        (billsList?'<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
+          '<div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:8px;">BILLS &amp; PAYMENTS</div>'+
+          billsList+
+        '</div>':'');
 
     return billsHtml+'</div>';
   }).join('');
