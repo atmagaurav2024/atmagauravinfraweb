@@ -3831,6 +3831,8 @@ function execRenderBills(){
     var totDoneAmt=Object.keys(allotGroups).reduce(function(s,k){return s+allotGroups[k].doneAmt;},0);
 
     // ── Bills summary ──
+    var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
+    var totalAdvance=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
     var pBills=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;});
     var totalBilled=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
     var totalDeductions=pBills.reduce(function(s,b){
