@@ -3915,33 +3915,33 @@ function execRenderBills(){
       '</div>';
     }).join(''):'';
 
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
-      // Party header
+    var cardTop=
+      '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
         '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
         '<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
         '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:#F57F17;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128181; + Advance</button>'+
       '</div>'+
-      // Allotment table
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">'+
         '<thead><tr style="background:#F8FAFC;">'+
           '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">RESOURCE / WORK</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED QTY</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED AMT</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;">UTILISED QTY</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">PAYABLE AMT<div style="font-size:8px;font-weight:400;">(Util Qty × Rate)</div></th>'+
+          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">PAYABLE AMT</th>'+
         '</tr></thead>'+
         '<tbody>'+allotRows+'</tbody>'+
         '<tfoot><tr style="background:#EFF6FF;border-top:2px solid #1565C0;">'+
           '<td style="padding:7px 10px;font-size:11px;font-weight:800;">TOTAL</td>'+
-          '<td style="padding:7px 10px;"></td>'+
+          '<td></td>'+
           '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;">'+inr(totAllotAmt)+'</td>'+
-          '<td style="padding:7px 10px;"></td>'+
+          '<td></td>'+
           '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1565C0;">'+inr(totDoneAmt)+'</td>'+
         '</tr></tfoot>'+
-      '</table></div>'+
-      // Financial summary bar
+      '</table></div>';
+
+    var summaryBar=
       '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:2px solid var(--border);">'+
         '<div style="padding:8px 10px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">BILLED</div><div style="font-size:13px;font-weight:900;color:#1565C0;">'+inr(totalBilled)+'</div></div>'+
         '<div style="padding:8px 10px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">DEDUCTIONS</div><div style="font-size:13px;font-weight:900;color:#E65100;">'+inr(totalDeductions)+'</div></div>'+
@@ -3950,35 +3950,31 @@ function execRenderBills(){
         '<div style="padding:8px 10px;text-align:center;"><div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE DUE</div><div style="font-size:13px;font-weight:900;color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
       '</div>';
 
-      // Advances section
-      var advancesList=pAdvances.length?
-        '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
-          '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:8px;">ADVANCE PAYMENTS</div>'+
-          pAdvances.map(function(adv){
-            var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
-            var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
-            var resLabel=planRes.party_name||planRes.resource_category||allot.scope||'';
-            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F5F5F5;font-size:11px;">'+
-              '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;">ADV</span>'+
-              '<div style="flex:1;">'+
-                (resLabel?'<b>'+resLabel+'</b> — ':'')+(adv.purpose||'')+
-                '<div style="font-size:9px;color:var(--text3);">'+adv.date+'  '+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+'</div>'+
-              '</div>'+
-              '<span style="font-weight:800;color:#F57F17;">'+inr(adv.amount)+'</span>'+
-              '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
-            '</div>';
-          }).join('')+
-        '</div>':
-        '';
+    var advancesList=pAdvances.length?
+      '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
+        '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:8px;">ADVANCE PAYMENTS</div>'+
+        pAdvances.map(function(adv){
+          var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
+          var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
+          var resLabel=planRes.party_name||planRes.resource_category||allot.scope||'';
+          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F5F5F5;font-size:11px;">'+
+            '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;">ADV</span>'+
+            '<div style="flex:1;">'+(resLabel?'<b>'+resLabel+'</b> — ':'')+(adv.purpose||'')+
+              '<div style="font-size:9px;color:var(--text3);">'+adv.date+' '+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+'</div>'+
+            '</div>'+
+            '<span style="font-weight:800;color:#F57F17;">'+inr(adv.amount)+'</span>'+
+            '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+          '</div>';
+        }).join('')+
+      '</div>':'';
 
-      // Bills section
-      var billsHtml=(advancesList?advancesList:'')+
-        (billsList?'<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
-          '<div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:8px;">BILLS &amp; PAYMENTS</div>'+
-          billsList+
-        '</div>':'');
+    var billsSection=billsList?
+      '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
+        '<div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:8px;">BILLS &amp; PAYMENTS</div>'+
+        billsList+
+      '</div>':'';
 
-    return billsHtml+'</div>';
+    return cardTop + summaryBar + advancesList + billsSection + '</div>';
   }).join('');
 }
 
