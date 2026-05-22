@@ -2540,7 +2540,9 @@ function execRenderAllotted(){
         '<div style="text-align:right;flex-shrink:0;">'+
           '<div style="font-size:12px;font-weight:800;">'+inr((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0))+'</div>'+
           (itemOrders.length?'<div style="font-size:9px;color:#2E7D32;font-weight:700;">&#10003; Doc issued</div>':'<div style="font-size:9px;color:var(--text3);">Pending</div>')+
+          (function(){var advs=WA_ADVANCES.filter(function(x){return x.allot_id===a.id;});if(!advs.length)return '';var tot=advs.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);return '<div style="font-size:9px;color:#F57F17;font-weight:700;">&#128181; Advance: ₹'+tot.toLocaleString('en-IN')+'</div>';})()+
         '</div>'+
+        '<button onclick="execOpenAdvanceAllot(\''+a.id+'\')" title="Advance Payment" style="background:#F57F17;color:white;border:none;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;">&#128181; Advance</button>'+
         '<button onclick="execEditAllotted(\''+a.id+'\')" title="Edit" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;flex-shrink:0;">&#9998;</button>'+
         '<button onclick="execDelAllotted(\''+a.id+'\')" title="Delete" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;flex-shrink:0;">&#215;</button>'+
       '</div>';
@@ -2566,6 +2568,29 @@ function execRenderAllotted(){
         '</div>'
       : '';
 
+    // Advances for this batch
+    var batchAdvances=WA_ADVANCES.filter(function(adv){
+      return items.some(function(a){return a.id===adv.allot_id;});
+    });
+    var totalBatchAdv=batchAdvances.reduce(function(s,adv){return s+(parseFloat(adv.amount)||0);},0);
+    var inrFmt=function(n){return '\u20b9'+Math.round(Number(n||0)).toLocaleString('en-IN');};
+
+    var advRow=batchAdvances.length?
+      '<div style="padding:8px 14px;background:#FFF8E1;border-top:1px solid #FFE0B2;">'+
+        '<div style="font-size:9px;font-weight:800;color:#F57F17;margin-bottom:4px;">ADVANCES PAID</div>'+
+        batchAdvances.map(function(adv){
+          return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:3px 0;border-bottom:1px solid #FFF3E0;">'+
+            '<span style="color:var(--text3);">'+adv.date+'</span>'+
+            '<span style="flex:1;font-weight:700;">'+inrFmt(adv.amount)+'</span>'+
+            '<span style="color:var(--text3);">'+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+'</span>'+
+            '<span style="color:#555;font-size:9px;">'+( adv.purpose||'')+'</span>'+
+            '<button onclick="execAdvanceReceipt(\''+adv.id+'\',\'\',0)" style="background:#F57F17;color:white;border:none;border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer;font-weight:700;">PDF</button>'+
+            '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;">&#215;</button>'+
+          '</div>';
+        }).join('')+
+        '<div style="display:flex;justify-content:flex-end;font-size:10px;font-weight:800;color:#F57F17;padding-top:4px;">Total Advance: '+inrFmt(totalBatchAdv)+'</div>'+
+      '</div>':'';
+
     return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
         '<div style="flex:1;">'+
@@ -2576,6 +2601,7 @@ function execRenderAllotted(){
       '</div>'+
       itemRows+
       orderRow+
+      advRow+
       downloadRow+
     '</div>';
   }).join('');
@@ -3923,6 +3949,169 @@ function execRenderBills(){
   }).join('');
 }
 
+
+// ════ ADVANCE PAYMENT (from Allotted Work tab) ══════════════════════════
+async function execOpenAdvanceAllot(allotId){
+  var a=WA_ALLOT.find(function(x){return x.id===allotId;});
+  if(!a){toast('Allotment not found','error');return;}
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+  var resName=planRes.party_name||planRes.resource_category||a.scope||'';
+  var allotAmt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
+  var alreadyAdv=WA_ADVANCES.filter(function(x){return x.allot_id===allotId;})
+    .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var balance=Math.max(0,allotAmt-alreadyAdv);
+  var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
+
+  document.getElementById('exec-sheet-title').textContent='Advance Payment — '+a.party_name;
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+      '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:6px;">'+a.party_name+'</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;">'+
+        '<div><div style="font-size:9px;color:var(--text3);">Resource</div><b>'+( resName||'—')+'</b></div>'+
+        '<div><div style="font-size:9px;color:var(--text3);">Total Value</div><b>'+inr(allotAmt)+'</b></div>'+
+        '<div><div style="font-size:9px;color:var(--text3);">Balance</div><b style="color:#F57F17;">'+inr(balance)+'</b></div>'+
+      '</div>'+
+      (alreadyAdv?'<div style="font-size:10px;color:#E65100;margin-top:6px;">Already advanced: '+inr(alreadyAdv)+'</div>':'')+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Date *</label><input id="adva-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+      '<div><label class="flbl">Amount (₹) *</label><input id="adva-amount" class="finp" type="number" placeholder="0" value="'+Math.max(0,balance)+'"></div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Payment Mode</label>'+
+        '<select id="adva-mode" class="fsel"><option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option></select>'+
+      '</div>'+
+      '<div><label class="flbl">Reference / UTR</label><input id="adva-ref" class="finp" placeholder="UTR / Cheque no."></div>'+
+    '</div>'+
+    '<label class="flbl">Purpose / Remarks *</label>'+
+    '<input id="adva-purpose" class="finp" placeholder="e.g. Mobilization advance, Advance against PO...">';
+
+  var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#F57F17;color:white;';
+  sb.innerHTML='&#128181; Record Advance';
+  sb.onclick=function(){execSaveAdvanceAllot(allotId,a.party_type||a.exec_type,a.party_name,projId,resName,allotAmt);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execSaveAdvanceAllot(allotId,partyType,partyName,projId,resName,allotAmt){
+  var date=gv('adva-date'),amount=parseFloat(gv('adva-amount'))||0;
+  var purpose=(gv('adva-purpose')||'').trim();
+  if(!date||!amount){toast('Date and amount required','warning');return;}
+  if(!purpose){toast('Purpose/remarks required','warning');return;}
+  if(amount>allotAmt){
+    if(!confirm('Amount exceeds total allotted value ('+'\u20b9'+allotAmt.toLocaleString('en-IN')+').\nContinue?'))return;
+  }
+  try{
+    var res=await sbInsert('work_advances',{
+      project_id:projId,party_type:partyType,party_name:partyName,
+      allot_id:allotId,date:date,amount:amount,
+      payment_mode:gv('adva-mode')||null,
+      reference:gv('adva-ref')||null,
+      purpose:purpose
+    });
+    if(res&&res[0]){
+      WA_ADVANCES.push(res[0]);
+      toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
+      closeSheet('ov-exec','sh-exec');
+      // Download receipt automatically
+      execAdvanceReceipt(res[0].id,resName,allotAmt);
+      execRenderAllotted();
+    }
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+function execAdvanceReceipt(advId,resName,allotAmt){
+  var adv=WA_ADVANCES.find(function(x){return x.id===advId;});
+  if(!adv){toast('Advance not found','error');return;}
+  var a=WA_ALLOT.find(function(x){return x.id===adv.allot_id;})||{};
+  var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+  var projSel=document.getElementById('proj-mod-sel');
+  var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
+  var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
+  function fmtD(d){if(!d)return '—';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+
+  // Receipt number
+  var rcptNo='ADV/'+new Date().getFullYear()+'/'+String(WA_ADVANCES.length).padStart(4,'0');
+  var allotAmt2=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
+  var totalAdv=WA_ADVANCES.filter(function(x){return x.allot_id===adv.allot_id;})
+    .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Advance Receipt — '+rcptNo+'</title>'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;padding:32px;color:#1a1a1a;}'+
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #F57F17;padding-bottom:12px;margin-bottom:16px;}'+
+    '.co{font-size:17px;font-weight:900;color:#F57F17;}.co-info{font-size:10px;color:#555;margin-top:3px;}'+
+    '.rcpt-title{font-size:20px;font-weight:900;color:#F57F17;text-align:right;}.rcpt-no{font-size:12px;color:#555;text-align:right;margin-top:4px;}'+
+    '.info-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:16px;}'+
+    '.info-cell{padding:10px 14px;}.info-cell+.info-cell{border-left:1px solid #DDD;}'+
+    '.lbl{font-size:9px;font-weight:800;color:#888;text-transform:uppercase;margin-bottom:3px;}'+
+    '.val{font-size:13px;font-weight:800;}'+
+    '.amt-box{background:#FFF8E1;border:2px solid #F57F17;border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;}'+
+    '.amt-lbl{font-size:11px;color:#888;font-weight:700;margin-bottom:6px;}'+
+    '.amt-val{font-size:32px;font-weight:900;color:#F57F17;}'+
+    '.detail-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border:1px solid #EEE;border-radius:8px;padding:12px;margin-bottom:16px;background:#FAFAFA;}'+
+    '.detail-cell .d-lbl{font-size:9px;color:#888;font-weight:700;margin-bottom:3px;}'+
+    '.detail-cell .d-val{font-size:12px;font-weight:800;}'+
+    '.purpose-box{background:#F8FAFC;border-radius:8px;padding:12px;margin-bottom:16px;}'+
+    '.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;}'+
+    '.sig-box{border-top:1.5px solid #333;padding-top:8px;text-align:center;font-size:10px;color:#555;}'+
+    '@media print{button{display:none;}}</style></head><body>'+
+    '<button onclick="window.print()" style="background:#F57F17;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:18px;font-family:Arial;font-weight:700;">&#128438; Print / Save PDF</button>'+
+
+    '<div class="hdr">'+
+      '<div><div class="co">'+(co.name||'Company Name')+'</div>'+
+        '<div class="co-info">'+(co.address||'')+(co.gstin?'<br>GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div><div class="rcpt-title">ADVANCE RECEIPT</div>'+
+        '<div class="rcpt-no">'+rcptNo+'</div>'+
+        '<div style="font-size:10px;color:#555;text-align:right;margin-top:3px;">Date: '+fmtD(adv.date)+'</div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="info-grid">'+
+      '<div class="info-cell"><div class="lbl">Party</div><div class="val">'+adv.party_name+'</div>'+
+        '<div style="font-size:10px;color:#555;margin-top:2px;">'+(adv.party_type||'')+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Project</div><div class="val">'+projName+'</div></div>'+
+    '</div>'+
+
+    '<div class="amt-box">'+
+      '<div class="amt-lbl">ADVANCE AMOUNT PAID</div>'+
+      '<div class="amt-val">'+inr(adv.amount)+'</div>'+
+      '<div style="font-size:11px;color:#888;margin-top:6px;">'+(adv.payment_mode||'')+(adv.reference?' · Ref: '+adv.reference:'')+'</div>'+
+    '</div>'+
+
+    '<div class="detail-grid">'+
+      '<div class="detail-cell"><div class="d-lbl">Resource / Work</div><div class="d-val">'+(resName||'—')+'</div></div>'+
+      '<div class="detail-cell"><div class="d-lbl">Allotted Qty × Rate</div><div class="d-val">'+( a.qty||0)+' '+(a.unit||'')+' @ '+inr(a.rate)+'</div></div>'+
+      '<div class="detail-cell"><div class="d-lbl">Total Order Value</div><div class="d-val">'+inr(allotAmt2)+'</div></div>'+
+      '<div class="detail-cell"><div class="d-lbl">Total Advance Paid</div><div class="d-val" style="color:#F57F17;">'+inr(totalAdv)+'</div></div>'+
+      '<div class="detail-cell"><div class="d-lbl">Balance Payable</div><div class="d-val" style="color:#C62828;">'+inr(Math.max(0,allotAmt2-totalAdv))+'</div></div>'+
+      '<div class="detail-cell"><div class="d-lbl">Payment Mode</div><div class="d-val">'+(adv.payment_mode||'—')+'</div></div>'+
+    '</div>'+
+
+    (adv.purpose?'<div class="purpose-box"><div class="lbl" style="margin-bottom:4px;">Purpose / Remarks</div><div style="font-size:11px;">'+adv.purpose+'</div></div>':'')+
+
+    '<div class="sig-grid">'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Company')+'</div><div>Paid By / Authorized</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+adv.party_name+'</div><div>Received By</div></div>'+
+    '</div>'+
+  '</body></html>';
+
+  var w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Allow popups to download receipt','warning');
+}
+
+async function execDelAdvance(id){
+  if(!confirm('Delete this advance payment record?'))return;
+  WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
+  execRenderAllotted();
+  try{await sbDelete('work_advances',id);}catch(e){console.error(e);}
+  toast('Advance deleted','success');
+}
+
 async function execOpenBill(partyKey,projId){
   var parts=partyKey.split('::');
   var partyType=parts[0],partyName=parts[1];
@@ -3996,6 +4185,11 @@ async function execOpenBill(partyKey,projId){
     '</div>';
   }).join('');
 
+  // Calculate total advance already paid for this party
+  var totalAdvParty=WA_ADVANCES.filter(function(a){
+    return a.party_name===partyName&&a.party_type===partyType;
+  }).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+
   // Store workRows for save
   window._blWorkRows=workRows;
 
@@ -4011,6 +4205,13 @@ async function execOpenBill(partyKey,projId){
       '&#9312; Select Works to Include in this Bill'+
     '</div>'+
     (workRows.length?workSelRows:'<div style="font-size:11px;color:var(--text3);padding:8px 0;">No work allotments found for this party.</div>')+
+    // Advance info
+    (totalAdvParty>0?
+      '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">'+
+        '<span style="font-size:20px;">&#128181;</span>'+
+        '<div><div style="font-size:11px;font-weight:800;color:#F57F17;">Advance Already Paid: ₹'+totalAdvParty.toLocaleString('en-IN')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);">This will be shown as deduction in the bill</div></div>'+
+      '</div>':'')+ 
     // Bill details
     '<div style="font-size:11px;font-weight:800;color:#333;margin:12px 0 8px;">&#9313; Bill Details</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
