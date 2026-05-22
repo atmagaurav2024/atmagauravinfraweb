@@ -3730,6 +3730,16 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 // ── Bills & Payments ────────────────────────────────────────────────────
+
+function billsToggleGroup(grpId){
+  var rows=document.querySelectorAll('#'+grpId+'-rows, [id="'+grpId+'-rows"]');
+  // querySelectorAll with same id - use attribute selector
+  var allRows=document.querySelectorAll('[id="'+grpId+'-rows"]');
+  if(!allRows.length) return;
+  var isHidden=allRows[0].style.display==='none';
+  allRows.forEach(function(r){r.style.display=isHidden?'table-row':'none';});
+}
+
 function execRenderBills(){
   var el=document.getElementById('exec-content');if(!el)return;
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
@@ -3754,8 +3764,7 @@ function execRenderBills(){
     var p=parties[key];
     var col=tCol[p.type]||'#37474F';
 
-    // ── Per-allotment rows — grouped by resource name+unit ──
-    // Build groups: same resName+unit combined
+    // ── Per-allotment rows — grouped with expandable individual rows ──
     var allotGroups={}, allotGroupOrder=[];
     p.allots.forEach(function(a){
       var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
@@ -3767,31 +3776,54 @@ function execRenderBills(){
         var rr=[];try{rr=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
         rr.forEach(function(r){if(r.allot_id===a.id&&r.qty)doneQty+=parseFloat(r.qty)||0;});
       });
+      var boqItem=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
       var key=(resName||a.party_name)+'__'+(a.unit||'');
       if(!allotGroups[key]){
-        allotGroups[key]={resName:resName,partyName:a.party_name,unit:a.unit||'',allotQty:0,allotAmt:0,doneQty:0,doneAmt:0};
+        allotGroups[key]={resName:resName,partyName:a.party_name,unit:a.unit||'',allotQty:0,allotAmt:0,doneQty:0,doneAmt:0,items:[]};
         allotGroupOrder.push(key);
       }
       allotGroups[key].allotQty+=allotQty;
       allotGroups[key].allotAmt+=Math.round(allotQty*allotRate);
       allotGroups[key].doneQty+=doneQty;
       allotGroups[key].doneAmt+=Math.round(doneQty*allotRate);
+      allotGroups[key].items.push({a:a,resName:resName,allotQty:allotQty,allotRate:allotRate,doneQty:doneQty,boqItem:boqItem});
     });
 
     var allotRows=allotGroupOrder.map(function(key){
       var g=allotGroups[key];
       var pct=g.allotQty>0?Math.min(100,Math.round(g.doneQty/g.allotQty*100)):0;
       var pctCol=pct>=100?'#2E7D32':pct>=50?'#1565C0':'#E65100';
-      return '<tr style="border-bottom:1px solid #F5F5F5;">'+
+      var grpId='grp-'+key.replace(/[^a-z0-9]/gi,'-');
+      var hasMultiple=g.items.length>1;
+
+      // Individual rows (hidden by default when multiple)
+      var indivRows=hasMultiple?g.items.map(function(x){
+        var aPct=x.allotQty>0?Math.min(100,Math.round(x.doneQty/x.allotQty*100)):0;
+        var aPctCol=aPct>=100?'#2E7D32':aPct>=50?'#1565C0':'#E65100';
+        return '<tr id="'+grpId+'-rows" style="display:none;background:#F8FAFC;border-bottom:1px solid #F0F0F0;">'+
+          '<td style="padding:5px 10px 5px 24px;font-size:10px;color:#555;">'+
+            (x.boqItem.item_code?'<span style="font-size:9px;font-family:monospace;background:#EEE;padding:1px 4px;border-radius:3px;margin-right:4px;">['+x.boqItem.item_code+']</span>':'')+
+            (x.boqItem.short_name||x.boqItem.description||x.resName||'—')+
+          '</td>'+
+          '<td style="padding:5px 10px;font-size:10px;text-align:right;">'+x.allotQty.toFixed(2)+'</td>'+
+          '<td style="padding:5px 10px;font-size:10px;text-align:right;">'+inr(Math.round(x.allotQty*x.allotRate))+'</td>'+
+          '<td style="padding:5px 10px;font-size:10px;text-align:right;color:'+aPctCol+';">'+x.doneQty.toFixed(2)+' ('+aPct+'%)</td>'+
+          '<td style="padding:5px 10px;font-size:10px;text-align:right;color:#1565C0;">'+inr(Math.round(x.doneQty*x.allotRate))+'</td>'+
+        '</tr>';
+      }).join(''):'';
+
+      var trStyle='border-bottom:1px solid #F5F5F5;'+(hasMultiple?'cursor:pointer;':'');
+      var trClick=hasMultiple?' onclick="billsToggleGroup(\'' + grpId + '\')"':'';
+      return '<tr style="'+trStyle+'"'+trClick+'>'+
         '<td style="padding:7px 10px;font-size:11px;">'+
-          (g.resName?'<div style="font-weight:800;color:#1B5E20;">'+g.resName+'</div>':'')+
+          (g.resName?'<div style="font-weight:800;color:#1B5E20;">'+g.resName+(hasMultiple?' <span style="font-size:9px;background:#E3F2FD;color:#1565C0;border-radius:3px;padding:1px 5px;font-weight:700;">'+g.items.length+' items &#9660;</span>':'')+'</div>':'')+
           '<div style="font-size:10px;color:#555;">'+g.partyName+'</div>'+
         '</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+g.allotQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+inr(g.allotAmt)+'</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;color:'+pctCol+';font-weight:700;">'+g.doneQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span><div style="font-size:9px;color:'+pctCol+';">('+pct+'% of allotted)</div></td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+inr(g.doneAmt)+'</td>'+
-      '</tr>';
+      '</tr>'+indivRows;
     }).join('');
 
     // ── Totals — sum from groups ──
@@ -3853,6 +3885,7 @@ function execRenderBills(){
                 '<span style="flex:1;font-weight:700;">'+d.head+'</span>'+
                 '<span style="color:#E65100;font-weight:800;">'+inr(d.amount)+'</span>'+
                 '<button onclick="execReleaseDeduction(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;">Release</button>'+
+                '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;" title="Delete deduction">&#215;</button>'+
               '</div>';
             }).join('')+
           '</div>':'')+
@@ -4683,6 +4716,22 @@ async function execDelBill(id){
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
   execRenderBills();
   try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
+}
+
+
+async function execDeleteDeduction(billId,dedId){
+  if(!confirm('Delete this deduction?'))return;
+  var bill=WA_BILLS.find(function(b){return b.id===billId;});
+  if(!bill)return;
+  var deductions=[];try{deductions=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
+  deductions=deductions.filter(function(d){return d.id!==dedId;});
+  try{
+    await sbUpdate('work_bills',billId,{deductions:deductions.length?JSON.stringify(deductions):null});
+    var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
+    if(idx>-1) WA_BILLS[idx].deductions=deductions.length?JSON.stringify(deductions):null;
+    toast('Deduction deleted','success');
+    execRenderBills();
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 async function execDelPayment(id){
