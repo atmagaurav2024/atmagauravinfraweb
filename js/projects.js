@@ -3843,6 +3843,7 @@ function execRenderBills(){
         '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1A237E;">'+(g.billedAmt?inr(g.billedAmt):'—')+'</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;color:#F57F17;font-weight:800;">'+(g.advAmt?inr(g.advAmt):'—')+'</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;color:#558B2F;font-weight:800;">'+(g.paidAmt?inr(g.paidAmt):'—')+'</td>'+
+        (function(){var tot=(g.advAmt||0)+(g.paidAmt||0);return '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(tot)+'</td>';})()+
         (function(){var bal=Math.max(0,g.doneAmt-(g.advAmt||0)-(g.paidAmt||0));return '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:'+(bal>0?'#C62828':'#2E7D32')+';">'+inr(bal)+'</td>';})()+ 
       '</tr>'+indivRows;
     }).join('');
@@ -3956,7 +3957,8 @@ function execRenderBills(){
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">PAYABLE AMT</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1A237E;">BILLED</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#F57F17;">ADVANCE</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#558B2F;">PAID</th>'+
+          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#558B2F;">PAYMENT</th>'+
+          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">TOTAL PAID</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#C62828;">BALANCE</th>'+
         '</tr></thead>'+
         '<tbody>'+allotRows+'</tbody>'+
@@ -3969,6 +3971,7 @@ function execRenderBills(){
         '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1A237E;">'+inr(totalBilled)+'</td>'+
         '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</td>'+
         '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#558B2F;">'+inr(totalPaid)+'</td>'+
+        '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#2E7D32;">'+inr(totalPaidAll)+'</td>'+
         '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</td>'+
         '</tr></tfoot>'+
       '</table></div>';
@@ -3979,7 +3982,7 @@ function execRenderBills(){
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">DEDUCTIONS</div><div style="font-size:12px;font-weight:900;color:#E65100;">'+inr(totalDeductions)+'</div></div>'+
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">NET PAYABLE</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</div></div>'+
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">ADVANCE</div><div style="font-size:12px;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</div></div>'+
-        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">BILL PAID</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
+        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">PAYMENT</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
         '<div style="padding:8px 6px;text-align:center;"><div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE</div><div style="font-size:12px;font-weight:900;color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
       '</div>';
 
