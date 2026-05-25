@@ -3844,7 +3844,7 @@ function execRenderBills(){
         '<td style="padding:7px 10px;font-size:11px;text-align:right;color:#F57F17;font-weight:800;">'+(g.advAmt?inr(g.advAmt):'—')+'</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;color:#558B2F;font-weight:800;">'+(g.paidAmt?inr(g.paidAmt):'—')+'</td>'+
         (function(){var tot=(g.advAmt||0)+(g.paidAmt||0);return '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(tot)+'</td>';})()+
-        (function(){var bal=Math.max(0,g.doneAmt-(g.advAmt||0)-(g.paidAmt||0));return '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:'+(bal>0?'#C62828':'#2E7D32')+';">'+inr(bal)+'</td>';})()+ 
+        (function(){var bal=g.doneAmt-(g.advAmt||0)-(g.paidAmt||0);return '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:'+(bal>0?'#C62828':bal<0?'#6A1B9A':'#2E7D32')+';">'+inr(bal)+'</td>';})()+ 
       '</tr>'+indivRows;
     }).join('');
 
@@ -3869,7 +3869,7 @@ function execRenderBills(){
     var totalPaid=pPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
     var netPayable=totalBilled-totalDeductions;
     var totalPaidAll=totalPaid+totalAdvance;
-    var balDue=Math.max(0,netPayable-totalPaidAll);
+    var balDue=netPayable-totalPaidAll;
 
     // ── Bills list ──
     var billsList=pBills.length?pBills.map(function(b){
@@ -3972,7 +3972,7 @@ function execRenderBills(){
         '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</td>'+
         '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#558B2F;">'+inr(totalPaid)+'</td>'+
         '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#2E7D32;">'+inr(totalPaidAll)+'</td>'+
-        '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</td>'+
+        '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(balDue)+'</td>'+
         '</tr></tfoot>'+
       '</table></div>';
 
@@ -3983,7 +3983,7 @@ function execRenderBills(){
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">NET PAYABLE</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</div></div>'+
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">ADVANCE</div><div style="font-size:12px;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</div></div>'+
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">PAYMENT</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
-        '<div style="padding:8px 6px;text-align:center;"><div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE</div><div style="font-size:12px;font-weight:900;color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
+        '<div style="padding:8px 6px;text-align:center;"><div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE</div><div style="font-size:12px;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
       '</div>';
 
     var advancesList=pAdvances.length?
@@ -4704,7 +4704,7 @@ function execDownloadBillPDF(billId){
       '<div class="sum-cell"><div class="sum-lbl">Gross Amount</div><div class="sum-val" style="color:#1565C0;">'+inr(grossAmt)+'</div></div>'+
       '<div class="sum-cell"><div class="sum-lbl">Deductions</div><div class="sum-val" style="color:#E65100;">'+inr(totalDed)+'</div></div>'+
       '<div class="sum-cell"><div class="sum-lbl">Net Payable</div><div class="sum-val" style="color:#1565C0;">'+inr(netPayable)+'</div></div>'+
-      '<div class="sum-cell"><div class="sum-lbl">Balance Due</div><div class="sum-val" style="color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
+      '<div class="sum-cell"><div class="sum-lbl">Balance Due</div><div class="sum-val" style="color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
     '</div>'+
 
     // Work items table
@@ -4732,7 +4732,7 @@ function execDownloadBillPDF(billId){
           '<td colspan="3" style="padding:7px 10px;font-weight:900;text-align:right;">Total Paid</td>'+
           '<td style="padding:7px 10px;font-weight:900;text-align:right;color:#2E7D32;">'+inr(totalPaid)+'</td>'+
         '</tr><tr style="background:'+(balDue>0?'#FFEBEE':'#E8F5E9')+';"><td colspan="3" style="padding:7px 10px;font-weight:900;text-align:right;">Balance Due</td>'+
-          '<td style="padding:7px 10px;font-weight:900;text-align:right;color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(balDue)+'</td>'+
+          '<td style="padding:7px 10px;font-weight:900;text-align:right;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(balDue)+'</td>'+
         '</tr></tfoot>'+
       '</table>'
     :'')+
