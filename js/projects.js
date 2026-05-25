@@ -3880,13 +3880,18 @@ function execRenderBills(){
       var relTotal=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var bPaid=WA_PAYMENTS.filter(function(py){return py.bill_id===b.id;});
       var bPaidAmt=bPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
-      var bNet=( parseFloat(b.bill_amount)||0)-dedTotal;
-      var bBal=Math.max(0,bNet-bPaidAmt);
+      // Advance adjustments count as paid
+      var bAdvAdj=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      // Released deductions count as paid (released back to party)
+      var bRelDed=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var bNet=(parseFloat(b.bill_amount)||0)-dedTotal;
+      var bBal=bNet-bPaidAmt-bRelDed;
 
       return '<div style="background:#F8FAFC;border:1px solid #E8EAF6;border-radius:10px;padding:10px 12px;margin-bottom:8px;">'+
         // Bill header
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
-          '<span style="background:#E3F2FD;color:#1565C0;font-weight:800;padding:2px 8px;border-radius:4px;font-size:10px;">Bill #'+b.bill_number+'</span>'+
+          '<span style="background:#E3F2FD;color:#1565C0;font-weight:800;padding:2px 8px;border-radius:4px;font-size:10px;">'+(b.bill_ref||'Bill #'+b.bill_number)+'</span>'+
+          '<span style="font-size:10px;color:var(--text3);">'+fmtD(b.bill_date)+'</span>'+
           '<span style="font-size:10px;color:var(--text3);">'+( b.bill_date||'')+'</span>'+
           (b.description?'<span style="font-size:10px;color:var(--text3);flex:1;">'+b.description+'</span>':'<span style="flex:1;"></span>')+
           '<button onclick="execOpenPayment(\''+b.id+'\',\''+key+'\',\''+projId+'\','+bBal+')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">+ Pay</button>'+
@@ -3906,22 +3911,39 @@ function execRenderBills(){
           '<div style="margin-bottom:6px;">'+
             '<div style="font-size:9px;font-weight:800;color:#E65100;margin-bottom:4px;">DEDUCTIONS HELD</div>'+
             activeDed.map(function(d){
+              var isAdvAdj=d.is_advance_adj?true:false;
               return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:3px 0;border-bottom:1px solid #F0F0F0;">'+
+                '<span style="background:'+(isAdvAdj?'#FFF8E1':'#FFF3E0')+';color:'+(isAdvAdj?'#F57F17':'#E65100')+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;">'+(isAdvAdj?'ADV ADJ':'DED')+'</span>'+
                 '<span style="flex:1;font-weight:700;">'+d.head+'</span>'+
-                '<span style="color:#E65100;font-weight:800;">'+inr(d.amount)+'</span>'+
-                '<button onclick="execReleaseDeduction(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;">Release</button>'+
-                '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;" title="Delete deduction">&#215;</button>'+
+                '<span style="color:'+(isAdvAdj?'#F57F17':'#E65100')+';font-weight:800;">'+inr(d.amount)+'</span>'+
+                (isAdvAdj?
+                  '<button onclick="billDownloadAdvReceipt(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF8E1;color:#F57F17;border:1px solid #FFE0B2;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;">&#128438; PDF</button>':
+                  '<button onclick="execReleaseDeduction(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;">Release</button>'
+                )+
+                '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;" title="Delete">&#215;</button>'+
               '</div>';
             }).join('')+
           '</div>':'')+
         (relDed.length?
           '<div style="margin-bottom:6px;">'+
-            '<div style="font-size:9px;font-weight:800;color:#2E7D32;margin-bottom:4px;">RELEASED DEDUCTIONS</div>'+
+            '<div style="font-size:9px;font-weight:800;color:#2E7D32;margin-bottom:4px;">RELEASED DEDUCTIONS (COUNTED AS PAID)</div>'+
             relDed.map(function(d){
-              return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;color:var(--text3);">'+
-                '<span style="flex:1;">'+d.head+'</span>'+
-                '<span>'+inr(d.amount)+'</span>'+
-                '<span style="font-size:9px;color:#2E7D32;">&#10003; Released</span>'+
+              return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;">'+
+                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;">REL</span>'+
+                '<span style="flex:1;color:#555;">'+d.head+'</span>'+
+                '<span style="font-weight:800;color:#2E7D32;">'+inr(d.amount)+'</span>'+
+                '<span style="font-size:9px;color:#2E7D32;">&#10003; Released: '+fmtD(d.released_date)+'</span>'+
+              '</div>';
+            }).join('')+
+          '</div>':'')+
+        // Advance adjustments shown as payments
+        (activeDed.filter(function(d){return d.is_advance_adj;}).length?
+          '<div style="margin-bottom:6px;">'+
+            '<div style="font-size:9px;font-weight:800;color:#F57F17;margin-bottom:4px;">ADVANCE ADJUSTED (COUNTED AS PAID)</div>'+
+            activeDed.filter(function(d){return d.is_advance_adj;}).map(function(d){
+              return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;">'+
+                '<span style="flex:1;color:#555;">'+d.head+'</span>'+
+                '<span style="font-weight:800;color:#F57F17;">'+inr(d.amount)+'</span>'+
               '</div>';
             }).join('')+
           '</div>':'')+
@@ -4256,6 +4278,16 @@ async function execOpenBill(partyKey,projId){
     '</div>';
   }).join('');
 
+  // Released deductions from previous bills — payable to party in this bill
+  var partyRelDed=[];
+  WA_BILLS.filter(function(b){return b.party_name===partyName&&b.party_type===partyType;}).forEach(function(b){
+    var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+    ded.filter(function(d){return d.released&&!d.is_advance_adj;}).forEach(function(d){
+      partyRelDed.push({head:d.head,amount:d.amount,released_date:d.released_date,bill_no:b.bill_number,bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date});
+    });
+  });
+  var totalRelDed=partyRelDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+
   // Calculate advances for this party
   var partyAdvances=WA_ADVANCES.filter(function(a){
     return a.party_name===partyName&&a.party_type===partyType;
@@ -4317,6 +4349,23 @@ async function execOpenBill(partyKey,projId){
         }).join('')+
       '</div>';
     })()+
+    // Released deductions info
+    (totalRelDed>0?
+      '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
+        '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:6px;">&#128176; Released Deductions (payable in this bill)</div>'+
+        partyRelDed.map(function(d){
+          return '<div style="display:flex;gap:8px;font-size:10px;padding:3px 0;">'+
+            '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;">REL</span>'+
+            '<span style="flex:1;">'+d.head+
+              ' <span style="color:var(--text3);">Ref: <b>'+(d.bill_ref||'Bill #'+d.bill_no)+'</b>'+
+              ' | Bill Date: '+fmtD(d.bill_date||'')+'</span>'+
+              ' <span style="color:#2E7D32;font-weight:700;">Released: '+fmtD(d.released_date)+'</span>'+
+            '</span>'+
+            '<b style="color:#2E7D32;">&#8377;'+Number(d.amount||0).toLocaleString("en-IN")+'</b>'+
+          '</div>';
+        }).join('')+
+        '<div style="font-size:10px;font-weight:800;color:#2E7D32;border-top:1px solid #C8E6C9;margin-top:6px;padding-top:4px;">Total Released: &#8377;'+Number(totalRelDed).toLocaleString("en-IN")+'</div>'+
+      '</div>':'')+ 
     // Bill details
     '<div style="font-size:11px;font-weight:800;color:#333;margin:12px 0 8px;">&#9313; Bill Details</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
@@ -4473,10 +4522,16 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false});
   });
 
+  // Generate unique bill ref: BILL/YYYY/NNNN (global across all bills)
+  var billYear=new Date().getFullYear();
+  var billSeq=String(WA_BILLS.length+1).padStart(4,'0');
+  var billRef='BILL/'+billYear+'/'+billSeq;
+
   try{
     var res=await sbInsert('work_bills',{
       project_id:projId,party_type:partyType,party_name:partyName,
       bill_number:parseInt(gv('bl-no'))||billNo,
+      bill_ref:billRef,
       bill_date:date,bill_amount:Math.round(grossAmount),
       selected_items:JSON.stringify(selectedItems),
       deductions:deductions.length?JSON.stringify(deductions):null,
@@ -4502,7 +4557,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
         });
       }
     }
-    toast('Bill #'+(parseInt(gv('bl-no'))||billNo)+' generated'+(adjAdvTotal?' — advance ₹'+adjAdvTotal.toLocaleString('en-IN')+' adjusted':''),'success');
+    toast(billRef+' generated'+(adjAdvTotal?' — advance ₹'+adjAdvTotal.toLocaleString('en-IN')+' adjusted':''),'success');
     BL_DEDUCTIONS=[];
     window._blWorkRows=null;
     closeSheet('ov-exec','sh-exec');
@@ -4531,21 +4586,130 @@ async function execAddDeduction(billId){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
+
+function billDownloadAdvReceipt(billId, dedId){
+  var bill=WA_BILLS.find(function(b){return b.id===billId;});
+  if(!bill){toast('Bill not found','error');return;}
+  var ded=[]; try{ded=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
+  var d=ded.find(function(x){return x.id===dedId;});
+  if(!d){toast('Deduction not found','error');return;}
+
+  // Find advances linked to this adjustment
+  var advIds=d.advance_ids||[];
+  var advList=WA_ADVANCES.filter(function(a){return advIds.indexOf(a.id)>-1;});
+
+  var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+  var projSel=document.getElementById('proj-mod-sel');
+  var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
+  var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
+  function fmtD(dt){if(!dt)return '—';var p=String(dt).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:dt;}
+
+  var rcptNo='ADVADJ/'+new Date().getFullYear()+'/'+String(WA_BILLS.indexOf(bill)+1).padStart(4,'0');
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Advance Adjustment — '+rcptNo+'</title>'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;padding:32px;color:#1a1a1a;}'+
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #F57F17;padding-bottom:12px;margin-bottom:16px;}'+
+    '.co{font-size:17px;font-weight:900;color:#F57F17;}.co-info{font-size:10px;color:#555;margin-top:3px;}'+
+    '.rcpt-title{font-size:18px;font-weight:900;color:#F57F17;text-align:right;}'+
+    '.rcpt-no{font-size:12px;color:#555;text-align:right;margin-top:4px;}'+
+    '.info-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:14px;}'+
+    '.info-cell{padding:10px 14px;}.info-cell+.info-cell{border-left:1px solid #DDD;}'+
+    '.lbl{font-size:9px;font-weight:800;color:#888;text-transform:uppercase;margin-bottom:3px;}'+
+    '.val{font-size:13px;font-weight:800;}'+
+    '.amt-box{background:#FFF8E1;border:2px solid #F57F17;border-radius:12px;padding:18px;text-align:center;margin-bottom:14px;}'+
+    '.amt-lbl{font-size:11px;color:#888;font-weight:700;margin-bottom:6px;}'+
+    '.amt-val{font-size:30px;font-weight:900;color:#F57F17;}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:14px;}'+
+    'th{background:#F57F17;color:white;padding:7px 10px;font-size:10px;text-align:left;}'+
+    'td{padding:7px 10px;font-size:11px;border-bottom:1px solid #EEE;}'+
+    '.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;}'+
+    '.sig-box{border-top:1.5px solid #333;padding-top:8px;text-align:center;font-size:10px;color:#555;}'+
+    '@media print{button{display:none;}}</style></head><body>'+
+    '<button onclick="window.print()" style="background:#F57F17;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-family:Arial;font-weight:700;">&#128438; Print / Save PDF</button>'+
+
+    '<div class="hdr">'+
+      '<div><div class="co">'+(co.name||'Company Name')+'</div>'+
+        '<div class="co-info">'+(co.address||'')+(co.gstin?'<br>GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div><div class="rcpt-title">ADVANCE ADJUSTMENT NOTE</div>'+
+        '<div class="rcpt-no">Ref: '+rcptNo+'</div>'+
+        '<div style="font-size:10px;color:#555;text-align:right;margin-top:3px;">Ref: '+(bill.bill_ref||'Bill #'+bill.bill_number)+' | Date: '+fmtD(bill.bill_date)+'</div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="info-grid">'+
+      '<div class="info-cell"><div class="lbl">Party</div><div class="val">'+bill.party_name+'</div>'+
+        '<div style="font-size:10px;color:#555;">'+(bill.party_type||'')+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Project</div><div class="val">'+projName+'</div></div>'+
+    '</div>'+
+
+    '<div class="amt-box">'+
+      '<div class="amt-lbl">ADVANCE ADJUSTED AGAINST '+(bill.bill_ref||'BILL #'+bill.bill_number)+'</div>'+
+      '<div class="amt-val">'+inr(d.amount)+'</div>'+
+      '<div style="font-size:11px;color:#888;margin-top:4px;">Gross Bill: '+inr(bill.bill_amount)+' | Net after adjustment: '+inr(Math.max(0,bill.bill_amount-d.amount))+'</div>'+
+    '</div>'+
+
+    (advList.length?
+      '<div class="lbl" style="margin-bottom:6px;">ADVANCE PAYMENTS ADJUSTED</div>'+
+      '<table><thead><tr><th>Date</th><th>Purpose</th><th>Mode</th><th>Reference</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+
+      advList.map(function(adv){
+        return '<tr><td>'+fmtD(adv.date)+'</td><td>'+(adv.purpose||'—')+'</td><td>'+(adv.payment_mode||'—')+'</td><td>'+(adv.reference||'—')+'</td><td style="text-align:right;font-weight:800;color:#F57F17;">'+inr(adv.amount)+'</td></tr>';
+      }).join('')+
+      '</tbody></table>':'')+
+
+    '<div class="sig-grid">'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Company')+'</div><div>Authorised Signatory</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+bill.party_name+'</div><div>Acknowledged By</div></div>'+
+    '</div>'+
+  '</body></html>';
+
+  var w=window.open('','_blank');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Allow popups to download receipt','warning');
+}
+
 async function execReleaseDeduction(billId,dedId){
   var bill=WA_BILLS.find(function(b){return b.id===billId;});
   if(!bill)return;
-  if(!confirm('Release this deduction? The held amount will be added back to payable.'))return;
   var deductions=[];try{deductions=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
   var ded=deductions.find(function(d){return d.id===dedId;});
   if(!ded)return;
-  ded.released=true;ded.released_date=new Date().toISOString().slice(0,10);
-  try{
-    await sbUpdate('work_bills',billId,{deductions:JSON.stringify(deductions)});
-    var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
-    if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
-    toast('Deduction released — ₹'+ded.amount+' added back to payable','success');
-    execRenderBills();
-  }catch(e){toast('Error: '+e.message,'error');}
+
+  // Show release form with date
+  document.getElementById('exec-sheet-title').textContent='Release Deduction';
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#E8F5E9;border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
+      '<div style="font-size:12px;font-weight:800;color:#2E7D32;margin-bottom:4px;">'+ded.head+'</div>'+
+      '<div style="font-size:11px;color:#555;">Amount: <b>&#8377;'+Number(ded.amount||0).toLocaleString("en-IN")+'</b></div>'+
+      '<div style="font-size:10px;color:var(--text3);">Bill: '+(bill.bill_ref||'Bill #'+bill.bill_number)+' | Bill Date: '+fmtDate(bill.bill_date)+'</div>'+
+    '</div>'+
+    '<label class="flbl">Release Date *</label>'+
+    '<input id="rel-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl" style="margin-top:8px;">Remarks (optional)</label>'+
+    '<input id="rel-remarks" class="finp" placeholder="e.g. Released after DLP period, Final settlement...">';
+
+  var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#2E7D32;color:white;';
+  sb.innerHTML='&#10003; Confirm Release';
+  sb.onclick=async function(){
+    var relDate=gv('rel-date');
+    var relRemarks=gv('rel-remarks');
+    if(!relDate){toast('Release date required','warning');return;}
+    ded.released=true;
+    ded.released_date=relDate;
+    ded.released_remarks=relRemarks||undefined;
+    try{
+      await sbUpdate('work_bills',billId,{deductions:JSON.stringify(deductions)});
+      var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
+      if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
+      toast('Deduction released — ₹'+Number(ded.amount||0).toLocaleString('en-IN')+' on '+relDate,'success');
+      closeSheet('ov-exec','sh-exec');
+      execRenderBills();
+    }catch(e){toast('Error: '+e.message,'error');}
+  };
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
 }
 
 async function execOpenPayment(billId,partyKey,projId,balAmount){
@@ -4671,7 +4835,7 @@ function execDownloadBillPDF(billId){
     : '<tr><td colspan="4" style="padding:10px;color:#888;text-align:center;">No payments recorded</td></tr>';
 
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
-    '<title>Bill #'+b.bill_number+' — '+b.party_name+'</title>'+
+    '<title>'+(b.bill_ref||'Bill #'+b.bill_number)+' — '+b.party_name+'</title>'+
     '<style>'+
       '*{box-sizing:border-box;margin:0;padding:0;}'+
       'body{font-family:Arial,sans-serif;font-size:11px;padding:24px;color:#1a1a1a;}'+
@@ -4697,7 +4861,7 @@ function execDownloadBillPDF(billId){
         '<div class="co-info">'+(co.address||'')+(co.gstin?'<br>GSTIN: '+co.gstin:'')+'</div></div>'+
       '<div style="text-align:right;">'+
         '<div class="bill-title">BILL / INVOICE</div>'+
-        '<div class="bill-no">Bill #'+b.bill_number+'</div>'+
+        '<div class="bill-no">'+(b.bill_ref||'Bill #'+b.bill_number)+'</div>'+
         '<div style="font-size:10px;color:#555;margin-top:3px;">Date: '+fmtD(b.bill_date)+'</div>'+
       '</div>'+
     '</div>'+
