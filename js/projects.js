@@ -3993,12 +3993,18 @@ function execRenderBills(){
           var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
           var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
           var resLabel=planRes.party_name||planRes.resource_category||allot.scope||'';
+          var adjSoFar=parseFloat(adv.adjusted_amount)||0;
+          var advTotal=parseFloat(adv.amount)||0;
+          var remaining=Math.max(0,advTotal-adjSoFar);
           return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F5F5F5;font-size:11px;">'+
-            '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;">ADV</span>'+
+            '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;">'+(remaining<=0?'ADJ':'ADV')+'</span>'+
             '<div style="flex:1;">'+(resLabel?'<b>'+resLabel+'</b> — ':'')+(adv.purpose||'')+
-              '<div style="font-size:9px;color:var(--text3);">'+adv.date+' '+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+'</div>'+
+              '<div style="font-size:9px;color:var(--text3);">'+adv.date+' '+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+
+                (adjSoFar?'<span style="color:#E65100;margin-left:6px;"> Adj: '+inr(adjSoFar)+'</span>':'')+
+                (remaining>0&&adjSoFar?'<span style="color:#2E7D32;margin-left:4px;"> Rem: '+inr(remaining)+'</span>':'')+
+              '</div>'+
             '</div>'+
-            '<span style="font-weight:800;color:#F57F17;">'+inr(adv.amount)+'</span>'+
+            '<span style="font-weight:800;color:'+(remaining<=0?'#9E9E9E':'#F57F17')+';">'+inr(advTotal)+'</span>'+
             '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
           '</div>';
         }).join('')+
@@ -4283,27 +4289,29 @@ async function execOpenBill(partyKey,projId){
           var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
           var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
           var resLabel=planRes.party_name||planRes.resource_category||allot.scope||adv.purpose||'';
-          var alreadyAdj=adv.adjusted_in_bill?true:false;
           var advAmt=parseFloat(adv.amount)||0;
-          // Auto-cap: if bill < advance, only adjust up to bill amount
-          var defaultAdj=Math.min(advAmt, grossBillAmt);
+          var adjSoFar=parseFloat(adv.adjusted_amount)||0;
+          var remaining=Math.max(0,advAmt-adjSoFar);
+          var alreadyAdj=remaining<=0; // fully adjusted only when nothing left
+          // Auto-cap: if bill < remaining advance, only adjust up to bill amount
+          var defaultAdj=Math.min(remaining, grossBillAmt);
           return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
-              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+advAmt+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
+              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+remaining+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
               '<div style="flex:1;font-size:11px;">'+
                 (resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+
                 (adv.payment_mode?' · '+adv.payment_mode:'')+
-                (alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(already adjusted)</span>':'')+
+                (alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(fully adjusted)</span>':'')+
               '</div>'+
-              '<span style="font-size:10px;color:var(--text3);">Paid: <b style="color:#F57F17;">₹'+Number(advAmt).toLocaleString("en-IN")+'</b></span>'+
+              '<span style="font-size:10px;color:var(--text3);">Total: <b style="color:#F57F17;">₹'+Number(advAmt).toLocaleString("en-IN")+'</b>'+(adjSoFar>0?' | Adj: <b style="color:#E65100;">₹'+Number(adjSoFar).toLocaleString("en-IN")+'</b> | Rem: <b style="color:#2E7D32;">₹'+Number(remaining).toLocaleString("en-IN")+'</b>':'')+'</span>'+
             '</div>'+
             (!alreadyAdj?
               '<div style="display:flex;align-items:center;gap:8px;padding:0 0 2px 23px;">'+
                 '<span style="font-size:10px;color:var(--text3);">Adjust amount:</span>'+
-                '<input id="adv-adj-amt-'+ai+'" type="number" value="'+defaultAdj+'" min="0" max="'+advAmt+'" '+
+                '<input id="adv-adj-amt-'+ai+'" type="number" value="'+defaultAdj+'" min="0" max="'+remaining+'" '+
                   'style="width:120px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:#F57F17;" '+
                   'onchange="blAdvAdjAmtChange(this,'+ai+')">'+
-                '<span style="font-size:10px;color:var(--text3);">of ₹'+Number(advAmt).toLocaleString("en-IN")+(defaultAdj<advAmt?' <b style="color:#E65100;">(₹'+Number(advAmt-defaultAdj).toLocaleString("en-IN")+' carried forward)</b>':'')+'</span>'+
+                '<span style="font-size:10px;color:var(--text3);">of ₹'+Number(remaining).toLocaleString("en-IN")+(defaultAdj<remaining?' <b style="color:#E65100;">(₹'+Number(remaining-defaultAdj).toLocaleString("en-IN")+' carried forward)</b>':'')+'</span>'+
               '</div>':'')+
           '</div>';
         }).join('')+
@@ -4476,12 +4484,21 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     });
     if(res&&res[0]){
       WA_BILLS.push(res[0]);
-      // Mark adjusted advances as adjusted
+      // Update adjusted_amount for each advance (cumulative partial tracking)
       if(adjAdvIds.length){
-        adjAdvIds.forEach(function(advId){
+        // Collect per-advance amounts from checkboxes
+        document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
+          var advId=chk.getAttribute('data-adv-id');
+          var adjAmt=parseFloat(chk.getAttribute('data-amount'))||0;
+          if(!adjAmt) return;
           var idx=WA_ADVANCES.findIndex(function(a){return a.id===advId;});
-          if(idx>-1) WA_ADVANCES[idx].adjusted_in_bill=res[0].id;
-          sbUpdate('work_advances',advId,{adjusted_in_bill:res[0].id}).catch(function(){});
+          if(idx>-1){
+            var prev=parseFloat(WA_ADVANCES[idx].adjusted_amount)||0;
+            var newAdj=prev+adjAmt;
+            WA_ADVANCES[idx].adjusted_amount=newAdj;
+            WA_ADVANCES[idx].adjusted_in_bill=res[0].id;
+            sbUpdate('work_advances',advId,{adjusted_amount:newAdj,adjusted_in_bill:res[0].id}).catch(function(){});
+          }
         });
       }
     }
