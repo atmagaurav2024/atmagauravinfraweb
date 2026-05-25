@@ -1,4 +1,7 @@
 // ════ PROJECTS — Navigation ═════════════════════════════
+// Global date formatter used throughout projects module
+function fmtD(d){if(!d)return '—';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+
 var PROJ_DATA=[], PROJ_EDIT_ID=null;
 var PROJ_MOD_TAB = 'projects';      // current main tab
 var PROJ_MOD_SUB = '';              // current sub-tab (for grouped tabs)
@@ -4680,7 +4683,7 @@ async function execReleaseDeduction(billId,dedId){
     '<div style="background:#E8F5E9;border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#2E7D32;margin-bottom:4px;">'+ded.head+'</div>'+
       '<div style="font-size:11px;color:#555;">Amount: <b>&#8377;'+Number(ded.amount||0).toLocaleString("en-IN")+'</b></div>'+
-      '<div style="font-size:10px;color:var(--text3);">Bill: '+(bill.bill_ref||'Bill #'+bill.bill_number)+' | Bill Date: '+fmtDate(bill.bill_date)+'</div>'+
+      '<div style="font-size:10px;color:var(--text3);">Bill: '+(bill.bill_ref||'Bill #'+bill.bill_number)+' | Bill Date: '+fmtD(bill.bill_date)+'</div>'+
     '</div>'+
     '<label class="flbl">Release Date *</label>'+
     '<input id="rel-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
