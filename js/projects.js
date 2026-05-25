@@ -4272,26 +4272,43 @@ async function execOpenBill(partyKey,projId){
     '</div>'+
     (workRows.length?workSelRows:'<div style="font-size:11px;color:var(--text3);padding:8px 0;">No work allotments found for this party.</div>')+
     // Advance info
-    (partyAdvances.length?
-      '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
+    (function(){
+      if(!partyAdvances.length) return '';
+      // Cap advance adjustment to current bill amount
+      var grossBillAmt=workRows.reduce(function(s,w){return s+(w.unbilled||0);},0);
+      return '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#128181; Advance Adjustment</div>'+
-        '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances to adjust against this bill. Selected amounts will be deducted from bill total.</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances to adjust against this bill. Amounts are capped to current bill value.</div>'+
         partyAdvances.map(function(adv,ai){
           var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
           var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
           var resLabel=planRes.party_name||planRes.resource_category||allot.scope||adv.purpose||'';
           var alreadyAdj=adv.adjusted_in_bill?true:false;
-          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
-            '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+adv.amount+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;" onchange="blUpdateTotal()">'+
-            '<div style="flex:1;font-size:11px;">'+
-              (resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+
-              (adv.payment_mode?' · '+adv.payment_mode:'')+
-              (alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(already adjusted)</span>':'')+
+          var advAmt=parseFloat(adv.amount)||0;
+          // Auto-cap: if bill < advance, only adjust up to bill amount
+          var defaultAdj=Math.min(advAmt, grossBillAmt);
+          return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
+              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+advAmt+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
+              '<div style="flex:1;font-size:11px;">'+
+                (resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+
+                (adv.payment_mode?' · '+adv.payment_mode:'')+
+                (alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(already adjusted)</span>':'')+
+              '</div>'+
+              '<span style="font-size:10px;color:var(--text3);">Paid: <b style="color:#F57F17;">₹'+Number(advAmt).toLocaleString("en-IN")+'</b></span>'+
             '</div>'+
-            '<span style="font-weight:800;color:#F57F17;">₹'+Number(adv.amount||0).toLocaleString("en-IN")+'</span>'+
+            (!alreadyAdj?
+              '<div style="display:flex;align-items:center;gap:8px;padding:0 0 2px 23px;">'+
+                '<span style="font-size:10px;color:var(--text3);">Adjust amount:</span>'+
+                '<input id="adv-adj-amt-'+ai+'" type="number" value="'+defaultAdj+'" min="0" max="'+advAmt+'" '+
+                  'style="width:120px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:#F57F17;" '+
+                  'onchange="blAdvAdjAmtChange(this,'+ai+')">'+
+                '<span style="font-size:10px;color:var(--text3);">of ₹'+Number(advAmt).toLocaleString("en-IN")+(defaultAdj<advAmt?' <b style="color:#E65100;">(₹'+Number(advAmt-defaultAdj).toLocaleString("en-IN")+' carried forward)</b>':'')+'</span>'+
+              '</div>':'')+
           '</div>';
         }).join('')+
-      '</div>':'')+ 
+      '</div>';
+    })()+
     // Bill details
     '<div style="font-size:11px;font-weight:800;color:#333;margin:12px 0 8px;">&#9313; Bill Details</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
@@ -4327,6 +4344,34 @@ async function execOpenBill(partyKey,projId){
   openSheet('ov-exec','sh-exec');
 }
 
+
+function blAdvAdjChange(chk, ai){
+  // When checkbox toggled, enable/disable the amount input
+  var amtInp=document.getElementById('adv-adj-amt-'+ai);
+  if(amtInp){
+    amtInp.disabled=!chk.checked;
+    if(chk.checked){
+      // Restore to max if was cleared
+      var max=parseFloat(chk.getAttribute('data-max'))||0;
+      if(!parseFloat(amtInp.value)) amtInp.value=max;
+    }
+  }
+  // Update data-amount from input
+  blAdvAdjAmtChange(amtInp,ai);
+  blUpdateTotal();
+}
+
+function blAdvAdjAmtChange(inp, ai){
+  if(!inp) return;
+  var chk=document.getElementById('adv-adj-'+ai);
+  if(!chk) return;
+  var max=parseFloat(chk.getAttribute('data-max'))||0;
+  var val=Math.min(Math.max(0,parseFloat(inp.value)||0),max);
+  inp.value=val;
+  chk.setAttribute('data-amount',val);
+  blUpdateTotal();
+}
+
 function blUpdateTotal(){
   var total=0;
   document.querySelectorAll('.bl-work-chk').forEach(function(chk){
@@ -4336,10 +4381,14 @@ function blUpdateTotal(){
       total+=parseFloat(amtInp&&amtInp.value)||0;
     }
   });
-  // Sum selected advance adjustments
+  // Sum selected advance adjustments (use input field values for partial)
   var advAdj=0;
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
-    advAdj+=parseFloat(chk.getAttribute('data-amount'))||0;
+    var ai=chk.id.replace('adv-adj-','');
+    var amtInp=document.getElementById('adv-adj-amt-'+ai);
+    var amt=amtInp?parseFloat(amtInp.value)||0:parseFloat(chk.getAttribute('data-amount'))||0;
+    advAdj+=amt;
+    chk.setAttribute('data-amount',amt); // keep in sync for save
   });
   var net=Math.max(0,total-advAdj);
   var amtEl=document.getElementById('bl-amount');
