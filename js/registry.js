@@ -74,11 +74,10 @@ var CAT_DATA={
 
 var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats'};
 
-// ── Category name → pill filter key (simple lowercase, no slug) ──
 function catKey(name){ return (name||'').toLowerCase().trim(); }
 
 async function initRegistry(){
-  await loadCategories(); // wait for DB categories before building pills
+  await loadCategories();
   rebuildPills('vendor',  'vendor-cat-pills','var(--teal)',  filterVendors);
   rebuildPills('material','mat-cat-pills',   'var(--green)', filterMaterials);
   rebuildPills('sc',      'sc-cat-pills',    'var(--purple)',filterSC);
@@ -141,8 +140,6 @@ async function loadAllData(){
   }catch(e){ toast('Failed to load data — check connection','error'); console.error(e); }
 }
 
-// ── RENDER FUNCTIONS ──────────────────────────────────────────────
-
 function renderVendors(list){
   list = list || VENDORS;
   var el=document.getElementById('vendor-list'); if(!el)return;
@@ -162,7 +159,7 @@ function renderVendors(list){
           '<div style="font-family:monospace;font-size:12px;font-weight:800;color:var(--green);margin-top:4px;">'+fmtV(v.totalValue)+'</div>' +
         '</div>' +
       '</div>' +
-      '<div class="rc-footer"><span>\ud83d\udcde '+v.phone+'</span><span>Lead: '+v.leadTime+'</span><span>'+v.payTerms+'</span></div>' +
+      '<div class="rc-footer" style="display:flex;align-items:center;gap:6px;"><span>\ud83d\udcde '+v.phone+'</span><span>Lead: '+v.leadTime+'</span><div style="margin-left:auto;display:flex;gap:4px;"><button onclick="openEditForm(\x27vendor\x27,\x27'+v.id+'\x27)" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\x27Delete?\x27))deleteRecord(\x27vendor\x27,\x27'+v.id+'\x27)" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div></div>' +
     '</div>';
   }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No vendors found</div>';
   var sv=document.getElementById('stat-v-total'); if(sv)sv.textContent=VENDORS.length;
@@ -186,6 +183,7 @@ function renderMaterials(list){
           '<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+(m.uom||'—')+'</div>' +
         '</div>' +
       '</div>' +
+      '<div class="rc-footer" style="display:flex;justify-content:flex-end;gap:4px;"><button onclick="openEditForm(\x27material\x27,\x27'+m.id+'\x27)" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\x27Delete?\x27))deleteRecord(\x27material\x27,\x27'+m.id+'\x27)" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div>'+
     '</div>';
   }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No materials found</div>';
   var sm=document.getElementById('stat-m-total'); if(sm)sm.textContent=MATERIALS.length;
@@ -209,7 +207,7 @@ function renderSC(list){
           '<div style="font-size:9px;color:var(--text3);">'+s.workers+' workers</div>' +
         '</div>' +
       '</div>' +
-      '<div class="rc-footer"><span>\ud83d\udcde '+s.phone+'</span><span>'+s.exp+'</span></div>' +
+      '<div class="rc-footer" style="display:flex;align-items:center;gap:6px;"><span>\ud83d\udcde '+s.phone+'</span><span>'+s.exp+'</span><div style="margin-left:auto;display:flex;gap:4px;"><button onclick="openEditForm(\x27sc\x27,\x27'+s.id+'\x27)" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\x27Delete?\x27))deleteRecord(\x27sc\x27,\x27'+s.id+'\x27)" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div></div>' +
     '</div>';
   }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No subcontractors found</div>';
   var st=document.getElementById('stat-sc-total'); if(st)st.textContent=SUBCONTRACTORS.length;
@@ -262,8 +260,6 @@ function renderUsers(list){
     '</div>';
   }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No users found</div>';
 }
-
-// ── FILTER FUNCTIONS — all use catKey() for consistent comparison ──
 
 function filterVendors(cat,el){
   document.querySelectorAll('#vendor-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
@@ -338,7 +334,6 @@ function openDetail(type,id){
   openSheet('ov-det','sh-det');
 }
 
-
 function switchPage(p){
   currentPage=p;
   ['vendors','materials','subcontractors','labour','settings'].forEach(function(t){
@@ -360,7 +355,6 @@ function updateAllStats(){
   setEl('dk-workers',USERS.filter(function(u){return u.status==='active';}).length||'—');
 }
 
-// ── rebuildPills: uses catKey() so pill value matches stored category ──
 function rebuildPills(type,containerId,activeColor,filterFn){
   var cats=(CAT_DATA[type]||[]).filter(function(c){return c.active;});
   var el=document.getElementById(containerId); if(!el)return;
@@ -379,6 +373,7 @@ function renderCatSection(type,containerId){
       '<div onclick="toggleCat(\''+type+'\','+i+')" style="width:40px;height:22px;border-radius:11px;background:'+(c.active?'var(--green)':'#CBD5E1')+';position:relative;cursor:pointer;">' +
         '<div style="position:absolute;top:3px;left:'+(c.active?'21':'3')+'px;width:16px;height:16px;border-radius:50%;background:white;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div>' +
       '</div>' +
+      '<button onclick="deleteCat(\x27'+type+'\x27,'+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:18px;padding:0 2px;" title="Delete">&#215;</button>'+
     '</div>';
   }).join('');
 }
@@ -401,7 +396,6 @@ function deleteCat(type,i){
 function toggleCat(type,i){
   CAT_DATA[type][i].active=!CAT_DATA[type][i].active;
   renderCatSection(type,catSectionMap[type]);
-  // Rebuild pills so toggled categories immediately appear/disappear
   var pillMap={vendor:'vendor-cat-pills',material:'mat-cat-pills',sc:'sc-cat-pills',labour:'lab-cat-pills'};
   var fnMap={vendor:filterVendors,material:filterMaterials,sc:filterSC,labour:filterLabour};
   var colorMap={vendor:'var(--teal)',material:'var(--green)',sc:'var(--purple)',labour:'#E65100'};
@@ -451,7 +445,6 @@ async function loadCategories(){
       }
     });
     Object.keys(catSectionMap).forEach(function(type){renderCatSection(type,catSectionMap[type]);});
-    // Rebuild pills after DB load
     rebuildPills('vendor',  'vendor-cat-pills','var(--teal)',  filterVendors);
     rebuildPills('material','mat-cat-pills',   'var(--green)', filterMaterials);
     rebuildPills('sc',      'sc-cat-pills',    'var(--purple)',filterSC);
@@ -480,17 +473,12 @@ async function deleteRecord(type,id){
   try{await sbDelete(tables[type],id);}catch(e){console.error(e);}
 }
 
-
-// ════ EDIT / ADD FORMS ═══════════════════════════════════════════
-
 function openEditForm(type,id){
   var items={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS};
   var item=id?(items[type]||[]).find(function(x){return x.id===id;}):null;
   var isEdit=!!item;
   var title=(isEdit?'Edit ':'Add ')+{vendor:'Vendor',material:'Material',sc:'Subcontractor',labour:'Labour'}[type];
-
   var catOpts=catOptions(type==='sc'?'sc':type==='labour'?'labour':type);
-
   var body='';
   if(type==='vendor'){
     body=
@@ -573,8 +561,6 @@ function openEditForm(type,id){
       '</div>'+
       '<label class="flbl">Address</label><textarea id="ef-address" class="finp" rows="2">'+(item?item.address||'':'')+'</textarea>';
   }
-
-  // Pre-select category
   setTimeout(function(){
     var sel=document.getElementById('ef-cat')||document.getElementById('ef-trade')||document.getElementById('ef-skill');
     if(sel&&item){
@@ -582,7 +568,6 @@ function openEditForm(type,id){
       Array.from(sel.options).forEach(function(o){if(o.value.toLowerCase()===val.toLowerCase())o.selected=true;});
     }
   },50);
-
   document.getElementById('add-title').textContent=title;
   document.getElementById('add-body').innerHTML=body;
   document.getElementById('add-foot').innerHTML=
@@ -596,7 +581,6 @@ async function saveRegistryRecord(type,id){
   var gv2=function(i){var el=document.getElementById(i);return el?el.value.trim():null;};
   var name=gv2('ef-name');
   if(!name){toast('Name is required','warning');return;}
-
   var data={};
   if(type==='vendor'){
     data={name:name,category:gv2('ef-cat')||null,gst:gv2('ef-gst')||null,status:gv2('ef-status')||'active',
@@ -615,24 +599,17 @@ async function saveRegistryRecord(type,id){
       daily_rate:parseFloat(gv2('ef-rate'))||0,blood_group:gv2('ef-blood')||null,
       aadhar:gv2('ef-aadhar')||null,joined:gv2('ef-joined')||null,address:gv2('ef-address')||null};
   }
-
   var tables={vendor:'vendors',material:'materials',sc:'subcontractors',labour:'labourers'};
   var maps={vendor:mapVendor,material:mapMaterial,sc:mapSC,labour:mapLabour};
   var arrs={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS};
-
   try{
     if(id){
-      // Update existing
       await sbUpdate(tables[type],id,data);
       var arr=arrs[type];
       var idx=arr.findIndex(function(x){return x.id===id;});
-      if(idx>-1){
-        var updated=Object.assign({id:id},data);
-        arr[idx]=maps[type](Object.assign({id:id,vendor_id:arr[idx].vendorId,mat_id:arr[idx].matId,sc_id:arr[idx].scId,lab_id:arr[idx].labId},data));
-      }
+      if(idx>-1) arr[idx]=maps[type](Object.assign({id:id,vendor_id:arr[idx].vendorId,mat_id:arr[idx].matId,sc_id:arr[idx].scId,lab_id:arr[idx].labId},data));
       toast(name+' updated','success');
     } else {
-      // Insert new with auto ID
       var prefix={vendor:'VND',material:'MAT',sc:'SUB',labour:'LAB'};
       var arr=arrs[type];
       var newId=prefix[type]+'-'+String(arr.length+1).padStart(3,'0');
@@ -651,7 +628,7 @@ async function saveRegistryRecord(type,id){
 
 function confirmDelete(type,id,name){
   document.getElementById('det-body').innerHTML='<div style="text-align:center;padding:24px;"><div style="font-size:48px;margin-bottom:12px;">\u26a0\ufe0f</div><div style="font-size:16px;font-weight:800;margin-bottom:8px;">Delete?</div><div style="font-size:13px;color:var(--text2);">Delete <strong>'+name+'</strong>? This cannot be undone.</div></div>';
-  document.getElementById('det-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Cancel</button><button class="btn btn-red" onclick="deleteRecord(\''+type+'\',\''+id+'\')">🗑 Delete</button>';
+  document.getElementById('det-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Cancel</button><button class="btn btn-red" onclick="deleteRecord(\''+type+'\',\''+id+'\')">&#128465; Delete</button>';
 }
 
 async function saveVendor(){toast('Save vendor — implement in registry.js','info');}
