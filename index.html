@@ -2230,6 +2230,1394 @@ input,select,textarea{font-size:16px !important;}
 const SUPABASE_URL = 'https://aywlauygsqkivdihbaut.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5d2xhdXlnc3FraXZkaWhiYXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODYxNjgsImV4cCI6MjA4OTY2MjE2OH0.NHMZTF6yCaZXW8bNw496Hd_t_NAIE__PUU4WsxZc3yw';
 
+
+async function sbFetch(table, options={}){
+  var url = SUPABASE_URL+'/rest/v1/'+table;
+  var params = [];
+  if(options.select) params.push('select='+options.select);
+  if(options.filter) params.push(options.filter);
+  if(options.order) params.push('order='+options.order);
+  if(params.length) url += '?'+params.join('&');
+  var res = await fetch(url,{
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json'}
+  });
+  return res.json();
+}
+
+async function sbInsert(table, data){
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(data)
+  });
+  return res.json();
+}
+
+async function sbUpdate(table, id, data){
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
+    method:'PATCH',
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(data)
+  });
+  return res.json();
+}
+
+async function sbDelete(table, id){
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table+'?id=eq.'+id,{
+    method:'DELETE',
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json'}
+  });
+  return res.ok;
+}
+
+// ── EMPTY DATA ARRAYS (loaded from Supabase) ──
+var VENDORS = [];
+var MATERIALS = [];
+var SUBCONTRACTORS = [];
+var USERS = [];
+var PROJECTS = [];
+
+// ── LOAD ALL DATA FROM SUPABASE ──
+async function loadAllData(){
+  var loadHtml='<div style="text-align:center;padding:30px;color:var(--text3);"><div style="font-size:24px;margin-bottom:8px;">⏳</div><div style="font-weight:700;">Loading...</div></div>';
+  ['vendor-list','material-list','sc-list','labour-list','user-list'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.innerHTML=loadHtml;
+  });
+  try{
+    var [vendors, materials, subcons, labours, employees, projects] = await Promise.all([
+      sbFetch('vendors',{select:'*',order:'created_at.desc'}),
+      sbFetch('materials',{select:'*',order:'created_at.desc'}),
+      sbFetch('subcontractors',{select:'*',order:'created_at.desc'}),
+      sbFetch('labourers',{select:'*',order:'created_at.desc'}),
+      sbFetch('employees',{select:'*',order:'created_at.desc'}),
+      sbFetch('projects',{select:'*',order:'name.asc'}),
+    ]);
+    VENDORS       = Array.isArray(vendors)?vendors.map(mapVendor):[];
+    MATERIALS     = Array.isArray(materials)?materials.map(mapMaterial):[];
+    SUBCONTRACTORS= Array.isArray(subcons)?subcons.map(mapSC):[];
+    LABOURERS     = Array.isArray(labours)?labours.map(mapLabour):[];
+    USERS         = Array.isArray(employees)?employees.map(mapEmployee):[];
+    PROJECTS      = Array.isArray(projects)?projects:[];
+    renderVendors(); renderMaterials(); renderSC(); renderLabour(); renderUsers();
+    updateAllStats();
+    toast('Data loaded','success');
+  } catch(e){
+    toast('Failed to load data — check connection','error');
+    console.error(e);
+  }
+}
+
+// ── DATA MAPPERS (DB → App format) ──
+function mapVendor(v){
+  return {id:v.id,vendorId:v.vendor_id,name:v.name||'Unknown',cat:v.category||'',status:v.status||'active',rating:v.rating||0,
+    gst:v.gst||'',contact:v.contact_person||'',phone:v.phone||'',email:v.email||'',address:v.address||'',
+    brands:v.brands||'',payTerms:v.pay_terms||'',leadTime:v.lead_time||'',orders:v.total_orders||0,
+    totalValue:v.total_value||0,materialRates:[],col:catColor(v.category)};
+}
+function mapMaterial(m){
+  return {id:m.id,matId:m.mat_id,name:m.name,cat:m.category||'',code:m.code||'',
+    unit:m.unit,uom:m.uom,spec:m.spec,col:catColor(m.category)};
+}
+function mapSC(s){
+  return {id:s.id,scId:s.sc_id,name:s.name||'Unknown',trade:s.trade||'',rating:s.rating||0,
+    gst:s.gst||'',contact:s.contact_person||'',phone:s.phone||'',email:s.email||'',address:s.address||'',
+    exp:s.experience||'',turnover:s.turnover||'',workers:s.workers||0,speciality:s.speciality||'',
+    pbgAvail:s.pbg_available,emdAvail:s.emd_available,status:s.status||'active',col:'#1565C0'};
+}
+function mapEmployee(e){
+  return {id:e.id,empId:e.emp_id,name:((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim()||'Unknown',
+    role:e.role||'viewer',access:e.designation||e.role,dept:e.department||'',
+    phone:e.phone,phone2:e.phone2,dob:e.dob||e.date_of_birth,gender:e.gender,blood:e.blood_group,
+    marital:e.marital_status,doj:e.date_of_joining,
+    empType:e.emp_type,location:e.work_location,project:e.work_location||'',
+    address:e.address,permanent:e.permanent_address,
+    aadhar:e.aadhar,pan:e.pan,pf:e.pf_no,esic:e.esic_no,
+    bank:e.bank_name,accNo:e.account_no,ifsc:e.ifsc,accName:e.account_holder,
+    ecName:e.emergency_name,ecRel:e.emergency_relation,ecPhone:e.emergency_phone,
+    status:e.status||'active',lastLogin:e.last_login||'Never',
+    joined:e.date_of_joining||e.created_at,email:'',col:ROLE_COLORS[e.role]||'#37474F',
+    photoUrl:e.profile_photo||null,aadharUrl:e.aadhar_doc_url||null,panUrl:e.pan_doc_url||null};
+}
+function catColor(cat){
+  var colors={steel:'#C62828',cement:'#37474F',concrete:'#1565C0',structural:'#C62828',
+    finishing:'#E65100',mep:'#F57F17',road:'#795548',safety:'#F57F17',
+    formwork:'#1565C0',waterproofing:'#6A1B9A',electrical:'#F57F17',plant:'#00838F'};
+  return colors[cat]||'#37474F';
+}
+
+var ROLE_COLORS={admin:'#6A1B9A',pm:'#1565C0',engineer:'#00838F',qhse:'#2E7D32',finance:'#E65100',viewer:'#37474F'};
+var ROLE_IC={admin:'&#128084;',pm:'&#127959;',engineer:'&#9881;&#65039;',qhse:'&#128203;',finance:'&#128178;',viewer:'&#128065;'};
+
+// ── RENDER VENDORS ──
+var vendorCatFilter='all';
+function renderVendors(list){
+  list=list||VENDORS;
+  if(vendorCatFilter!=='all') list=list.filter(function(v){return v.cat===vendorCatFilter||v.cat.includes(vendorCatFilter);});
+  var sv=document.getElementById('stat-v-total');if(sv)sv.textContent=VENDORS.length;
+  var sa=document.getElementById('stat-v-active');if(sa)sa.textContent=CAT_DATA.vendor.filter(function(c){return c.active;}).length;
+  var sc=document.getElementById('stat-v-cats');if(sc)sc.textContent=VENDORS.reduce(function(s,v){return s+(v.totalValue||0);},0)>=10000000?'₹'+(VENDORS.reduce(function(s,v){return s+(v.totalValue||0);},0)/10000000).toFixed(1)+'Cr':'₹'+(VENDORS.reduce(function(s,v){return s+(v.totalValue||0);},0)/100000).toFixed(0)+'L';
+  var stBadge={approved:'b-green',active:'b-green','under-review':'b-amber',blacklisted:'b-red',rejected:'b-red',suspended:'b-red'};
+  document.getElementById('vendor-list').innerHTML=list.map(function(v){
+    return '<div class="reg-card" onclick="openDetail(\'vendor\',\''+v.id+'\')">'+
+      '<div class="rc-accent" style="background:'+v.col+'"></div>'+
+      '<div class="rc-body">'+
+        '<div class="avatar" style="background:'+v.col+'">'+(v.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div class="rc-info">'+
+          '<div class="rc-name">'+v.name+'</div>'+
+          '<div class="rc-sub">'+(v.brands||'').split(',')[0]+'</div>'+
+          '<div class="rc-tags">'+
+            '<span class="badge '+(stBadge[v.status]||'b-navy')+'">'+v.status+'</span>'+
+            '<span class="badge b-navy">'+v.cat+'</span>'+
+            '<span class="badge b-teal">&#9733; '+v.rating+'</span>'+
+          '</div>'+
+        '</div>'+
+        '<div class="rc-right">'+
+          '<div class="rc-id" style="color:'+v.col+'">'+v.id+'</div>'+
+          '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:800;color:var(--green);margin-top:4px;">'+fmtV(v.totalValue)+'</div>'+
+          '<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+v.orders+' orders</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rc-footer"><span>&#128222; '+v.phone+'</span><span>Lead: '+v.leadTime+'</span><span>'+v.payTerms+'</span></div>'+
+    '</div>';
+  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No vendors found</div>';
+}
+
+function filterVendors(cat,el){
+  document.querySelectorAll('#vendor-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
+  if(el){el.style.background='var(--teal)';el.style.borderColor='var(--teal)';el.style.color='white';}
+  vendorCatFilter=cat;
+  if(cat==='all'){renderVendors();return;}
+  var filtered=VENDORS.filter(function(v){return v.cat.toLowerCase().replace(/[^a-z0-9]/g,'')=== cat.toLowerCase().replace(/[^a-z0-9]/g,'') || v.cat.toLowerCase()===cat.toLowerCase();});
+  renderVendors(filtered);
+}
+
+// ── RENDER MATERIALS ──
+var matCatFilter='all';
+function renderMaterials(list){
+  list=list||MATERIALS;
+  if(matCatFilter!=='all') list=list.filter(function(m){return m.cat===matCatFilter;});
+  document.getElementById('material-list').innerHTML=list.map(function(m){
+    return '<div class="reg-card" onclick="openDetail(\'material\',\''+m.id+'\')">'+
+      '<div class="rc-accent" style="background:'+m.col+'"></div>'+
+      '<div class="rc-body">'+
+        '<div class="avatar" style="background:'+m.col+';font-size:20px;">'+
+          (m.cat==='structural'?'&#129493;':m.cat==='concrete'?'&#129521;':m.cat==='finishing'?'&#127775;':m.cat==='mep'?'&#9889;':m.cat==='road'?'&#128739;':m.cat==='safety'?'&#9973;&#65039;':'&#128230;')+
+        '</div>'+
+        '<div class="rc-info">'+
+          '<div class="rc-name">'+m.name+'</div>'+
+          '<div class="rc-sub">'+m.code+' &bull; '+m.spec+'</div>'+
+          '<div class="rc-tags"><span class="badge b-navy">'+m.cat+'</span></div>'+
+        '</div>'+
+        '<div class="rc-right">'+
+          '<div class="rc-id" style="color:'+m.col+'">'+m.id+'</div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+m.uom+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rc-footer">'+
+          '<span>'+
+            (function(){var vcount=VENDORS.filter(function(v){return v.materialRates&&v.materialRates.some(function(r){return r.matId===m.id;});}).length;
+            return vcount>0?'&#127970; '+vcount+' vendor'+(vcount>1?'s':'')+' linked':'&#127970; No vendors linked';})()+'</span>'+
+          '<span style="font-family:monospace;font-size:11px;">'+m.code+'</span>'+
+        '</div>'+
+    '</div>';
+  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No materials found</div>';
+  var sm=document.getElementById('stat-m-total');if(sm)sm.textContent=MATERIALS.length;
+  var sc=document.getElementById('stat-m-cats');if(sc)sc.textContent=CAT_DATA.material.filter(function(c){return c.active;}).length;
+  var sv=document.getElementById('stat-m-vendors');if(sv)sv.textContent=[].concat.apply([],MATERIALS.map(function(m){return m.vendors;})).filter(function(v,i,a){return a.indexOf(v)===i;}).length;
+}
+
+function filterMaterials(cat,el){
+  document.querySelectorAll('#mat-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
+  if(el){el.style.background='var(--green)';el.style.borderColor='var(--green)';el.style.color='white';}
+  matCatFilter=cat;
+  if(cat==='all'){renderMaterials();return;}
+  var filtered=MATERIALS.filter(function(m){return m.cat.toLowerCase().replace(/[^a-z0-9]/g,'')=== cat.toLowerCase().replace(/[^a-z0-9]/g,'') || m.cat.toLowerCase()===cat.toLowerCase();});
+  renderMaterials(filtered);
+}
+
+// ── RENDER SUBCONTRACTORS ──
+var scCatFilter='all';
+function renderSC(list){
+  list=list||SUBCONTRACTORS;
+  if(scCatFilter!=='all') list=list.filter(function(s){return s.trade===scCatFilter;});
+  document.getElementById('sc-list').innerHTML=list.map(function(s){
+    var stars='';for(var i=0;i<5;i++){stars+='<span class="'+(i<Math.floor(s.rating)?'star':'star empty')+'">&#9733;</span>';}
+    return '<div class="reg-card" onclick="openDetail(\'sc\',\''+s.id+'\')">'+
+      '<div class="rc-accent" style="background:'+s.col+'"></div>'+
+      '<div class="rc-body">'+
+        '<div class="avatar" style="background:'+s.col+'">'+(s.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div class="rc-info">'+
+          '<div class="rc-name">'+s.name+'</div>'+
+          '<div class="rc-sub">'+(s.speciality||'').split(',')[0]+'</div>'+
+          '<div class="rc-tags">'+
+            '<span class="badge b-purple">'+s.trade+'</span>'+
+            (s.pbgAvail?'<span class="badge b-teal">PBG &#10003;</span>':'<span class="badge b-amber">No PBG</span>')+
+          '</div>'+
+        '</div>'+
+        '<div class="rc-right">'+
+          '<div class="rc-id" style="color:'+s.col+'">'+s.id+'</div>'+
+          '<div style="margin-top:4px;">'+stars+'</div>'+
+          '<div style="font-size:9px;color:var(--text3);margin-top:2px;">'+s.workers+' workers</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rc-footer"><span>&#128222; '+s.phone+'</span><span>Exp: '+s.exp+'</span><span>T/O: '+s.turnover+'</span></div>'+
+    '</div>';
+  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No subcontractors found</div>';
+  var st=document.getElementById('stat-sc-total');if(st)st.textContent=SUBCONTRACTORS.length;
+  var sp=document.getElementById('stat-sc-pbg');if(sp)sp.textContent=SUBCONTRACTORS.filter(function(s){return s.pbgAvail;}).length;
+}
+
+function filterSC(cat,el){
+  document.querySelectorAll('#sc-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
+  if(el){el.style.background='var(--purple)';el.style.borderColor='var(--purple)';el.style.color='white';}
+  scCatFilter=cat;
+  if(cat==='all'){renderSC();return;}
+  var filtered=SUBCONTRACTORS.filter(function(s){return s.trade.toLowerCase().replace(/[^a-z0-9]/g,'')=== cat.toLowerCase().replace(/[^a-z0-9]/g,'') || s.trade.toLowerCase()===cat.toLowerCase();});
+  renderSC(filtered);
+}
+
+// ── LABOUR ──────────────────────────────────────────────────────────
+var LABOURERS = [];
+var labCatFilter = 'all';
+
+function mapLabour(l){
+  return {
+    id:l.id, labId:l.lab_id||l.id.slice(0,8).toUpperCase(),
+    name:l.name||'Unknown', skill:l.skill||'', type:l.type||'unskilled',
+    phone:l.phone||'', address:l.address||'',
+    aadhar:l.aadhar||'', idProof:l.id_proof||'',
+    dailyRate:l.daily_rate||0, source:l.source||'direct',
+    contractor:l.contractor||'', project:l.project||'',
+    status:l.status||'active', joined:l.joined||'',
+    bloodGroup:l.blood_group||'', remarks:l.remarks||''
+  };
+}
+
+async function loadLabour(){
+  var el = document.getElementById('labour-list');
+  if(el) el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);"><div style="font-size:24px;margin-bottom:8px;">⏳</div><div style="font-weight:700;">Loading...</div></div>';
+  try{
+    var rows = await sbFetch('labourers',{select:'*',order:'created_at.desc'});
+    LABOURERS = Array.isArray(rows) ? rows.map(mapLabour) : [];
+    renderLabour();
+  }catch(e){
+    LABOURERS=[];
+    if(el) el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Error loading. Check connection.</div>';
+    console.error(e);
+  }
+}
+
+function renderLabour(list){
+  list = list||LABOURERS;
+  if(labCatFilter!=='all') list=list.filter(function(l){return (l.skill||'').toLowerCase()===labCatFilter;});
+  var el = document.getElementById('labour-list'); if(!el)return;
+  var typeColor = {'skilled':'#1565C0','semi-skilled':'#7B1FA2','unskilled':'#E65100'};
+  el.innerHTML = list.map(function(l){
+    var col = typeColor[l.type]||'#E65100';
+    return '<div class="reg-card" onclick="openDetail(\'labour\',\''+l.id+'\')">'+
+      '<div class="rc-accent" style="background:'+col+'"></div>'+
+      '<div class="rc-body">'+
+        '<div class="avatar" style="background:'+col+'">'+(l.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div class="rc-info">'+
+          '<div class="rc-name">'+l.name+'</div>'+
+          '<div class="rc-sub">'+(l.skill||'—')+(l.project?' &bull; '+l.project:'')+'</div>'+
+          '<div class="rc-tags">'+
+            '<span class="badge" style="background:'+col+'25;color:'+col+';">'+l.type+'</span>'+
+            (l.source==='contractor'?'<span class="badge b-purple">Via SC</span>':'<span class="badge b-teal">Direct</span>')+
+            (l.status==='inactive'?'<span class="badge b-red">Inactive</span>':'')+
+          '</div>'+
+        '</div>'+
+        '<div class="rc-right">'+
+          '<div class="rc-id" style="color:'+col+'">'+l.labId+'</div>'+
+          '<div style="font-size:11px;font-weight:800;color:#1B5E20;margin-top:4px;">&#8377;'+Number(l.dailyRate||0).toLocaleString('en-IN')+'/day</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rc-footer"><span>&#128222; '+(l.phone||'—')+'</span><span>'+l.skill+'</span><span>Aadhar: '+(l.aadhar?'✓':'—')+'</span></div>'+
+    '</div>';
+  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No labourers found</div>';
+  var stTotal  = document.getElementById('stat-lab-total');   if(stTotal)  stTotal.textContent  = LABOURERS.length;
+  var stActive = document.getElementById('stat-lab-active');  if(stActive) stActive.textContent  = LABOURERS.filter(function(l){return l.status==='active';}).length;
+  var stSkill  = document.getElementById('stat-lab-skilled'); if(stSkill)  stSkill.textContent   = LABOURERS.filter(function(l){return l.type==='skilled';}).length;
+}
+
+function filterLabour(cat,el){
+  document.querySelectorAll('#lab-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
+  if(el){el.style.background='#E65100';el.style.borderColor='#E65100';el.style.color='white';}
+  labCatFilter=cat;
+  if(cat==='all'){renderLabour();return;}
+  renderLabour(LABOURERS.filter(function(l){return (l.skill||'').toLowerCase()===cat.toLowerCase();}));
+}
+
+function openAddLabour(){
+  var af = document.getElementById('add-foot');
+  document.getElementById('add-title').textContent = 'New Labour Registration';
+  document.getElementById('add-body').innerHTML = buildLabourForm(null);
+  af.innerHTML = '';
+  var cb = document.createElement('button');
+  cb.className='btn btn-outline'; cb.textContent='Cancel';
+  cb.onclick = function(){ closeSheet('ov-add','sh-add'); };
+  var sb = document.createElement('button');
+  sb.className='btn btn-navy'; sb.innerHTML='&#10003; Save Labour';
+  sb.onclick = function(){ saveLabour(''); };
+  af.appendChild(cb); af.appendChild(sb);
+  openSheet('ov-add','sh-add');
+}
+
+function buildLabourForm(l){
+  l = l||{};
+  var labTypes = catOptions('labour')||
+    '<option value="skilled"'+(l.type==='skilled'?' selected':'')+'>Skilled</option>'+
+    '<option value="semi-skilled"'+(l.type==='semi-skilled'?' selected':'')+'>Semi-Skilled</option>'+
+    '<option value="unskilled"'+(!l.type||l.type==='unskilled'?' selected':'')+'>Unskilled</option>';
+  return (
+    '<label class="flbl">Full Name *</label>'+
+    '<input id="e-labname" class="finp" value="'+esc(l.name||'')+'" placeholder="e.g. Ramesh Kumar">'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Skill / Trade</label>'+
+        '<input id="e-labskill" class="finp" placeholder="Mason, Carpenter, Helper..." value="'+esc(l.skill||'')+'"></div>'+
+      '<div><label class="flbl">Labour Type</label>'+
+        '<select id="e-labtype" class="fsel">'+labTypes+'</select></div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Phone</label>'+
+        '<input id="e-labphone" class="finp" type="tel" value="'+esc(l.phone||'')+'" placeholder="Mobile"></div>'+
+      '<div><label class="flbl">Daily Rate (₹)</label>'+
+        '<input id="e-labrate" class="finp" type="number" value="'+(l.dailyRate||'')+'" placeholder="0"></div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Source</label>'+
+        '<select id="e-labsource" class="fsel">'+
+          '<option value="direct"'+(l.source==='direct'||!l.source?' selected':'')+'>Direct Hire</option>'+
+          '<option value="contractor"'+(l.source==='contractor'?' selected':'')+'>Via Contractor</option>'+
+        '</select></div>'+
+      '<div><label class="flbl">Contractor Name</label>'+
+        '<input id="e-labcontractor" class="finp" value="'+esc(l.contractor||'')+'" placeholder="If via contractor"></div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Aadhar No.</label>'+
+        '<input id="e-labaadhar" class="finp" value="'+esc(l.aadhar||'')+'" placeholder="XXXX XXXX XXXX"></div>'+
+      '<div><label class="flbl">Blood Group</label>'+
+        '<input id="e-labblood" class="finp" placeholder="e.g. B+" value="'+esc(l.bloodGroup||'')+'"></div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Date of Joining</label>'+
+        '<input id="e-labjoined" class="finp" type="date" value="'+esc(l.joined||'')+'"></div>'+
+      '<div><label class="flbl">Status</label>'+
+        '<select id="e-labstatus" class="fsel">'+
+          '<option value="active"'+(l.status==='active'||!l.status?' selected':'')+'>Active</option>'+
+          '<option value="inactive"'+(l.status==='inactive'?' selected':'')+'>Inactive</option>'+
+        '</select></div>'+
+    '</div>'+
+    '<label class="flbl">Project / Site</label>'+
+    '<input id="e-labproject" class="finp" value="'+esc(l.project||'')+'" placeholder="Current project">'+
+    '<label class="flbl">Address</label>'+
+    '<textarea id="e-labaddress" class="ftxt" placeholder="Residential address...">'+esc(l.address||'')+'</textarea>'+
+    '<label class="flbl">Remarks</label>'+
+    '<input id="e-labremarks" class="finp" value="'+esc(l.remarks||'')+'" placeholder="Any notes...">'
+  );
+}
+
+
+async function saveLabour(editId){
+  var name = gv('e-labname');
+  if(!name){toast('Name is required','warning');return;}
+  var data = {
+    name:name, skill:gv('e-labskill'), type:gv('e-labtype'),
+    phone:gv('e-labphone'), daily_rate:parseFloat(gv('e-labrate'))||0,
+    source:gv('e-labsource'), contractor:gv('e-labcontractor'),
+    aadhar:gv('e-labaadhar'), blood_group:gv('e-labblood'),
+    joined:gv('e-labjoined')||null, status:gv('e-labstatus'),
+    project:gv('e-labproject'), address:gv('e-labaddress'), remarks:gv('e-labremarks')
+  };
+  try{
+    if(editId){
+      await sbUpdate('labourers',editId,data);
+      var idx=LABOURERS.findIndex(function(l){return l.id===editId;});
+      if(idx>-1) LABOURERS[idx]=mapLabour(Object.assign({id:editId},data));
+      toast('Labourer updated!','success');
+    } else {
+      var res=await sbInsert('labourers',data);
+      if(res&&res[0]) LABOURERS.unshift(mapLabour(res[0]));
+      toast('Labourer added!','success');
+    }
+    closeSheet('ov-add','sh-add');
+    switchPage('labour');
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+async function deleteLabour(id){
+  if(!confirm('Delete this labourer record?')) return;
+  try{
+    await sbDelete('labourers',id);
+    LABOURERS=LABOURERS.filter(function(l){return l.id!==id;});
+    closeDetail(); renderLabour(); toast('Deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ── RENDER USERS ──
+var userRoleFilter='all';
+function renderUsers(list){
+  list=list||USERS;
+  var section=document.getElementById('sc-in-users-section');
+  if(userRoleFilter==='subcontractor'){
+    document.getElementById('user-list').innerHTML='';
+    if(section)section.style.display='';
+    renderSCInUsers(true);
+    return;
+  }
+  if(userRoleFilter!=='all') list=list.filter(function(u){return u.role===userRoleFilter;});
+  var stBadge={active:'b-green',pending:'b-amber',inactive:'b-red'};
+  document.getElementById('user-list').innerHTML=list.map(function(u){
+    var col=ROLE_COLORS[u.role]||'#37474F';
+    return '<div class="reg-card" onclick="openDetail(\'user\',\''+u.id+'\')">'+
+      '<div class="rc-accent" style="background:'+col+'"></div>'+
+      '<div class="rc-body">'+
+        '<div class="avatar" style="background:'+col+'">'+(u.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div class="rc-info" style="min-width:0;flex:1;">'+
+          '<div class="rc-name" style="white-space:normal;word-break:break-word;">'+u.name+'</div>'+
+          '<div class="rc-sub">'+u.access+' &bull; '+u.dept+'</div>'+
+          '<div class="rc-tags">'+
+            '<span class="badge '+(stBadge[u.status]||'b-navy')+'">'+u.status+'</span>'+
+          '</div>'+
+        '</div>'+
+        '<div class="rc-right" style="flex-shrink:0;">'+
+          '<div class="rc-id" style="color:'+col+'">'+u.empId+'</div>'+
+          '<div style="font-size:9px;color:var(--text3);margin-top:4px;">'+u.dept+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rc-footer"><span>&#128241; '+(u.phone||'—')+'</span><span>'+(u.empId||u.id.slice(0,8))+'</span></div>'+
+    '</div>';
+  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No users found</div>';
+  renderSCInUsers();
+}
+
+function renderSCInUsers(forceShow){
+  var el=document.getElementById('sc-in-users-list');
+  if(!el) return;
+  var section=document.getElementById('sc-in-users-section');
+  if(!forceShow && userRoleFilter!=='all'){if(section)section.style.display='none';return;}
+  if(section)section.style.display='';
+  el.innerHTML=SUBCONTRACTORS.map(function(s){
+    return '<div class="reg-card" onclick="openDetail(\'sc\',\''+s.id+'\')" style="opacity:.92;">'+
+      '<div class="rc-accent" style="background:'+s.col+'"></div>'+
+      '<div class="rc-body">'+
+        '<div class="avatar" style="background:'+s.col+';font-size:13px;">'+(s.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div class="rc-info">'+
+          '<div class="rc-name">'+s.name+'</div>'+
+          '<div class="rc-sub">'+(s.speciality||'').split(',')[0]+'</div>'+
+          '<div class="rc-tags">'+
+            '<span class="badge b-purple">'+s.trade+'</span>'+
+            (s.pbgAvail?'<span class="badge b-teal">PBG &#10003;</span>':'')+
+          '</div>'+
+        '</div>'+
+        '<div class="rc-right">'+
+          '<div class="rc-id" style="color:'+s.col+'">'+s.id+'</div>'+
+          '<div style="font-size:9px;color:var(--text3);margin-top:4px;">'+s.workers+' workers</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rc-footer"><span>&#128222; '+s.phone+'</span><span>'+s.contact+'</span></div>'+
+    '</div>';
+  }).join('')||'<div style="text-align:center;padding:20px;color:var(--text3);">No subcontractors registered</div>';
+}
+
+function filterUsers(role,el){
+  document.querySelectorAll('#user-role-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
+  if(el){
+    var col = role==='pending'?'var(--amber)':'var(--rose)';
+    el.style.background=col;el.style.borderColor=col;el.style.color='white';
+  }
+  userRoleFilter=role;
+  if(role==='pending'){
+    // Show pending employees inline in list
+    renderPendingInList();
+    return;
+  }
+  renderUsers();
+}
+
+function renderPendingInList(){
+  var list = document.getElementById('user-list');
+  if(!list) return;
+  if(!pendingEmployees||!pendingEmployees.length){
+    list.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);"><div style="font-size:32px;margin-bottom:8px;">✅</div><div style="font-weight:700;">No pending approvals</div></div>';
+    return;
+  }
+  list.innerHTML = pendingEmployees.map(function(e,i){
+    var name=((e.first_name||'')+( e.middle_name?' '+e.middle_name:'')+( e.last_name?' '+e.last_name:'')).trim();
+    var submitted=fmtDate(e.created_at);
+    return '<div class="reg-card" onclick="openApprovalDetail('+i+')">'+
+      '<div class="rc-accent" style="background:var(--amber)"></div>'+
+      '<div class="rc-body">'+
+        '<div class="avatar" style="background:var(--amber);">'+name.split(' ').map(function(w){return w[0];}).join('').slice(0,2)+'</div>'+
+        '<div class="rc-info" style="min-width:0;flex:1;">'+
+          '<div class="rc-name" style="white-space:normal;">'+name+'</div>'+
+          '<div class="rc-sub">'+(e.designation||e.role||'—')+' · '+(e.department||'—')+'</div>'+
+          '<div class="rc-tags"><span class="badge b-amber">⏳ Pending Approval</span></div>'+
+        '</div>'+
+        '<div class="rc-right" style="flex-shrink:0;">'+
+          '<div class="rc-id" style="color:var(--amber);">'+(e.emp_id||'—')+'</div>'+
+          '<div style="font-size:9px;color:var(--text3);margin-top:4px;">'+submitted+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rc-footer"><span>📱 '+(e.phone||'—')+'</span><span>Tap to Review</span></div>'+
+    '</div>';
+  }).join('');
+}
+
+// ── SEARCH ──
+function searchList(type,q){
+  var ql=q.toLowerCase();
+  if(type==='vendors'){var r=VENDORS.filter(function(v){return v.name.toLowerCase().includes(ql)||v.cat.includes(ql)||v.gst.toLowerCase().includes(ql)||v.contact.toLowerCase().includes(ql);});renderVendors(r);}
+  if(type==='materials'){var r=MATERIALS.filter(function(m){return m.name.toLowerCase().includes(ql)||m.code.toLowerCase().includes(ql)||m.cat.includes(ql);});renderMaterials(r);}
+  if(type==='sc'){var r=SUBCONTRACTORS.filter(function(s){return s.name.toLowerCase().includes(ql)||s.trade.includes(ql)||s.contact.toLowerCase().includes(ql);});renderSC(r);}
+  if(type==='users'){
+    var section=document.getElementById('sc-in-users-section');
+    var r=USERS.filter(function(u){return u.name.toLowerCase().includes(ql)||u.role.includes(ql)||u.dept.toLowerCase().includes(ql)||u.email.includes(ql);});
+    renderUsers(r);
+    if(section)section.style.display=ql?'none':'';
+  }
+}
+
+// ── DETAIL SHEETS ──
+function openDetail(type,id){
+  if(type==='vendor'){
+    var v=VENDORS.find(function(x){return x.id===id;});if(!v)return;
+    document.getElementById('det-title').textContent=v.name;
+    document.getElementById('det-body').innerHTML=
+      '<div style="background:'+v.col+'1A;border:1px solid '+v.col+'40;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">'+
+        '<div class="avatar" style="width:56px;height:56px;border-radius:16px;font-size:18px;background:'+v.col+'">'+(v.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div><div style="font-size:17px;font-weight:800;">'+v.name+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">'+v.brands+'</div><div style="margin-top:6px;display:flex;gap:6px;"><span class="badge b-green">'+v.status+'</span><span class="badge b-teal">&#9733; '+v.rating+'</span></div></div>'+
+      '</div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
+        ir('Vendor ID',v.id,true)+ir('Category',v.cat)+ir('GST No.',v.gst,true)+
+        ir('Contact',v.contact)+ir('Phone',v.phone)+ir('Email',v.email)+
+        ir('Address',v.address)+ir('Pay Terms',v.payTerms)+ir('Lead Time',v.leadTime)+
+        ir('Total Orders',v.orders+' orders')+ir('Total Value',fmtV(v.totalValue))+
+      '</div>'+
+      '<div style="font-size:13px;font-weight:800;margin-bottom:8px;">Products / Brands</div>'+
+      '<div style="background:var(--bg);border-radius:10px;padding:12px;font-size:12px;color:var(--text2);margin-bottom:14px;">'+v.brands+'</div>'+
+      (v.materialRates&&v.materialRates.length?
+        '<div style="font-size:13px;font-weight:800;margin-bottom:8px;">&#129521; Material Rates</div>'+
+        '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
+        v.materialRates.map(function(r){
+          var mat=MATERIALS.find(function(m){return m.id===r.matId;});
+          if(!mat) return '';
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="closeSheet(\'ov-det\',\'sh-det\');setTimeout(function(){openDetail(\'material\',\''+mat.id+'\')}  ,200)">'+
+            '<div><div style="font-size:13px;font-weight:700;">'+mat.name+'</div><div style="font-size:11px;color:var(--text3);margin-top:2px;">'+mat.code+' &bull; Tap to view</div></div>'+
+            '<div style="text-align:right;"><div style="font-size:14px;font-weight:800;color:#2E7D32;">&#8377;'+r.rate.toLocaleString('en-IN')+'</div><div style="font-size:11px;color:var(--text3);">per '+mat.uom+'</div></div></div>';
+        }).join('')+'</div>'
+      :'<div style="font-size:12px;color:var(--text3);margin-bottom:14px;">No material rates added yet.</div>');
+    document.getElementById('det-foot').innerHTML=
+      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
+      '<button class="btn btn-red" onclick="confirmDelete(\'vendor\',\''+v.id+'\',\''+esc(v.name)+'\')">&#128465; Delete</button>'+
+      '<button class="btn btn-navy" onclick="editRecord(\'vendor\',\''+v.id+'\')">&#9998; Edit</button>';
+    openSheet('ov-det','sh-det');
+  }
+  if(type==='material'){
+    var m=MATERIALS.find(function(x){return x.id===id;});if(!m)return;
+    document.getElementById('det-title').textContent=m.name;
+    var vendorRatesHtml=(function(){
+      var vlist=VENDORS.filter(function(v){return v.materialRates&&v.materialRates.some(function(r){return r.matId===m.id;});});
+      if(!vlist.length) return '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);padding:16px;text-align:center;margin-bottom:14px;"><div style="font-size:24px;margin-bottom:6px;">🏪</div><div style="font-size:12px;color:var(--text3);">No vendor rates linked yet.<br>Add rates from the Vendor profile.</div></div>';
+      var rates=vlist.map(function(v){return v.materialRates.find(function(r){return r.matId===m.id;}).rate;});
+      var minR=Math.min.apply(null,rates), maxR=Math.max.apply(null,rates);
+      return '<div style="display:flex;gap:8px;margin-bottom:8px;">'+
+        '<div style="flex:1;background:#E8F5E9;border-radius:10px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:#2E7D32;font-weight:700;">LOWEST</div><div style="font-size:14px;font-weight:800;color:#2E7D32;">&#8377;'+minR.toLocaleString('en-IN')+'</div></div>'+
+        '<div style="flex:1;background:#FFF3E0;border-radius:10px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:#E65100;font-weight:700;">HIGHEST</div><div style="font-size:14px;font-weight:800;color:#E65100;">&#8377;'+maxR.toLocaleString('en-IN')+'</div></div>'+
+        '<div style="flex:1;background:#E3F2FD;border-radius:10px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:#1565C0;font-weight:700;">VENDORS</div><div style="font-size:14px;font-weight:800;color:#1565C0;">'+vlist.length+'</div></div>'+
+      '</div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
+        vlist.map(function(v){
+          var r=v.materialRates.find(function(r){return r.matId===m.id;});
+          var isLowest=r.rate===minR;
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openDetail(\'vendor\',\''+v.id+'\')">'+
+            '<div>'+
+              '<div style="font-size:13px;font-weight:700;">'+v.name+'</div>'+
+              '<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+v.cat+' &bull; Tap to view profile</div>'+
+            '</div>'+
+            '<div style="text-align:right;">'+
+              '<div style="font-size:14px;font-weight:800;color:'+(isLowest?'#2E7D32':'var(--text)')+';">&#8377;'+r.rate.toLocaleString('en-IN')+'<span style="font-size:11px;font-weight:500;"> / '+m.uom+'</span></div>'+
+              (isLowest?'<div style="font-size:10px;background:#E8F5E9;color:#2E7D32;border-radius:4px;padding:1px 5px;font-weight:700;">L1 ✓</div>':'')+
+            '</div>'+
+          '</div>';
+        }).join('')+'</div>';
+    })();
+    document.getElementById('det-body').innerHTML=
+      '<div style="background:'+m.col+'1A;border:1px solid '+m.col+'40;border-radius:14px;padding:14px;margin-bottom:14px;">'+
+        '<div style="font-family:monospace;font-size:10px;color:'+m.col+'">'+m.id+' &bull; '+m.code+'</div>'+
+        '<div style="font-size:17px;font-weight:800;margin-top:2px;">'+m.name+'</div>'+
+        '<div style="display:flex;gap:6px;margin-top:8px;"><span class="badge b-navy">'+m.cat+'</span><span class="badge b-teal">'+m.uom+'</span></div>'+
+      '</div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
+        ir('Material ID',m.id,true)+
+        ir('Material Code',m.code,true)+
+        ir('Category',m.cat)+
+        ir('Unit of Measure',m.uom)+
+        ir('Specification / IS Code',m.spec)+
+      '</div>'+
+      '<div style="font-size:13px;font-weight:800;margin-bottom:8px;">&#127970; Vendor Rates</div>'+
+      vendorRatesHtml;
+    document.getElementById('det-foot').innerHTML=
+      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
+      '<button class="btn btn-red" onclick="confirmDelete(\'material\',\''+m.id+'\',\''+esc(m.name)+'\')">&#128465; Delete</button>'+
+      '<button class="btn btn-navy" onclick="editRecord(\'material\',\''+m.id+'\')">&#9998; Edit</button>';
+    openSheet('ov-det','sh-det');
+  }
+  if(type==='sc'){
+    var s=SUBCONTRACTORS.find(function(x){return x.id===id;});if(!s)return;
+    var stars='';for(var i=0;i<5;i++){stars+='<span class="'+(i<Math.floor(s.rating)?'star':'star empty')+'">&#9733;</span>';}
+    document.getElementById('det-title').textContent=s.name;
+    document.getElementById('det-body').innerHTML=
+      '<div style="background:'+s.col+'1A;border:1px solid '+s.col+'40;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">'+
+        '<div class="avatar" style="width:56px;height:56px;border-radius:16px;font-size:18px;background:'+s.col+'">'+(s.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div><div style="font-size:17px;font-weight:800;">'+s.name+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">'+s.speciality+'</div>'+
+          '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;"><span class="badge b-purple">'+s.trade+'</span></div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">'+
+        '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center;"><div style="font-family:\'JetBrains Mono\',monospace;font-size:16px;font-weight:800;color:'+s.col+'">'+s.workers+'</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Workers</div></div>'+
+        '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:14px;font-weight:800;">'+stars+'</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Rating</div></div>'+
+        '<div style="background:'+(s.pbgAvail?'var(--greenl)':'var(--redl)')+';border-radius:10px;padding:10px;text-align:center;"><div style="font-size:14px;font-weight:800;color:'+(s.pbgAvail?'var(--green)':'var(--red)')+'">PBG</div><div style="font-size:9px;color:'+(s.pbgAvail?'var(--green)':'var(--red)')+';text-transform:uppercase;">'+(s.pbgAvail?'Available':'N/A')+'</div></div>'+
+        '<div style="background:'+(s.emdAvail?'var(--greenl)':'var(--redl)')+';border-radius:10px;padding:10px;text-align:center;"><div style="font-size:14px;font-weight:800;color:'+(s.emdAvail?'var(--green)':'var(--red)')+'">EMD</div><div style="font-size:9px;color:'+(s.emdAvail?'var(--green)':'var(--red)')+';text-transform:uppercase;">'+(s.emdAvail?'Available':'N/A')+'</div></div>'+
+      '</div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
+        ir('SC ID',s.id,true)+ir('Trade',s.trade)+ir('GST No.',s.gst,true)+
+        ir('Contact',s.contact)+ir('Phone',s.phone)+ir('Email',s.email)+
+        ir('Address',s.address)+ir('Experience',s.exp)+ir('Annual Turnover',s.turnover)+
+        ir('Current Projects',s.projects.length?s.projects.join(', '):'None assigned')+
+      '</div>';
+    document.getElementById('det-foot').innerHTML=
+      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
+      '<button class="btn btn-red" onclick="confirmDelete(\'sc\',\''+s.id+'\',\''+esc(s.name)+'\')">&#128465; Delete</button>'+
+      '<button class="btn btn-navy" onclick="editRecord(\'sc\',\''+s.id+'\')">&#9998; Edit</button>';
+    openSheet('ov-det','sh-det');
+  }
+  if(type==='labour'){
+    var l=LABOURERS.find(function(x){return x.id===id;});if(!l)return;
+    var col='#E65100';
+    var typeColor={'skilled':'#1565C0','semi-skilled':'#7B1FA2','unskilled':'#E65100'};
+    col=typeColor[l.type]||'#E65100';
+    document.getElementById('det-title').textContent=l.name;
+    document.getElementById('det-body').innerHTML=
+      '<div style="background:'+col+'1A;border:1px solid '+col+'40;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">'+
+        '<div class="avatar" style="width:56px;height:56px;border-radius:16px;font-size:18px;background:'+col+'">'+(l.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div>'+
+          '<div style="font-size:17px;font-weight:800;">'+l.name+'</div>'+
+          '<div style="font-size:12px;color:var(--text2);margin-top:2px;">'+(l.skill||'—')+' &bull; '+l.type+'</div>'+
+          '<div style="margin-top:6px;display:flex;gap:6px;">'+
+            '<span class="badge" style="background:'+col+'25;color:'+col+';">'+l.type+'</span>'+
+            (l.status==='active'?'<span class="badge b-green">Active</span>':'<span class="badge b-red">Inactive</span>')+
+            (l.source==='contractor'?'<span class="badge b-purple">Via SC</span>':'<span class="badge b-teal">Direct</span>')+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
+        ir('Labour ID',l.labId,true)+ir('Skill',l.skill)+ir('Daily Rate','₹'+Number(l.dailyRate||0).toLocaleString('en-IN'))+
+        ir('Phone',l.phone)+ir('Source',l.source==='contractor'?'Via Contractor — '+(l.contractor||''):'Direct Hire')+
+        ir('Project/Site',l.project)+ir('Date Joined',l.joined?fmtDate(l.joined):'—')+
+        ir('Aadhar',l.aadhar||'—',true)+ir('Blood Group',l.bloodGroup||'—')+
+        ir('Address',l.address)+ir('Remarks',l.remarks)+
+      '</div>';
+    document.getElementById('det-foot').innerHTML=
+      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
+      '<button class="btn btn-red" onclick="deleteLabour(\''+l.id+'\')">&#128465; Delete</button>'+
+      '<button class="btn btn-navy" onclick="editRecord(\'labour\',\''+l.id+'\')">&#9998; Edit</button>';
+    openSheet('ov-det','sh-det');
+  }
+  if(type==='user'){
+    var u=USERS.find(function(x){return x.id===id;});if(!u)return;
+    var col=ROLE_COLORS[u.role]||'#37474F';
+    var stBadge={active:'b-green',pending:'b-amber',inactive:'b-red'};
+    document.getElementById('det-title').textContent=u.name;
+    document.getElementById('det-body').innerHTML=
+      '<div style="background:'+col+'1A;border:1px solid '+col+'40;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">'+
+        '<div class="avatar" style="width:56px;height:56px;border-radius:16px;font-size:18px;background:'+col+'">'+(u.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
+        '<div><div style="font-size:17px;font-weight:800;">'+u.name+'</div>'+
+        '<div style="font-size:12px;color:var(--text2);margin-top:2px;">'+u.access+' &bull; '+u.dept+'</div>'+
+        '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;"><span class="badge '+(stBadge[u.status]||'b-navy')+'">'+u.status+'</span><span class="badge b-navy">'+u.id+'</span>'+(u.badge?'<span class="badge b-teal">'+u.badge+'</span>':'')+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #1565C020;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#1565C020;display:flex;align-items:center;justify-content:center;font-size:12px;">👤</div><div style="font-size:11px;font-weight:800;color:#1565C0;text-transform:uppercase;letter-spacing:.7px;">Personal Details</div></div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
+        ir('Full Name',u.name)+
+        (u.dob?ir('Date of Birth',u.dob):'')+
+        (u.gender?ir('Gender',u.gender):'')+
+        (u.blood?ir('Blood Group',u.blood):'')+
+        (u.marital?ir('Marital Status',u.marital):'')+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #2E7D3220;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#2E7D3220;display:flex;align-items:center;justify-content:center;font-size:12px;">🏗️</div><div style="font-size:11px;font-weight:800;color:#2E7D32;text-transform:uppercase;letter-spacing:.7px;">Employment Details</div></div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
+        ir('Employee ID',u.empId||u.id,true)+
+        ir('Role / Designation',u.access)+ir('Department',u.dept)+
+        ir('Project',u.project)+(u.empType?ir('Employment Type',u.empType):'')+
+        (u.location?ir('Work Location',u.location):'')+
+        ir('Date of Joining',u.joined)+ir('Status',u.status)+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #E6510020;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#E6510020;display:flex;align-items:center;justify-content:center;font-size:12px;">📞</div><div style="font-size:11px;font-weight:800;color:#E65100;text-transform:uppercase;letter-spacing:.7px;">Contact Details</div></div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
+        ir('Mobile',u.phone)+(u.phone2?ir('Alternate Mobile',u.phone2):'')+
+        (u.address?ir('Residential Address',u.address):'')+
+        (u.permanent?ir('Permanent Address',u.permanent):'')+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #6A1B9A20;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#6A1B9A20;display:flex;align-items:center;justify-content:center;font-size:12px;">🪪</div><div style="font-size:11px;font-weight:800;color:#6A1B9A;text-transform:uppercase;letter-spacing:.7px;">KYC Details</div></div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
+        (u.aadhar?ir('Aadhar No.',u.aadhar,true):'<div class="info-row"><div class="ir-lbl">Aadhar No.</div><div class="ir-val" style="color:var(--text3);">Not provided</div></div>')+
+        (u.pan?ir('PAN No.',u.pan,true):'')+(u.pf?ir('PF No.',u.pf,true):'')+
+        (u.esic?ir('ESIC No.',u.esic,true):'')+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #C6282820;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:12px;">🏦</div><div style="font-size:11px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Bank Details</div></div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
+        (u.bank?ir('Bank Name',u.bank):'<div class="info-row"><div class="ir-lbl">Bank Details</div><div class="ir-val" style="color:var(--text3);">Not provided</div></div>')+
+        (u.accNo?ir('Account No.',u.accNo,true):'')+(u.ifsc?ir('IFSC Code',u.ifsc,true):'')+
+        (u.accName?ir('Account Holder',u.accName):'')+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #C6282820;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:12px;">🚨</div><div style="font-size:11px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Emergency Contact</div></div>'+
+      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
+        (u.ecName?ir('Name',u.ecName):'<div class="info-row"><div class="ir-lbl">Contact</div><div class="ir-val" style="color:var(--text3);">Not provided</div></div>')+
+        (u.ecRel?ir('Relationship',u.ecRel):'')+(u.ecPhone?ir('Mobile',u.ecPhone):'')+
+      '</div>';
+    document.getElementById('det-foot').innerHTML=
+      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
+      '<button class="btn btn-red" onclick="confirmDelete(\'user\',\''+u.id+'\',\''+esc(u.name)+'\')">&#128465; Delete</button>'+
+      '<button class="btn btn-navy" onclick="editRecord(\'user\',\''+u.id+'\')">&#9998; Edit</button>';
+    openSheet('ov-det','sh-det');
+  }
+}
+
+function activateUser(id){
+  var u=USERS.find(function(x){return x.id===id;});
+  if(u){u.status='active';renderUsers();closeSheet('ov-det','sh-det');toast(u.name+' activated!','success');}
+}
+
+function confirmDelete(type,id,name){
+  var typeLabel={vendor:'Vendor',material:'Material',sc:'Subcontractor',user:'User'}[type]||type;
+  document.getElementById('det-body').innerHTML=
+    '<div style="text-align:center;padding:24px 16px;">'+
+      '<div style="font-size:48px;margin-bottom:12px;">&#9888;&#65039;</div>'+
+      '<div style="font-size:16px;font-weight:800;margin-bottom:8px;">Delete '+typeLabel+'?</div>'+
+      '<div style="font-size:13px;color:var(--text2);margin-bottom:20px;">You are about to permanently delete <strong>'+name+'</strong>. This cannot be undone.</div>'+
+    '</div>';
+  document.getElementById('det-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="openDetail(\''+type+'\',\''+id+'\')">&#8592; Cancel</button>'+
+    '<button class="btn btn-red" style="flex:1;" onclick="deleteRecord(\''+type+'\',\''+id+'\')">&#128465; Yes, Delete</button>';
+}
+
+async function deleteRecord(type,id){
+  var arrays={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,user:USERS};
+  var tables={vendor:'vendors',material:'materials',sc:'subcontractors',user:'employees'};
+  var arr=arrays[type];
+  var idx=arr.findIndex(function(x){return x.id===id;});
+  if(idx===-1) return;
+  var name=arr[idx].name;
+  // 1. Remove from local array immediately and track deleted ID
+  _deletedIds[id]=true;
+  arr.splice(idx,1);
+  closeSheet('ov-det','sh-det');
+  var renders={vendor:renderVendors,material:renderMaterials,sc:renderSC,user:renderUsers};
+  renders[type]();
+  updateAllStats();
+  toast(name+' deleted','success');
+  // 2. Delete from Supabase
+  try{
+    await sbDelete(tables[type], id);
+  } catch(e){
+    console.error('Delete from DB failed:',e);
+    toast('Warning: Could not sync delete to server','warning');
+  }
+}
+
+// ── EDIT RECORD ──
+function editRecord(type,id){
+  closeSheet('ov-det','sh-det');
+  var rec,html,saveCall,title;
+  if(type==='vendor'){
+    var v=VENDORS.find(function(x){return x.id===id;});if(!v)return;
+    title='Edit Vendor \u2014 '+v.id;
+    var catSel=CAT_DATA.vendor.filter(function(c){return c.active;}).map(function(c){
+      return '<option value="'+c.name+'"'+(v.cat.toLowerCase()===c.name.toLowerCase()?' selected':'')+'>'+c.icon+' '+c.name+'</option>';
+    }).join('');
+    var paySel=['Advance','15 days','30 days','45 days','60 days','Monthly billing'].map(function(p){
+      return '<option'+(v.payTerms===p?' selected':'')+'>'+p+'</option>';
+    }).join('');
+    // Build existing material rate rows for edit
+    vendorMatRates=(v.materialRates||[]).map(function(r){return {matId:r.matId,rate:r.rate};});
+    var matOpts=MATERIALS.map(function(m){return '<option value="'+m.id+'">'+m.name+' ('+m.uom+')</option>';}).join('');
+    html='<div class="section-title">&#127968; Edit Vendor</div>'+
+      '<label class="flbl">Company Name</label><input id="e-vname" class="finp" value="'+esc(v.name)+'">'+
+      '<div class="g2"><div><label class="flbl">Category</label><select id="e-vcat" class="fsel">'+catSel+'</select></div><div><label class="flbl">Status</label><select id="e-vstatus" class="fsel"><option'+(v.status==='approved'?' selected':'')+'>approved</option><option'+(v.status==='under-review'?' selected':'')+'>under-review</option><option'+(v.status==='blacklisted'?' selected':'')+'>blacklisted</option></select></div></div>'+
+      '<div class="g2"><div><label class="flbl">GST Number</label><input id="e-vgst" class="finp" value="'+esc(v.gst)+'"></div><div><label class="flbl">Contact Person</label><input id="e-vcontact" class="finp" value="'+esc(v.contact)+'"></div></div>'+
+      '<div class="g2"><div><label class="flbl">Phone</label><input id="e-vphone" class="finp" value="'+esc(v.phone)+'"></div><div><label class="flbl">Email</label><input id="e-vemail" class="finp" value="'+esc(v.email)+'"></div></div>'+
+      '<label class="flbl">Address</label><textarea id="e-vaddress" class="ftxt">'+esc(v.address)+'</textarea>'+
+      '<label class="flbl">Products / Brands Supplied</label><input id="e-vbrands" class="finp" value="'+esc(v.brands)+'">'+
+      '<div class="g2"><div><label class="flbl">Payment Terms</label><select id="e-vpay" class="fsel">'+paySel+'</select></div><div><label class="flbl">Lead Time</label><input id="e-vlead" class="finp" value="'+esc(v.leadTime)+'"></div></div>'+
+      '<div style="margin-top:4px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><label class="flbl" style="margin:0;">&#129521; Materials &amp; Rates Supplied</label><button onclick="addMatRateRow()" style="border:none;background:#E8F5E9;color:#2E7D32;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">+ Add Material</button></div><div id="mat-rate-rows"></div></div>';
+    saveCall='updateVendor(\''+id+'\')'; setTimeout(renderMatRateRows, 50);
+  }
+  else if(type==='material'){
+    var m=MATERIALS.find(function(x){return x.id===id;});if(!m)return;
+    title='Edit Material — '+m.id;
+    var catSel=CAT_DATA.material.filter(function(c){return c.active;}).map(function(c){
+      return '<option value="'+c.name+'"'+(m.cat.toLowerCase()===c.name.toLowerCase()?' selected':'')+'>'+c.icon+' '+c.name+'</option>';
+    }).join('');
+    var uomSel=CAT_DATA.uom.filter(function(c){return c.active;}).map(function(c){
+      return '<option value="'+c.name+'"'+(m.uom===c.name?' selected':'')+'>'+c.name+'</option>';
+    }).join('');
+    html='<div class="section-title">&#129521; Edit Material</div>'+
+      '<label class="flbl">Material Name</label><input id="e-mname" class="finp" value="'+esc(m.name)+'">'+
+      '<div class="g2"><div><label class="flbl">Category</label><select id="e-mcat" class="fsel">'+catSel+'</select></div><div><label class="flbl">Unit of Measure</label><select id="e-muom" class="fsel">'+uomSel+'</select></div></div>'+
+      '<div class="g2"><div><label class="flbl">Material Code</label><input id="e-mcode" class="finp" value="'+esc(m.code)+'" style="background:#F8F9FA;" readonly></div><div><label class="flbl">Specification / IS Code</label><input id="e-mspec" class="finp" value="'+esc(m.spec)+'"></div></div>';
+    saveCall='updateMaterial(\''+id+'\')';
+  }
+  else if(type==='sc'){
+    var s=SUBCONTRACTORS.find(function(x){return x.id===id;});if(!s)return;
+    title='Edit Subcontractor — '+s.id;
+    var catSel=CAT_DATA.sc.filter(function(c){return c.active;}).map(function(c){
+      return '<option value="'+c.name+'"'+(s.trade.toLowerCase()===c.name.toLowerCase()?' selected':'')+'>'+c.icon+' '+c.name+'</option>';
+    }).join('');
+    html='<div class="section-title">&#128296; Edit Subcontractor</div>'+
+      '<label class="flbl">Company Name</label><input id="e-scname" class="finp" value="'+esc(s.name)+'">'+
+      '<label class="flbl">Primary Trade</label><select id="e-sctrade" class="fsel">'+catSel+'</select>'+
+      '<div class="g2"><div><label class="flbl">GST Number</label><input id="e-scgst" class="finp" value="'+esc(s.gst)+'"></div><div><label class="flbl">Contact Person</label><input id="e-sccontact" class="finp" value="'+esc(s.contact)+'"></div></div>'+
+      '<div class="g2"><div><label class="flbl">Phone</label><input id="e-scphone" class="finp" value="'+esc(s.phone)+'"></div><div><label class="flbl">Email</label><input id="e-scemail" class="finp" value="'+esc(s.email)+'"></div></div>'+
+      '<label class="flbl">Address</label><textarea id="e-scaddress" class="ftxt">'+esc(s.address)+'</textarea>'+
+      '<div class="g2"><div><label class="flbl">Experience</label><input id="e-scexp" class="finp" value="'+esc(s.exp)+'"></div><div><label class="flbl">Annual Turnover</label><input id="e-scturnover" class="finp" value="'+esc(s.turnover)+'"></div></div>'+
+      '<div class="g2"><div><label class="flbl">No. of Workers</label><input id="e-scworkers" class="finp" type="number" value="'+s.workers+'"></div><div><label class="flbl">Speciality</label><input id="e-scspec" class="finp" value="'+esc(s.speciality)+'"></div></div>'+
+      '<div class="g2"><div><label class="flbl">PBG Available?</label><select id="e-scpbg" class="fsel"><option value="true"'+(s.pbgAvail?' selected':'')+'>Yes</option><option value="false"'+(!s.pbgAvail?' selected':'')+'>No</option></select></div><div><label class="flbl">EMD Available?</label><select id="e-scemd" class="fsel"><option value="true"'+(s.emdAvail?' selected':'')+'>Yes</option><option value="false"'+(!s.emdAvail?' selected':'')+'>No</option></select></div></div>';
+    saveCall='updateSC(\''+id+'\')';
+  }
+  else if(type==='labour'){
+    var l=LABOURERS.find(function(x){return x.id===id;});if(!l)return;
+    title='Edit Labourer — '+l.name;
+    html='<div class="section-title">&#128373; Edit Labourer</div>'+buildLabourForm(l);
+    saveCall='saveLabour(\''+id+'\')';
+  }
+  else if(type==='user'){
+    var u=USERS.find(function(x){return x.id===id;});if(!u)return;
+    title='Edit Employee \u2014 '+u.id;
+    var nameParts=(u.name||'').split(' ');
+    var projOpts='<option value="">All Projects</option>';
+    if(typeof PROJ_DATA!=='undefined'&&PROJ_DATA.length){
+      projOpts+= PROJ_DATA.map(function(p){return '<option value="'+p.name+'"'+(u.project===p.name?' selected':'')+'>'+p.name+'</option>';}).join('');
+    }
+    var stOpts=['active','pending','inactive'].map(function(st){
+      return '<option value="'+st+'"'+(u.status===st?' selected':'')+'>'+st+'</option>';
+    }).join('');
+    var roleOpts=CAT_DATA.role.filter(function(c){return c.active;}).map(function(c){
+      return '<option'+(u.access===c.name?' selected':'')+'>'+c.name+'</option>';
+    }).join('');
+    var deptOpts=CAT_DATA.dept.filter(function(c){return c.active;}).map(function(c){
+      return '<option'+(u.dept===c.name?' selected':'')+'>'+c.name+'</option>';
+    }).join('');
+    html='<div class="section-title">&#128101; Edit Employee</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #1565C020;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#1565C020;display:flex;align-items:center;justify-content:center;font-size:12px;">👤</div><div style="font-size:11px;font-weight:800;color:#1565C0;text-transform:uppercase;letter-spacing:.7px;">Personal Details</div></div>'+
+      '<div class="g3"><div><label class="flbl">First Name *</label><input id="e-ufname" class="finp" value="'+esc(nameParts[0]||'')+'"></div><div><label class="flbl">Middle Name</label><input id="e-umname" class="finp" value="'+esc(nameParts.length>2?nameParts.slice(1,-1).join(' '):'')+'"></div><div><label class="flbl">Last Name</label><input id="e-ulname" class="finp" value="'+esc(nameParts.length>1?nameParts[nameParts.length-1]:'')+'"></div></div>'+
+      '<div class="g2"><div><label class="flbl">Date of Birth</label><input class="finp" type="date" id="e-udob" value="'+(u.dob||'')+'"></div><div><label class="flbl">Gender</label><select id="e-ugender" class="fsel"><option value="">-- Select --</option>'+['Male','Female','Other'].map(function(g){return '<option'+(u.gender===g?' selected':'')+'>'+g+'</option>';}).join('')+'</select></div></div>'+
+      '<div class="g2"><div><label class="flbl">Blood Group</label><select id="e-ublood" class="fsel"><option value="">--</option>'+['A+','A-','B+','B-','O+','O-','AB+','AB-'].map(function(b){return '<option'+(u.blood===b?' selected':'')+'>'+b+'</option>';}).join('')+'</select></div><div><label class="flbl">Marital Status</label><select id="e-umarital" class="fsel"><option value="">--</option>'+['Single','Married','Other'].map(function(m){return '<option'+(u.marital===m?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #2E7D3220;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#2E7D3220;display:flex;align-items:center;justify-content:center;font-size:12px;">🏗️</div><div style="font-size:11px;font-weight:800;color:#2E7D32;text-transform:uppercase;letter-spacing:.7px;">Employment Details</div></div>'+
+      '<label class="flbl">Date of Joining</label><input class="finp" type="date" id="e-udoj" value="'+(u.doj||'')+'">'+
+      '<div class="g2"><div><label class="flbl">Role / Designation</label><select id="e-urole" class="fsel">'+roleOpts+'</select></div><div><label class="flbl">Status</label><select id="e-ustatus" class="fsel">'+stOpts+'</select></div></div>'+
+      '<div class="g2"><div><label class="flbl">Department</label><select id="e-udept" class="fsel">'+deptOpts+'</select></div><div><label class="flbl">Project</label><select id="e-uproject" class="fsel">'+projOpts+'</select></div></div>'+
+      '<div class="g2"><div><label class="flbl">Employment Type</label><select id="e-uemptype" class="fsel">'+['Full Time','Part Time','Contract','Daily Wage'].map(function(t){return '<option'+(u.empType===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div><div><label class="flbl">Work Location / Project</label><select id="e-ulocation" class="fsel"><option value="">&#9203; Loading...</option></select></div></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #E6510020;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#E6510020;display:flex;align-items:center;justify-content:center;font-size:12px;">📞</div><div style="font-size:11px;font-weight:800;color:#E65100;text-transform:uppercase;letter-spacing:.7px;">Contact Details</div></div>'+
+      '<div class="g2"><div><label class="flbl">Mobile Number</label><input id="e-uphone" class="finp" value="'+esc(u.phone||'')+'"></div><div><label class="flbl">Alternate Mobile</label><input id="e-uphone2" class="finp" value="'+esc(u.phone2||'')+'"></div></div>'+
+      '<label class="flbl">Email Address</label><input id="e-uemail" class="finp" type="email" placeholder="e.g. name@company.com" value="'+esc(u.email||'')+'">'+
+      '<label class="flbl">Residential Address</label><textarea id="e-uaddress" class="ftxt" rows="2">'+esc(u.address||'')+'</textarea>'+
+      '<label class="flbl">Permanent Address</label><textarea id="e-upermanent" class="ftxt" rows="2">'+esc(u.permanent||'')+'</textarea>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #6A1B9A20;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#6A1B9A20;display:flex;align-items:center;justify-content:center;font-size:12px;">🪪</div><div style="font-size:11px;font-weight:800;color:#6A1B9A;text-transform:uppercase;letter-spacing:.7px;">KYC Details</div></div>'+
+      '<div class="g2"><div><label class="flbl">Aadhar Number</label><input id="e-uaadhar" class="finp" value="'+esc(u.aadhar||'')+'"></div><div><label class="flbl">PAN Number</label><input id="e-upan" class="finp" value="'+esc(u.pan||'')+'"></div></div>'+
+      '<div class="g2"><div><label class="flbl">PF Number</label><input id="e-upf" class="finp" value="'+esc(u.pf||'')+'"></div><div><label class="flbl">ESIC Number</label><input id="e-uesic" class="finp" value="'+esc(u.esic||'')+'"></div></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #C6282820;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:12px;">🏦</div><div style="font-size:11px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Bank Details</div></div>'+
+      '<label class="flbl">Bank Name</label><input id="e-ubank" class="finp" value="'+esc(u.bank||'')+'">'+
+      '<div class="g2"><div><label class="flbl">Account Number</label><input id="e-uaccno" class="finp" value="'+esc(u.accNo||'')+'"></div><div><label class="flbl">IFSC Code</label><input id="e-uifsc" class="finp" value="'+esc(u.ifsc||'')+'"></div></div>'+
+      '<label class="flbl">Account Holder Name</label><input id="e-uaccname" class="finp" value="'+esc(u.accName||'')+'">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #C6282820;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:12px;">🚨</div><div style="font-size:11px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Emergency Contact</div></div>'+
+      '<div class="g2"><div><label class="flbl">Contact Name</label><input id="e-uecname" class="finp" value="'+esc(u.ecName||'')+'"></div><div><label class="flbl">Relationship</label><select id="e-uecrel" class="fsel">'+['','Spouse','Father','Mother','Sibling','Other'].map(function(r){return '<option value="'+r+'"'+(u.ecRel===r?' selected':'')+'>'+r+'</option>';}).join('')+'</select></div></div>'+
+      '<label class="flbl">Emergency Mobile</label><input id="e-uecphone" class="finp" value="'+esc(u.ecPhone||'')+'">'+
+'<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #1565C020;margin:12px 0 8px;">'+
+      '<div style="width:24px;height:24px;border-radius:7px;background:#1565C020;display:flex;align-items:center;justify-content:center;font-size:12px;">📎</div>'+
+      (u.photoUrl||u.aadharUrl||u.panUrl ?
+        '<div style="margin-bottom:10px;"><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;">UPLOADED DOCUMENTS</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'+
+          (u.photoUrl?'<a href="'+u.photoUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#E3F2FD;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;color:#1565C0;text-decoration:none;">🖼️ View Photo</a>':'')+
+          (u.aadharUrl?'<a href="'+u.aadharUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#F3E5F5;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;color:#6A1B9A;text-decoration:none;">🪪 View Aadhar</a>':'')+
+          (u.panUrl?'<a href="'+u.panUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#E8F5E9;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;color:#2E7D32;text-decoration:none;">📄 View PAN</a>':'')+
+        '</div></div>'
+      : '') +
+      '<div style="font-size:11px;font-weight:800;color:#1565C0;text-transform:uppercase;letter-spacing:.7px;">Documents & Photo</div></div>'+
+      '<label class="flbl">Passport Photo</label>'+
+      '<div class="upload-box" onclick="document.getElementById(\'e-uphoto\').click()">'+
+        '<div class="photo-preview" id="e-uphoto-prev">📷</div>'+
+        '<input type="file" id="e-uphoto" accept="image/*" onchange="handleFilePreview(\'e-uphoto\',\'e-uphoto-prev\')">'+
+        '<div class="upload-label">Tap to upload passport photo</div>'+
+        '<div class="upload-progress-wrap" id="e-uphoto-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="e-uphoto-prog-name"></span><span class="upload-progress-pct" id="e-uphoto-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="e-uphoto-prog-fill"></div></div></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Aadhar Card</label>'+
+        '<div class="upload-box" onclick="document.getElementById(\'e-uaadhar-doc\').click()">'+
+          '<div id="e-uaadhar-doc-prev" class="upload-preview"></div>'+
+          '<input type="file" id="e-uaadhar-doc" accept="image/*,application/pdf" onchange="handleFilePreview(\'e-uaadhar-doc\',\'e-uaadhar-doc-prev\')">'+
+          '<div class="upload-label">📄 Upload Aadhar</div>'+
+          '<div class="upload-progress-wrap" id="e-uaadhar-doc-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="e-uaadhar-doc-prog-name"></span><span class="upload-progress-pct" id="e-uaadhar-doc-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="e-uaadhar-doc-prog-fill"></div></div></div>'+
+        '</div></div>'+
+        '<div><label class="flbl">PAN Card</label>'+
+        '<div class="upload-box" onclick="document.getElementById(\'e-upan-doc\').click()">'+
+          '<div id="e-upan-doc-prev" class="upload-preview"></div>'+
+          '<input type="file" id="e-upan-doc" accept="image/*,application/pdf" onchange="handleFilePreview(\'e-upan-doc\',\'e-upan-doc-prev\')">'+
+          '<div class="upload-label">📄 Upload PAN</div>'+
+          '<div class="upload-progress-wrap" id="e-upan-doc-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="e-upan-doc-prog-name"></span><span class="upload-progress-pct" id="e-upan-doc-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="e-upan-doc-prog-fill"></div></div></div>'+
+        '</div></div>'+
+      '</div>'+
+      '';
+    saveCall='updateUser(\''+id+'\')'; 
+
+  }
+  document.getElementById('add-title').textContent=title;
+  document.getElementById('add-body').innerHTML=html;
+  document.getElementById('add-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-add\',\'sh-add\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="'+saveCall+'">&#10003; Save Changes</button>';
+  setTimeout(function(){
+    openSheet('ov-add','sh-add');
+    // Populate work location from live projects
+    loadLocationDropdown('e-ulocation', typeof u!=='undefined'?u.location:'');
+    loadLocationDropdown('f-ulocation', '');
+  },200);
+}
+
+function esc(s){return s?String(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'):''; }
+
+// Load work location dropdown from live projects
+async function loadLocationDropdown(selectId, currentVal){
+  var el = document.getElementById(selectId);
+  if(!el) return;
+  try{
+    var projs = await sbFetch('projects',{select:'id,name',order:'name.asc'});
+    var locs = ['Head Office'].concat(Array.isArray(projs)?projs.map(function(p){return p.name;}):[]);
+    el.innerHTML = '<option value="">-- Select Location --</option>'+
+      locs.map(function(l){
+        return '<option value="'+l+'"'+(l===currentVal?' selected':'')+'>'+l+'</option>';
+      }).join('');
+  }catch(e){
+    el.innerHTML = '<option value="">Head Office</option>';
+  }
+}
+
+function updateVendor(id){
+  var v=VENDORS.find(function(x){return x.id===id;});if(!v)return;
+  var n=gv('e-vname');if(!n){toast('Name is required','warning');return;}
+  var cat=gv('e-vcat');
+  var catData=CAT_DATA.vendor.find(function(c){return c.name===cat;})||{color:v.col};
+  v.name=n; v.cat=cat.toLowerCase(); v.status=gv('e-vstatus');
+  v.gst=gv('e-vgst'); v.contact=gv('e-vcontact'); v.phone=gv('e-vphone');
+  v.email=gv('e-vemail'); v.address=gv('e-vaddress'); v.brands=gv('e-vbrands');
+  v.payTerms=gv('e-vpay'); v.leadTime=gv('e-vlead'); v.col=catData.color;
+  v.materialRates=vendorMatRates.filter(function(r){return r.matId&&r.rate;}).map(function(r){return {matId:r.matId,rate:parseFloat(r.rate)||0};});
+  renderVendors(); closeSheet('ov-add','sh-add'); toast(v.name+' updated!','success');
+}
+
+function updateMaterial(id){
+  var m=MATERIALS.find(function(x){return x.id===id;});if(!m)return;
+  var n=gv('e-mname');if(!n){toast('Name is required','warning');return;}
+  var cat=gv('e-mcat');
+  var catData=CAT_DATA.material.find(function(c){return c.name===cat;})||{color:m.col};
+  m.name=n; m.cat=cat.toLowerCase();
+  m.uom=gv('e-muom'); m.unit=gv('e-muom');
+  // stdRate removed — rates are per-vendor now
+  m.spec=gv('e-mspec');
+  // vendors removed — linked via vendor materialRates
+  m.col=catData.color;
+  renderMaterials(); closeSheet('ov-add','sh-add'); toast(m.name+' updated!','success');
+}
+
+function updateSC(id){
+  var s=SUBCONTRACTORS.find(function(x){return x.id===id;});if(!s)return;
+  var n=gv('e-scname');if(!n){toast('Name is required','warning');return;}
+  var trade=gv('e-sctrade');
+  var catData=CAT_DATA.sc.find(function(c){return c.name===trade;})||{color:s.col};
+  s.name=n; s.trade=trade.toLowerCase();
+  s.gst=gv('e-scgst'); s.contact=gv('e-sccontact'); s.phone=gv('e-scphone');
+  s.email=gv('e-scemail'); s.address=gv('e-scaddress');
+  s.exp=gv('e-scexp'); s.turnover=gv('e-scturnover');
+  s.workers=parseInt(gv('e-scworkers'))||0; s.speciality=gv('e-scspec');
+  s.pbgAvail=gv('e-scpbg')==='true'; s.emdAvail=gv('e-scemd')==='true';
+  s.col=catData.color;
+  renderSC(); closeSheet('ov-add','sh-add'); toast(s.name+' updated!','success');
+}
+
+function updateUser(id){
+  var u=USERS.find(function(x){return x.id===id;});if(!u)return;
+  var fname=gv('e-ufname'),mname=gv('e-umname')||'',lname=gv('e-ulname');
+  var name=[fname,mname,lname].filter(Boolean).join(' ').trim();
+  if(!name){toast('Name is required','warning');return;}
+  var roleRaw=gv('e-urole');
+  var roleMap={'Admin':'admin','Project Manager':'pm','Site Engineer':'engineer','Junior Engineer':'engineer','QC Engineer':'qhse','Safety Officer':'qhse','Finance / Accounts':'finance','HR / Admin':'admin','Viewer (Read Only)':'viewer','Client Viewer':'viewer'};
+  u.name=name; u.phone=gv('e-uphone'); u.phone2=gv('e-uphone2'); u.email=gv('e-uemail')||null;
+  u.dob=gv('e-udob'); u.gender=gv('e-ugender'); u.marital=gv('e-umarital');
+  u.blood=gv('e-ublood');
+  u.access=roleRaw; u.role=roleMap[roleRaw]||u.role;
+  u.status=gv('e-ustatus'); u.dept=gv('e-udept'); u.project=gv('e-uproject');
+  u.empType=gv('e-uemptype'); u.location=gv('e-ulocation');
+  u.address=gv('e-uaddress'); u.permanent=gv('e-upermanent');
+  u.aadhar=gv('e-uaadhar'); u.pan=gv('e-upan'); u.pf=gv('e-upf'); u.esic=gv('e-uesic');
+  u.bank=gv('e-ubank'); u.accNo=gv('e-uaccno'); u.ifsc=gv('e-uifsc'); u.accName=gv('e-uaccname');
+  u.ecName=gv('e-uecname'); u.ecRel=gv('e-uecrel'); u.ecPhone=gv('e-uecphone');
+  u.col=ROLE_COLORS[u.role]||'#37474F';
+  // Upload files if selected
+  var ePhoto=document.getElementById('e-uphoto')&&document.getElementById('e-uphoto').files[0];
+  var eAadhar=document.getElementById('e-uaadhar-doc')&&document.getElementById('e-uaadhar-doc').files[0];
+  var ePan=document.getElementById('e-upan-doc')&&document.getElementById('e-upan-doc').files[0];
+  Promise.all([
+    ePhoto?uploadToCloudinary(ePhoto,'photos','e-uphoto'):Promise.resolve(u.photoUrl||null),
+    eAadhar?uploadToCloudinary(eAadhar,'kyc','e-uaadhar-doc'):Promise.resolve(u.aadharUrl||null),
+    ePan?uploadToCloudinary(ePan,'kyc','e-upan-doc'):Promise.resolve(u.panUrl||null)
+  ]).then(async function(urls){
+    if(urls[0]) u.photoUrl=urls[0];
+    if(urls[1]) u.aadharUrl=urls[1];
+    if(urls[2]) u.panUrl=urls[2];
+    try{
+      await sbUpdate('employees',u.id,{
+        first_name:fname, middle_name:mname||null, last_name:lname||null,
+        email:u.email||null,
+        phone:u.phone||null, phone2:u.phone2||null,
+        date_of_birth:u.dob||null, gender:u.gender||null,
+        marital_status:u.marital||null, blood_group:u.blood||null,
+        designation:u.access||null, role:u.role||null,
+        status:u.status||'active', department:u.dept||null,
+        emp_type:u.empType||null, work_location:u.location||null,
+        address:u.address||null, permanent_address:u.permanent||null,
+        aadhar:u.aadhar||null, pan:u.pan||null, pf_no:u.pf||null, esic_no:u.esic||null,
+        bank_name:u.bank||null, account_no:u.accNo||null, ifsc:u.ifsc||null, account_holder:u.accName||null,
+        emergency_name:u.ecName||null, emergency_relation:u.ecRel||null, emergency_phone:u.ecPhone||null,
+        profile_photo:u.photoUrl||null, aadhar_doc_url:u.aadharUrl||null, pan_doc_url:u.panUrl||null
+      });
+    }catch(e){console.error(e);}
+    renderUsers(); closeSheet('ov-add','sh-add'); toast(u.name+' updated!','success');
+  });
+}
+
+// ── DYNAMIC CATEGORY SELECT HELPERS ──
+function catOptions(type){
+  return (CAT_DATA[type]||[]).filter(function(c){return c.active;}).map(function(c){
+    return '<option value="'+c.name+'">'+c.icon+' '+c.name+'</option>';
+  }).join('');
+}
+function uomOptions(){
+  return (CAT_DATA.uom||[]).filter(function(c){return c.active;}).map(function(c){
+    return '<option value="'+c.name+'">'+c.name+' — '+c.desc+'</option>';
+  }).join('');
+}
+
+// ── ADD FORMS ──
+var currentPage='vendors';
+function openAdd(){
+  var html='';
+  if(currentPage==='labour'){
+    var af2=document.getElementById('add-foot');
+    document.getElementById('add-title').textContent='New Labour Registration';
+    document.getElementById('add-body').innerHTML=buildLabourForm(null);
+    af2.innerHTML='';
+    var cb2=document.createElement('button');cb2.className='btn btn-outline';cb2.textContent='Cancel';
+    cb2.onclick=function(){closeSheet('ov-add','sh-add');};
+    var sb2=document.createElement('button');sb2.className='btn btn-navy';sb2.innerHTML='&#10003; Save Labour';
+    sb2.onclick=function(){saveLabour('');};
+    af2.appendChild(cb2);af2.appendChild(sb2);
+    openSheet('ov-add','sh-add');
+    return;
+  }
+  if(currentPage==='vendors'){
+    html='<div class="section-title">&#127968; New Vendor Registration</div>'+
+      '<div class="g2"><div><label class="flbl">Company Name</label><input id="f-vname" class="finp" placeholder="e.g. JSW Steel Ltd."></div><div><label class="flbl">Vendor ID</label><input class="finp" placeholder="Auto: VND-'+String(VENDORS.length+1).padStart(3,'0')+'" disabled style="opacity:.5;"></div></div>'+
+      '<div class="g2"><div><label class="flbl">Category</label><select id="f-vcat" class="fsel">'+catOptions('vendor')+'</select></div><div><label class="flbl">GST Number</label><input id="f-vgst" class="finp" placeholder="e.g. 27AAAXX0000X1ZX"></div></div>'+
+      '<div class="g2"><div><label class="flbl">Contact Person</label><input id="f-vcontact" class="finp" placeholder="Name"></div><div><label class="flbl">Phone</label><input id="f-vphone" class="finp" type="tel" placeholder="Mobile"></div></div>'+
+      '<label class="flbl">Email</label><input id="f-vemail" class="finp" type="email" placeholder="email@company.com">'+
+      '<label class="flbl">Address</label><textarea id="f-vaddress" class="ftxt" placeholder="Registered office address..."></textarea>'+
+      '<label class="flbl">Products / Brands Supplied</label><input id="f-vbrands" class="finp" placeholder="e.g. Fe-500D TMT Bars, Fe-550D">'+
+      '<div class="g2"><div><label class="flbl">Payment Terms</label><select id="f-vpay" class="fsel"><option>Advance</option><option>15 days</option><option>30 days</option><option>45 days</option><option>60 days</option><option>Monthly billing</option></select></div><div><label class="flbl">Typical Lead Time</label><input id="f-vlead" class="finp" placeholder="e.g. 7 days"></div></div>'+
+      '<label class="flbl">Bank Account</label>'+
+      '<div class="g2"><div><input class="finp" placeholder="Account Number"></div><div><input class="finp" placeholder="IFSC Code"></div></div>'+
+      '<div style="margin-top:4px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><label class="flbl" style="margin:0;">&#129521; Materials &amp; Rates Supplied</label><button onclick="addMatRateRow()" style="border:none;background:#E8F5E9;color:#2E7D32;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">+ Add Material</button></div><div id="mat-rate-rows"><div style="font-size:12px;color:var(--text3);padding:8px 0;">No materials added yet.</div></div></div>';
+  } else if(currentPage==='materials'){
+    html='<div class="section-title">&#129521; New Material Registration</div>'+
+      '<label class="flbl">Material Name</label><input id="f-mname" class="finp" placeholder="e.g. Fe-500D TMT Steel Bars">'+
+      '<div class="g2"><div><label class="flbl">Category</label><select id="f-mcat" class="fsel" oninput="updateMatCodePreview()">'+catOptions('material')+'</select></div><div><label class="flbl">Unit of Measure</label><select id="f-muom" class="fsel">'+uomOptions()+'</select></div></div>'+
+      '<div class="g2"><div><label class="flbl">Material Code</label><input id="f-mcode" class="finp" placeholder="Auto-generated" style="background:#F8F9FA;" readonly></div><div><label class="flbl">Applicable GST (%)</label><select id="f-mgst" class="fsel"><option>5%</option><option selected>12%</option><option>18%</option><option>28%</option></select></div></div>'+
+      '<label class="flbl">Technical Specification / IS Code</label><input id="f-mspec" class="finp" placeholder="e.g. IS:1786 / IS:456">';
+  } else if(currentPage==='subcontractors'){
+    html='<div class="section-title">&#128296; New Subcontractor Registration</div>'+
+      '<div class="g2"><div><label class="flbl">Company Name</label><input id="f-scname" class="finp" placeholder="e.g. Shri Ganesh Civil Works"></div><div><label class="flbl">SC Reg. ID</label><input class="finp" placeholder="Auto: SC-REG-001" disabled style="opacity:.5;"></div></div>'+
+      '<div class="g2"><div><label class="flbl">Primary Trade</label><select id="f-sctrade" class="fsel">'+catOptions('sc')+'</select></div><div><label class="flbl">GST Number</label><input id="f-scgst" class="finp" placeholder="e.g. 27XXXXX0000X1ZX"></div></div>'+
+      '<div class="g2"><div><label class="flbl">Contact Person</label><input id="f-sccontact" class="finp" placeholder="Name & Designation"></div><div><label class="flbl">Phone</label><input id="f-scphone" class="finp" type="tel" placeholder="Mobile"></div></div>'+
+      '<label class="flbl">Email</label><input id="f-scemail" class="finp" type="email" placeholder="email@company.com">'+
+      '<label class="flbl">Registered Address</label><textarea id="f-scaddress" class="ftxt" placeholder="Full address..."></textarea>'+
+      '<div class="g2"><div><label class="flbl">Years of Experience</label><input id="f-scexp" class="finp" placeholder="e.g. 8 years"></div><div><label class="flbl">Annual Turnover</label><input id="f-scturnover" class="finp" placeholder="e.g. ₹2.4Cr"></div></div>'+
+      '<div class="g2"><div><label class="flbl">No. of Workers</label><input id="f-scworkers" class="finp" type="number" placeholder="Typical workforce"></div><div><label class="flbl">Specialisation</label><input id="f-scspec" class="finp" placeholder="e.g. Culvert, retaining walls"></div></div>'+
+      '<div class="g2"><div><label class="flbl">PBG Available?</label><select id="f-scpbg" class="fsel"><option>Yes</option><option>No</option></select></div><div><label class="flbl">EMD Available?</label><select id="f-scemd" class="fsel"><option>Yes</option><option>No</option></select></div></div>';
+  } else if(currentPage==='users'){
+    html=
+      '<div class="section-title">&#128101; Register New Employee</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #1565C020;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#1565C020;display:flex;align-items:center;justify-content:center;font-size:14px;">👤</div><div style="font-size:12px;font-weight:800;color:#1565C0;text-transform:uppercase;letter-spacing:.7px;">Personal Details</div></div>'+
+      '<div class="g3"><div><label class="flbl">First Name *</label><input id="f-ufname" class="finp" placeholder="First name"></div><div><label class="flbl">Middle Name</label><input id="f-umname" class="finp" placeholder="Middle name"></div><div><label class="flbl">Last Name</label><input id="f-ulname" class="finp" placeholder="Last name"></div></div>'+
+      '<div class="g2"><div><label class="flbl">Date of Birth</label><input class="finp" type="date" id="f-udob"></div><div><label class="flbl">Gender</label><select id="f-ugender" class="fsel"><option value="">-- Select --</option><option>Male</option><option>Female</option><option>Other</option></select></div></div>'+
+      '<div class="g2"><div><label class="flbl">Blood Group</label><select id="f-ublood" class="fsel"><option value="">-- Select --</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div><div><label class="flbl">Marital Status</label><select id="f-umarital" class="fsel"><option value="">-- Select --</option><option>Single</option><option>Married</option><option>Other</option></select></div></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #2E7D3220;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#2E7D3220;display:flex;align-items:center;justify-content:center;font-size:14px;">🏗️</div><div style="font-size:12px;font-weight:800;color:#2E7D32;text-transform:uppercase;letter-spacing:.7px;">Employment Details</div></div>'+
+      '<label class="flbl">Date of Joining</label><input class="finp" type="date" id="f-udoj">'+
+      '<div class="g2"><div><label class="flbl">Role / Designation</label><select id="f-urole" class="fsel">'+catOptions('role')+'</select></div><div><label class="flbl">Department</label><select id="f-udept" class="fsel">'+catOptions('dept')+'</select></div></div>'+
+      '<label class="flbl">Project Assignment</label><select id="f-uproject" class="fsel" id="emp-proj-sel"><option value="">All Projects</option></select>'+
+      '<div class="g2"><div><label class="flbl">Employment Type</label><select id="f-uemptype" class="fsel"><option>Full Time</option><option>Part Time</option><option>Contract</option><option>Daily Wage</option></select></div><div><label class="flbl">Work Location / Project</label><select id="f-ulocation" class="fsel"><option value="">&#9203; Loading...</option></select></div></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #E6510020;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#E6510020;display:flex;align-items:center;justify-content:center;font-size:14px;">📞</div><div style="font-size:12px;font-weight:800;color:#E65100;text-transform:uppercase;letter-spacing:.7px;">Contact Details</div></div>'+
+      '<div class="g2"><div><label class="flbl">Mobile Number</label><input id="f-uphone" class="finp" type="tel" placeholder="10-digit mobile"></div><div><label class="flbl">Alternate Mobile</label><input id="f-uphone2" class="finp" type="tel" placeholder="Optional"></div></div>'+
+      '<label class="flbl">Residential Address</label><textarea id="f-uaddress" class="ftxt" rows="2" placeholder="Current residential address..."></textarea>'+
+      '<label class="flbl">Permanent Address</label><textarea id="f-upermanent" class="ftxt" rows="2" placeholder="Permanent / native address (if different)..."></textarea>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #6A1B9A20;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#6A1B9A20;display:flex;align-items:center;justify-content:center;font-size:14px;">🪪</div><div style="font-size:12px;font-weight:800;color:#6A1B9A;text-transform:uppercase;letter-spacing:.7px;">KYC Details</div></div>'+
+      '<div class="g2"><div><label class="flbl">Aadhar Number</label><input id="f-uaadhar" class="finp" placeholder="XXXX XXXX XXXX"></div><div><label class="flbl">PAN Number</label><input id="f-upan" class="finp" placeholder="ABCDE1234F"></div></div>'+
+      '<div class="g2"><div><label class="flbl">PF Number</label><input id="f-upf" class="finp" placeholder="Optional"></div><div><label class="flbl">ESIC Number</label><input id="f-uesic" class="finp" placeholder="Optional"></div></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #C6282820;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:14px;">🏦</div><div style="font-size:12px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Bank Details</div></div>'+
+      '<label class="flbl">Bank Name</label><input id="f-ubank" class="finp" placeholder="e.g. State Bank of India">'+
+      '<div class="g2"><div><label class="flbl">Account Number</label><input id="f-uaccno" class="finp" placeholder="Bank account number"></div><div><label class="flbl">IFSC Code</label><input id="f-uifsc" class="finp" placeholder="e.g. SBIN0001234"></div></div>'+
+      '<label class="flbl">Account Holder Name</label><input id="f-uaccname" class="finp" placeholder="As per bank records">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #C6282820;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:14px;">🚨</div><div style="font-size:12px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Emergency Contact</div></div>'+
+      '<div class="g2"><div><label class="flbl">Contact Name</label><input id="f-uecname" class="finp" placeholder="Full name"></div><div><label class="flbl">Relationship</label><select id="f-uecrel" class="fsel"><option value="">-- Select --</option><option>Spouse</option><option>Father</option><option>Mother</option><option>Sibling</option><option>Other</option></select></div></div>'+
+      '<label class="flbl">Emergency Mobile</label><input id="f-uecphone" class="finp" type="tel" placeholder="10-digit mobile">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #1565C020;margin:12px 0 8px;">'+
+      '<div style="width:24px;height:24px;border-radius:7px;background:#1565C020;display:flex;align-items:center;justify-content:center;font-size:12px;">📎</div>'+
+      '<div style="font-size:11px;font-weight:800;color:#1565C0;text-transform:uppercase;letter-spacing:.7px;">Documents & Photo</div></div>'+
+      '<label class="flbl">Passport Photo</label>'+
+      '<div class="upload-box" onclick="document.getElementById(\'f-uphoto\').click()">'+
+        '<div class="photo-preview" id="f-uphoto-prev">📷</div>'+
+        '<input type="file" id="f-uphoto" accept="image/*" onchange="handleFilePreview(\'f-uphoto\',\'f-uphoto-prev\')">'+
+        '<div class="upload-label">Tap to upload passport photo</div>'+
+        '<div class="upload-progress-wrap" id="f-uphoto-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="f-uphoto-prog-name"></span><span class="upload-progress-pct" id="f-uphoto-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="f-uphoto-prog-fill"></div></div></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Aadhar Card</label>'+
+        '<div class="upload-box" onclick="document.getElementById(\'f-uaadhar-doc\').click()">'+
+          '<div id="f-uaadhar-doc-prev" class="upload-preview"></div>'+
+          '<input type="file" id="f-uaadhar-doc" accept="image/*,application/pdf" onchange="handleFilePreview(\'f-uaadhar-doc\',\'f-uaadhar-doc-prev\')">'+
+          '<div class="upload-label">📄 Upload Aadhar</div>'+
+          '<div class="upload-progress-wrap" id="f-uaadhar-doc-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="f-uaadhar-doc-prog-name"></span><span class="upload-progress-pct" id="f-uaadhar-doc-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="f-uaadhar-doc-prog-fill"></div></div></div>'+
+        '</div></div>'+
+        '<div><label class="flbl">PAN Card</label>'+
+        '<div class="upload-box" onclick="document.getElementById(\'f-upan-doc\').click()">'+
+          '<div id="f-upan-doc-prev" class="upload-preview"></div>'+
+          '<input type="file" id="f-upan-doc" accept="image/*,application/pdf" onchange="handleFilePreview(\'f-upan-doc\',\'f-upan-doc-prev\')">'+
+          '<div class="upload-label">📄 Upload PAN</div>'+
+          '<div class="upload-progress-wrap" id="f-upan-doc-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="f-upan-doc-prog-name"></span><span class="upload-progress-pct" id="f-upan-doc-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="f-upan-doc-prog-fill"></div></div></div>'+
+        '</div></div>'+
+      '</div>';
+  }
+  var titles={vendors:'Register New Vendor',materials:'Register New Material',subcontractors:'Register New Subcontractor',users:'Register New Employee'};
+  var btnCols={vendors:'btn-teal',materials:'btn-green',subcontractors:'btn-purple',users:'btn-indigo'};
+  var saveFunc={vendors:'saveVendor()',materials:'saveMaterial()',subcontractors:'saveSC()',users:'saveUser()'};
+  document.getElementById('add-title').textContent=titles[currentPage]||'Add New';
+  document.getElementById('add-body').innerHTML=html;
+  document.getElementById('add-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-add\',\'sh-add\')">Cancel</button>'+
+    '<button class="btn '+(btnCols[currentPage]||'btn-navy')+'" onclick="'+(saveFunc[currentPage]||'')+'" style="flex:1;">&#10003; Register</button>';
+  if(currentPage==='vendors'){vendorMatRates=[];renderMatRateRows();}
+  if(currentPage==='materials'){setTimeout(updateMatCodePreview,50);}
+  openSheet('ov-add','sh-add');
+}
+// gv: shared above
+
+// ── MATERIAL CODE PREVIEW ──
+function updateMatCodePreview(){
+  var cat=gv('f-mcat');
+  var prefix=(cat||'MAT').replace(/[^a-zA-Z]/g,'').toUpperCase().slice(0,4);
+  var code=prefix+'-'+String(MATERIALS.length+1).padStart(4,'0');
+  var el=document.getElementById('f-mcode');
+  if(el) el.value=code;
+}
+
+// ── VENDOR MATERIAL RATES ──
+var vendorMatRates=[]; // temp rows for add form
+
+function addMatRateRow(){
+  vendorMatRates.push({matId:'',rate:''});
+  renderMatRateRows();
+}
+
+function removeMatRateRow(idx){
+  vendorMatRates.splice(idx,1);
+  renderMatRateRows();
+}
+
+function renderMatRateRows(){
+  var el=document.getElementById('mat-rate-rows');
+  if(!el) return;
+  if(!vendorMatRates.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0;">No materials added yet. Click + Add Material below.</div>';
+    return;
+  }
+  var matOpts=MATERIALS.map(function(m){
+    return '<option value="'+m.id+'">'+m.name+' ('+m.uom+')</option>';
+  }).join('');
+  el.innerHTML=vendorMatRates.map(function(r,i){
+    return '<div style="display:grid;grid-template-columns:1fr 120px 36px;gap:8px;margin-bottom:8px;align-items:center;">'+
+      '<select class="fsel" style="font-size:12px;padding:8px 10px;" onchange="vendorMatRates['+i+'].matId=this.value">'+
+      '<option value="">-- Select Material --</option>'+matOpts+'</select>'+
+      '<input class="finp" type="number" placeholder="Rate/unit" style="font-size:12px;padding:8px 10px;" value="'+r.rate+'" oninput="vendorMatRates['+i+'].rate=this.value">'+
+      '<button onclick="removeMatRateRow('+i+')" style="width:36px;height:36px;border-radius:10px;border:none;background:#FFEBEE;color:#C62828;font-size:16px;cursor:pointer;flex-shrink:0;">&#215;</button>'+
+    '</div>';
+  }).join('');
+}
+
+async function saveVendor(){
+  var name=gv('f-vname');
+  if(!name){toast('Company name is required','warning');return;}
+  var cat=gv('f-vcat');
+  var newVndId='VND-'+String(VENDORS.length+1).padStart(3,'0');
+  var data={vendor_id:newVndId,name:name,category:cat.toLowerCase(),status:'active',
+    gst:gv('f-vgst')||null,contact_person:gv('f-vcontact')||null,phone:gv('f-vphone')||null,
+    email:gv('f-vemail')||null,address:gv('f-vaddress')||null,brands:gv('f-vbrands')||null,
+    pay_terms:gv('f-vpay')||null,lead_time:gv('f-vlead')||null,total_orders:0,total_value:0};
+  try{
+    toast('Saving...','info');
+    var result=await sbInsert('vendors',data);
+    if(result&&result[0]){
+      var vendor=mapVendor(result[0]);
+      // Save material rates separately
+      var rates=vendorMatRates.filter(function(r){return r.matId&&r.rate;});
+      for(var i=0;i<rates.length;i++){
+        await sbInsert('vendor_material_rates',{vendor_id:result[0].id,material_id:rates[i].matId,rate:parseFloat(rates[i].rate)||0});
+        vendor.materialRates.push({matId:rates[i].matId,rate:parseFloat(rates[i].rate)||0});
+      }
+      VENDORS.unshift(vendor);
+      renderVendors();
+    updateAllStats();
+      closeSheet('ov-add','sh-add');
+      toast(name+' registered!','success');
+    } else { toast('Failed to save vendor','error'); console.error(result); }
+  } catch(e){ toast('Error: '+e.message,'error'); console.error(e); }
+}
+
+async function saveMaterial(){
+  var name=gv('f-mname');
+  if(!name){toast('Material name is required','warning');return;}
+  var cat=gv('f-mcat');
+  var prefix=(cat||'MAT').replace(/[^a-zA-Z]/g,'').toUpperCase().slice(0,4);
+  var code=prefix+'-'+String(MATERIALS.length+1).padStart(4,'0');
+  var newMatId='MAT-'+String(MATERIALS.length+1).padStart(3,'0');
+  var data={mat_id:newMatId,name:name,category:cat.toLowerCase(),code:code,
+    unit:gv('f-muom')||null,uom:gv('f-muom')||null,spec:gv('f-mspec')||null};
+  try{
+    toast('Saving...','info');
+    var result=await sbInsert('materials',data);
+    if(result&&result[0]){
+      MATERIALS.unshift(mapMaterial(result[0]));
+      renderMaterials();
+    updateAllStats();
+      closeSheet('ov-add','sh-add');
+      toast(name+' registered! Code: '+code,'success');
+    } else { toast('Failed to save material','error'); console.error(result); }
+  } catch(e){ toast('Error: '+e.message,'error'); console.error(e); }
+}
+
+async function saveSC(){
+  var name=gv('f-scname');
+  if(!name){toast('Company name is required','warning');return;}
+  var trade=gv('f-sctrade');
+  var newScId='SC-REG-'+String(SUBCONTRACTORS.length+1).padStart(3,'0');
+  var data={sc_id:newScId,name:name,trade:trade.toLowerCase(),
+    gst:gv('f-scgst')||null,contact_person:gv('f-sccontact')||null,
+    phone:gv('f-scphone')||null,email:gv('f-scemail')||null,
+    address:gv('f-scaddress')||null,experience:gv('f-scexp')||null,
+    turnover:gv('f-scturnover')||null,workers:parseInt(gv('f-scworkers'))||0,
+    speciality:gv('f-scspec')||null,
+    pbg_available:gv('f-scpbg')==='Yes',emd_available:gv('f-scemd')==='Yes',
+    status:'active'};
+  try{
+    toast('Saving...','info');
+    var result=await sbInsert('subcontractors',data);
+    if(result&&result[0]){
+      SUBCONTRACTORS.unshift(mapSC(result[0]));
+      renderSC();
+    updateAllStats();
+      closeSheet('ov-add','sh-add');
+      toast(name+' registered!','success');
+    } else { toast('Failed to save','error'); console.error(result); }
+  } catch(e){ toast('Error: '+e.message,'error'); console.error(e); }
+}
+
+async function saveUser(){
+  var fname=gv('f-ufname'), mname=gv('f-umname')||'', lname=gv('f-ulname');
+  var name=[fname,mname,lname].filter(Boolean).join(' ').trim();
+  if(!name){toast('Name is required','warning');return;}
+  var phone=gv('f-uphone');
+  if(!phone){toast('Mobile number is required','warning');return;}
+  var roleRaw=gv('f-urole');
+  var roleMap={'Admin':'admin','Project Manager':'pm','Site Engineer':'engineer','Junior Engineer':'engineer','QC Engineer':'qhse','Safety Officer':'qhse','Finance / Accounts':'finance','HR / Admin':'admin','Viewer (Read Only)':'viewer','Client Viewer':'viewer'};
+  var role=roleMap[roleRaw]||'viewer';
+  var newEmpId=await getNextAIPLId();
+  var data={
+    emp_id:newEmpId, first_name:fname, last_name:lname||'',
+    phone:phone, phone2:gv('f-uphone2')||null,
+    dob:gv('f-udob')||null, gender:gv('f-ugender')||null,
+    blood_group:gv('f-ublood')||null, marital_status:gv('f-umarital')||null,
+    badge_no:newEmpId, date_of_joining:gv('f-udoj')||null,
+    role:role, designation:roleRaw, department:gv('f-udept')||null,
+    emp_type:gv('f-uemptype')||null, work_location:gv('f-ulocation')||null,
+    address:gv('f-uaddress')||null, permanent_address:gv('f-upermanent')||null,
+    aadhar:gv('f-uaadhar')||null, pan:gv('f-upan')||null,
+    pf_no:gv('f-upf')||null, esic_no:gv('f-uesic')||null,
+    bank_name:gv('f-ubank')||null, account_no:gv('f-uaccno')||null,
+    ifsc:gv('f-uifsc')||null, account_holder:gv('f-uaccname')||null,
+    emergency_name:gv('f-uecname')||null, emergency_relation:gv('f-uecrel')||null,
+    emergency_phone:gv('f-uecphone')||null, status:'active'
+  };
+  try{
+    toast('Uploading documents...','info');
+    // Upload files to Cloudinary
+    var photoFile = document.getElementById('f-uphoto') && document.getElementById('f-uphoto').files[0];
+    var aadharFile = document.getElementById('f-uaadhar-doc') && document.getElementById('f-uaadhar-doc').files[0];
+    var panFile = document.getElementById('f-upan-doc') && document.getElementById('f-upan-doc').files[0];
+    var photoUrl = photoFile ? await uploadToCloudinary(photoFile,'photos','f-uphoto') : null;
+    var aadharUrl = aadharFile ? await uploadToCloudinary(aadharFile,'kyc','f-uaadhar-doc') : null;
+    var panUrl = panFile ? await uploadToCloudinary(panFile,'kyc','f-upan-doc') : null;
+    if(photoUrl) data.profile_photo = photoUrl;
+    if(aadharUrl) data.aadhar_doc_url = aadharUrl;
+    if(panUrl) data.pan_doc_url = panUrl;
+    toast('Saving...','info');
+    var result=await sbInsert('employees',data);
+    if(result&&result[0]){
+      var mapped=mapEmployee(result[0]);
+      USERS.unshift(mapped);
+      // Also add to EMP_LIST for Employee Management tab
+      if(!EMP_LIST.find(function(x){return x.id===result[0].id;})){
+        EMP_LIST.unshift(result[0]);
+      }
+      renderUsers();
+      closeSheet('ov-add','sh-add');
+      toast(name+' registered as employee','success');
+    } else { toast('Failed to save','error'); console.error(result); }
+  } catch(e){ toast('Error: '+e.message,'error'); console.error(e); }
+}
+
+function ir(lbl,val,mono){
+  return '<div class="info-row"><div class="ir-lbl">'+lbl+'</div><div class="ir-val'+(mono?' style="font-family:\'JetBrains Mono\',monospace;font-size:12px;"':'')+'">'+(mono?'<span style="font-family:\'JetBrains Mono\',monospace;font-size:12px;">'+val+'</span>':val)+'</div></div>';
+}
+function fmtV(n){if(n>=10000000)return '₹'+(n/10000000).toFixed(2)+'Cr';if(n>=100000)return '₹'+(n/100000).toFixed(1)+'L';return '₹'+(n/1000).toFixed(0)+'K';}
+function openSheet(o,s){document.getElementById(o).classList.add('on');document.getElementById(s).classList.add('on');}
+function closeSheet(o,s){document.getElementById(o).classList.remove('on');document.getElementById(s).classList.remove('on');}
+function switchPage(p){
+  currentPage=p;
+  ['vendors','materials','subcontractors','labour','users','settings'].forEach(function(t){
+    var pg=document.getElementById('pg-'+t);
+    var nv=document.getElementById('nav-'+t);
+    if(pg) pg.classList.toggle('on',t===p);
+    if(nv) nv.classList.toggle('on',t===p);
+  });
+  if(p==='vendors'){vendorCatFilter='all';rebuildPills('vendor','vendor-cat-pills','var(--teal)',filterVendors);renderVendors();}
+  if(p==='materials'){matCatFilter='all';rebuildPills('material','mat-cat-pills','var(--green)',filterMaterials);renderMaterials();}
+  if(p==='subcontractors'){scCatFilter='all';rebuildPills('sc','sc-cat-pills','var(--purple)',filterSC);renderSC();}
+  if(p==='labour'){labCatFilter='all';rebuildPills('labour','lab-cat-pills','#E65100',filterLabour);renderLabour();}
+  if(p==='users'){showApp('employees');return;}
+}
+// toast: shared above
+
+// init called at bottom after CAT_DATA is defined
+
+// ── CATEGORY DATA (editable) ──────────────────────────────────────────
+
 // Stubs — real implementations defined later in main script block
 var USER_PERMISSIONS={};
 var COMPANY_DATA={};
