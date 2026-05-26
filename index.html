@@ -2001,16 +2001,7 @@ input,select,textarea{font-size:16px !important;}
       <div class="stat-mini"><div class="stat-mini-val" style="color:var(--indigo);font-size:13px;" id="stat-v-cats">0</div><div class="stat-mini-lbl">Total Order Value</div></div>
     </div>
     <div class="search-bar"><span style="font-size:16px;color:var(--text3)">&#128269;</span><input type="text" placeholder="Search vendors by name, category, GST..." oninput="searchList('vendors',this.value)"></div>
-    <div class="pill-row" id="vendor-cat-pills">
-      <div class="pill on" style="background:var(--teal);border-color:var(--teal);color:white" onclick="filterVendors('all',this)">All</div>
-      <div class="pill" onclick="filterVendors('steel',this)">&#129493; Steel</div>
-      <div class="pill" onclick="filterVendors('cement',this)">&#129521; Cement</div>
-      <div class="pill" onclick="filterVendors('aggregate',this)">&#9898; Aggregate</div>
-      <div class="pill" onclick="filterVendors('formwork',this)">&#128296; Formwork</div>
-      <div class="pill" onclick="filterVendors('electrical',this)">&#9889; Electrical</div>
-      <div class="pill" onclick="filterVendors('plant',this)">&#9881;&#65039; Plant Hire</div>
-      <div class="pill" onclick="filterVendors('waterproofing',this)">&#128167; Waterproofing</div>
-    </div>
+    <div class="pill-row" id="vendor-cat-pills"></div>
     <div id="vendor-list"></div>
     <div style="height:10px"></div>
   </div>
@@ -2023,15 +2014,7 @@ input,select,textarea{font-size:16px !important;}
       <div class="stat-mini"><div class="stat-mini-val" style="color:var(--indigo)" id="stat-m-vendors">0</div><div class="stat-mini-lbl">Linked Vendors</div></div>
     </div>
     <div class="search-bar"><span style="font-size:16px;color:var(--text3)">&#128269;</span><input type="text" placeholder="Search materials by name, code, category..." oninput="searchList('materials',this.value)"></div>
-    <div class="pill-row" id="mat-cat-pills">
-      <div class="pill on" style="background:var(--green);border-color:var(--green);color:white" onclick="filterMaterials('all',this)">All</div>
-      <div class="pill" onclick="filterMaterials('structural',this)">&#127959; Structural</div>
-      <div class="pill" onclick="filterMaterials('concrete',this)">&#129521; Concrete</div>
-      <div class="pill" onclick="filterMaterials('finishing',this)">&#127775; Finishing</div>
-      <div class="pill" onclick="filterMaterials('mep',this)">&#9889; MEP</div>
-      <div class="pill" onclick="filterMaterials('road',this)">&#128739; Road</div>
-      <div class="pill" onclick="filterMaterials('safety',this)">&#9973;&#65039; Safety</div>
-    </div>
+    <div class="pill-row" id="mat-cat-pills"></div>
     <div id="material-list"></div>
     <div style="height:10px"></div>
   </div>
@@ -2043,14 +2026,7 @@ input,select,textarea{font-size:16px !important;}
       <div class="stat-mini"><div class="stat-mini-val" style="color:var(--green)" id="stat-sc-pbg">0</div><div class="stat-mini-lbl">PBG Available</div></div>
     </div>
     <div class="search-bar"><span style="font-size:16px;color:var(--text3)">&#128269;</span><input type="text" placeholder="Search subcontractors by name, trade..." oninput="searchList('sc',this.value)"></div>
-    <div class="pill-row" id="sc-cat-pills">
-      <div class="pill on" style="background:var(--purple);border-color:var(--purple);color:white" onclick="filterSC('all',this)">All</div>
-      <div class="pill" onclick="filterSC('civil',this)">&#127959; Civil</div>
-      <div class="pill" onclick="filterSC('structural',this)">&#128296; Structural</div>
-      <div class="pill" onclick="filterSC('mep',this)">&#9889; MEP</div>
-      <div class="pill" onclick="filterSC('finishing',this)">&#127775; Finishing</div>
-      <div class="pill" onclick="filterSC('road',this)">&#128739; Road</div>
-    </div>
+    <div class="pill-row" id="sc-cat-pills"></div>
     <div id="sc-list"></div>
     <div style="height:10px"></div>
   </div>
@@ -2063,9 +2039,7 @@ input,select,textarea{font-size:16px !important;}
       <div class="stat-mini"><div class="stat-mini-val" style="color:#1565C0" id="stat-lab-skilled">0</div><div class="stat-mini-lbl">Skilled</div></div>
     </div>
     <div class="search-bar"><span style="font-size:16px;color:var(--text3)">&#128269;</span><input type="text" placeholder="Search by name, skill, ID..." oninput="searchList('labour',this.value)"></div>
-    <div class="pill-row" id="lab-cat-pills">
-      <div class="pill on" style="background:#E65100;border-color:#E65100;color:white" onclick="filterLabour('all',this)">All</div>
-    </div>
+    <div class="pill-row" id="lab-cat-pills"></div>
     <div id="labour-list"></div>
     <div style="height:10px"></div>
   </div>
@@ -3373,8 +3347,8 @@ function showToast(msg, type = 'success') {
 // ═══════════════════════════════════════════
 // MASTER REGISTRY JS
 // ═══════════════════════════════════════════
-function initRegistry(){
-  loadCategories();
+async function initRegistry(){
+  await loadCategories();
   try{
     rebuildPills('vendor','vendor-cat-pills','var(--teal)',filterVendors);
     rebuildPills('material','mat-cat-pills','var(--green)',filterMaterials);
@@ -5351,6 +5325,13 @@ async function loadCategories(){
     Object.keys(catSectionMap).forEach(function(type){
       renderCatSection(type,catSectionMap[type]);
     });
+    // Rebuild pills immediately after categories are loaded
+    if(typeof rebuildPills==='function'){
+      rebuildPills('vendor','vendor-cat-pills','var(--teal)',filterVendors);
+      rebuildPills('material','mat-cat-pills','var(--green)',filterMaterials);
+      rebuildPills('sc','sc-cat-pills','var(--purple)',filterSC);
+      rebuildPills('labour','lab-cat-pills','#E65100',filterLabour);
+    }
   } catch(e){ console.error('loadCategories error:',e); }
 }
 
