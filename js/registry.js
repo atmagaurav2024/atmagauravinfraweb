@@ -305,21 +305,39 @@ function searchList(type,q){
 }
 
 function openAdd(){
-  document.getElementById('add-title').textContent='Add New — '+currentPage;
-  document.getElementById('add-body').innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">Form for '+currentPage+'</div>';
-  document.getElementById('add-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-add\',\'sh-add\')">Cancel</button>';
-  openSheet('ov-add','sh-add');
+  openEditForm(currentPage, null);
 }
 
 function openDetail(type,id){
   var items={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS,user:USERS};
   var item=(items[type]||[]).find(function(x){return x.id===id;});
-  if(!item)return;
+  if(!item) return;
+  var labels={
+    vendor:  [{k:'vendorId',l:'Vendor ID'},{k:'name',l:'Name'},{k:'cat',l:'Category'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'contact',l:'Contact Person'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'brands',l:'Brands'},{k:'payTerms',l:'Pay Terms'},{k:'leadTime',l:'Lead Time'},{k:'rating',l:'Rating'}],
+    material:[{k:'matId',l:'Material ID'},{k:'name',l:'Name'},{k:'cat',l:'Category'},{k:'code',l:'Code'},{k:'uom',l:'Unit'},{k:'spec',l:'Specification'}],
+    sc:      [{k:'scId',l:'SC ID'},{k:'name',l:'Name'},{k:'trade',l:'Trade'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'contact',l:'Contact'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'exp',l:'Experience'},{k:'speciality',l:'Speciality'},{k:'workers',l:'Workers'},{k:'turnover',l:'Turnover'}],
+    labour:  [{k:'labId',l:'Labour ID'},{k:'name',l:'Name'},{k:'skill',l:'Skill'},{k:'type',l:'Type'},{k:'phone',l:'Phone'},{k:'address',l:'Address'},{k:'dailyRate',l:'Daily Rate'},{k:'source',l:'Source'},{k:'bloodGroup',l:'Blood Group'},{k:'joined',l:'Joined'}],
+    user:    [{k:'empId',l:'Emp ID'},{k:'name',l:'Name'},{k:'role',l:'Role'},{k:'dept',l:'Department'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'status',l:'Status'}]
+  };
+  var fields=labels[type]||[];
+  var rows=fields.map(function(f){
+    var v=item[f.k];
+    if(v===undefined||v===null||v==='') return '';
+    return '<div style="display:flex;padding:8px 0;border-bottom:1px solid #F5F5F5;">'+
+      '<div style="font-size:10px;color:var(--text3);font-weight:700;width:110px;flex-shrink:0;">'+f.l+'</div>'+
+      '<div style="font-size:12px;font-weight:700;flex:1;word-break:break-word;">'+v+'</div></div>';
+  }).join('');
+  var safeId=id.replace(/'/g,'');
+  var safeName=(item.name||'').replace(/'/g,'');
   document.getElementById('det-title').textContent=item.name;
-  document.getElementById('det-body').innerHTML='<div style="padding:12px;">'+Object.keys(item).filter(function(k){return typeof item[k]==='string'&&item[k];}).slice(0,8).map(function(k){return ir(k,item[k]);}).join('')+'</div>';
-  document.getElementById('det-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>';
+  document.getElementById('det-body').innerHTML='<div style="padding:10px 14px;">'+rows+'</div>';
+  document.getElementById('det-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
+    '<button class="btn" style="background:#E3F2FD;color:#1565C0;font-weight:800;" onclick="openEditForm(\''+type+'\'\,\''+safeId+'\')">&#9998; Edit</button>'+
+    '<button class="btn" style="background:#FFEBEE;color:#C62828;font-weight:800;" onclick="confirmDelete(\''+type+'\',\''+safeId+'\',\''+safeName+'\')">&#128465; Delete</button>';
   openSheet('ov-det','sh-det');
 }
+
 
 function switchPage(p){
   currentPage=p;
@@ -363,6 +381,21 @@ function renderCatSection(type,containerId){
       '</div>' +
     '</div>';
   }).join('');
+}
+
+function deleteCat(type,i){
+  var cat=CAT_DATA[type][i];
+  if(!confirm('Delete category "'+cat.name+'"?')) return;
+  CAT_DATA[type].splice(i,1);
+  renderCatSection(type,catSectionMap[type]);
+  var pillMap={vendor:'vendor-cat-pills',material:'mat-cat-pills',sc:'sc-cat-pills',labour:'lab-cat-pills'};
+  var fnMap={vendor:filterVendors,material:filterMaterials,sc:filterSC,labour:filterLabour};
+  var colorMap={vendor:'var(--teal)',material:'var(--green)',sc:'var(--purple)',labour:'#E65100'};
+  if(pillMap[type]) rebuildPills(type,pillMap[type],colorMap[type],fnMap[type]);
+  toast(cat.name+' removed','success');
+  if(cat.id&&!cat.id.startsWith(type+'-new')){
+    sbDelete('categories',cat.id).catch(function(){});
+  }
 }
 
 function toggleCat(type,i){
@@ -447,7 +480,175 @@ async function deleteRecord(type,id){
   try{await sbDelete(tables[type],id);}catch(e){console.error(e);}
 }
 
-function editRecord(type,id){toast('Edit form — expand in registry.js','info');}
+
+// ════ EDIT / ADD FORMS ═══════════════════════════════════════════
+
+function openEditForm(type,id){
+  var items={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS};
+  var item=id?(items[type]||[]).find(function(x){return x.id===id;}):null;
+  var isEdit=!!item;
+  var title=(isEdit?'Edit ':'Add ')+{vendor:'Vendor',material:'Material',sc:'Subcontractor',labour:'Labour'}[type];
+
+  var catOpts=catOptions(type==='sc'?'sc':type==='labour'?'labour':type);
+
+  var body='';
+  if(type==='vendor'){
+    body=
+      '<div class="g2">'+
+        '<div><label class="flbl">Name *</label><input id="ef-name" class="finp" value="'+(item?item.name||'':'')+'" placeholder="Vendor company name"></div>'+
+        '<div><label class="flbl">Category *</label><select id="ef-cat" class="fsel">'+catOpts+'</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">GST Number</label><input id="ef-gst" class="finp" value="'+(item?item.gst||'':'')+'" placeholder="22AAAAA0000A1Z5"></div>'+
+        '<div><label class="flbl">Status</label><select id="ef-status" class="fsel">'+
+          ['active','approved','under-review','blacklisted'].map(function(s){return '<option value="'+s+'"'+(item&&item.status===s?' selected':'')+'>'+s+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Contact Person</label><input id="ef-contact" class="finp" value="'+(item?item.contact||'':'')+'" placeholder="Contact name"></div>'+
+        '<div><label class="flbl">Phone *</label><input id="ef-phone" class="finp" value="'+(item?item.phone||'':'')+'" placeholder="+91 98765 43210"></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Email</label><input id="ef-email" class="finp" value="'+(item?item.email||'':'')+'" placeholder="vendor@email.com"></div>'+
+        '<div><label class="flbl">Rating (1-5)</label><input id="ef-rating" class="finp" type="number" min="1" max="5" value="'+(item?item.rating||'':'')+'" placeholder="4"></div>'+
+      '</div>'+
+      '<label class="flbl">Address</label><textarea id="ef-address" class="finp" rows="2" placeholder="Full address">'+(item?item.address||'':'')+'</textarea>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Brands / Products</label><input id="ef-brands" class="finp" value="'+(item?item.brands||'':'')+'" placeholder="TMT, MS Plate..."></div>'+
+        '<div><label class="flbl">Payment Terms</label><input id="ef-payterms" class="finp" value="'+(item?item.payTerms||'':'')+'" placeholder="30 days credit"></div>'+
+      '</div>'+
+      '<label class="flbl">Lead Time</label><input id="ef-leadtime" class="finp" value="'+(item?item.leadTime||'':'')+'" placeholder="7-10 days">';
+  } else if(type==='material'){
+    body=
+      '<div class="g2">'+
+        '<div><label class="flbl">Name *</label><input id="ef-name" class="finp" value="'+(item?item.name||'':'')+'" placeholder="Material name"></div>'+
+        '<div><label class="flbl">Category *</label><select id="ef-cat" class="fsel">'+catOpts+'</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Material Code</label><input id="ef-code" class="finp" value="'+(item?item.code||'':'')+'" placeholder="STL-001"></div>'+
+        '<div><label class="flbl">Unit of Measure</label><select id="ef-uom" class="fsel">'+catOptions('uom')+'</select></div>'+
+      '</div>'+
+      '<label class="flbl">Specification</label><textarea id="ef-spec" class="finp" rows="2" placeholder="Grade, size, standard...">'+(item?item.spec||'':'')+'</textarea>';
+  } else if(type==='sc'){
+    body=
+      '<div class="g2">'+
+        '<div><label class="flbl">Name *</label><input id="ef-name" class="finp" value="'+(item?item.name||'':'')+'" placeholder="Subcontractor name"></div>'+
+        '<div><label class="flbl">Trade *</label><select id="ef-trade" class="fsel">'+catOpts+'</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">GST Number</label><input id="ef-gst" class="finp" value="'+(item?item.gst||'':'')+'" placeholder="GST No"></div>'+
+        '<div><label class="flbl">Phone *</label><input id="ef-phone" class="finp" value="'+(item?item.phone||'':'')+'" placeholder="+91..."></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Contact Person</label><input id="ef-contact" class="finp" value="'+(item?item.contact||'':'')+'" placeholder="Name"></div>'+
+        '<div><label class="flbl">Email</label><input id="ef-email" class="finp" value="'+(item?item.email||'':'')+'" placeholder="email@..."></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Experience</label><input id="ef-exp" class="finp" value="'+(item?item.exp||'':'')+'" placeholder="5 years"></div>'+
+        '<div><label class="flbl">Workers Strength</label><input id="ef-workers" class="finp" type="number" value="'+(item?item.workers||'':'')+'" placeholder="50"></div>'+
+      '</div>'+
+      '<label class="flbl">Speciality / Work Types</label><input id="ef-spec" class="finp" value="'+(item?item.speciality||'':'')+'" placeholder="Earthwork, RCC, Masonry...">'+
+      '<label class="flbl">Address</label><textarea id="ef-address" class="finp" rows="2">'+(item?item.address||'':'')+'</textarea>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">PBG Available</label><select id="ef-pbg" class="fsel"><option value="true"'+(item&&item.pbgAvail?' selected':'')+'>Yes</option><option value="false"'+(item&&!item.pbgAvail?' selected':'')+'>No</option></select></div>'+
+        '<div><label class="flbl">Status</label><select id="ef-status" class="fsel">'+['active','inactive'].map(function(s){return '<option value="'+s+'"'+(item&&item.status===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div>'+
+      '</div>';
+  } else if(type==='labour'){
+    body=
+      '<div class="g2">'+
+        '<div><label class="flbl">Name *</label><input id="ef-name" class="finp" value="'+(item?item.name||'':'')+'" placeholder="Full name"></div>'+
+        '<div><label class="flbl">Skill</label><select id="ef-skill" class="fsel">'+catOpts+'</select></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Type</label><select id="ef-type" class="fsel">'+['skilled','semi-skilled','unskilled'].map(function(t){return '<option value="'+t+'"'+(item&&item.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div>'+
+        '<div><label class="flbl">Phone</label><input id="ef-phone" class="finp" value="'+(item?item.phone||'':'')+'" placeholder="+91..."></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Daily Rate (₹)</label><input id="ef-rate" class="finp" type="number" value="'+(item?item.dailyRate||'':'')+'" placeholder="600"></div>'+
+        '<div><label class="flbl">Blood Group</label><input id="ef-blood" class="finp" value="'+(item?item.bloodGroup||'':'')+'" placeholder="B+"></div>'+
+      '</div>'+
+      '<div class="g2">'+
+        '<div><label class="flbl">Aadhar No</label><input id="ef-aadhar" class="finp" value="'+(item?item.aadhar||'':'')+'" placeholder="xxxx-xxxx-xxxx"></div>'+
+        '<div><label class="flbl">Joined Date</label><input id="ef-joined" class="finp" type="date" value="'+(item?item.joined||'':'')+'"></div>'+
+      '</div>'+
+      '<label class="flbl">Address</label><textarea id="ef-address" class="finp" rows="2">'+(item?item.address||'':'')+'</textarea>';
+  }
+
+  // Pre-select category
+  setTimeout(function(){
+    var sel=document.getElementById('ef-cat')||document.getElementById('ef-trade')||document.getElementById('ef-skill');
+    if(sel&&item){
+      var val=item.cat||item.trade||item.skill||'';
+      Array.from(sel.options).forEach(function(o){if(o.value.toLowerCase()===val.toLowerCase())o.selected=true;});
+    }
+  },50);
+
+  document.getElementById('add-title').textContent=title;
+  document.getElementById('add-body').innerHTML=body;
+  document.getElementById('add-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-add\',\'sh-add\');">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="saveRegistryRecord(\''+type+'\',\''+( id||'')+'\')">&#128190; '+(isEdit?'Update':'Save')+'</button>';
+  closeSheet('ov-det','sh-det');
+  openSheet('ov-add','sh-add');
+}
+
+async function saveRegistryRecord(type,id){
+  var gv2=function(i){var el=document.getElementById(i);return el?el.value.trim():null;};
+  var name=gv2('ef-name');
+  if(!name){toast('Name is required','warning');return;}
+
+  var data={};
+  if(type==='vendor'){
+    data={name:name,category:gv2('ef-cat')||null,gst:gv2('ef-gst')||null,status:gv2('ef-status')||'active',
+      contact_person:gv2('ef-contact')||null,phone:gv2('ef-phone')||null,email:gv2('ef-email')||null,
+      address:gv2('ef-address')||null,brands:gv2('ef-brands')||null,pay_terms:gv2('ef-payterms')||null,
+      lead_time:gv2('ef-leadtime')||null,rating:parseFloat(gv2('ef-rating'))||0};
+  } else if(type==='material'){
+    data={name:name,category:gv2('ef-cat')||null,code:gv2('ef-code')||null,uom:gv2('ef-uom')||null,spec:gv2('ef-spec')||null};
+  } else if(type==='sc'){
+    data={name:name,trade:gv2('ef-trade')||null,gst:gv2('ef-gst')||null,phone:gv2('ef-phone')||null,
+      contact_person:gv2('ef-contact')||null,email:gv2('ef-email')||null,address:gv2('ef-address')||null,
+      experience:gv2('ef-exp')||null,workers:parseInt(gv2('ef-workers'))||0,speciality:gv2('ef-spec')||null,
+      pbg_available:gv2('ef-pbg')==='true',status:gv2('ef-status')||'active'};
+  } else if(type==='labour'){
+    data={name:name,skill:gv2('ef-skill')||null,type:gv2('ef-type')||'unskilled',phone:gv2('ef-phone')||null,
+      daily_rate:parseFloat(gv2('ef-rate'))||0,blood_group:gv2('ef-blood')||null,
+      aadhar:gv2('ef-aadhar')||null,joined:gv2('ef-joined')||null,address:gv2('ef-address')||null};
+  }
+
+  var tables={vendor:'vendors',material:'materials',sc:'subcontractors',labour:'labourers'};
+  var maps={vendor:mapVendor,material:mapMaterial,sc:mapSC,labour:mapLabour};
+  var arrs={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS};
+
+  try{
+    if(id){
+      // Update existing
+      await sbUpdate(tables[type],id,data);
+      var arr=arrs[type];
+      var idx=arr.findIndex(function(x){return x.id===id;});
+      if(idx>-1){
+        var updated=Object.assign({id:id},data);
+        arr[idx]=maps[type](Object.assign({id:id,vendor_id:arr[idx].vendorId,mat_id:arr[idx].matId,sc_id:arr[idx].scId,lab_id:arr[idx].labId},data));
+      }
+      toast(name+' updated','success');
+    } else {
+      // Insert new with auto ID
+      var prefix={vendor:'VND',material:'MAT',sc:'SUB',labour:'LAB'};
+      var arr=arrs[type];
+      var newId=prefix[type]+'-'+String(arr.length+1).padStart(3,'0');
+      var idField={vendor:'vendor_id',material:'mat_id',sc:'sc_id',labour:'lab_id'};
+      data[idField[type]]=newId;
+      var res=await sbInsert(tables[type],data);
+      if(res&&res[0]) arr.push(maps[type](res[0]));
+      toast(name+' added','success');
+    }
+    closeSheet('ov-add','sh-add');
+    var renders={vendor:renderVendors,material:renderMaterials,sc:renderSC,labour:renderLabour};
+    if(renders[type]) renders[type]();
+    updateAllStats();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
 function confirmDelete(type,id,name){
   document.getElementById('det-body').innerHTML='<div style="text-align:center;padding:24px;"><div style="font-size:48px;margin-bottom:12px;">\u26a0\ufe0f</div><div style="font-size:16px;font-weight:800;margin-bottom:8px;">Delete?</div><div style="font-size:13px;color:var(--text2);">Delete <strong>'+name+'</strong>? This cannot be undone.</div></div>';
   document.getElementById('det-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Cancel</button><button class="btn btn-red" onclick="deleteRecord(\''+type+'\',\''+id+'\')">🗑 Delete</button>';
