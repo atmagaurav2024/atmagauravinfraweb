@@ -332,10 +332,10 @@ function openDetail(type,id){
   document.getElementById('det-title').textContent=item.name;
   document.getElementById('det-body').innerHTML='<div style="padding:10px 14px;">'+rows+'</div>';
   document.getElementById('det-foot').innerHTML=
-    '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
-    '<button class="btn" style="background:#E3F2FD;color:#1565C0;font-weight:800;" onclick="openEditForm(\''+type+'\'\,\''+safeId+'\')">&#9998; Edit</button>'+
-    '<button class="btn" style="background:#FFEBEE;color:#C62828;font-weight:800;" onclick="confirmDelete(\''+type+'\',\''+safeId+'\',\''+safeName+'\')">&#128465; Delete</button>';
-  openSheet('ov-det','sh-det');
+  document.getElementById('det-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button> '+
+    '<button class="btn" style="background:#E3F2FD;color:#1565C0;font-weight:800;" onclick="openEditForm(\''+type+'\',\''+safeId+'\')">✎ Edit</button> '+
+    '<button class="btn" style="background:#FFEBEE;color:#C62828;font-weight:800;" onclick="confirmDelete(\''+type+'\',\''+safeId+'\',\''+safeName+'\')">&times; Delete</button>';
 }
 
 
