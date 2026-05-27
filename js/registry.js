@@ -301,7 +301,12 @@ function searchList(type,q){
 }
 
 function openAdd(){
-  openEditForm(currentPage, null);
+  // currentPage is plural ('vendors','materials','subcontractors','labour')
+  // openEditForm expects singular ('vendor','material','sc','labour')
+  var typeMap={vendors:'vendor',materials:'material',subcontractors:'sc',labour:'labour'};
+  var type=typeMap[currentPage];
+  if(!type){toast('Select a section first','warning');return;}
+  openEditForm(type, null);
 }
 
 function openDetail(type,id){
@@ -477,7 +482,8 @@ function openEditForm(type,id){
   var items={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS};
   var item=id?(items[type]||[]).find(function(x){return x.id===id;}):null;
   var isEdit=!!item;
-  var title=(isEdit?'Edit ':'Add ')+{vendor:'Vendor',material:'Material',sc:'Subcontractor',labour:'Labour'}[type];
+  var typeLabels={vendor:'Vendor',material:'Material',sc:'Subcontractor',labour:'Labour'};
+  var title=(isEdit?'Edit ':'Add ')+(typeLabels[type]||type);
   var catOpts=catOptions(type==='sc'?'sc':type==='labour'?'labour':type);
   var body='';
   if(type==='vendor'){
