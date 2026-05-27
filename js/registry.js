@@ -156,7 +156,7 @@ function renderVendors(list){
         '</div>' +
         '<div class="rc-right">' +
           '<div class="rc-id" style="color:'+v.col+'">'+(v.vendorId||v.id.slice(0,8))+'</div>' +
-          '<div style="font-family:monospace;font-size:12px;font-weight:800;color:var(--green);margin-top:4px;">'+fmtV(v.totalValue)+'</div>' +
+
         '</div>' +
       '</div>' +
       '<div class="rc-footer" style="display:flex;align-items:center;gap:6px;"><span>\ud83d\udcde '+v.phone+'</span><span>Lead: '+v.leadTime+'</span><div style="margin-left:auto;display:flex;gap:4px;"><button onclick="openEditForm(\'vendor\',\''+v.id+'\')" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\'Delete?\'))deleteRecord(\'vendor\',\''+v.id+'\')" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div></div>' +
