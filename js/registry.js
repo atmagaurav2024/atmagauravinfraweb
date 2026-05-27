@@ -159,7 +159,7 @@ function renderVendors(list){
           '<div style="font-family:monospace;font-size:12px;font-weight:800;color:var(--green);margin-top:4px;">'+fmtV(v.totalValue)+'</div>' +
         '</div>' +
       '</div>' +
-      '<div class="rc-footer" style="display:flex;align-items:center;gap:6px;"><span>\ud83d\udcde '+v.phone+'</span><span>Lead: '+v.leadTime+'</span><div style="margin-left:auto;display:flex;gap:4px;"><button onclick="openEditForm(\x27vendor\x27,\x27'+v.id+'\x27)" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\x27Delete?\x27))deleteRecord(\x27vendor\x27,\x27'+v.id+'\x27)" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div></div>' +
+      '<div class="rc-footer" style="display:flex;align-items:center;gap:6px;"><span>\ud83d\udcde '+v.phone+'</span><span>Lead: '+v.leadTime+'</span><div style="margin-left:auto;display:flex;gap:4px;"><button onclick="openEditForm(\'vendor\',\''+v.id+'\')" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\'Delete?\'))deleteRecord(\'vendor\',\''+v.id+'\')" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div></div>' +
     '</div>';
   }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No vendors found</div>';
   var sv=document.getElementById('stat-v-total'); if(sv)sv.textContent=VENDORS.length;
@@ -183,7 +183,7 @@ function renderMaterials(list){
           '<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+(m.uom||'—')+'</div>' +
         '</div>' +
       '</div>' +
-      '<div class="rc-footer" style="display:flex;justify-content:flex-end;gap:4px;"><button onclick="openEditForm(\x27material\x27,\x27'+m.id+'\x27)" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\x27Delete?\x27))deleteRecord(\x27material\x27,\x27'+m.id+'\x27)" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div>'+
+      '<div class="rc-footer" style="display:flex;justify-content:flex-end;gap:4px;"><button onclick="openEditForm(\'material\',\''+m.id+'\')" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\'Delete?\'))deleteRecord(\'material\',\''+m.id+'\')" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div>'+
     '</div>';
   }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No materials found</div>';
   var sm=document.getElementById('stat-m-total'); if(sm)sm.textContent=MATERIALS.length;
@@ -207,7 +207,7 @@ function renderSC(list){
           '<div style="font-size:9px;color:var(--text3);">'+s.workers+' workers</div>' +
         '</div>' +
       '</div>' +
-      '<div class="rc-footer" style="display:flex;align-items:center;gap:6px;"><span>\ud83d\udcde '+s.phone+'</span><span>'+s.exp+'</span><div style="margin-left:auto;display:flex;gap:4px;"><button onclick="openEditForm(\x27sc\x27,\x27'+s.id+'\x27)" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\x27Delete?\x27))deleteRecord(\x27sc\x27,\x27'+s.id+'\x27)" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div></div>' +
+      '<div class="rc-footer" style="display:flex;align-items:center;gap:6px;"><span>\ud83d\udcde '+s.phone+'</span><span>'+s.exp+'</span><div style="margin-left:auto;display:flex;gap:4px;"><button onclick="openEditForm(\'sc\',\''+s.id+'\')" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\'Delete?\'))deleteRecord(\'sc\',\''+s.id+'\')" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div></div>' +
     '</div>';
   }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No subcontractors found</div>';
   var st=document.getElementById('stat-sc-total'); if(st)st.textContent=SUBCONTRACTORS.length;
@@ -232,7 +232,7 @@ function renderLabour(list){
           '<div style="font-size:11px;font-weight:800;color:#1B5E20;margin-top:4px;">\u20b9'+Number(l.dailyRate||0).toLocaleString('en-IN')+'/day</div>' +
         '</div>' +
       '</div>' +
-      '<div class="rc-footer"><span>\ud83d\udcde '+(l.phone||'—')+'</span><span>'+l.skill+'</span></div>' +
+      '<div class="rc-footer" style="display:flex;align-items:center;gap:6px;"><span>\ud83d\udcde '+(l.phone||'\u2014')+'</span><span>'+l.skill+'</span><div style="margin-left:auto;display:flex;gap:4px;"><button onclick="openEditForm(\'labour\',\''+l.id+'\')" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:5px;padding:3px 9px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button><button onclick="if(confirm(\'Delete?\'))deleteRecord(\'labour\',\''+l.id+'\')" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;">&#215;</button></div></div>' +
     '</div>';
   }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No labourers found</div>';
   var stTotal=document.getElementById('stat-lab-total'); if(stTotal)stTotal.textContent=LABOURERS.length;
@@ -373,7 +373,7 @@ function renderCatSection(type,containerId){
       '<div onclick="toggleCat(\''+type+'\','+i+')" style="width:40px;height:22px;border-radius:11px;background:'+(c.active?'var(--green)':'#CBD5E1')+';position:relative;cursor:pointer;">' +
         '<div style="position:absolute;top:3px;left:'+(c.active?'21':'3')+'px;width:16px;height:16px;border-radius:50%;background:white;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div>' +
       '</div>' +
-      '<button onclick="deleteCat(\x27'+type+'\x27,'+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:18px;padding:0 2px;" title="Delete">&#215;</button>'+
+      '<button onclick="deleteCat(\''+type+'\','+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:18px;padding:0 2px;" title="Delete">&#215;</button>'+
     '</div>';
   }).join('');
 }
