@@ -2295,6 +2295,7 @@ var appScreenIds = ['app-dashboard','app-attendance','app-registry'];
 
 function showApp(name){
   // Permission check (admins bypass, dashboard always allowed)
+  var allProjTabs=['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
   if(name!=='dashboard' && currentUser && currentUser.role!=='admin'){
     // Map app name to AC_MODS key(s) for checking
     var checkKey = name;
@@ -2316,7 +2317,6 @@ function showApp(name){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
   document.querySelectorAll('.app-screen').forEach(function(s){s.classList.remove('on');});
   // Project sub-modules all live inside app-projects now
-  var allProjTabs=['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
   var isProjectTab=allProjTabs.indexOf(name)>-1;
   var target = isProjectTab
     ? document.getElementById('app-projects')
