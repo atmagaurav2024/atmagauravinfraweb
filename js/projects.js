@@ -3534,10 +3534,29 @@ async function execSaveDailyEntry(projId,itemId){
 }
 
 async function execDelDaily(id){
-  if(!confirm('Delete this entry?'))return;
+  var entry=WA_DAILY.find(function(d){return d.id===id;});
+  if(!entry)return;
+  // Find linked issue logs — those whose daily_progress_id matches or whose status changed due to this entry
+  var linkedLogs=STORE_ISSUE_LOG.filter(function(l){return l.daily_progress_id===id;});
+  var msg='Delete this daily progress entry?';
+  if(linkedLogs.length) msg+='\n\n'+linkedLogs.length+' issue log utilisation record(s) will also be cleared.';
+  if(!confirm(msg))return;
   WA_DAILY=WA_DAILY.filter(function(d){return d.id!==id;});
+  // Restore issue log status to 'available' and clear daily_progress_id
+  STORE_ISSUE_LOG=STORE_ISSUE_LOG.map(function(l){
+    if(l.daily_progress_id===id) return Object.assign({},l,{status:'available',daily_progress_id:null});
+    return l;
+  });
   execRenderDaily();
-  try{await sbDelete('work_daily_progress',id);}catch(e){console.error(e);}
+  try{
+    await sbDelete('work_daily_progress',id);
+    // Restore linked issue logs
+    for(var li=0;li<linkedLogs.length;li++){
+      try{
+        await sbUpdate('store_issue_log',linkedLogs[li].id,{status:'available',daily_progress_id:null});
+      }catch(e){console.warn(e);}
+    }
+  }catch(e){console.error(e);}
 }
 
 async function execEditDailyEntry(entryId, itemId){
@@ -5659,7 +5678,39 @@ function storeRender(){
           '<tbody>'+rows+'</tbody>'+
         '</table>'+
       '</div>'+
-    '</div>';
+    '</div>'+
+    // Issue Log section
+    (function(){
+      var projLogs=STORE_ISSUE_LOG.filter(function(l){return l.project_id===(STORE_PROJ_ID||'');});
+      if(!projLogs.length) return '';
+      return '<div style="background:white;border-radius:14px;margin-top:12px;overflow:hidden;">'+
+        '<div style="padding:10px 14px;font-size:12px;font-weight:800;color:#6A1B9A;border-bottom:1px solid #F0F0F0;">&#128221; Issue Log</div>'+
+        '<div style="overflow-x:auto;">'+
+        '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
+          '<thead><tr style="background:#F3E5F5;">'+
+            '<th style="padding:7px 10px;font-size:9px;text-align:left;color:#6A1B9A;">MATERIAL</th>'+
+            '<th style="padding:7px 10px;font-size:9px;text-align:right;color:#6A1B9A;">QTY</th>'+
+            '<th style="padding:7px 10px;font-size:9px;text-align:left;color:#6A1B9A;">ISSUED TO</th>'+
+            '<th style="padding:7px 10px;font-size:9px;text-align:left;color:#6A1B9A;">DATE</th>'+
+            '<th style="padding:7px 10px;font-size:9px;text-align:left;color:#6A1B9A;">STATUS</th>'+
+            '<th style="padding:7px 10px;font-size:9px;text-align:left;color:#6A1B9A;"></th>'+
+          '</tr></thead>'+
+          '<tbody>'+
+          projLogs.map(function(log){
+            var statusCol=log.status==='used'?'#2E7D32':'#F57F17';
+            return '<tr style="border-bottom:1px solid #F9F0FF;">'+
+              '<td style="padding:7px 10px;font-size:11px;font-weight:700;">'+( log.item_name||'—')+'</td>'+
+              '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#6A1B9A;">'+(parseFloat(log.qty_issued)||0).toFixed(2)+' '+(log.unit||'')+'</td>'+
+              '<td style="padding:7px 10px;font-size:11px;">'+(log.issued_to||'—')+'</td>'+
+              '<td style="padding:7px 10px;font-size:11px;">'+(log.issue_date?log.issue_date.split('-').reverse().join('/'):'—')+'</td>'+
+              '<td style="padding:7px 10px;"><span style="font-size:9px;font-weight:800;color:'+statusCol+';background:'+statusCol+'18;padding:2px 6px;border-radius:3px;">'+(log.status||'available').toUpperCase()+'</span></td>'+
+              '<td style="padding:7px 10px;"><button data-lid="'+log.id+'" onclick="storeDeleteIssueLog(this.getAttribute(\x27data-lid\x27))" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;" title="Delete issue log">&#215;</button></td>'+
+            '</tr>';
+          }).join('')+
+          '</tbody>'+
+        '</table>'+
+        '</div></div>';
+    })();
 }
 
 function storeIssue(itemId){
@@ -5753,13 +5804,54 @@ async function storeSaveIssue(itemId){
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
+async function storeDeleteIssueLog(logId){
+  var log=STORE_ISSUE_LOG.find(function(l){return l.id===logId;});
+  if(!log)return;
+  var msg='Delete this issue record?';
+  if(log.status==='used') msg+='\n\nThis issue has been used in daily progress. Deleting will restore it as available.';
+  msg+='\n\nStore quantity will be restored.';
+  if(!confirm(msg))return;
+
+  // Restore store qty
+  var storeItem=STORE_ITEMS.find(function(i){return i.id===log.store_id;});
+  var qtyToRestore=parseFloat(log.qty_issued)||0;
+
+  // Remove from memory
+  STORE_ISSUE_LOG=STORE_ISSUE_LOG.filter(function(l){return l.id!==logId;});
+
+  try{
+    await sbDelete('store_issue_log',logId);
+    // Restore store qty
+    if(storeItem&&qtyToRestore>0){
+      var newInHand=(parseFloat(storeItem.qty_in_hand)||0)+qtyToRestore;
+      var newIssued=Math.max(0,(parseFloat(storeItem.qty_issued)||0)-qtyToRestore);
+      await sbUpdate('store_inventory',storeItem.id,{qty_in_hand:newInHand,qty_issued:newIssued});
+      var idx=STORE_ITEMS.findIndex(function(i){return i.id===storeItem.id;});
+      if(idx>-1){STORE_ITEMS[idx].qty_in_hand=newInHand;STORE_ITEMS[idx].qty_issued=newIssued;}
+    }
+    toast('Issue log deleted — qty restored to store','success');
+    storeRender();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
 async function storeDelete(itemId){
   var item=STORE_ITEMS.find(function(i){return i.id===itemId;});
   if(!item)return;
-  if(!confirm('Delete store entry for "'+item.item_name+'"?\n\nNote: This will only remove the store record. The GRN will remain.')) return;
+  // Count linked issue logs
+  var linkedLogs=STORE_ISSUE_LOG.filter(function(l){return l.store_id===itemId;});
+  var msg='Delete store entry for "'+item.item_name+'"?';
+  if(linkedLogs.length) msg+='\n\n'+linkedLogs.length+' issue log entry(s) will also be deleted.';
+  msg+='\n\nThe GRN will remain.';
+  if(!confirm(msg)) return;
   STORE_ITEMS=STORE_ITEMS.filter(function(i){return i.id!==itemId;});
+  // Remove linked issue logs from memory
+  STORE_ISSUE_LOG=STORE_ISSUE_LOG.filter(function(l){return l.store_id!==itemId;});
   storeRender();
   try{
+    // Delete linked issue log entries first
+    for(var li=0;li<linkedLogs.length;li++){
+      try{await sbDelete('store_issue_log',linkedLogs[li].id);}catch(e){console.warn(e);}
+    }
     await sbDelete('store_inventory',itemId);
     // Also mark the linked GRN as store_updated=false so it can be re-added
     if(item.grn_id){
@@ -5767,7 +5859,7 @@ async function storeDelete(itemId){
       var grnIdx=GRN_ITEMS.findIndex(function(g){return g.id===item.grn_id;});
       if(grnIdx>-1) GRN_ITEMS[grnIdx].store_updated=false;
     }
-    toast('Store entry deleted','success');
+    toast('Store entry deleted'+(linkedLogs.length?' with '+linkedLogs.length+' issue log(s)':''),'success');
   }catch(e){console.error(e);toast('Error: '+e.message,'error');}
 }
 
