@@ -2253,6 +2253,31 @@ input,select,textarea{font-size:16px !important;}
 
 <script>
 // Stubs — real implementations in external JS files
+// Registry stubs (overridden by registry.js after load)
+function filterVendors(c,e){}
+function filterMaterials(c,e){}
+function filterSC(c,e){}
+function filterLabour(c,e){}
+function filterUsers(c,e){}
+function renderVendors(l){}
+function renderMaterials(l){}
+function renderSC(l){}
+function renderLabour(l){}
+function openDetail(t,i){}
+function openEditForm(t,i){}
+function deleteRecord(t,i){}
+function confirmDelete(t,i,n){}
+function searchList(t,q){}
+function openAdd(){}
+function switchPage(p){}
+function rebuildPills(t,c,a,f){}
+function renderCatSection(t,c){}
+function toggleCat(t,i){}
+function deleteCat(t,i){}
+function addCategory(t){}
+function saveNewCat(t){}
+function loadAllData(){}
+function updateAllStats(){}
 var USER_PERMISSIONS={};
 var COMPANY_DATA={};
 async function preloadCompanyData(){try{var r=await sbFetch('company_details',{select:'*',order:'id.asc'});COMPANY_DATA=(Array.isArray(r)&&r.length)?r[0]:{};}catch(e){COMPANY_DATA={};}}
@@ -3442,34 +3467,7 @@ var USERS = [];
 var PROJECTS = [];
 
 // ── LOAD ALL DATA FROM SUPABASE ──
-async function loadAllData(){
-  var loadHtml='<div style="text-align:center;padding:30px;color:var(--text3);"><div style="font-size:24px;margin-bottom:8px;">⏳</div><div style="font-weight:700;">Loading...</div></div>';
-  ['vendor-list','material-list','sc-list','labour-list','user-list'].forEach(function(id){
-    var el=document.getElementById(id);if(el)el.innerHTML=loadHtml;
-  });
-  try{
-    var [vendors, materials, subcons, labours, employees, projects] = await Promise.all([
-      sbFetch('vendors',{select:'*',order:'created_at.desc'}),
-      sbFetch('materials',{select:'*',order:'created_at.desc'}),
-      sbFetch('subcontractors',{select:'*',order:'created_at.desc'}),
-      sbFetch('labourers',{select:'*',order:'created_at.desc'}),
-      sbFetch('employees',{select:'*',order:'created_at.desc'}),
-      sbFetch('projects',{select:'*',order:'name.asc'}),
-    ]);
-    VENDORS       = Array.isArray(vendors)?vendors.map(mapVendor):[];
-    MATERIALS     = Array.isArray(materials)?materials.map(mapMaterial):[];
-    SUBCONTRACTORS= Array.isArray(subcons)?subcons.map(mapSC):[];
-    LABOURERS     = Array.isArray(labours)?labours.map(mapLabour):[];
-    USERS         = Array.isArray(employees)?employees.map(mapEmployee):[];
-    PROJECTS      = Array.isArray(projects)?projects:[];
-    renderVendors(); renderMaterials(); renderSC(); renderLabour(); renderUsers();
-    updateAllStats();
-    toast('Data loaded','success');
-  } catch(e){
-    toast('Failed to load data — check connection','error');
-    console.error(e);
-  }
-}
+
 
 // ── DATA MAPPERS (DB → App format) ──
 function mapVendor(v){
@@ -3514,131 +3512,21 @@ var ROLE_IC={admin:'&#128084;',pm:'&#127959;',engineer:'&#9881;&#65039;',qhse:'&
 
 // ── RENDER VENDORS ──
 var vendorCatFilter='all';
-function renderVendors(list){
-  list=list||VENDORS;
-  if(vendorCatFilter!=='all') list=list.filter(function(v){return v.cat===vendorCatFilter||v.cat.includes(vendorCatFilter);});
-  var sv=document.getElementById('stat-v-total');if(sv)sv.textContent=VENDORS.length;
-  var sa=document.getElementById('stat-v-active');if(sa)sa.textContent=CAT_DATA.vendor.filter(function(c){return c.active;}).length;
-  var sc=document.getElementById('stat-v-cats');if(sc)sc.textContent=VENDORS.reduce(function(s,v){return s+(v.totalValue||0);},0)>=10000000?'₹'+(VENDORS.reduce(function(s,v){return s+(v.totalValue||0);},0)/10000000).toFixed(1)+'Cr':'₹'+(VENDORS.reduce(function(s,v){return s+(v.totalValue||0);},0)/100000).toFixed(0)+'L';
-  var stBadge={approved:'b-green',active:'b-green','under-review':'b-amber',blacklisted:'b-red',rejected:'b-red',suspended:'b-red'};
-  document.getElementById('vendor-list').innerHTML=list.map(function(v){
-    return '<div class="reg-card" onclick="openDetail(\'vendor\',\''+v.id+'\')">'+
-      '<div class="rc-accent" style="background:'+v.col+'"></div>'+
-      '<div class="rc-body">'+
-        '<div class="avatar" style="background:'+v.col+'">'+(v.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
-        '<div class="rc-info">'+
-          '<div class="rc-name">'+v.name+'</div>'+
-          '<div class="rc-sub">'+(v.brands||'').split(',')[0]+'</div>'+
-          '<div class="rc-tags">'+
-            '<span class="badge '+(stBadge[v.status]||'b-navy')+'">'+v.status+'</span>'+
-            '<span class="badge b-navy">'+v.cat+'</span>'+
-            '<span class="badge b-teal">&#9733; '+v.rating+'</span>'+
-          '</div>'+
-        '</div>'+
-        '<div class="rc-right">'+
-          '<div class="rc-id" style="color:'+v.col+'">'+v.id+'</div>'+
-          '<div style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:800;color:var(--green);margin-top:4px;">'+fmtV(v.totalValue)+'</div>'+
-          '<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+v.orders+' orders</div>'+
-        '</div>'+
-      '</div>'+
-      '<div class="rc-footer"><span>&#128222; '+v.phone+'</span><span>Lead: '+v.leadTime+'</span><span>'+v.payTerms+'</span></div>'+
-    '</div>';
-  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No vendors found</div>';
-}
 
-function filterVendors(cat,el){
-  document.querySelectorAll('#vendor-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
-  if(el){el.style.background='var(--teal)';el.style.borderColor='var(--teal)';el.style.color='white';}
-  vendorCatFilter=cat;
-  if(cat==='all'){renderVendors();return;}
-  var filtered=VENDORS.filter(function(v){return v.cat.toLowerCase().replace(/[^a-z0-9]/g,'')=== cat.toLowerCase().replace(/[^a-z0-9]/g,'') || v.cat.toLowerCase()===cat.toLowerCase();});
-  renderVendors(filtered);
-}
+
+
 
 // ── RENDER MATERIALS ──
 var matCatFilter='all';
-function renderMaterials(list){
-  list=list||MATERIALS;
-  if(matCatFilter!=='all') list=list.filter(function(m){return m.cat===matCatFilter;});
-  document.getElementById('material-list').innerHTML=list.map(function(m){
-    return '<div class="reg-card" onclick="openDetail(\'material\',\''+m.id+'\')">'+
-      '<div class="rc-accent" style="background:'+m.col+'"></div>'+
-      '<div class="rc-body">'+
-        '<div class="avatar" style="background:'+m.col+';font-size:20px;">'+
-          (m.cat==='structural'?'&#129493;':m.cat==='concrete'?'&#129521;':m.cat==='finishing'?'&#127775;':m.cat==='mep'?'&#9889;':m.cat==='road'?'&#128739;':m.cat==='safety'?'&#9973;&#65039;':'&#128230;')+
-        '</div>'+
-        '<div class="rc-info">'+
-          '<div class="rc-name">'+m.name+'</div>'+
-          '<div class="rc-sub">'+m.code+' &bull; '+m.spec+'</div>'+
-          '<div class="rc-tags"><span class="badge b-navy">'+m.cat+'</span></div>'+
-        '</div>'+
-        '<div class="rc-right">'+
-          '<div class="rc-id" style="color:'+m.col+'">'+m.id+'</div>'+
-          '<div style="font-size:11px;color:var(--text3);margin-top:4px;">'+m.uom+'</div>'+
-        '</div>'+
-      '</div>'+
-      '<div class="rc-footer">'+
-          '<span>'+
-            (function(){var vcount=VENDORS.filter(function(v){return v.materialRates&&v.materialRates.some(function(r){return r.matId===m.id;});}).length;
-            return vcount>0?'&#127970; '+vcount+' vendor'+(vcount>1?'s':'')+' linked':'&#127970; No vendors linked';})()+'</span>'+
-          '<span style="font-family:monospace;font-size:11px;">'+m.code+'</span>'+
-        '</div>'+
-    '</div>';
-  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No materials found</div>';
-  var sm=document.getElementById('stat-m-total');if(sm)sm.textContent=MATERIALS.length;
-  var sc=document.getElementById('stat-m-cats');if(sc)sc.textContent=CAT_DATA.material.filter(function(c){return c.active;}).length;
-  var sv=document.getElementById('stat-m-vendors');if(sv)sv.textContent=[].concat.apply([],MATERIALS.map(function(m){return m.vendors;})).filter(function(v,i,a){return a.indexOf(v)===i;}).length;
-}
 
-function filterMaterials(cat,el){
-  document.querySelectorAll('#mat-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
-  if(el){el.style.background='var(--green)';el.style.borderColor='var(--green)';el.style.color='white';}
-  matCatFilter=cat;
-  if(cat==='all'){renderMaterials();return;}
-  var filtered=MATERIALS.filter(function(m){return m.cat.toLowerCase().replace(/[^a-z0-9]/g,'')=== cat.toLowerCase().replace(/[^a-z0-9]/g,'') || m.cat.toLowerCase()===cat.toLowerCase();});
-  renderMaterials(filtered);
-}
+
+
 
 // ── RENDER SUBCONTRACTORS ──
 var scCatFilter='all';
-function renderSC(list){
-  list=list||SUBCONTRACTORS;
-  if(scCatFilter!=='all') list=list.filter(function(s){return s.trade===scCatFilter;});
-  document.getElementById('sc-list').innerHTML=list.map(function(s){
-    var stars='';for(var i=0;i<5;i++){stars+='<span class="'+(i<Math.floor(s.rating)?'star':'star empty')+'">&#9733;</span>';}
-    return '<div class="reg-card" onclick="openDetail(\'sc\',\''+s.id+'\')">'+
-      '<div class="rc-accent" style="background:'+s.col+'"></div>'+
-      '<div class="rc-body">'+
-        '<div class="avatar" style="background:'+s.col+'">'+(s.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
-        '<div class="rc-info">'+
-          '<div class="rc-name">'+s.name+'</div>'+
-          '<div class="rc-sub">'+(s.speciality||'').split(',')[0]+'</div>'+
-          '<div class="rc-tags">'+
-            '<span class="badge b-purple">'+s.trade+'</span>'+
-            (s.pbgAvail?'<span class="badge b-teal">PBG &#10003;</span>':'<span class="badge b-amber">No PBG</span>')+
-          '</div>'+
-        '</div>'+
-        '<div class="rc-right">'+
-          '<div class="rc-id" style="color:'+s.col+'">'+s.id+'</div>'+
-          '<div style="margin-top:4px;">'+stars+'</div>'+
-          '<div style="font-size:9px;color:var(--text3);margin-top:2px;">'+s.workers+' workers</div>'+
-        '</div>'+
-      '</div>'+
-      '<div class="rc-footer"><span>&#128222; '+s.phone+'</span><span>Exp: '+s.exp+'</span><span>T/O: '+s.turnover+'</span></div>'+
-    '</div>';
-  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No subcontractors found</div>';
-  var st=document.getElementById('stat-sc-total');if(st)st.textContent=SUBCONTRACTORS.length;
-  var sp=document.getElementById('stat-sc-pbg');if(sp)sp.textContent=SUBCONTRACTORS.filter(function(s){return s.pbgAvail;}).length;
-}
 
-function filterSC(cat,el){
-  document.querySelectorAll('#sc-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
-  if(el){el.style.background='var(--purple)';el.style.borderColor='var(--purple)';el.style.color='white';}
-  scCatFilter=cat;
-  if(cat==='all'){renderSC();return;}
-  var filtered=SUBCONTRACTORS.filter(function(s){return s.trade.toLowerCase().replace(/[^a-z0-9]/g,'')=== cat.toLowerCase().replace(/[^a-z0-9]/g,'') || s.trade.toLowerCase()===cat.toLowerCase();});
-  renderSC(filtered);
-}
+
+
 
 // ── LABOUR ──────────────────────────────────────────────────────────
 var LABOURERS = [];
@@ -3671,46 +3559,9 @@ async function loadLabour(){
   }
 }
 
-function renderLabour(list){
-  list = list||LABOURERS;
-  if(labCatFilter!=='all') list=list.filter(function(l){return (l.skill||'').toLowerCase()===labCatFilter;});
-  var el = document.getElementById('labour-list'); if(!el)return;
-  var typeColor = {'skilled':'#1565C0','semi-skilled':'#7B1FA2','unskilled':'#E65100'};
-  el.innerHTML = list.map(function(l){
-    var col = typeColor[l.type]||'#E65100';
-    return '<div class="reg-card" onclick="openDetail(\'labour\',\''+l.id+'\')">'+
-      '<div class="rc-accent" style="background:'+col+'"></div>'+
-      '<div class="rc-body">'+
-        '<div class="avatar" style="background:'+col+'">'+(l.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
-        '<div class="rc-info">'+
-          '<div class="rc-name">'+l.name+'</div>'+
-          '<div class="rc-sub">'+(l.skill||'—')+(l.project?' &bull; '+l.project:'')+'</div>'+
-          '<div class="rc-tags">'+
-            '<span class="badge" style="background:'+col+'25;color:'+col+';">'+l.type+'</span>'+
-            (l.source==='contractor'?'<span class="badge b-purple">Via SC</span>':'<span class="badge b-teal">Direct</span>')+
-            (l.status==='inactive'?'<span class="badge b-red">Inactive</span>':'')+
-          '</div>'+
-        '</div>'+
-        '<div class="rc-right">'+
-          '<div class="rc-id" style="color:'+col+'">'+l.labId+'</div>'+
-          '<div style="font-size:11px;font-weight:800;color:#1B5E20;margin-top:4px;">&#8377;'+Number(l.dailyRate||0).toLocaleString('en-IN')+'/day</div>'+
-        '</div>'+
-      '</div>'+
-      '<div class="rc-footer"><span>&#128222; '+(l.phone||'—')+'</span><span>'+l.skill+'</span><span>Aadhar: '+(l.aadhar?'✓':'—')+'</span></div>'+
-    '</div>';
-  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No labourers found</div>';
-  var stTotal  = document.getElementById('stat-lab-total');   if(stTotal)  stTotal.textContent  = LABOURERS.length;
-  var stActive = document.getElementById('stat-lab-active');  if(stActive) stActive.textContent  = LABOURERS.filter(function(l){return l.status==='active';}).length;
-  var stSkill  = document.getElementById('stat-lab-skilled'); if(stSkill)  stSkill.textContent   = LABOURERS.filter(function(l){return l.type==='skilled';}).length;
-}
 
-function filterLabour(cat,el){
-  document.querySelectorAll('#lab-cat-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
-  if(el){el.style.background='#E65100';el.style.borderColor='#E65100';el.style.color='white';}
-  labCatFilter=cat;
-  if(cat==='all'){renderLabour();return;}
-  renderLabour(LABOURERS.filter(function(l){return (l.skill||'').toLowerCase()===cat.toLowerCase();}));
-}
+
+
 
 function openAddLabour(){
   var af = document.getElementById('add-foot');
@@ -3943,252 +3794,16 @@ function searchList(type,q){
 }
 
 // ── DETAIL SHEETS ──
-function openDetail(type,id){
-  if(type==='vendor'){
-    var v=VENDORS.find(function(x){return x.id===id;});if(!v)return;
-    document.getElementById('det-title').textContent=v.name;
-    document.getElementById('det-body').innerHTML=
-      '<div style="background:'+v.col+'1A;border:1px solid '+v.col+'40;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">'+
-        '<div class="avatar" style="width:56px;height:56px;border-radius:16px;font-size:18px;background:'+v.col+'">'+(v.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
-        '<div><div style="font-size:17px;font-weight:800;">'+v.name+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">'+v.brands+'</div><div style="margin-top:6px;display:flex;gap:6px;"><span class="badge b-green">'+v.status+'</span><span class="badge b-teal">&#9733; '+v.rating+'</span></div></div>'+
-      '</div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
-        ir('Vendor ID',v.id,true)+ir('Category',v.cat)+ir('GST No.',v.gst,true)+
-        ir('Contact',v.contact)+ir('Phone',v.phone)+ir('Email',v.email)+
-        ir('Address',v.address)+ir('Pay Terms',v.payTerms)+ir('Lead Time',v.leadTime)+
-        ir('Total Orders',v.orders+' orders')+ir('Total Value',fmtV(v.totalValue))+
-      '</div>'+
-      '<div style="font-size:13px;font-weight:800;margin-bottom:8px;">Products / Brands</div>'+
-      '<div style="background:var(--bg);border-radius:10px;padding:12px;font-size:12px;color:var(--text2);margin-bottom:14px;">'+v.brands+'</div>'+
-      (v.materialRates&&v.materialRates.length?
-        '<div style="font-size:13px;font-weight:800;margin-bottom:8px;">&#129521; Material Rates</div>'+
-        '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
-        v.materialRates.map(function(r){
-          var mat=MATERIALS.find(function(m){return m.id===r.matId;});
-          if(!mat) return '';
-          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="closeSheet(\'ov-det\',\'sh-det\');setTimeout(function(){openDetail(\'material\',\''+mat.id+'\')}  ,200)">'+
-            '<div><div style="font-size:13px;font-weight:700;">'+mat.name+'</div><div style="font-size:11px;color:var(--text3);margin-top:2px;">'+mat.code+' &bull; Tap to view</div></div>'+
-            '<div style="text-align:right;"><div style="font-size:14px;font-weight:800;color:#2E7D32;">&#8377;'+r.rate.toLocaleString('en-IN')+'</div><div style="font-size:11px;color:var(--text3);">per '+mat.uom+'</div></div></div>';
-        }).join('')+'</div>'
-      :'<div style="font-size:12px;color:var(--text3);margin-bottom:14px;">No material rates added yet.</div>');
-    document.getElementById('det-foot').innerHTML=
-      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
-      '<button class="btn btn-red" onclick="confirmDelete(\'vendor\',\''+v.id+'\',\''+esc(v.name)+'\')">&#128465; Delete</button>'+
-      '<button class="btn btn-navy" onclick="editRecord(\'vendor\',\''+v.id+'\')">&#9998; Edit</button>';
-    openSheet('ov-det','sh-det');
-  }
-  if(type==='material'){
-    var m=MATERIALS.find(function(x){return x.id===id;});if(!m)return;
-    document.getElementById('det-title').textContent=m.name;
-    var vendorRatesHtml=(function(){
-      var vlist=VENDORS.filter(function(v){return v.materialRates&&v.materialRates.some(function(r){return r.matId===m.id;});});
-      if(!vlist.length) return '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);padding:16px;text-align:center;margin-bottom:14px;"><div style="font-size:24px;margin-bottom:6px;">🏪</div><div style="font-size:12px;color:var(--text3);">No vendor rates linked yet.<br>Add rates from the Vendor profile.</div></div>';
-      var rates=vlist.map(function(v){return v.materialRates.find(function(r){return r.matId===m.id;}).rate;});
-      var minR=Math.min.apply(null,rates), maxR=Math.max.apply(null,rates);
-      return '<div style="display:flex;gap:8px;margin-bottom:8px;">'+
-        '<div style="flex:1;background:#E8F5E9;border-radius:10px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:#2E7D32;font-weight:700;">LOWEST</div><div style="font-size:14px;font-weight:800;color:#2E7D32;">&#8377;'+minR.toLocaleString('en-IN')+'</div></div>'+
-        '<div style="flex:1;background:#FFF3E0;border-radius:10px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:#E65100;font-weight:700;">HIGHEST</div><div style="font-size:14px;font-weight:800;color:#E65100;">&#8377;'+maxR.toLocaleString('en-IN')+'</div></div>'+
-        '<div style="flex:1;background:#E3F2FD;border-radius:10px;padding:8px 10px;text-align:center;"><div style="font-size:10px;color:#1565C0;font-weight:700;">VENDORS</div><div style="font-size:14px;font-weight:800;color:#1565C0;">'+vlist.length+'</div></div>'+
-      '</div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
-        vlist.map(function(v){
-          var r=v.materialRates.find(function(r){return r.matId===m.id;});
-          var isLowest=r.rate===minR;
-          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openDetail(\'vendor\',\''+v.id+'\')">'+
-            '<div>'+
-              '<div style="font-size:13px;font-weight:700;">'+v.name+'</div>'+
-              '<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+v.cat+' &bull; Tap to view profile</div>'+
-            '</div>'+
-            '<div style="text-align:right;">'+
-              '<div style="font-size:14px;font-weight:800;color:'+(isLowest?'#2E7D32':'var(--text)')+';">&#8377;'+r.rate.toLocaleString('en-IN')+'<span style="font-size:11px;font-weight:500;"> / '+m.uom+'</span></div>'+
-              (isLowest?'<div style="font-size:10px;background:#E8F5E9;color:#2E7D32;border-radius:4px;padding:1px 5px;font-weight:700;">L1 ✓</div>':'')+
-            '</div>'+
-          '</div>';
-        }).join('')+'</div>';
-    })();
-    document.getElementById('det-body').innerHTML=
-      '<div style="background:'+m.col+'1A;border:1px solid '+m.col+'40;border-radius:14px;padding:14px;margin-bottom:14px;">'+
-        '<div style="font-family:monospace;font-size:10px;color:'+m.col+'">'+m.id+' &bull; '+m.code+'</div>'+
-        '<div style="font-size:17px;font-weight:800;margin-top:2px;">'+m.name+'</div>'+
-        '<div style="display:flex;gap:6px;margin-top:8px;"><span class="badge b-navy">'+m.cat+'</span><span class="badge b-teal">'+m.uom+'</span></div>'+
-      '</div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
-        ir('Material ID',m.id,true)+
-        ir('Material Code',m.code,true)+
-        ir('Category',m.cat)+
-        ir('Unit of Measure',m.uom)+
-        ir('Specification / IS Code',m.spec)+
-      '</div>'+
-      '<div style="font-size:13px;font-weight:800;margin-bottom:8px;">&#127970; Vendor Rates</div>'+
-      vendorRatesHtml;
-    document.getElementById('det-foot').innerHTML=
-      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
-      '<button class="btn btn-red" onclick="confirmDelete(\'material\',\''+m.id+'\',\''+esc(m.name)+'\')">&#128465; Delete</button>'+
-      '<button class="btn btn-navy" onclick="editRecord(\'material\',\''+m.id+'\')">&#9998; Edit</button>';
-    openSheet('ov-det','sh-det');
-  }
-  if(type==='sc'){
-    var s=SUBCONTRACTORS.find(function(x){return x.id===id;});if(!s)return;
-    var stars='';for(var i=0;i<5;i++){stars+='<span class="'+(i<Math.floor(s.rating)?'star':'star empty')+'">&#9733;</span>';}
-    document.getElementById('det-title').textContent=s.name;
-    document.getElementById('det-body').innerHTML=
-      '<div style="background:'+s.col+'1A;border:1px solid '+s.col+'40;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">'+
-        '<div class="avatar" style="width:56px;height:56px;border-radius:16px;font-size:18px;background:'+s.col+'">'+(s.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
-        '<div><div style="font-size:17px;font-weight:800;">'+s.name+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">'+s.speciality+'</div>'+
-          '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;"><span class="badge b-purple">'+s.trade+'</span></div>'+
-        '</div>'+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">'+
-        '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center;"><div style="font-family:\'JetBrains Mono\',monospace;font-size:16px;font-weight:800;color:'+s.col+'">'+s.workers+'</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Workers</div></div>'+
-        '<div style="background:var(--bg);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:14px;font-weight:800;">'+stars+'</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Rating</div></div>'+
-        '<div style="background:'+(s.pbgAvail?'var(--greenl)':'var(--redl)')+';border-radius:10px;padding:10px;text-align:center;"><div style="font-size:14px;font-weight:800;color:'+(s.pbgAvail?'var(--green)':'var(--red)')+'">PBG</div><div style="font-size:9px;color:'+(s.pbgAvail?'var(--green)':'var(--red)')+';text-transform:uppercase;">'+(s.pbgAvail?'Available':'N/A')+'</div></div>'+
-        '<div style="background:'+(s.emdAvail?'var(--greenl)':'var(--redl)')+';border-radius:10px;padding:10px;text-align:center;"><div style="font-size:14px;font-weight:800;color:'+(s.emdAvail?'var(--green)':'var(--red)')+'">EMD</div><div style="font-size:9px;color:'+(s.emdAvail?'var(--green)':'var(--red)')+';text-transform:uppercase;">'+(s.emdAvail?'Available':'N/A')+'</div></div>'+
-      '</div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
-        ir('SC ID',s.id,true)+ir('Trade',s.trade)+ir('GST No.',s.gst,true)+
-        ir('Contact',s.contact)+ir('Phone',s.phone)+ir('Email',s.email)+
-        ir('Address',s.address)+ir('Experience',s.exp)+ir('Annual Turnover',s.turnover)+
-        ir('Current Projects',s.projects.length?s.projects.join(', '):'None assigned')+
-      '</div>';
-    document.getElementById('det-foot').innerHTML=
-      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
-      '<button class="btn btn-red" onclick="confirmDelete(\'sc\',\''+s.id+'\',\''+esc(s.name)+'\')">&#128465; Delete</button>'+
-      '<button class="btn btn-navy" onclick="editRecord(\'sc\',\''+s.id+'\')">&#9998; Edit</button>';
-    openSheet('ov-det','sh-det');
-  }
-  if(type==='labour'){
-    var l=LABOURERS.find(function(x){return x.id===id;});if(!l)return;
-    var col='#E65100';
-    var typeColor={'skilled':'#1565C0','semi-skilled':'#7B1FA2','unskilled':'#E65100'};
-    col=typeColor[l.type]||'#E65100';
-    document.getElementById('det-title').textContent=l.name;
-    document.getElementById('det-body').innerHTML=
-      '<div style="background:'+col+'1A;border:1px solid '+col+'40;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">'+
-        '<div class="avatar" style="width:56px;height:56px;border-radius:16px;font-size:18px;background:'+col+'">'+(l.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
-        '<div>'+
-          '<div style="font-size:17px;font-weight:800;">'+l.name+'</div>'+
-          '<div style="font-size:12px;color:var(--text2);margin-top:2px;">'+(l.skill||'—')+' &bull; '+l.type+'</div>'+
-          '<div style="margin-top:6px;display:flex;gap:6px;">'+
-            '<span class="badge" style="background:'+col+'25;color:'+col+';">'+l.type+'</span>'+
-            (l.status==='active'?'<span class="badge b-green">Active</span>':'<span class="badge b-red">Inactive</span>')+
-            (l.source==='contractor'?'<span class="badge b-purple">Via SC</span>':'<span class="badge b-teal">Direct</span>')+
-          '</div>'+
-        '</div>'+
-      '</div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
-        ir('Labour ID',l.labId,true)+ir('Skill',l.skill)+ir('Daily Rate','₹'+Number(l.dailyRate||0).toLocaleString('en-IN'))+
-        ir('Phone',l.phone)+ir('Source',l.source==='contractor'?'Via Contractor — '+(l.contractor||''):'Direct Hire')+
-        ir('Project/Site',l.project)+ir('Date Joined',l.joined?fmtDate(l.joined):'—')+
-        ir('Aadhar',l.aadhar||'—',true)+ir('Blood Group',l.bloodGroup||'—')+
-        ir('Address',l.address)+ir('Remarks',l.remarks)+
-      '</div>';
-    document.getElementById('det-foot').innerHTML=
-      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
-      '<button class="btn btn-red" onclick="deleteLabour(\''+l.id+'\')">&#128465; Delete</button>'+
-      '<button class="btn btn-navy" onclick="editRecord(\'labour\',\''+l.id+'\')">&#9998; Edit</button>';
-    openSheet('ov-det','sh-det');
-  }
-  if(type==='user'){
-    var u=USERS.find(function(x){return x.id===id;});if(!u)return;
-    var col=ROLE_COLORS[u.role]||'#37474F';
-    var stBadge={active:'b-green',pending:'b-amber',inactive:'b-red'};
-    document.getElementById('det-title').textContent=u.name;
-    document.getElementById('det-body').innerHTML=
-      '<div style="background:'+col+'1A;border:1px solid '+col+'40;border-radius:14px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">'+
-        '<div class="avatar" style="width:56px;height:56px;border-radius:16px;font-size:18px;background:'+col+'">'+(u.name||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)+'</div>'+
-        '<div><div style="font-size:17px;font-weight:800;">'+u.name+'</div>'+
-        '<div style="font-size:12px;color:var(--text2);margin-top:2px;">'+u.access+' &bull; '+u.dept+'</div>'+
-        '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;"><span class="badge '+(stBadge[u.status]||'b-navy')+'">'+u.status+'</span><span class="badge b-navy">'+u.id+'</span>'+(u.badge?'<span class="badge b-teal">'+u.badge+'</span>':'')+'</div>'+
-        '</div>'+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #1565C020;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#1565C020;display:flex;align-items:center;justify-content:center;font-size:12px;">👤</div><div style="font-size:11px;font-weight:800;color:#1565C0;text-transform:uppercase;letter-spacing:.7px;">Personal Details</div></div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
-        ir('Full Name',u.name)+
-        (u.dob?ir('Date of Birth',u.dob):'')+
-        (u.gender?ir('Gender',u.gender):'')+
-        (u.blood?ir('Blood Group',u.blood):'')+
-        (u.marital?ir('Marital Status',u.marital):'')+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #2E7D3220;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#2E7D3220;display:flex;align-items:center;justify-content:center;font-size:12px;">🏗️</div><div style="font-size:11px;font-weight:800;color:#2E7D32;text-transform:uppercase;letter-spacing:.7px;">Employment Details</div></div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
-        ir('Employee ID',u.empId||u.id,true)+
-        ir('Role / Designation',u.access)+ir('Department',u.dept)+
-        ir('Project',u.project)+(u.empType?ir('Employment Type',u.empType):'')+
-        (u.location?ir('Work Location',u.location):'')+
-        ir('Date of Joining',u.joined)+ir('Status',u.status)+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #E6510020;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#E6510020;display:flex;align-items:center;justify-content:center;font-size:12px;">📞</div><div style="font-size:11px;font-weight:800;color:#E65100;text-transform:uppercase;letter-spacing:.7px;">Contact Details</div></div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
-        ir('Mobile',u.phone)+(u.phone2?ir('Alternate Mobile',u.phone2):'')+
-        (u.address?ir('Residential Address',u.address):'')+
-        (u.permanent?ir('Permanent Address',u.permanent):'')+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #6A1B9A20;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#6A1B9A20;display:flex;align-items:center;justify-content:center;font-size:12px;">🪪</div><div style="font-size:11px;font-weight:800;color:#6A1B9A;text-transform:uppercase;letter-spacing:.7px;">KYC Details</div></div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
-        (u.aadhar?ir('Aadhar No.',u.aadhar,true):'<div class="info-row"><div class="ir-lbl">Aadhar No.</div><div class="ir-val" style="color:var(--text3);">Not provided</div></div>')+
-        (u.pan?ir('PAN No.',u.pan,true):'')+(u.pf?ir('PF No.',u.pf,true):'')+
-        (u.esic?ir('ESIC No.',u.esic,true):'')+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #C6282820;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:12px;">🏦</div><div style="font-size:11px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Bank Details</div></div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
-        (u.bank?ir('Bank Name',u.bank):'<div class="info-row"><div class="ir-lbl">Bank Details</div><div class="ir-val" style="color:var(--text3);">Not provided</div></div>')+
-        (u.accNo?ir('Account No.',u.accNo,true):'')+(u.ifsc?ir('IFSC Code',u.ifsc,true):'')+
-        (u.accName?ir('Account Holder',u.accName):'')+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #C6282820;margin:12px 0 8px;"><div style="width:24px;height:24px;border-radius:7px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:12px;">🚨</div><div style="font-size:11px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Emergency Contact</div></div>'+
-      '<div style="background:var(--white);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
-        (u.ecName?ir('Name',u.ecName):'<div class="info-row"><div class="ir-lbl">Contact</div><div class="ir-val" style="color:var(--text3);">Not provided</div></div>')+
-        (u.ecRel?ir('Relationship',u.ecRel):'')+(u.ecPhone?ir('Mobile',u.ecPhone):'')+
-      '</div>';
-    document.getElementById('det-foot').innerHTML=
-      '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button>'+
-      '<button class="btn btn-red" onclick="confirmDelete(\'user\',\''+u.id+'\',\''+esc(u.name)+'\')">&#128465; Delete</button>'+
-      '<button class="btn btn-navy" onclick="editRecord(\'user\',\''+u.id+'\')">&#9998; Edit</button>';
-    openSheet('ov-det','sh-det');
-  }
-}
+
 
 function activateUser(id){
   var u=USERS.find(function(x){return x.id===id;});
   if(u){u.status='active';renderUsers();closeSheet('ov-det','sh-det');toast(u.name+' activated!','success');}
 }
 
-function confirmDelete(type,id,name){
-  var typeLabel={vendor:'Vendor',material:'Material',sc:'Subcontractor',user:'User'}[type]||type;
-  document.getElementById('det-body').innerHTML=
-    '<div style="text-align:center;padding:24px 16px;">'+
-      '<div style="font-size:48px;margin-bottom:12px;">&#9888;&#65039;</div>'+
-      '<div style="font-size:16px;font-weight:800;margin-bottom:8px;">Delete '+typeLabel+'?</div>'+
-      '<div style="font-size:13px;color:var(--text2);margin-bottom:20px;">You are about to permanently delete <strong>'+name+'</strong>. This cannot be undone.</div>'+
-    '</div>';
-  document.getElementById('det-foot').innerHTML=
-    '<button class="btn btn-outline" onclick="openDetail(\''+type+'\',\''+id+'\')">&#8592; Cancel</button>'+
-    '<button class="btn btn-red" style="flex:1;" onclick="deleteRecord(\''+type+'\',\''+id+'\')">&#128465; Yes, Delete</button>';
-}
 
-async function deleteRecord(type,id){
-  var arrays={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,user:USERS};
-  var tables={vendor:'vendors',material:'materials',sc:'subcontractors',user:'employees'};
-  var arr=arrays[type];
-  var idx=arr.findIndex(function(x){return x.id===id;});
-  if(idx===-1) return;
-  var name=arr[idx].name;
-  // 1. Remove from local array immediately and track deleted ID
-  _deletedIds[id]=true;
-  arr.splice(idx,1);
-  closeSheet('ov-det','sh-det');
-  var renders={vendor:renderVendors,material:renderMaterials,sc:renderSC,user:renderUsers};
-  renders[type]();
-  updateAllStats();
-  toast(name+' deleted','success');
-  // 2. Delete from Supabase
-  try{
-    await sbDelete(tables[type], id);
-  } catch(e){
-    console.error('Delete from DB failed:',e);
-    toast('Warning: Could not sync delete to server','warning');
-  }
-}
+
+
 
 // ── EDIT RECORD ──
 function editRecord(type,id){
