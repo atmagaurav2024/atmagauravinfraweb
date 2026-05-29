@@ -6071,6 +6071,15 @@ function salWireLogButtons(){
         salDeleteMonth(m, y, label);
       });
     });
+    // Per-employee delete buttons
+    document.querySelectorAll('[data-sal-del-rid]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var rid   = btn.getAttribute('data-sal-del-rid');
+        var name  = btn.getAttribute('data-sal-del-name')||'Employee';
+        var label = btn.getAttribute('data-sal-del-label')||'this month';
+        salDeleteEmpRecord(rid, name, label);
+      });
+    });
     // Payment entry buttons
     document.querySelectorAll('[data-sal-pay-rid]').forEach(function(btn){
       btn.addEventListener('click',function(){
@@ -7765,7 +7774,7 @@ async function empResetPassword(empId, empName, phone){
           toast('Auth error: '+msg,'warning');
         }
       } else {
-        toast(empName+'\'s password updated successfully!','success');
+        toast(empName+"'s password updated successfully!",'success');
         closeEmpSheet();
       }
     }catch(e){toast('Error: '+e.message,'error');}
@@ -17348,6 +17357,17 @@ async function salClearPayment(){
 }
 
 // ── Rewrite empSalaryHTML log section with payment tracking ──────────────
+
+async function salDeleteEmpRecord(recordId, empName, monthLabel){
+  if(!confirm('Delete '+empName+' record for '+monthLabel+'?')) return;
+  try{
+    await sbDelete('salary_records', recordId);
+    SALARY_RECORDS = SALARY_RECORDS.filter(function(r){return r.id!==recordId;});
+    toast(monthLabel+' record deleted','success');
+    empRender();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
 function salBuildLogSection(logMap, logKeys){
   if(!logKeys.length) return '';
 
@@ -17441,6 +17461,7 @@ function salBuildLogSection(logMap, logKeys){
                     (isPaid?
                       '<button data-sal-slip-eid="'+r.employee_id+'" data-sal-slip-rid="'+r.id+'" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">Slip</button>'
                     : '<span style="font-size:10px;color:var(--text3);">Pay first</span>')+
+                    '<button data-sal-del-rid="'+r.id+'" data-sal-del-name="'+r.employee_name+'" data-sal-del-label="'+r.month_label+'" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 6px;font-size:11px;font-weight:800;cursor:pointer;margin-left:3px;" title="Delete record">&#215;</button>'+
                   '</td>'+
                 '</tr>';
               }).join('')+
@@ -17877,6 +17898,7 @@ function annDownloadPDF(){
 }
 </script>
 <script src="js/registry.js"></script>
+<script src="js/employee.js"></script>
 <script src="js/projects.js"></script>
 <script src="js/finance.js"></script>
 </html>
