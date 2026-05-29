@@ -21,12 +21,11 @@ var PMT_GROUPS = {
 async function projModLoadProjects(){
   var sel = document.getElementById('proj-mod-sel');
   if(!sel) return;
-  if(!PROJ_DATA || !PROJ_DATA.length){
-    try{
-      var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
-      PROJ_DATA = Array.isArray(rows) ? rows : [];
-    }catch(e){ PROJ_DATA = []; }
-  }
+  // Always fetch fresh from DB to pick up newly added projects
+  try{
+    var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
+    PROJ_DATA = Array.isArray(rows) ? rows : [];
+  }catch(e){ if(!PROJ_DATA) PROJ_DATA=[]; }
   var prev = PROJ_MOD_SEL_ID;
   sel.innerHTML = '<option value="">— Select Project —</option>'+
     PROJ_DATA.map(function(p){
@@ -510,11 +509,9 @@ async function saveProjForm(editId){
 
   // File upload (base64 encode for storage — small files only)
   var attachments=[];
-  // Existing files (from edit)
   PF_FILES.forEach(function(f){
-    if(f.url) attachments.push({name:f.name,url:f.url}); // already stored
+    if(f.url) attachments.push({name:f.name,url:f.url});
   });
-  // New files — encode as base64 data URLs
   var newFiles=PF_FILES.filter(function(f){return f.file;});
   if(newFiles.length){
     try{
@@ -531,14 +528,13 @@ async function saveProjForm(editId){
     }catch(e){console.warn('File encode:',e);}
   }
 
+  // Core columns — always exist in projects table
   var data = {
     name:name,
     code:(document.getElementById('pf-code')||{value:''}).value.trim()||null,
     client:(document.getElementById('pf-client')||{value:''}).value.trim()||null,
     status:(document.getElementById('pf-status')||{value:'active'}).value||'active',
     location:(document.getElementById('pf-location')||{value:''}).value.trim()||null,
-    project_length:parseFloat((document.getElementById('pf-length')||{value:''}).value)||null,
-    coordinates:PF_COORDS.length?JSON.stringify(PF_COORDS):null,
     tender_cost:parseFloat((document.getElementById('pf-tender')||{value:''}).value)||null,
     tender_pct:parseFloat((document.getElementById('pf-pct')||{value:'0'}).value)||0,
     contract_value:parseFloat((document.getElementById('pf-contract')||{value:''}).value)||null,
@@ -548,16 +544,81 @@ async function saveProjForm(editId){
     description:(document.getElementById('pf-desc')||{value:''}).value.trim()||null,
     attachments:attachments.length?JSON.stringify(attachments):null
   };
+
+  // Optional columns — add only if they have values (avoids 400 if column missing)
+  var projLen=parseFloat((document.getElementById('pf-length')||{value:''}).value)||null;
+  if(projLen) data.project_length=projLen;
+  if(PF_COORDS&&PF_COORDS.length) data.coordinates=JSON.stringify(PF_COORDS);
+
   try{
+    toast('Saving...','info');
     if(editId){
-      await sbUpdate('projects',editId,data);
+      // Use JWT fetch for update
+      var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
+      var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
+      var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:anonKey;
+      var res=await fetch(baseUrl+'/rest/v1/projects?id=eq.'+editId,{
+        method:'PATCH',
+        headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify(data)
+      });
+      if(!res.ok){
+        var errBody=await res.json().catch(function(){return{};});
+        // If failed due to unknown columns, retry with safe columns only
+        if(res.status===400){
+          delete data.project_length; delete data.coordinates;
+          var res2=await fetch(baseUrl+'/rest/v1/projects?id=eq.'+editId,{
+            method:'PATCH',
+            headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
+            body:JSON.stringify(data)
+          });
+          if(!res2.ok) throw new Error((await res2.json().catch(function(){return{};})).message||'Update failed');
+        } else {
+          throw new Error(errBody.message||'Update failed: '+res.status);
+        }
+      }
       var idx=PROJ_DATA.findIndex(function(p){return p.id===editId;});
       if(idx>-1) PROJ_DATA[idx]=Object.assign(PROJ_DATA[idx],data);
       toast('Project updated!','success');
     } else {
-      var res=await sbInsert('projects',data);
-      if(res&&res[0]) PROJ_DATA.push(res[0]);
-      toast('Project added!','success');
+      // Insert with JWT
+      var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
+      var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
+      var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:anonKey;
+      var res=await fetch(baseUrl+'/rest/v1/projects',{
+        method:'POST',
+        headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify(data)
+      });
+      if(!res.ok){
+        var errBody=await res.json().catch(function(){return{};});
+        // If 400 due to unknown columns, retry without optional ones
+        if(res.status===400){
+          delete data.project_length; delete data.coordinates;
+          var res2=await fetch(baseUrl+'/rest/v1/projects',{
+            method:'POST',
+            headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
+            body:JSON.stringify(data)
+          });
+          if(!res2.ok) throw new Error((await res2.json().catch(function(){return{};})).message||'Insert failed');
+          var saved=await res2.json();
+          if(Array.isArray(saved)&&saved[0]){
+            PROJ_DATA.push(saved[0]);
+            // Force reload so new project appears in selector
+            PROJ_DATA=[]; // clear cache so projModLoadProjects re-fetches
+            await projModLoadProjects();
+          }
+        } else {
+          throw new Error(errBody.message||'Insert failed: '+res.status);
+        }
+      } else {
+        var saved=await res.json();
+        if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(saved[0]);
+        // Force reload so new project appears in selector
+        PROJ_DATA=[]; // clear cache so projModLoadProjects re-fetches
+        await projModLoadProjects();
+      }
+      toast('Project added! Select it from the dropdown above.','success');
     }
     closeProjSheet();
     renderProjList();
