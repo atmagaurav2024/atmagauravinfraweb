@@ -528,27 +528,28 @@ async function saveProjForm(editId){
     }catch(e){console.warn('File encode:',e);}
   }
 
-  // Core columns — always exist in projects table
+  // Only send columns that exist in the projects table
+  // Fetch the project schema first to know which columns exist
   var data = {
     name:name,
     code:(document.getElementById('pf-code')||{value:''}).value.trim()||null,
     client:(document.getElementById('pf-client')||{value:''}).value.trim()||null,
     status:(document.getElementById('pf-status')||{value:'active'}).value||'active',
     location:(document.getElementById('pf-location')||{value:''}).value.trim()||null,
-    tender_cost:parseFloat((document.getElementById('pf-tender')||{value:''}).value)||null,
-    tender_pct:parseFloat((document.getElementById('pf-pct')||{value:'0'}).value)||0,
-    contract_value:parseFloat((document.getElementById('pf-contract')||{value:''}).value)||null,
-    loa_date:(document.getElementById('pf-loa')||{value:''}).value||null,
-    wo_date:(document.getElementById('pf-wo-date')||{value:''}).value||null,
-    completion_date:(document.getElementById('pf-completion')||{value:''}).value||null,
-    description:(document.getElementById('pf-desc')||{value:''}).value.trim()||null,
-    attachments:attachments.length?JSON.stringify(attachments):null
+    description:(document.getElementById('pf-desc')||{value:''}).value.trim()||null
   };
 
-  // Optional columns — add only if they have values (avoids 400 if column missing)
-  var projLen=parseFloat((document.getElementById('pf-length')||{value:''}).value)||null;
-  if(projLen) data.project_length=projLen;
-  if(PF_COORDS&&PF_COORDS.length) data.coordinates=JSON.stringify(PF_COORDS);
+  // Optional columns — only add if non-null (Supabase will 400 if column missing)
+  function addCol(key, val){ if(val!==null&&val!==undefined&&val!=='') data[key]=val; }
+  addCol('tender_cost',     parseFloat((document.getElementById('pf-tender')||{value:''}).value)||null);
+  addCol('tender_pct',      parseFloat((document.getElementById('pf-pct')||{value:''}).value)||null);
+  addCol('contract_value',  parseFloat((document.getElementById('pf-contract')||{value:''}).value)||null);
+  addCol('loa_date',        (document.getElementById('pf-loa')||{value:''}).value||null);
+  addCol('wo_date',         (document.getElementById('pf-wo-date')||{value:''}).value||null);
+  addCol('completion_date', (document.getElementById('pf-completion')||{value:''}).value||null);
+  addCol('attachments',     attachments.length?JSON.stringify(attachments):null);
+  addCol('project_length',  parseFloat((document.getElementById('pf-length')||{value:''}).value)||null);
+  addCol('coordinates',     PF_COORDS&&PF_COORDS.length?JSON.stringify(PF_COORDS):null);
 
   try{
     toast('Saving...','info');
@@ -566,13 +567,18 @@ async function saveProjForm(editId){
         var errBody=await res.json().catch(function(){return{};});
         // If failed due to unknown columns, retry with safe columns only
         if(res.status===400){
-          delete data.project_length; delete data.coordinates;
+          var optCols=['contract_value','tender_cost','tender_pct','loa_date','wo_date',
+            'completion_date','attachments','project_length','coordinates'];
+          optCols.forEach(function(k){delete data[k];});
           var res2=await fetch(baseUrl+'/rest/v1/projects?id=eq.'+editId,{
             method:'PATCH',
             headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
             body:JSON.stringify(data)
           });
-          if(!res2.ok) throw new Error((await res2.json().catch(function(){return{};})).message||'Update failed');
+          if(!res2.ok){
+            var e2=await res2.json().catch(function(){return{};});
+            throw new Error(e2.message||'Update failed: '+res2.status);
+          }
         } else {
           throw new Error(errBody.message||'Update failed: '+res.status);
         }
@@ -594,20 +600,24 @@ async function saveProjForm(editId){
         var errBody=await res.json().catch(function(){return{};});
         // If 400 due to unknown columns, retry without optional ones
         if(res.status===400){
-          delete data.project_length; delete data.coordinates;
+          // Strip optional columns one by one until insert succeeds
+          var optCols=['contract_value','tender_cost','tender_pct','loa_date','wo_date',
+            'completion_date','attachments','project_length','coordinates'];
+          optCols.forEach(function(k){delete data[k];});
           var res2=await fetch(baseUrl+'/rest/v1/projects',{
             method:'POST',
             headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
             body:JSON.stringify(data)
           });
-          if(!res2.ok) throw new Error((await res2.json().catch(function(){return{};})).message||'Insert failed');
-          var saved=await res2.json();
-          if(Array.isArray(saved)&&saved[0]){
-            PROJ_DATA.push(saved[0]);
-            // Force reload so new project appears in selector
-            PROJ_DATA=[]; // clear cache so projModLoadProjects re-fetches
-            await projModLoadProjects();
+          if(!res2.ok){
+            var e2=await res2.json().catch(function(){return{};});
+            throw new Error(e2.message||'Insert failed: '+res2.status);
           }
+          var saved=await res2.json();
+          if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(saved[0]);
+          PROJ_DATA=[];
+          await projModLoadProjects();
+          toast('Project added! (some optional fields not saved — add missing columns to DB)','success');
         } else {
           throw new Error(errBody.message||'Insert failed: '+res.status);
         }
