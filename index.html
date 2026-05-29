@@ -3397,23 +3397,7 @@ function showToast(msg, type = 'success') {
 // ═══════════════════════════════════════════
 // MASTER REGISTRY JS
 // ═══════════════════════════════════════════
-function initRegistry(){
-  loadCategories();
-  try{
-    rebuildPills('vendor','vendor-cat-pills','var(--teal)',filterVendors);
-    rebuildPills('material','mat-cat-pills','var(--green)',filterMaterials);
-    rebuildPills('sc','sc-cat-pills','var(--purple)',filterSC);
-    rebuildPills('labour','lab-cat-pills','#E65100',filterLabour);
-    renderCatSection('vendor','vendor-cats');
-    renderCatSection('material','material-cats');
-    renderCatSection('sc','sc-cats');
-    renderCatSection('labour','labour-cats');
-    renderCatSection('uom','uom-cats');
-    renderCatSection('role','role-cats');
-    renderCatSection('dept','dept-cats');
-    loadAllData();
-  }catch(e){console.log('reg init',e);}
-}
+
 
 // ── DATA ──────────────────────────────────────────────────────────────
 // ── SUPABASE CONFIG ──
@@ -3735,20 +3719,7 @@ function renderSCInUsers(forceShow){
   }).join('')||'<div style="text-align:center;padding:20px;color:var(--text3);">No subcontractors registered</div>';
 }
 
-function filterUsers(role,el){
-  document.querySelectorAll('#user-role-pills .pill').forEach(function(p){p.style.background='';p.style.borderColor='';p.style.color='';});
-  if(el){
-    var col = role==='pending'?'var(--amber)':'var(--rose)';
-    el.style.background=col;el.style.borderColor=col;el.style.color='white';
-  }
-  userRoleFilter=role;
-  if(role==='pending'){
-    // Show pending employees inline in list
-    renderPendingInList();
-    return;
-  }
-  renderUsers();
-}
+
 
 function renderPendingInList(){
   var list = document.getElementById('user-list');
@@ -3780,18 +3751,7 @@ function renderPendingInList(){
 }
 
 // ── SEARCH ──
-function searchList(type,q){
-  var ql=q.toLowerCase();
-  if(type==='vendors'){var r=VENDORS.filter(function(v){return v.name.toLowerCase().includes(ql)||v.cat.includes(ql)||v.gst.toLowerCase().includes(ql)||v.contact.toLowerCase().includes(ql);});renderVendors(r);}
-  if(type==='materials'){var r=MATERIALS.filter(function(m){return m.name.toLowerCase().includes(ql)||m.code.toLowerCase().includes(ql)||m.cat.includes(ql);});renderMaterials(r);}
-  if(type==='sc'){var r=SUBCONTRACTORS.filter(function(s){return s.name.toLowerCase().includes(ql)||s.trade.includes(ql)||s.contact.toLowerCase().includes(ql);});renderSC(r);}
-  if(type==='users'){
-    var section=document.getElementById('sc-in-users-section');
-    var r=USERS.filter(function(u){return u.name.toLowerCase().includes(ql)||u.role.includes(ql)||u.dept.toLowerCase().includes(ql)||u.email.includes(ql);});
-    renderUsers(r);
-    if(section)section.style.display=ql?'none':'';
-  }
-}
+
 
 // ── DETAIL SHEETS ──
 
@@ -4088,114 +4048,7 @@ function uomOptions(){
 
 // ── ADD FORMS ──
 var currentPage='vendors';
-function openAdd(){
-  var html='';
-  if(currentPage==='labour'){
-    var af2=document.getElementById('add-foot');
-    document.getElementById('add-title').textContent='New Labour Registration';
-    document.getElementById('add-body').innerHTML=buildLabourForm(null);
-    af2.innerHTML='';
-    var cb2=document.createElement('button');cb2.className='btn btn-outline';cb2.textContent='Cancel';
-    cb2.onclick=function(){closeSheet('ov-add','sh-add');};
-    var sb2=document.createElement('button');sb2.className='btn btn-navy';sb2.innerHTML='&#10003; Save Labour';
-    sb2.onclick=function(){saveLabour('');};
-    af2.appendChild(cb2);af2.appendChild(sb2);
-    openSheet('ov-add','sh-add');
-    return;
-  }
-  if(currentPage==='vendors'){
-    html='<div class="section-title">&#127968; New Vendor Registration</div>'+
-      '<div class="g2"><div><label class="flbl">Company Name</label><input id="f-vname" class="finp" placeholder="e.g. JSW Steel Ltd."></div><div><label class="flbl">Vendor ID</label><input class="finp" placeholder="Auto: VND-'+String(VENDORS.length+1).padStart(3,'0')+'" disabled style="opacity:.5;"></div></div>'+
-      '<div class="g2"><div><label class="flbl">Category</label><select id="f-vcat" class="fsel">'+catOptions('vendor')+'</select></div><div><label class="flbl">GST Number</label><input id="f-vgst" class="finp" placeholder="e.g. 27AAAXX0000X1ZX"></div></div>'+
-      '<div class="g2"><div><label class="flbl">Contact Person</label><input id="f-vcontact" class="finp" placeholder="Name"></div><div><label class="flbl">Phone</label><input id="f-vphone" class="finp" type="tel" placeholder="Mobile"></div></div>'+
-      '<label class="flbl">Email</label><input id="f-vemail" class="finp" type="email" placeholder="email@company.com">'+
-      '<label class="flbl">Address</label><textarea id="f-vaddress" class="ftxt" placeholder="Registered office address..."></textarea>'+
-      '<label class="flbl">Products / Brands Supplied</label><input id="f-vbrands" class="finp" placeholder="e.g. Fe-500D TMT Bars, Fe-550D">'+
-      '<div class="g2"><div><label class="flbl">Payment Terms</label><select id="f-vpay" class="fsel"><option>Advance</option><option>15 days</option><option>30 days</option><option>45 days</option><option>60 days</option><option>Monthly billing</option></select></div><div><label class="flbl">Typical Lead Time</label><input id="f-vlead" class="finp" placeholder="e.g. 7 days"></div></div>'+
-      '<label class="flbl">Bank Account</label>'+
-      '<div class="g2"><div><input class="finp" placeholder="Account Number"></div><div><input class="finp" placeholder="IFSC Code"></div></div>'+
-      '<div style="margin-top:4px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><label class="flbl" style="margin:0;">&#129521; Materials &amp; Rates Supplied</label><button onclick="addMatRateRow()" style="border:none;background:#E8F5E9;color:#2E7D32;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">+ Add Material</button></div><div id="mat-rate-rows"><div style="font-size:12px;color:var(--text3);padding:8px 0;">No materials added yet.</div></div></div>';
-  } else if(currentPage==='materials'){
-    html='<div class="section-title">&#129521; New Material Registration</div>'+
-      '<label class="flbl">Material Name</label><input id="f-mname" class="finp" placeholder="e.g. Fe-500D TMT Steel Bars">'+
-      '<div class="g2"><div><label class="flbl">Category</label><select id="f-mcat" class="fsel" oninput="updateMatCodePreview()">'+catOptions('material')+'</select></div><div><label class="flbl">Unit of Measure</label><select id="f-muom" class="fsel">'+uomOptions()+'</select></div></div>'+
-      '<div class="g2"><div><label class="flbl">Material Code</label><input id="f-mcode" class="finp" placeholder="Auto-generated" style="background:#F8F9FA;" readonly></div><div><label class="flbl">Applicable GST (%)</label><select id="f-mgst" class="fsel"><option>5%</option><option selected>12%</option><option>18%</option><option>28%</option></select></div></div>'+
-      '<label class="flbl">Technical Specification / IS Code</label><input id="f-mspec" class="finp" placeholder="e.g. IS:1786 / IS:456">';
-  } else if(currentPage==='subcontractors'){
-    html='<div class="section-title">&#128296; New Subcontractor Registration</div>'+
-      '<div class="g2"><div><label class="flbl">Company Name</label><input id="f-scname" class="finp" placeholder="e.g. Shri Ganesh Civil Works"></div><div><label class="flbl">SC Reg. ID</label><input class="finp" placeholder="Auto: SC-REG-001" disabled style="opacity:.5;"></div></div>'+
-      '<div class="g2"><div><label class="flbl">Primary Trade</label><select id="f-sctrade" class="fsel">'+catOptions('sc')+'</select></div><div><label class="flbl">GST Number</label><input id="f-scgst" class="finp" placeholder="e.g. 27XXXXX0000X1ZX"></div></div>'+
-      '<div class="g2"><div><label class="flbl">Contact Person</label><input id="f-sccontact" class="finp" placeholder="Name & Designation"></div><div><label class="flbl">Phone</label><input id="f-scphone" class="finp" type="tel" placeholder="Mobile"></div></div>'+
-      '<label class="flbl">Email</label><input id="f-scemail" class="finp" type="email" placeholder="email@company.com">'+
-      '<label class="flbl">Registered Address</label><textarea id="f-scaddress" class="ftxt" placeholder="Full address..."></textarea>'+
-      '<div class="g2"><div><label class="flbl">Years of Experience</label><input id="f-scexp" class="finp" placeholder="e.g. 8 years"></div><div><label class="flbl">Annual Turnover</label><input id="f-scturnover" class="finp" placeholder="e.g. ₹2.4Cr"></div></div>'+
-      '<div class="g2"><div><label class="flbl">No. of Workers</label><input id="f-scworkers" class="finp" type="number" placeholder="Typical workforce"></div><div><label class="flbl">Specialisation</label><input id="f-scspec" class="finp" placeholder="e.g. Culvert, retaining walls"></div></div>'+
-      '<div class="g2"><div><label class="flbl">PBG Available?</label><select id="f-scpbg" class="fsel"><option>Yes</option><option>No</option></select></div><div><label class="flbl">EMD Available?</label><select id="f-scemd" class="fsel"><option>Yes</option><option>No</option></select></div></div>';
-  } else if(currentPage==='users'){
-    html=
-      '<div class="section-title">&#128101; Register New Employee</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #1565C020;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#1565C020;display:flex;align-items:center;justify-content:center;font-size:14px;">👤</div><div style="font-size:12px;font-weight:800;color:#1565C0;text-transform:uppercase;letter-spacing:.7px;">Personal Details</div></div>'+
-      '<div class="g3"><div><label class="flbl">First Name *</label><input id="f-ufname" class="finp" placeholder="First name"></div><div><label class="flbl">Middle Name</label><input id="f-umname" class="finp" placeholder="Middle name"></div><div><label class="flbl">Last Name</label><input id="f-ulname" class="finp" placeholder="Last name"></div></div>'+
-      '<div class="g2"><div><label class="flbl">Date of Birth</label><input class="finp" type="date" id="f-udob"></div><div><label class="flbl">Gender</label><select id="f-ugender" class="fsel"><option value="">-- Select --</option><option>Male</option><option>Female</option><option>Other</option></select></div></div>'+
-      '<div class="g2"><div><label class="flbl">Blood Group</label><select id="f-ublood" class="fsel"><option value="">-- Select --</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div><div><label class="flbl">Marital Status</label><select id="f-umarital" class="fsel"><option value="">-- Select --</option><option>Single</option><option>Married</option><option>Other</option></select></div></div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #2E7D3220;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#2E7D3220;display:flex;align-items:center;justify-content:center;font-size:14px;">🏗️</div><div style="font-size:12px;font-weight:800;color:#2E7D32;text-transform:uppercase;letter-spacing:.7px;">Employment Details</div></div>'+
-      '<label class="flbl">Date of Joining</label><input class="finp" type="date" id="f-udoj">'+
-      '<div class="g2"><div><label class="flbl">Role / Designation</label><select id="f-urole" class="fsel">'+catOptions('role')+'</select></div><div><label class="flbl">Department</label><select id="f-udept" class="fsel">'+catOptions('dept')+'</select></div></div>'+
-      '<label class="flbl">Project Assignment</label><select id="f-uproject" class="fsel" id="emp-proj-sel"><option value="">All Projects</option></select>'+
-      '<div class="g2"><div><label class="flbl">Employment Type</label><select id="f-uemptype" class="fsel"><option>Full Time</option><option>Part Time</option><option>Contract</option><option>Daily Wage</option></select></div><div><label class="flbl">Work Location / Project</label><select id="f-ulocation" class="fsel"><option value="">&#9203; Loading...</option></select></div></div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #E6510020;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#E6510020;display:flex;align-items:center;justify-content:center;font-size:14px;">📞</div><div style="font-size:12px;font-weight:800;color:#E65100;text-transform:uppercase;letter-spacing:.7px;">Contact Details</div></div>'+
-      '<div class="g2"><div><label class="flbl">Mobile Number</label><input id="f-uphone" class="finp" type="tel" placeholder="10-digit mobile"></div><div><label class="flbl">Alternate Mobile</label><input id="f-uphone2" class="finp" type="tel" placeholder="Optional"></div></div>'+
-      '<label class="flbl">Residential Address</label><textarea id="f-uaddress" class="ftxt" rows="2" placeholder="Current residential address..."></textarea>'+
-      '<label class="flbl">Permanent Address</label><textarea id="f-upermanent" class="ftxt" rows="2" placeholder="Permanent / native address (if different)..."></textarea>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #6A1B9A20;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#6A1B9A20;display:flex;align-items:center;justify-content:center;font-size:14px;">🪪</div><div style="font-size:12px;font-weight:800;color:#6A1B9A;text-transform:uppercase;letter-spacing:.7px;">KYC Details</div></div>'+
-      '<div class="g2"><div><label class="flbl">Aadhar Number</label><input id="f-uaadhar" class="finp" placeholder="XXXX XXXX XXXX"></div><div><label class="flbl">PAN Number</label><input id="f-upan" class="finp" placeholder="ABCDE1234F"></div></div>'+
-      '<div class="g2"><div><label class="flbl">PF Number</label><input id="f-upf" class="finp" placeholder="Optional"></div><div><label class="flbl">ESIC Number</label><input id="f-uesic" class="finp" placeholder="Optional"></div></div>'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #C6282820;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:14px;">🏦</div><div style="font-size:12px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Bank Details</div></div>'+
-      '<label class="flbl">Bank Name</label><input id="f-ubank" class="finp" placeholder="e.g. State Bank of India">'+
-      '<div class="g2"><div><label class="flbl">Account Number</label><input id="f-uaccno" class="finp" placeholder="Bank account number"></div><div><label class="flbl">IFSC Code</label><input id="f-uifsc" class="finp" placeholder="e.g. SBIN0001234"></div></div>'+
-      '<label class="flbl">Account Holder Name</label><input id="f-uaccname" class="finp" placeholder="As per bank records">'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:10px 0 6px;border-bottom:2px solid #C6282820;margin:14px 0 10px;"><div style="width:28px;height:28px;border-radius:8px;background:#C6282820;display:flex;align-items:center;justify-content:center;font-size:14px;">🚨</div><div style="font-size:12px;font-weight:800;color:#C62828;text-transform:uppercase;letter-spacing:.7px;">Emergency Contact</div></div>'+
-      '<div class="g2"><div><label class="flbl">Contact Name</label><input id="f-uecname" class="finp" placeholder="Full name"></div><div><label class="flbl">Relationship</label><select id="f-uecrel" class="fsel"><option value="">-- Select --</option><option>Spouse</option><option>Father</option><option>Mother</option><option>Sibling</option><option>Other</option></select></div></div>'+
-      '<label class="flbl">Emergency Mobile</label><input id="f-uecphone" class="finp" type="tel" placeholder="10-digit mobile">'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:8px 0 4px;border-bottom:2px solid #1565C020;margin:12px 0 8px;">'+
-      '<div style="width:24px;height:24px;border-radius:7px;background:#1565C020;display:flex;align-items:center;justify-content:center;font-size:12px;">📎</div>'+
-      '<div style="font-size:11px;font-weight:800;color:#1565C0;text-transform:uppercase;letter-spacing:.7px;">Documents & Photo</div></div>'+
-      '<label class="flbl">Passport Photo</label>'+
-      '<div class="upload-box" onclick="document.getElementById(\'f-uphoto\').click()">'+
-        '<div class="photo-preview" id="f-uphoto-prev">📷</div>'+
-        '<input type="file" id="f-uphoto" accept="image/*" onchange="handleFilePreview(\'f-uphoto\',\'f-uphoto-prev\')">'+
-        '<div class="upload-label">Tap to upload passport photo</div>'+
-        '<div class="upload-progress-wrap" id="f-uphoto-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="f-uphoto-prog-name"></span><span class="upload-progress-pct" id="f-uphoto-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="f-uphoto-prog-fill"></div></div></div>'+
-      '</div>'+
-      '<div class="g2">'+
-        '<div><label class="flbl">Aadhar Card</label>'+
-        '<div class="upload-box" onclick="document.getElementById(\'f-uaadhar-doc\').click()">'+
-          '<div id="f-uaadhar-doc-prev" class="upload-preview"></div>'+
-          '<input type="file" id="f-uaadhar-doc" accept="image/*,application/pdf" onchange="handleFilePreview(\'f-uaadhar-doc\',\'f-uaadhar-doc-prev\')">'+
-          '<div class="upload-label">📄 Upload Aadhar</div>'+
-          '<div class="upload-progress-wrap" id="f-uaadhar-doc-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="f-uaadhar-doc-prog-name"></span><span class="upload-progress-pct" id="f-uaadhar-doc-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="f-uaadhar-doc-prog-fill"></div></div></div>'+
-        '</div></div>'+
-        '<div><label class="flbl">PAN Card</label>'+
-        '<div class="upload-box" onclick="document.getElementById(\'f-upan-doc\').click()">'+
-          '<div id="f-upan-doc-prev" class="upload-preview"></div>'+
-          '<input type="file" id="f-upan-doc" accept="image/*,application/pdf" onchange="handleFilePreview(\'f-upan-doc\',\'f-upan-doc-prev\')">'+
-          '<div class="upload-label">📄 Upload PAN</div>'+
-          '<div class="upload-progress-wrap" id="f-upan-doc-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="f-upan-doc-prog-name"></span><span class="upload-progress-pct" id="f-upan-doc-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="f-upan-doc-prog-fill"></div></div></div>'+
-        '</div></div>'+
-      '</div>';
-  }
-  var titles={vendors:'Register New Vendor',materials:'Register New Material',subcontractors:'Register New Subcontractor',users:'Register New Employee'};
-  var btnCols={vendors:'btn-teal',materials:'btn-green',subcontractors:'btn-purple',users:'btn-indigo'};
-  var saveFunc={vendors:'saveVendor()',materials:'saveMaterial()',subcontractors:'saveSC()',users:'saveUser()'};
-  document.getElementById('add-title').textContent=titles[currentPage]||'Add New';
-  document.getElementById('add-body').innerHTML=html;
-  document.getElementById('add-foot').innerHTML=
-    '<button class="btn btn-outline" onclick="closeSheet(\'ov-add\',\'sh-add\')">Cancel</button>'+
-    '<button class="btn '+(btnCols[currentPage]||'btn-navy')+'" onclick="'+(saveFunc[currentPage]||'')+'" style="flex:1;">&#10003; Register</button>';
-  if(currentPage==='vendors'){vendorMatRates=[];renderMatRateRows();}
-  if(currentPage==='materials'){setTimeout(updateMatCodePreview,50);}
-  openSheet('ov-add','sh-add');
-}
+
 // gv: shared above
 
 // ── MATERIAL CODE PREVIEW ──
@@ -4377,20 +4230,7 @@ function ir(lbl,val,mono){
 function fmtV(n){if(n>=10000000)return '₹'+(n/10000000).toFixed(2)+'Cr';if(n>=100000)return '₹'+(n/100000).toFixed(1)+'L';return '₹'+(n/1000).toFixed(0)+'K';}
 function openSheet(o,s){document.getElementById(o).classList.add('on');document.getElementById(s).classList.add('on');}
 function closeSheet(o,s){document.getElementById(o).classList.remove('on');document.getElementById(s).classList.remove('on');}
-function switchPage(p){
-  currentPage=p;
-  ['vendors','materials','subcontractors','labour','users','settings'].forEach(function(t){
-    var pg=document.getElementById('pg-'+t);
-    var nv=document.getElementById('nav-'+t);
-    if(pg) pg.classList.toggle('on',t===p);
-    if(nv) nv.classList.toggle('on',t===p);
-  });
-  if(p==='vendors'){vendorCatFilter='all';rebuildPills('vendor','vendor-cat-pills','var(--teal)',filterVendors);renderVendors();}
-  if(p==='materials'){matCatFilter='all';rebuildPills('material','mat-cat-pills','var(--green)',filterMaterials);renderMaterials();}
-  if(p==='subcontractors'){scCatFilter='all';rebuildPills('sc','sc-cat-pills','var(--purple)',filterSC);renderSC();}
-  if(p==='labour'){labCatFilter='all';rebuildPills('labour','lab-cat-pills','#E65100',filterLabour);renderLabour();}
-  if(p==='users'){showApp('employees');return;}
-}
+
 // toast: shared above
 
 // init called at bottom after CAT_DATA is defined
@@ -4471,37 +4311,9 @@ var CAT_DATA={
   resource:[]
 };
 
-function renderCatSection(type,containerId){
-  if(!containerId) return;
-  var cats=(CAT_DATA[type])||[];
-  var el=document.getElementById(containerId);
-  if(!el) return;
-  el.innerHTML=cats.map(function(c,i){
-    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--border);'+(i===cats.length-1?'border-bottom:none;':'')+'">'+
-      '<div style="width:38px;height:38px;border-radius:10px;background:'+c.color+'20;border:1px solid '+c.color+'40;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+c.icon+'</div>'+
-      '<div style="flex:1;min-width:0;">'+
-        '<div style="font-size:13px;font-weight:800;">'+c.name+'</div>'+
-        '<div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+c.desc+'</div>'+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">'+
-        '<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--text3);">'+c.count+' items</span>'+
-        '<div onclick="toggleCat(\''+type+'\','+i+')" style="width:40px;height:22px;border-radius:11px;background:'+(c.active?'var(--green)':'#CBD5E1')+';position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;">'+
-          '<div style="position:absolute;top:3px;left:'+(c.active?'21':'3')+'px;width:16px;height:16px;border-radius:50%;background:white;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div>'+
-        '</div>'+
-        '<button onclick="editCat(\''+type+'\','+i+')" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;color:var(--text2);">&#9998;</button>'+
-        (c.count===0?'<button onclick="deleteCat(\''+type+'\','+i+')" style="background:var(--redl);border:1px solid var(--redb);border-radius:8px;padding:5px 8px;font-size:11px;cursor:pointer;color:var(--red);">&#128465;</button>':
-        '<button style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:11px;cursor:not-allowed;color:var(--text3);" title="In use — cannot delete">&#128274;</button>')+
-      '</div>'+
-    '</div>';
-  }).join('');
-}
 
-async function toggleCat(type,i){
-  CAT_DATA[type][i].active=!CAT_DATA[type][i].active;
-  renderCatSection(type,catSectionMap[type]);
-  toast(CAT_DATA[type][i].name+' '+(CAT_DATA[type][i].active?'enabled':'disabled'),'success');
-  await syncCategoryToggle(CAT_DATA[type][i].id, CAT_DATA[type][i].active);
-}
+
+
 
 function editCat(type,i){
   var c=CAT_DATA[type][i];
@@ -4548,33 +4360,9 @@ async function saveCatEdit(type,i){
   await syncCategoryUpdate(cat.id,{name:cat.name,description:cat.desc,icon:cat.icon,color:cat.color});
 }
 
-async function deleteCat(type,i){
-  var catId=CAT_DATA[type][i].id;
-  CAT_DATA[type].splice(i,1);
-  renderCatSection(type,catSectionMap[type]);
-  toast('Category deleted','warning');
-  await syncCategoryDelete(catId);
-}
 
-function addCategory(type){
-  var typeNames={vendor:'Vendor',material:'Material',sc:'Subcontractor Trade',uom:'Unit of Measure',role:'Role',dept:'Department',labour:'Labour Type/Skill',resource:'Resource Category'};
-  document.getElementById('add-title').textContent='Add '+typeNames[type]+' Category';
-  document.getElementById('add-body').innerHTML=
-    '<label class="flbl">Category Name</label><input class="finp" id="new-cat-name" placeholder="e.g. Precast Concrete">'+
-    '<label class="flbl">Icon (Emoji)</label><input class="finp" id="new-cat-icon" placeholder="e.g. 🏗️" style="font-size:20px;">'+
-    '<label class="flbl">Description</label><input class="finp" id="new-cat-desc" placeholder="Brief description of this category">'+
-    '<label class="flbl">Colour</label>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;" id="new-colour-picker">'+
-      ['#C62828','#E65100','#F57F17','#2E7D32','#1565C0','#6A1B9A','#00838F','#795548','#37474F','#880E4F'].map(function(col,ci){
-        return '<div onclick="selNewColour(this,\''+col+'\')" data-col="'+col+'" style="width:28px;height:28px;border-radius:8px;background:'+col+';cursor:pointer;border:3px solid '+(ci===0?'white':'transparent')+';box-shadow:'+(ci===0?'0 0 0 2px '+col:'none')+'"></div>';
-      }).join('')+
-    '</div>';
-  selectedColour='#C62828';
-  document.getElementById('add-foot').innerHTML=
-    '<button class="btn btn-outline" onclick="closeSheet(\'ov-add\',\'sh-add\')">Cancel</button>'+
-    '<button class="btn btn-navy" onclick="saveNewCat(\''+type+'\')">&#10003; Add Category</button>';
-  openSheet('ov-add','sh-add');
-}
+
+
 
 function selNewColour(el,col){
   selectedColour=col;
@@ -4584,36 +4372,10 @@ function selNewColour(el,col){
   el.style.border='3px solid white';el.style.boxShadow='0 0 0 2px '+col;
 }
 
-async function saveNewCat(type){
-  var n=document.getElementById('new-cat-name').value.trim();
-  if(!n){toast('Please enter a category name','warning');return;}
-  var icon=document.getElementById('new-cat-icon').value.trim()||'📦';
-  var desc=document.getElementById('new-cat-desc').value.trim()||'';
-  var newCat={id:type+'-new-'+Date.now(),icon:icon,name:n,desc:desc,color:selectedColour||'#37474F',count:0,active:true};
-  CAT_DATA[type].push(newCat);
-  // Refresh category section in settings (null-safe — only updates if settings page visible)
-  renderCatSection(type,catSectionMap[type]);
-  // Rebuild filter pills for this type
-  var pillMap={vendor:'vendor-cat-pills',material:'mat-cat-pills',sc:'sc-cat-pills',labour:'lab-cat-pills'};
-  var filterFnMap={vendor:filterVendors,material:filterMaterials,sc:filterSC,labour:filterLabour};
-  var colMap={vendor:'var(--teal)',material:'var(--green)',sc:'var(--purple)',labour:'#E65100'};
-  if(pillMap[type]) rebuildPills(type,pillMap[type],colMap[type]||'#37474F',filterFnMap[type]||function(){});
-  closeSheet('ov-add','sh-add');
-  toast(n+' added!','success');
-  await syncCategoryAdd(type, newCat);
-}
+
 
 // Rebuild filter pills from live CAT_DATA
-function rebuildPills(type, containerId, activeColor, filterFn){
-  if(!containerId) return;
-  var cats = (CAT_DATA[type]||[]).filter(function(c){ return c.active; });
-  var el = document.getElementById(containerId);
-  if(!el) return;
-  el.innerHTML = '<div class="pill on" style="background:'+activeColor+';border-color:'+activeColor+';color:white" onclick="'+filterFn.name+'(\'all\',this)">All</div>' +
-    cats.map(function(c){
-      return '<div class="pill" onclick="'+filterFn.name+'(\''+c.name.toLowerCase().replace(/[^a-z0-9]/g,'')+'\',this)">'+c.icon+' '+c.name+'</div>';
-    }).join('');
-}
+
 
 // ── INIT — all called after CAT_DATA is defined ──
 rebuildPills('vendor','vendor-cat-pills','var(--teal)',filterVendors);
@@ -4813,52 +4575,7 @@ async function rejectEmployee(id, name){
 
 
 // ── UPDATE ALL STATS FROM LIVE DATA ──
-function updateAllStats(){
-  // Employee stats
-  var total = USERS.length;
-  var active = USERS.filter(function(u){return u.status==='active';}).length;
-  var pending = USERS.filter(function(u){return u.status==='pending';}).length;
-  var inactive = USERS.filter(function(u){return u.status==='inactive'||u.status==='rejected';}).length;
-  setEl('stat-emp-total', total);
-  setEl('stat-emp-active', active);
-  setEl('stat-emp-pending', pending);
-  // Update pending pill visibility
-  var pendingPill = document.getElementById('pill-pending');
-  if(pendingPill){
-    pendingPill.style.display = pending>0 ? '' : 'none';
-    pendingPill.textContent = '⏳ Pending ('+pending+')';
-  }
-  setEl('stat-emp-inactive', inactive);
-  setEl('ast-total', total);
 
-  // Dashboard KPIs
-  setEl('dk-projects', PROJECTS.filter(function(p){return p.status==='active'&&p.code!=='ALL';}).length||'—');
-  setEl('dk-workers', active||'—');
-  setEl('dk-progress', '—');
-  setEl('dk-issues', '—');
-
-  // Attendance scards
-  setEl('scard-total', total);
-  setEl('card-present', active);
-  setEl('card-absent', inactive);
-
-  // Vendor stats
-  setEl('stat-v-total', VENDORS.length);
-  setEl('stat-v-active', [...new Set(VENDORS.map(function(v){return v.cat;}))].length);
-  var totalVal = VENDORS.reduce(function(s,v){return s+(v.totalValue||0);},0);
-  setEl('stat-v-cats', totalVal>=10000000?'₹'+(totalVal/10000000).toFixed(1)+'Cr':totalVal>=100000?'₹'+(totalVal/100000).toFixed(0)+'L':'₹'+totalVal.toLocaleString('en-IN'));
-
-  // Material stats
-  setEl('stat-m-total', MATERIALS.length);
-  setEl('stat-m-cats', [...new Set(MATERIALS.map(function(m){return m.cat;}))].length);
-  var linkedVendors = VENDORS.filter(function(v){return v.materialRates&&v.materialRates.length>0;}).length;
-  setEl('stat-m-vendors', linkedVendors);
-
-  // SC stats
-  setEl('stat-sc-total', SUBCONTRACTORS.length);
-  var pbgCount = SUBCONTRACTORS.filter(function(s){return s.pbgAvail;}).length;
-  setEl('stat-sc-pbg', pbgCount);
-}
 
 function setEl(id, val){
   var el=document.getElementById(id);
@@ -8660,7 +8377,7 @@ async function empSavePay(){
 <script>
 
 // ════ HELPERS ════════════════════════════════════════════
-function gv(id){var el=document.getElementById(id);return el?el.value.trim():'';}
+
 function fmtINR(n){if(!n&&n!==0)return '\u20b90';return '\u20b9'+parseFloat(n).toLocaleString('en-IN',{maximumFractionDigits:0});}
 function fmtA(n){return '\u20b9'+Math.abs(Number(n||0)).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
 
@@ -8713,50 +8430,12 @@ var PMT_GROUPS = {
 };
 
 // ── Project selector (hidden, kept for compat) ────────────
-async function projModLoadProjects(){
-  var sel = document.getElementById('proj-mod-sel');
-  if(!sel) return;
-  if(!PROJ_DATA || !PROJ_DATA.length){
-    try{
-      var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
-      PROJ_DATA = Array.isArray(rows) ? rows : [];
-    }catch(e){ PROJ_DATA = []; }
-  }
-  var prev = PROJ_MOD_SEL_ID;
-  sel.innerHTML = '<option value="">— Select Project —</option>'+
-    PROJ_DATA.map(function(p){
-      return '<option value="'+p.id+'"'+(p.id===prev?' selected':'')+'>'+
-        (p.name||'Unnamed')+(p.code?' ('+p.code+')':'')+
-      '</option>';
-    }).join('');
-  if(prev) sel.value = prev;
-}
 
-function projModSelChange(){
-  var sel = document.getElementById('proj-mod-sel');
-  PROJ_MOD_SEL_ID = sel ? sel.value : '';
-  WA_LOADED_PROJ = '';
-  projModRenderNav();
-  projModLoadTab();
-}
+
+
 
 // ── Main entry: called from showApp ───────────────────────
-function initProjects(){
-  // Load projects data
-  if(!PROJ_DATA.length){
-    sbFetch('projects',{select:'*',order:'name.asc'})
-      .then(function(rows){
-        PROJ_DATA = Array.isArray(rows) ? rows : [];
-        projModLoadProjects();
-        projModRenderNav();
-        projModLoadTab();
-      }).catch(function(){ projModRenderNav(); projModLoadTab(); });
-  } else {
-    projModLoadProjects();
-    projModRenderNav();
-    projModLoadTab();
-  }
-}
+
 
 // ── Render the grouped tab nav bar ────────────────────────
 function projModRenderNav(){
@@ -10264,7 +9943,7 @@ function rrDownloadPDF(rrId, projName){
   var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
   var item=RR_PLAN_ITEMS.find(function(i){return i.id===rr.boq_item_id;})||{};
   var planRes=RR_PLAN_RES.find(function(r){return r.id===rr.plan_res_id;})||{};
-  function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  
   var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
   var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var stLbl={pending:'PENDING',approved:'APPROVED',rejected:'REJECTED',allotted:'ALLOTTED'};
@@ -12823,7 +12502,7 @@ function execAdvanceReceipt(advId,resName,allotAmt){
   var projSel=document.getElementById('proj-mod-sel');
   var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
-  function fmtD(d){if(!d)return '—';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+  
 
   // Receipt number
   var rcptNo='ADV/'+new Date().getFullYear()+'/'+String(WA_ADVANCES.length).padStart(4,'0');
@@ -13300,7 +12979,7 @@ function billDownloadAdvReceipt(billId, dedId){
   var projSel=document.getElementById('proj-mod-sel');
   var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
-  function fmtD(dt){if(!dt)return '—';var p=String(dt).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:dt;}
+  
 
   var rcptNo='ADVADJ/'+new Date().getFullYear()+'/'+String(WA_BILLS.indexOf(bill)+1).padStart(4,'0');
 
@@ -13470,7 +13149,7 @@ function execDownloadBillPDF(billId){
   var projSel=document.getElementById('proj-mod-sel');
   var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
   var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
-  function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  
 
   // Deductions
   var deductions=[];try{deductions=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
@@ -13704,13 +13383,7 @@ async function execSaveAdvance(partyType,partyName,projId){
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
-async function execDelAdvance(id){
-  if(!confirm('Delete this advance payment record?'))return;
-  WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
-  execRenderBills();
-  try{await sbDelete('work_advances',id);}catch(e){console.error(e);}
-  toast('Advance deleted','success');
-}
+
 async function execDelBill(id){
   var hasPaid=WA_PAYMENTS.some(function(p){return p.bill_id===id;});
   var msg=hasPaid?'This bill has payments.\\nDeleting will also delete all related payments. Continue?':'Delete this bill?';
@@ -14174,7 +13847,7 @@ function grnDownloadPDF(grnId){
   var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
   var projSel=document.getElementById('proj-mod-sel');
   var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
-  function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  
   var stCol={accepted:'#2E7D32',rejected:'#C62828',partial:'#F57F17'}[grn.status]||'#555';
   var stLbl={accepted:'ACCEPTED',rejected:'REJECTED',partial:'PARTIAL'}[grn.status]||grn.status.toUpperCase();
 
@@ -14490,23 +14163,7 @@ var PC_EMP_FILTER='all'; // 'all' or empId
 
 var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
 
-async function initPettyCash(){
-  var cont=document.getElementById('pc-main');if(!cont)return;
-  cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading...</div>';
-  try{
-    var[cashIn,expenses,emps,projs]=await Promise.all([
-      sbFetch('petty_cash_in',{select:'*',order:'created_at.desc'}),
-      sbFetch('petty_cash_expenses',{select:'*',order:'date.desc'}),
-      sbFetch('employees',{select:'id,emp_id,first_name,last_name,department',filter:'status=eq.active',order:'first_name.asc'}),
-      sbFetch('projects',{select:'id,name',order:'name.asc'}),
-    ]);
-    PC_IN=Array.isArray(cashIn)?cashIn:[];
-    PC_EXP=Array.isArray(expenses)?expenses:[];
-    PC_EMPS=Array.isArray(emps)?emps.map(function(e){return {id:e.id,empId:e.emp_id,name:((e.first_name||'')+' '+(e.last_name||'')).trim(),dept:e.department||''};}):[]; 
-    PC_PROJS=Array.isArray(projs)?projs:[];
-    pcRefresh();
-  }catch(e){console.error('initPettyCash:',e);if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading petty cash data</div>';}
-}
+
 
 function pcEmpName(empId){var e=PC_EMPS.find(function(x){return x.empId===empId||x.id===empId;});return e?e.name:empId||'—';}
 function pcEmpBal(empId){
@@ -14941,53 +14598,10 @@ async function accDelVoucher(id){
 function accQuickAdd(){accOpenVoucher();}
 
 
-async function initAccounts(){
-  // Build tab bar dynamically
-  var tb=document.getElementById('acc-tab-bar');
-  if(tb){
-    tb.innerHTML='';
-    [['dash','&#128202; Dashboard'],['entry','&#128221; Vouchers'],['ledger','&#128101; Ledger'],['reports','&#128200; Reports'],['gst','&#129534; GST/TDS'],['coa','&#128196; Chart of Accounts']].forEach(function(t,i){
-      var b=document.createElement('button');
-      b.innerHTML=t[1];b.id='acc-t-'+t[0];
-      b.style.cssText='padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:'+(i===0?'rgba(255,255,255,.2)':'transparent')+';color:'+(i===0?'white':'rgba(255,255,255,.6)');
-      b.onclick=(function(tab,btn){return function(){accSwitchTab(tab,btn);};})(t[0],b);
-      tb.appendChild(b);
-    });
-  }
-  var el=document.getElementById('acc-content');if(el)el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
-  try{
-    var r=await Promise.all([
-      sbFetch('accounts',{select:'*',filter:'active=eq.true',order:'code.asc'}),
-      sbFetch('vouchers',{select:'*',order:'date.desc,created_at.desc'}),
-      sbFetch('voucher_items',{select:'*',order:'created_at.asc'}),
-      sbFetch('gst_entries',{select:'*',order:'date.desc'}),
-      sbFetch('tds_entries',{select:'*',order:'date.desc'})
-    ]);
-    ACC_ACCOUNTS=Array.isArray(r[0])?r[0]:[];
-    ACC_VOUCHERS=Array.isArray(r[1])?r[1]:[];
-    ACC_VOU_ITEMS=Array.isArray(r[2])?r[2]:[];
-    ACC_GST=Array.isArray(r[3])?r[3]:[];
-    ACC_TDS=Array.isArray(r[4])?r[4]:[];
-  }catch(e){console.error(e);}
-  accSwitchTab('dash',document.getElementById('acc-t-dash'));
-}
 
-function accSwitchTab(tab,el){
-  ACC_TAB=tab;
-  var tb=document.getElementById('acc-tab-bar');
-  if(tb)Array.from(tb.children).forEach(function(b){b.style.background='transparent';b.style.color='rgba(255,255,255,.6)';});
-  if(el){el.style.background='rgba(255,255,255,.2)';el.style.color='white';}
-  var addBtn=document.getElementById('acc-add-btn');
-  if(addBtn)addBtn.style.display=(tab==='entry'||tab==='coa')?'':'none';
-  var c=document.getElementById('acc-content');if(!c)return;
-  if(tab==='dash')     c.innerHTML=accDash();
-  else if(tab==='entry')   c.innerHTML=accEntry();
-  else if(tab==='ledger')  c.innerHTML=accLedger();
-  else if(tab==='reports') c.innerHTML=accReports();
-  else if(tab==='gst')     c.innerHTML=accGstTab();
-  else if(tab==='coa')     c.innerHTML=accCoa();
-}
-function accQuickAdd(){if(ACC_TAB==='coa')accNewAccount();else accOpenVoucher(null);}
+
+
+
 
 // Balance calculator
 function accBal(accountId){
@@ -15032,458 +14646,45 @@ function accOpts(filterFn){
 }
 
 // ── CHART OF ACCOUNTS TAB ─────────────────────────────
-function accCoa(){
-  var groups={Assets:[],Liabilities:[],Income:[],Expenses:[]};
-  var gColors={Assets:'#1565C0',Liabilities:'#C62828',Income:'#2E7D32',Expenses:'#E65100'};
-  ACC_ACCOUNTS.forEach(function(a){if(!groups[a.group_name])groups[a.group_name]=[];groups[a.group_name].push(a);});
 
-  // Summary cards
-  var cards='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">';
-  ['Assets','Liabilities','Income','Expenses'].forEach(function(g){
-    var t=(groups[g]||[]).reduce(function(s,a){return s+accBal(a.id);},0);
-    cards+='<div style="background:white;border-radius:12px;padding:12px;border-left:3px solid '+gColors[g]+';"><div style="font-size:10px;color:var(--text3);font-weight:800;text-transform:uppercase;">'+g+'</div><div style="font-size:18px;font-weight:900;color:'+gColors[g]+';margin-top:4px;">'+fmtA(t)+'</div></div>';
-  });
-  cards+='</div>';
-
-  // Group sections with Head > Sub Head hierarchy
-  var body='';
-  ['Assets','Liabilities','Income','Expenses'].forEach(function(g){
-    var col=gColors[g];var list=groups[g]||[];
-    // Build Head > Sub Head tree
-    var headTree={};
-    list.forEach(function(a){
-      var h=a.head||'(No Head)';
-      var sh=a.sub_head||'(No Sub Head)';
-      if(!headTree[h])headTree[h]={};
-      if(!headTree[h][sh])headTree[h][sh]=[];
-      headTree[h][sh].push(a);
-    });
-
-    body+='<div style="margin-bottom:16px;">';
-    body+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'+
-      '<div style="font-size:12px;font-weight:900;color:'+col+';text-transform:uppercase;letter-spacing:.5px;">'+g+' ('+list.length+')</div>'+
-      '<div style="font-size:12px;font-weight:700;color:'+col+';">'+fmtA(list.reduce(function(s,a){return s+accBal(a.id);},0))+'</div>'+
-    '</div>';
-
-    if(!list.length){
-      body+='<div style="background:white;border-radius:12px;padding:16px;text-align:center;font-size:12px;color:var(--text3);border:1px solid var(--border);">No accounts yet. Tap + to add.</div>';
-    } else {
-      Object.keys(headTree).forEach(function(h){
-        var headTotal=Object.values(headTree[h]).flat().reduce(function(s,a){return s+accBal(a.id);},0);
-        body+='<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">';
-        // HEAD row
-        body+='<div style="padding:10px 14px;background:'+col+'18;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">'+
-          '<div style="font-size:13px;font-weight:900;color:'+col+';">&#128194; '+h+'</div>'+
-          '<div style="font-size:12px;font-weight:700;color:'+col+';">'+fmtA(headTotal)+'</div>'+
-        '</div>';
-        Object.keys(headTree[h]).forEach(function(sh){
-          var shAccounts=headTree[h][sh];
-          var shTotal=shAccounts.reduce(function(s,a){return s+accBal(a.id);},0);
-          // SUB HEAD row
-          body+='<div style="padding:7px 14px 7px 26px;background:'+col+'08;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">'+
-            '<div style="font-size:11px;font-weight:800;color:'+col+';">&#128193; '+sh+'</div>'+
-            '<div style="font-size:11px;font-weight:700;color:'+col+';">'+fmtA(shTotal)+'</div>'+
-          '</div>';
-          // ACCOUNTS under this sub head
-          shAccounts.forEach(function(a){
-            var b=accBal(a.id);
-            body+='<div style="display:grid;grid-template-columns:56px 1fr 90px 36px;gap:4px;padding:10px 14px 10px 36px;border-bottom:1px solid var(--border);align-items:center;">'+
-              '<div style="font-size:11px;font-weight:900;color:'+col+';font-family:monospace;">'+a.code+'</div>'+
-              '<div>'+
-                '<div style="font-size:13px;font-weight:700;color:var(--text);">'+a.name+'</div>'+
-                '<div style="font-size:10px;color:var(--text3);">'+a.account_type+(a.is_cash?' \u2022 Cash':a.is_bank?' \u2022 Bank':'')+' \u2022 OB:'+fmtA(a.opening_balance)+' '+a.balance_type.toUpperCase()+'</div>'+
-              '</div>'+
-              '<div style="text-align:right;">'+
-                '<div style="font-size:12px;font-weight:900;color:'+col+';">'+fmtA(Math.abs(b))+'</div>'+
-                '<div style="font-size:9px;color:var(--text3);">'+(b>=0?a.balance_type.toUpperCase():'REVERSED')+'</div>'+
-              '</div>'+
-              '<div style="display:flex;flex-direction:column;gap:3px;align-items:center;">'+
-                '<button onclick="accEditAccount(\''+a.id+'\')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--blue);">&#9998;</button>'+
-                '<button onclick="accDelAccount(\''+a.id+'\',\''+safeN(a.name)+'\')" style="background:none;border:none;font-size:14px;cursor:pointer;color:var(--red);">&#128465;</button>'+
-              '</div>'+
-            '</div>';
-          });
-        });
-        body+='</div>';
-      });
-    }
-    body+='</div>';
-  });
-
-  return cards+
-    '<button onclick="accNewAccount()" style="width:100%;padding:14px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;margin-bottom:14px;">+ Add New Account</button>'+
-    body;
-}
 
 // ── ADD / EDIT ACCOUNT FORM ───────────────────────────
-function accNewAccount(prefill){
-  var v=prefill||{};
-  // Get unique heads and sub_heads for autocomplete suggestions
-  var existingHeads=[...new Set(ACC_ACCOUNTS.map(function(a){return a.head||'';}).filter(Boolean))];
-  var existingSubHeads=[...new Set(ACC_ACCOUNTS.map(function(a){return a.sub_head||'';}).filter(Boolean))];
 
-  document.getElementById('acc-sheet-title').textContent=v.id?'Edit Account':'New Account';
-  document.getElementById('acc-sheet-body').innerHTML=
-    '<div style="background:#E3F2FD;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#1565C0;">'+
-      '&#128161; Head \u2192 Sub Head \u2192 Account code. E.g. Head: <b>Direct Expenses</b>, Sub Head: <b>Labour</b>, Code: <b>4001</b>'+
-    '</div>'+
-    // HEAD
-    '<label class="flbl">Head *</label>'+
-    '<input id="na-head" class="finp" placeholder="e.g. Direct Expenses, Current Assets..." value="'+(v.head||'')+'">'+
-    '<div id="na-head-suggestions" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">'+
-      existingHeads.map(function(h){return '<span onclick="document.getElementById(\'na-head\').value=\''+h+'\'" style="background:#E3F2FD;color:#1565C0;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">'+h+'</span>';}).join('')+
-    '</div>'+
-    // SUB HEAD
-    '<label class="flbl">Sub Head *</label>'+
-    '<input id="na-subhead" class="finp" placeholder="e.g. Labour, Material, Office..." value="'+(v.sub_head||'')+'">'+
-    '<div id="na-subhead-suggestions" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">'+
-      existingSubHeads.map(function(sh){return '<span onclick="document.getElementById(\'na-subhead\').value=\''+sh+'\'" style="background:#E8F5E9;color:#2E7D32;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;">'+sh+'</span>';}).join('')+
-    '</div>'+
-    // ACCOUNT DETAILS
-    '<div class="g2">'+
-      '<div><label class="flbl">Account Code *</label><input id="na-code" class="finp" placeholder="e.g. 4001" value="'+(v.code||'')+'"></div>'+
-      '<div><label class="flbl">Account Name *</label><input id="na-name" class="finp" placeholder="e.g. Bar Bending Labour" value="'+(v.name||'')+'"></div>'+
-    '</div>'+
-    '<div class="g2">'+
-      '<div><label class="flbl">Type *</label>'+
-        '<select id="na-type" class="fsel">'+
-          ['asset','liability','income','expense'].map(function(t){return '<option value="'+t+'"'+(v.account_type===t?' selected':'')+'>'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>';}).join('')+
-        '</select></div>'+
-      '<div><label class="flbl">Group *</label>'+
-        '<select id="na-group" class="fsel">'+
-          ['Assets','Liabilities','Income','Expenses'].map(function(g){return '<option value="'+g+'"'+(v.group_name===g?' selected':'')+'>'+g+'</option>';}).join('')+
-        '</select></div>'+
-    '</div>'+
-    '<div class="g2">'+
-      '<div><label class="flbl">Opening Balance (\u20b9)</label><input id="na-ob" class="finp" type="number" step="0.01" value="'+(v.opening_balance||0)+'"></div>'+
-      '<div><label class="flbl">Balance Type *</label>'+
-        '<select id="na-btype" class="fsel">'+
-          '<option value="debit"'+(v.balance_type==='debit'?' selected':'')+'>Debit (Assets, Expenses)</option>'+
-          '<option value="credit"'+(v.balance_type==='credit'?' selected':'')+'>Credit (Liabilities, Income)</option>'+
-        '</select></div>'+
-    '</div>'+
-    '<div style="display:flex;gap:20px;margin-top:4px;">'+
-      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;"><input type="checkbox" id="na-iscash" style="width:18px;height:18px;"'+(v.is_cash?' checked':'')+'>&#128181; Is Cash Account</label>'+
-      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;"><input type="checkbox" id="na-isbank" style="width:18px;height:18px;"'+(v.is_bank?' checked':'')+'>&#127981; Is Bank Account</label>'+
-    '</div>';
 
-  document.getElementById('acc-sheet-foot').innerHTML=
-    '<button class="btn btn-outline" onclick="closeAccSheet()">Cancel</button>'+
-    '<button class="btn btn-navy" onclick="accSaveAccount(\''+(v.id||'')+'\')">&#10003; '+(v.id?'Save Changes':'Add Account')+'</button>';
-  openAccSheet();
-}
 
-function accEditAccount(id){var a=ACC_ACCOUNTS.find(function(x){return x.id===id;});if(!a)return;accNewAccount(a);}
 
-async function accSaveAccount(editId){
-  var code=gv('na-code'),name=gv('na-name'),head=gv('na-head'),subHead=gv('na-subhead');
-  if(!code||!name){toast('Code and name required','warning');return;}
-  if(!head){toast('Head is required','warning');return;}
-  if(!subHead){toast('Sub Head is required','warning');return;}
-  var data={
-    code:code, name:name,
-    head:head, sub_head:subHead,
-    account_type:gv('na-type'),
-    group_name:gv('na-group'),
-    opening_balance:parseFloat(gv('na-ob'))||0,
-    balance_type:gv('na-btype'),
-    is_cash:document.getElementById('na-iscash').checked,
-    is_bank:document.getElementById('na-isbank').checked,
-    is_system:false, active:true
-  };
-  try{
-    toast('Saving...','info');
-    if(editId){
-      await sbUpdate('accounts',editId,data);
-      var idx=ACC_ACCOUNTS.findIndex(function(a){return a.id===editId;});
-      if(idx>-1)ACC_ACCOUNTS[idx]=Object.assign(ACC_ACCOUNTS[idx],data);
-      toast(name+' updated!','success');
-    } else {
-      var r=await sbInsert('accounts',data);
-      if(r&&r[0]){ACC_ACCOUNTS.push(r[0]);ACC_ACCOUNTS.sort(function(a,b){return a.code>b.code?1:-1;});}
-      toast(name+' added!','success');
-    }
-    closeAccSheet();
-    accSwitchTab('coa',document.getElementById('acc-t-coa'));
-  }catch(e){
-    if(e.message&&e.message.includes('unique'))toast('Account code already exists','error');
-    else toast('Error: '+e.message,'error');
-  }
-}
 
-async function accDelAccount(id,name){
-  var inUse=ACC_VOU_ITEMS.some(function(it){return it.account_id===id;});
-  if(inUse){toast(name+' is used in vouchers — cannot delete','error');return;}
-  if(!confirm('Delete "'+name+'"?'))return;
-  try{await sbDelete('accounts',id);ACC_ACCOUNTS=ACC_ACCOUNTS.filter(function(a){return a.id!==id;});toast(name+' deleted','success');accSwitchTab('coa',document.getElementById('acc-t-coa'));}
-  catch(e){toast('Error: '+e.message,'error');}
-}
+
+
 
 // ── DASHBOARD ─────────────────────────────────────────
-function accDash(){
-  if(!ACC_ACCOUNTS.length)return '<div style="text-align:center;padding:40px;"><div style="font-size:48px;margin-bottom:12px;">&#128196;</div><div style="font-size:15px;font-weight:800;color:var(--navy);margin-bottom:8px;">No accounts set up yet</div><div style="font-size:13px;color:var(--text3);margin-bottom:20px;">Go to Chart of Accounts tab to add account codes first.</div><button onclick="accSwitchTab(\'coa\',document.getElementById(\'acc-t-coa\'))" style="padding:12px 24px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128196; Chart of Accounts</button></div>';
-  var cA=ACC_ACCOUNTS.find(function(a){return a.is_cash;}),bA=ACC_ACCOUNTS.find(function(a){return a.is_bank;});
-  var cB=cA?accBal(cA.id):0,bB=bA?accBal(bA.id):0;
-  function sc(ic,lbl,val,col){return '<div style="background:white;border-radius:12px;padding:12px;border-left:3px solid '+col+';"><div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">'+ic+' '+lbl+'</div><div style="font-size:18px;font-weight:900;color:'+col+';">'+fmtA(val)+'</div></div>';}
-  var recent=ACC_VOUCHERS.slice(0,8).map(function(v){var cfg=VOU_TYPES[v.voucher_type]||{icon:'&#128196;',css:'vou-journal',label:v.voucher_type};
-    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="accViewVoucher(\''+v.id+'\')">'+
-      '<div style="width:36px;height:36px;border-radius:10px;background:#F0F4F8;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+cfg.icon+'</div>'+
-      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(v.narration||v.party_name||'\u2014')+'</div>'+
-      '<div style="font-size:10px;color:var(--text3);margin-top:2px;"><span class="vou-badge '+cfg.css+'">'+cfg.label+'</span> \u2022 '+v.voucher_no+' \u2022 '+v.date+'</div></div>'+
-      '<div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:var(--navy);">'+fmtA(v.net_amount)+'</div></div>'+
-    '</div>';
-  }).join('')||'<div style="text-align:center;padding:20px;color:var(--text3);">No vouchers yet</div>';
-  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">'+sc('&#128181;','Cash',cB,'#2E7D32')+sc('&#127981;','Bank',bB,'#1565C0')+'</div>'+
-    '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'+
-    '<button onclick="accOpenVoucher(\'payment\')" style="flex:1;min-width:70px;padding:10px;background:#C62828;color:white;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128184; Payment</button>'+
-    '<button onclick="accOpenVoucher(\'receipt\')" style="flex:1;min-width:70px;padding:10px;background:#2E7D32;color:white;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128176; Receipt</button>'+
-    '<button onclick="accOpenVoucher(\'purchase\')" style="flex:1;min-width:70px;padding:10px;background:#1565C0;color:white;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#129534; Purchase</button>'+
-    '<button onclick="accOpenVoucher(\'journal\')" style="flex:1;min-width:70px;padding:10px;background:#6A1B9A;color:white;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128218; Journal</button>'+
-    '</div>'+
-    '<div style="background:white;border-radius:12px;padding:4px 12px;"><div style="font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;padding:10px 0 6px;">Recent Vouchers</div>'+recent+'</div>';
-}
+
 
 // ── VOUCHER LIST ───────────────────────────────────────
-function accEntry(){
-  if(!ACC_ACCOUNTS.length)return '<div style="text-align:center;padding:30px;"><div style="font-size:14px;font-weight:800;color:var(--navy);margin-bottom:8px;">&#128196; Set up Chart of Accounts first</div><button onclick="accSwitchTab(\'coa\',document.getElementById(\'acc-t-coa\'))" style="padding:12px 20px;background:var(--navy);color:white;border:none;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Chart of Accounts</button></div>';
-  var rows=ACC_VOUCHERS.map(function(v){var cfg=VOU_TYPES[v.voucher_type]||{icon:'&#128196;',css:'vou-journal',label:v.voucher_type};
-    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="accViewVoucher(\''+v.id+'\')">'+
-      '<div style="width:34px;height:34px;border-radius:8px;background:#F0F4F8;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+cfg.icon+'</div>'+
-      '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(v.narration||v.party_name||'\u2014')+'</div>'+
-      '<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+v.voucher_no+' \u2022 '+v.date+(v.party_name?' \u2022 '+v.party_name:'')+'</div></div>'+
-      '<div style="text-align:right;flex-shrink:0;"><div class="vou-badge '+cfg.css+'">'+cfg.label+'</div>'+
-      '<div style="font-size:12px;font-weight:900;color:var(--navy);margin-top:4px;">'+fmtA(v.net_amount)+'</div></div>'+
-    '</div>';
-  }).join('')||'<div style="text-align:center;padding:30px;color:var(--text3);">No vouchers yet. Tap + to add.</div>';
-  return '<div style="background:white;border-radius:12px;padding:4px 12px;">'+rows+'</div>';
-}
+
 
 // Party Type → Party Name dynamic loader
 var ACC_PARTY_CACHE={};
-async function avLoadPartyNames(){
-  var type=(document.getElementById('av-party-type')||{}).value||'';
-  var wrap=document.getElementById('av-party-wrap');
-  var partyEl=document.getElementById('av-party');
-  if(!wrap)return;
-  if(!type||type==='other'||type==='client'){
-    wrap.innerHTML='<input id="av-party" class="finp" placeholder="'+(type==='client'?'Enter client name':'Enter party name')+'">';
-    return;
-  }
-  wrap.innerHTML='<div style="text-align:center;padding:8px;color:var(--text3);font-size:12px;">&#9203; Loading...</div>';
-  try{
-    var list=[];
-    if(type==='vendor'){
-      var d=await sbFetch('vendors',{select:'id,name,gst_no',filter:'status=eq.active',order:'name.asc'});
-      list=(Array.isArray(d)?d:[]).map(function(v){return {id:v.id,name:v.name,sub:v.gst_no?'GST: '+v.gst_no:''};});
-    } else if(type==='sc'){
-      var d=await sbFetch('subcontractors',{select:'id,name,trade',order:'name.asc'});
-      list=(Array.isArray(d)?d:[]).map(function(s){return {id:s.id,name:s.name,sub:s.trade||''};});
-    } else if(type==='employee'){
-      var d=await sbFetch('employees',{select:'id,first_name,last_name,emp_id,designation',filter:'status=eq.active',order:'first_name.asc'});
-      list=(Array.isArray(d)?d:[]).map(function(e){return {id:e.id,name:(e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:''),sub:(e.emp_id?e.emp_id+' • ':'')+(e.designation||'')};});
-    }
-    ACC_PARTY_CACHE[type]=list;
-    if(!list.length){
-      wrap.innerHTML='<input id="av-party" class="finp" placeholder="No '+type+'s found in registry — enter manually">';
-      return;
-    }
-    var opts='<option value="">— Select '+type.charAt(0).toUpperCase()+type.slice(1)+' —</option>'+
-      list.map(function(p){return '<option value="'+p.name+'">'+(p.name)+(p.sub?' ('+p.sub+')':'')+'</option>';}).join('');
-    wrap.innerHTML='<select id="av-party" class="fsel">'+opts+'</select>';
-  }catch(e){
-    wrap.innerHTML='<input id="av-party" class="finp" placeholder="Enter party name manually">';
-    console.error(e);
-  }
-}
+
 
 
 // ── VOUCHER FORM ───────────────────────────────────────
-async function accOpenVoucher(type){
-  if(!ACC_ACCOUNTS.length){toast('Add account codes in Chart of Accounts first','warning');accSwitchTab('coa',document.getElementById('acc-t-coa'));return;}
-  var vType=type||'payment';
-  var fy=new Date().getMonth()>=3?new Date().getFullYear():new Date().getFullYear()-1;
-  var prefix={payment:'PMT',receipt:'RCP',purchase:'PUR',journal:'JNL',contra:'CTR'}[vType]||'VCH';
-  var vno=prefix+'-'+fy+'-'+String(ACC_VOUCHERS.filter(function(v){return v.voucher_type===vType;}).length+1).padStart(3,'0');
-  var today=new Date().toISOString().slice(0,10);
-  var projOpts='<option value="">— No Project —</option>';
-  try{var pd=await sbFetch('projects',{select:'id,name',order:'name.asc'});if(Array.isArray(pd))projOpts+=pd.map(function(p){return '<option value="'+p.id+'" data-name="'+p.name+'">'+p.name+'</option>';}).join('');}catch(e){}
-  var typeOpts=Object.keys(VOU_TYPES).map(function(t){return '<option value="'+t+'"'+(t===vType?' selected':'')+'>'+VOU_TYPES[t].label+' \u2014 '+VOU_TYPES[t].desc+'</option>';}).join('');
-  // Smart Dr/Cr filters
-  var drF,crF;
-  if(vType==='payment'){drF=function(a){return a.account_type==='expense'||a.account_type==='asset';};crF=function(a){return a.is_cash||a.is_bank;};}
-  else if(vType==='receipt'){drF=function(a){return a.is_cash||a.is_bank;};crF=function(a){return a.account_type==='income'||a.account_type==='liability';};}
-  else if(vType==='purchase'){drF=function(a){return a.account_type==='expense'||a.account_type==='asset';};crF=function(a){return a.account_type==='liability'||a.is_cash||a.is_bank;};}
-  else if(vType==='contra'){drF=function(a){return a.is_bank;};crF=function(a){return a.is_cash;};}
-  else{drF=null;crF=null;}
 
-  document.getElementById('acc-sheet-title').textContent='&#128221; New '+VOU_TYPES[vType].label+' Voucher';
-  document.getElementById('acc-sheet-body').innerHTML=
-    '<label class="flbl">Voucher Type *</label><select id="av-type" class="fsel">'+typeOpts+'</select>'+
-    '<div class="g2"><div><label class="flbl">Date *</label><input id="av-date" class="finp" type="date" value="'+today+'"></div><div><label class="flbl">Voucher No</label><input id="av-no" class="finp" value="'+vno+'"></div></div>'+
-    '<label class="flbl">Project</label><select id="av-proj" class="fsel">'+projOpts+'</select>'+
-    '<div class="g2"><div><label class="flbl">Party Type</label><select id="av-party-type" class="fsel" onchange="avLoadPartyNames()"><option value="">— Select Type —</option><option value="vendor">Vendor</option><option value="sc">Subcontractor</option><option value="employee">Employee</option><option value="client">Client</option><option value="other">Other</option></select></div><div><label class="flbl">Reference No</label><input id="av-ref" class="finp" placeholder="Invoice No"></div></div>'+'<label class="flbl">Party Name</label><div id="av-party-wrap"><input id="av-party" class="finp" placeholder="Select party type first..."></div>'+
-    '<label class="flbl">Narration *</label><input id="av-narr" class="finp" placeholder="Description">'+
-    '<div style="background:#FFEBEE;border-radius:10px;padding:12px;margin-top:10px;">'+
-      '<div style="font-size:11px;font-weight:800;color:#C62828;text-transform:uppercase;margin-bottom:8px;">&#128229; DEBIT</div>'+
-      '<label class="flbl">Account (Dr) *</label><select id="av-dr-acc" class="fsel" style="margin-bottom:8px;">'+accOpts(drF)+'</select>'+
-      '<label class="flbl">Amount (\u20b9) *</label><input id="av-amount" class="finp" type="number" step="0.01" placeholder="0.00" style="font-size:20px;font-weight:900;">'+
-    '</div>'+
-    '<div style="background:#E8F5E9;border-radius:10px;padding:12px;margin-top:8px;">'+
-      '<div style="font-size:11px;font-weight:800;color:#2E7D32;text-transform:uppercase;margin-bottom:8px;">&#128228; CREDIT</div>'+
-      '<label class="flbl">Account (Cr) *</label><select id="av-cr-acc" class="fsel">'+accOpts(crF)+'</select>'+
-    '</div>'+
-    '<div style="margin-top:10px;background:#E3F2FD;border-radius:10px;padding:12px;">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'+
-        '<div style="font-size:12px;font-weight:800;color:#1565C0;">&#129534; GST Details</div>'+
-        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:700;"><input type="checkbox" id="av-gst-on" onchange="var s=this.checked;document.getElementById(\'av-gst-fields\').style.display=s?\'block\':\'none\';" style="width:16px;height:16px;"> Apply GST</label>'+
-      '</div>'+
-      '<div id="av-gst-fields" style="display:none;">'+
-        '<label class="flbl">Party GSTIN</label><input id="av-gstin" class="finp" placeholder="27XXXXX...">'+
-        '<div class="g2"><div><label class="flbl">Taxable Amount</label><input id="av-tax-amt" class="finp" type="number" oninput="var t=parseFloat(this.value)||0;var r=parseFloat((document.getElementById(\'av-gstrate\')||{value:12}).value)||12;var h=t*r/100/2;var cg=document.getElementById(\'av-cgst\');if(cg)cg.value=h.toFixed(2);var sg=document.getElementById(\'av-sgst\');if(sg)sg.value=h.toFixed(2);"></div>'+
-        '<div><label class="flbl">GST Rate %</label><select id="av-gstrate" class="fsel"><option value="5">5%</option><option value="12" selected>12%</option><option value="18">18%</option><option value="28">28%</option></select></div></div>'+
-        '<div class="g2"><div><label class="flbl">CGST (auto)</label><input id="av-cgst" class="finp" readonly style="opacity:.7;"></div><div><label class="flbl">SGST (auto)</label><input id="av-sgst" class="finp" readonly style="opacity:.7;"></div></div>'+
-      '</div>'+
-    '</div>';
-  document.getElementById('acc-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeAccSheet()">Cancel</button><button class="btn btn-navy" onclick="accSaveVoucher()">&#128190; Post Voucher</button>';
-  openAccSheet();
-}
 
-async function accSaveVoucher(){
-  var vType=gv('av-type'),date=gv('av-date'),narr=gv('av-narr');
-  var drAccId=(document.getElementById('av-dr-acc')||{}).value||'';
-  var crAccId=(document.getElementById('av-cr-acc')||{}).value||'';
-  var amt=parseFloat(gv('av-amount'))||0;
-  if(!vType||!date||!narr){toast('Date and narration required','warning');return;}
-  if(!drAccId){toast('Select Debit account','warning');return;}
-  if(!crAccId){toast('Select Credit account','warning');return;}
-  if(!amt){toast('Enter amount','warning');return;}
-  if(drAccId===crAccId){toast('Dr and Cr cannot be same','warning');return;}
-  var projEl=document.getElementById('av-proj');var projId=projEl?projEl.value||null:null;var projName=projEl&&projEl.selectedIndex>0?projEl.options[projEl.selectedIndex].text:null;
-  var drAcc=ACC_ACCOUNTS.find(function(a){return a.id===drAccId;})||{name:'\u2014'};
-  var crAcc=ACC_ACCOUNTS.find(function(a){return a.id===crAccId;})||{name:'\u2014'};
-  var hasGST=document.getElementById('av-gst-on')&&document.getElementById('av-gst-on').checked;
-  var gstAmt=hasGST?(parseFloat(gv('av-cgst'))||0)*2:0;
-  var fy=new Date().getMonth()>=3?new Date().getFullYear():new Date().getFullYear()-1;
-  var prefix={payment:'PMT',receipt:'RCP',purchase:'PUR',journal:'JNL',contra:'CTR'}[vType]||'VCH';
-  var vno=gv('av-no')||(prefix+'-'+fy+'-'+String(ACC_VOUCHERS.filter(function(v){return v.voucher_type===vType;}).length+1).padStart(3,'0'));
-  try{
-    toast('Posting...','info');
-    var vou=await sbInsert('vouchers',{voucher_no:vno,voucher_type:vType,date:date,project_id:projId,project_name:projName,party_name:gv('av-party')||null,narration:narr,reference_no:gv('av-ref')||null,total_amount:amt,gst_amount:gstAmt,tds_amount:0,net_amount:amt,status:'posted',source:'manual',created_by:currentUser?currentUser.name:null});
-    if(!vou||!vou[0]){toast('Failed to save','error');return;}
-    var vid=vou[0].id;ACC_VOUCHERS.unshift(vou[0]);
-    await Promise.all([
-      sbInsert('voucher_items',{voucher_id:vid,account_id:drAccId,account_name:drAcc.name,entry_type:'debit',amount:amt}),
-      sbInsert('voucher_items',{voucher_id:vid,account_id:crAccId,account_name:crAcc.name,entry_type:'credit',amount:amt})
-    ]);
-    ACC_VOU_ITEMS.push({voucher_id:vid,account_id:drAccId,account_name:drAcc.name,entry_type:'debit',amount:amt});
-    ACC_VOU_ITEMS.push({voucher_id:vid,account_id:crAccId,account_name:crAcc.name,entry_type:'credit',amount:amt});
-    if(hasGST&&gstAmt>0){
-      var gr=await sbInsert('gst_entries',{voucher_id:vid,date:date,party_name:gv('av-party')||null,party_gstin:gv('av-gstin')||null,taxable_amount:parseFloat(gv('av-tax-amt'))||0,cgst_rate:parseFloat(gv('av-gstrate'))/2,sgst_rate:parseFloat(gv('av-gstrate'))/2,cgst_amount:parseFloat(gv('av-cgst'))||0,sgst_amount:parseFloat(gv('av-sgst'))||0,total_gst:gstAmt,gst_type:(vType==='receipt'?'output':'input'),project_id:projId});
-      if(gr&&gr[0])ACC_GST.push(gr[0]);
-    }
-    toast('\u2713 '+vno+' posted!','success');closeAccSheet();accSwitchTab('entry',document.getElementById('acc-t-entry'));
-  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
-}
 
-function accViewVoucher(id){
-  var v=ACC_VOUCHERS.find(function(x){return x.id===id;});if(!v)return;
-  var cfg=VOU_TYPES[v.voucher_type]||{icon:'&#128196;',label:v.voucher_type};
-  var items=ACC_VOU_ITEMS.filter(function(it){return it.voucher_id===id;});
-  function row(l,val){return val?'<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F0F4F8;font-size:12px;"><span style="color:var(--text3);">'+l+'</span><span style="font-weight:700;">'+val+'</span></div>':'';}
-  document.getElementById('acc-sheet-title').textContent=cfg.icon+' '+v.voucher_no;
-  document.getElementById('acc-sheet-body').innerHTML=
-    '<div style="background:var(--navy);border-radius:12px;padding:16px;text-align:center;margin-bottom:14px;color:white;">'+
-      '<div style="font-size:12px;opacity:.6;margin-bottom:4px;">'+cfg.label+' \u2022 '+v.voucher_no+' \u2022 '+v.date+'</div>'+
-      '<div style="font-size:28px;font-weight:900;">'+fmtA(v.net_amount)+'</div>'+
-      (v.narration?'<div style="font-size:12px;opacity:.7;margin-top:4px;">'+v.narration+'</div>':'')+
-    '</div>'+
-    '<div style="background:white;border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
-      row('Party',v.party_name||'\u2014')+row('Project',v.project_name)+row('Reference',v.reference_no)+row('Status',v.status)+
-    '</div>'+
-    '<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Ledger Entries</div>'+
-    '<div style="background:white;border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
-      items.map(function(it){
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #F0F4F8;font-size:12px;">'+
-          '<div><span style="background:'+(it.entry_type==='debit'?'#FFEBEE':'#E8F5E9')+';color:'+(it.entry_type==='debit'?'#C62828':'#2E7D32')+';border-radius:4px;padding:2px 7px;font-size:10px;font-weight:800;margin-right:6px;">'+(it.entry_type==='debit'?'Dr':'Cr')+'</span>'+it.account_name+'</div>'+
-          '<div style="font-weight:800;">'+fmtA(it.amount)+'</div>'+
-        '</div>';
-      }).join('')+
-    '</div>';
-  var isAdmin=currentUser&&currentUser.role==='admin';
-  document.getElementById('acc-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeAccSheet()">Close</button>'+(isAdmin?'<button class="btn" style="background:#C62828;color:white;" onclick="accDelVoucher(\''+id+'\')">&#128465; Delete</button>':'');
-  openAccSheet();
-}
 
-async function accDelVoucher(id){
-  if(!confirm('Delete this voucher?'))return;
-  try{await sbDelete('vouchers',id);ACC_VOUCHERS=ACC_VOUCHERS.filter(function(v){return v.id!==id;});ACC_VOU_ITEMS=ACC_VOU_ITEMS.filter(function(it){return it.voucher_id!==id;});toast('Deleted','success');closeAccSheet();accSwitchTab('entry',document.getElementById('acc-t-entry'));}
-  catch(e){toast('Error: '+e.message,'error');}
-}
+
+
+
 
 // ── LEDGER TAB ────────────────────────────────────────
-function accLedger(){
-  var parties={};ACC_VOUCHERS.forEach(function(v){if(v.party_name)parties[v.party_name]=true;});
-  var selParty=document.getElementById('acc-sel-party')?document.getElementById('acc-sel-party').value:'';
-  var pOpts='<option value="">— Select Party —</option>'+Object.keys(parties).map(function(k){return '<option value="'+k+'"'+(k===selParty?' selected':'')+'>'+k+'</option>';}).join('');
-  var lHtml='';
-  if(selParty){
-    var txns=ACC_VOUCHERS.filter(function(v){return v.party_name===selParty;}).sort(function(a,b){return a.date.localeCompare(b.date);});
-    var bal=0;
-    var rows=txns.map(function(v){
-      var isD=(v.voucher_type==='payment'||v.voucher_type==='purchase');
-      bal+=isD?(parseFloat(v.net_amount)||0):-(parseFloat(v.net_amount)||0);
-      return '<div style="display:grid;grid-template-columns:64px 1fr 70px 70px 80px;gap:4px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;align-items:center;">'+
-        '<div style="color:var(--text3);">'+v.date+'</div>'+
-        '<div><div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(v.narration||v.reference_no||'\u2014')+'</div><div style="font-size:10px;color:var(--text3);">'+v.voucher_no+'</div></div>'+
-        '<div style="text-align:right;color:#C62828;font-weight:700;">'+(isD?fmtA(v.net_amount):'')+'</div>'+
-        '<div style="text-align:right;color:#2E7D32;font-weight:700;">'+(!isD?fmtA(v.net_amount):'')+'</div>'+
-        '<div style="text-align:right;font-weight:800;color:'+(bal>=0?'#1565C0':'#C62828')+';">'+fmtA(Math.abs(bal))+'</div>'+
-      '</div>';
-    }).join('')||'<div style="text-align:center;padding:16px;color:var(--text3);">No transactions</div>';
-    lHtml='<div style="background:white;border-radius:12px;padding:4px 12px;margin-top:10px;">'+
-      '<div style="display:grid;grid-template-columns:64px 1fr 70px 70px 80px;gap:4px;padding:6px 0;font-size:10px;font-weight:800;color:var(--text3);border-bottom:2px solid var(--border);">'+
-        '<div>Date</div><div>Narration</div><div style="text-align:right;">Dr</div><div style="text-align:right;">Cr</div><div style="text-align:right;">Balance</div>'+
-      '</div>'+rows+'</div>';
-  }
-  return '<div style="background:white;border-radius:12px;padding:14px;margin-bottom:10px;">'+
-    '<label class="flbl">Select Party</label>'+
-    '<select id="acc-sel-party" class="fsel" onchange="accSwitchTab(\'ledger\',document.getElementById(\'acc-t-ledger\'))">'+pOpts+'</select>'+
-  '</div>'+lHtml;
-}
+
 
 // ── REPORTS TAB ───────────────────────────────────────
-function accReports(){
-  var income=0,expense=0,incRows='',expRows='';
-  ACC_ACCOUNTS.forEach(function(a){var b=accBal(a.id);if(!b)return;
-    if(a.account_type==='income'){income+=b;incRows+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span>'+(a.head?a.head+' \u203a ':'')+a.name+'</span><span style="color:#2E7D32;font-weight:700;">'+fmtA(b)+'</span></div>';}
-    else if(a.account_type==='expense'){expense+=b;expRows+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;"><span>'+(a.head?a.head+' \u203a ':'')+a.name+'</span><span style="color:#C62828;font-weight:700;">'+fmtA(b)+'</span></div>';}
-  });
-  var profit=income-expense;
-  return '<div style="background:white;border-radius:12px;padding:12px;margin-bottom:10px;">'+
-    '<div style="font-size:11px;font-weight:800;color:#2E7D32;text-transform:uppercase;margin-bottom:8px;">Income</div>'+
-    (incRows||'<div style="font-size:12px;color:var(--text3);padding:8px 0;">No income entries</div>')+
-    '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;font-weight:900;border-top:2px solid #2E7D32;"><span>Total Income</span><span style="color:#2E7D32;">'+fmtA(income)+'</span></div></div>'+
-  '<div style="background:white;border-radius:12px;padding:12px;margin-bottom:10px;">'+
-    '<div style="font-size:11px;font-weight:800;color:#C62828;text-transform:uppercase;margin-bottom:8px;">Expenses</div>'+
-    (expRows||'<div style="font-size:12px;color:var(--text3);padding:8px 0;">No expense entries</div>')+
-    '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;font-weight:900;border-top:2px solid #C62828;"><span>Total Expenses</span><span style="color:#C62828;">'+fmtA(expense)+'</span></div></div>'+
-  '<div style="display:flex;justify-content:space-between;padding:14px 16px;background:'+(profit>=0?'#E8F5E9':'#FFEBEE')+';border-radius:12px;font-size:15px;font-weight:900;">'+
-    '<span>'+(profit>=0?'Net Profit':'Net Loss')+'</span><span style="color:'+(profit>=0?'#2E7D32':'#C62828')+';">'+fmtA(Math.abs(profit))+'</span></div>';
-}
+
 
 // ── GST TAB ───────────────────────────────────────────
-function accGstTab(){
-  var iGST=0,oGST=0;ACC_GST.forEach(function(g){if(g.gst_type==='input')iGST+=parseFloat(g.total_gst)||0;else oGST+=parseFloat(g.total_gst)||0;});
-  var net=oGST-iGST;
-  return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">'+
-    '<div style="background:white;border-radius:12px;padding:12px;text-align:center;border-left:3px solid #1565C0;"><div style="font-size:10px;color:var(--text3);font-weight:600;">Input GST</div><div style="font-size:16px;font-weight:900;color:#1565C0;margin-top:4px;">'+fmtA(iGST)+'</div></div>'+
-    '<div style="background:white;border-radius:12px;padding:12px;text-align:center;border-left:3px solid #C62828;"><div style="font-size:10px;color:var(--text3);font-weight:600;">Output GST</div><div style="font-size:16px;font-weight:900;color:#C62828;margin-top:4px;">'+fmtA(oGST)+'</div></div>'+
-    '<div style="background:white;border-radius:12px;padding:12px;text-align:center;border-left:3px solid '+(net>0?'#C62828':'#2E7D32')+';"><div style="font-size:10px;color:var(--text3);font-weight:600;">Net Payable</div><div style="font-size:16px;font-weight:900;color:'+(net>0?'#C62828':'#2E7D32')+';margin-top:4px;">'+fmtA(net)+'</div></div>'+
-  '</div>'+
-  '<div style="background:white;border-radius:12px;padding:12px;">'+
-    (ACC_GST.length?ACC_GST.slice(0,10).map(function(g){return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;"><div><div style="font-weight:700;">'+(g.party_name||'\u2014')+'</div><div style="font-size:10px;color:var(--text3);">'+g.date+' \u2022 '+g.gst_type+'</div></div><div style="font-weight:800;">'+fmtA(g.total_gst)+'</div></div>';}).join(''):'<div style="text-align:center;padding:20px;color:var(--text3);">No GST entries</div>')+
-  '</div>';
-}
+
 
 // ════ ACCESS CONTROL ════════════════════════════════════
 var AC_TAB='emp',AC_TARGET=null,AC_PERMISSIONS={};
@@ -15744,44 +14945,9 @@ async function acSavePermissions(){
 // ── Permission enforcement ─────────────────────────────────────────────
 var USER_PERMISSIONS = {}; // loaded after login
 
-async function loadUserPermissions(){
-  if(!currentUser) return;
-  try{
-    // Load by employee_id first, then by role
-    var empFilter = 'employee_id=eq.'+currentUser.id;
-    var roleFilter = 'role=eq.'+(currentUser.access||currentUser.role||'');
-    var results = await Promise.all([
-      sbFetch('access_permissions',{select:'*',filter:empFilter}),
-      sbFetch('access_permissions',{select:'*',filter:roleFilter})
-    ]);
-    USER_PERMISSIONS = {};
-    // Role permissions first (lower priority)
-    if(Array.isArray(results[1])) results[1].forEach(function(r){
-      if(!USER_PERMISSIONS[r.module]) USER_PERMISSIONS[r.module]={};
-      USER_PERMISSIONS[r.module][r.permission] = r.granted;
-    });
-    // Employee-specific permissions override role (higher priority)
-    if(Array.isArray(results[0])) results[0].forEach(function(r){
-      if(!USER_PERMISSIONS[r.module]) USER_PERMISSIONS[r.module]={};
-      USER_PERMISSIONS[r.module][r.permission] = r.granted;
-    });
-  }catch(e){
-    USER_PERMISSIONS = {};
-    console.warn('loadUserPermissions: table may not exist yet',e);
-  }
-  // Apply permissions to drawer immediately after load
-  if(typeof applyDrawerPermissions === 'function') applyDrawerPermissions();
-}
 
-function canAccess(module, permission){
-  // Admins always have full access
-  if(currentUser && currentUser.role==='admin') return true;
-  // If no permissions defined at all, default to allow (graceful degradation)
-  if(!Object.keys(USER_PERMISSIONS).length) return true;
-  var mp = USER_PERMISSIONS[module];
-  if(!mp) return false;
-  return mp[permission||'view'] === true;
-}
+
+
 
 // Returns 'all', 'department', or 'self'
 function getEmpDataScope(){
@@ -16004,140 +15170,15 @@ function coPhone(){ return coGet('phone',''); }
 function coEmail(){ return coGet('email',''); }
 
 // Pre-load company data on app start (called once)
-async function preloadCompanyData(){
-  try{
-    var rows = await sbFetch('company_details',{select:'*',order:'id.asc'});
-    COMPANY_DATA = (Array.isArray(rows)&&rows.length) ? rows[0] : {};
-  }catch(e){ COMPANY_DATA = {}; }
-}
+
 
 // ════ PDF / EXCEL DOWNLOAD UTILITIES ════════════════════════════════════
 
 // Download salary sheet as CSV/Excel
-function downloadSalaryExcel(){
-  var rows = window._salRows||[];
-  var month = window._salMonth||'Salary';
-  if(!rows.length){toast('Generate salary sheet first','warning');return;}
 
-  var lines = [
-    [coName()],
-    ['Salary Sheet - '+month],
-    [''],
-    ['Emp Code','Employee Name','Designation','Department','Days Worked','OT Hrs',
-     'Basic','Gross Earnings','PF (Emp)','ESIC (Emp)','TDS','Prof Tax','Advance',
-     'Total Deductions','Net Payable']
-  ];
-
-  rows.forEach(function(r){
-    var e = EMP_LIST.find(function(x){return x.id===r.id;})||{};
-    lines.push([
-      r.code,
-      r.name,
-      e.designation||e.role||'',
-      e.department||'',
-      r.days,
-      r.ot||0,
-      r.pay.basic||0,
-      r.earned+(r.otPay||0),
-      r.pfEmp||0,
-      r.esic||0,
-      r.tds||0,
-      r.pt||0,
-      r.adv||0,
-      (r.pfEmp||0)+(r.esic||0)+(r.tds||0)+(r.pt||0)+(r.adv||0),
-      r.payable
-    ]);
-  });
-
-  var total = rows.reduce(function(s,r){return s+r.payable;},0);
-  lines.push(['','','','','','','','','','','','','','TOTAL',total]);
-
-  var csv = lines.map(function(row){
-    return row.map(function(cell){
-      var s = String(cell==null?'':cell);
-      if(s.indexOf(',')>-1||s.indexOf('"')>-1||s.indexOf('\n')>-1)
-        s = '"'+s.replace(/"/g,'""')+'"';
-      return s;
-    }).join(',');
-  }).join('\n');
-
-  var blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'SalarySheet_'+month.replace(/\s+/g,'_')+'.csv';
-  a.click();
-  toast('Salary sheet downloaded as CSV/Excel','success');
-}
 
 // Download salary sheet as PDF (print-friendly HTML)
-function downloadSalaryPDF(){
-  var rows = window._salRows||[];
-  var month = window._salMonth||'Salary';
-  if(!rows.length){toast('Generate salary sheet first','warning');return;}
 
-  var total = rows.reduce(function(s,r){return s+r.payable;},0);
-  var compName = coName();
-  var compAddr = coAddr();
-  var compGST  = coGST();
-
-  var tableRows = rows.map(function(r,i){
-    var e = EMP_LIST.find(function(x){return x.id===r.id;})||{};
-    return '<tr>'+
-      '<td>'+(i+1)+'</td>'+
-      '<td>'+r.code+'</td>'+
-      '<td style="text-align:left;">'+r.name+'<br><small style="color:#666;">'+(e.designation||'')+'</small></td>'+
-      '<td style="text-align:center;">'+r.days+(r.ot?'+'+r.ot+'h':'')+'</td>'+
-      '<td>'+Number(r.pay.basic||0).toLocaleString('en-IN')+'</td>'+
-      '<td>'+Number(r.earned+(r.otPay||0)).toLocaleString('en-IN')+'</td>'+
-      '<td style="color:#C62828;">'+Number((r.pfEmp||0)+(r.esic||0)+(r.tds||0)+(r.pt||0)+(r.adv||0)).toLocaleString('en-IN')+'</td>'+
-      '<td style="font-weight:700;color:#1B5E20;">\u20b9'+Number(r.payable).toLocaleString('en-IN')+'</td>'+
-    '</tr>';
-  }).join('');
-
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
-    '<title>Salary Sheet - '+month+'</title>'+
-    '<style>'+
-    'body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0;padding:20px;}'+
-    '.header{text-align:center;border-bottom:3px double #1B5E20;padding-bottom:12px;margin-bottom:16px;}'+
-    '.co-name{font-size:18px;font-weight:900;color:#1B5E20;letter-spacing:1px;}'+
-    '.co-sub{font-size:10px;color:#555;margin-top:3px;}'+
-    '.sheet-title{font-size:14px;font-weight:700;text-align:center;margin:10px 0;text-decoration:underline;}'+
-    'table{width:100%;border-collapse:collapse;font-size:11px;}'+
-    'th{background:#1B5E20;color:white;padding:6px 8px;text-align:right;}'+
-    'th:nth-child(1),th:nth-child(2),th:nth-child(3){text-align:left;}'+
-    'td{padding:5px 8px;border-bottom:1px solid #eee;text-align:right;}'+
-    'td:nth-child(1),td:nth-child(2),td:nth-child(3){text-align:left;}'+
-    'tr:nth-child(even){background:#F9FFF9;}'+
-    '.total-row{background:#E8F5E9;font-weight:900;border-top:2px solid #1B5E20;}'+
-    '.footer{margin-top:20px;font-size:10px;color:#888;text-align:center;}'+
-    '@media print{@page{size:A4 landscape;margin:10mm;}body{padding:0;}}'+
-    '</style></head><body>'+
-    '<div class="header">'+
-      '<div class="co-name">'+compName+'</div>'+
-      (compAddr?'<div class="co-sub">'+compAddr+'</div>':'')+
-      (compGST?'<div class="co-sub">GSTIN: '+compGST+'</div>':'')+
-    '</div>'+
-    '<div class="sheet-title">SALARY SHEET &mdash; '+month+'</div>'+
-    '<table>'+
-      '<thead><tr>'+
-        '<th>#</th><th>Code</th><th>Employee</th><th style="text-align:center;">Days</th>'+
-        '<th>Basic</th><th>Gross</th><th>Deductions</th><th>Net Pay</th>'+
-      '</tr></thead>'+
-      '<tbody>'+tableRows+'</tbody>'+
-      '<tfoot><tr class="total-row">'+
-        '<td colspan="7" style="text-align:right;">TOTAL PAYROLL</td>'+
-        '<td>\u20b9'+Number(total).toLocaleString('en-IN')+'</td>'+
-      '</tr></tfoot>'+
-    '</table>'+
-    '<div class="footer">Generated on '+fmtDate(new Date())+
-      ' &nbsp;|&nbsp; '+compName+' &nbsp;|&nbsp; Computer generated document</div>'+
-    '<script>window.onload=function(){window.print();}<\/script>'+
-    '</body></html>';
-
-  var w = window.open('','_blank');
-  if(w){ w.document.write(html); w.document.close(); }
-  else { toast('Allow popups to download PDF','warning'); }
-}
 
 // Download individual payslip as PDF
 function downloadPayslipPDF(empId, monthLabel){
