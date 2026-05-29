@@ -16645,9 +16645,11 @@ function annBuildStatement(records, periodLabel){
       var pay = EMP_PAY.filter(function(p){return p.employee_id===r.employee_id;})
                        .sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);})[0]||{};
       var extraEarnings=[];try{extraEarnings=pay.extra_earnings?JSON.parse(pay.extra_earnings):[];}catch(ex){}
+      var empRec=EMP_LIST.find(function(x){return x.id===r.employee_id;})||{};
       empMap[key]={
         id:r.employee_id, name:r.employee_name, code:r.employee_code||'—',
         desig:r.designation||'—', dept:r.department||'—',
+        pan:empRec.pan||empRec.pan_no||'—',
         months:0, days:0, ot:0,
         basic:0, extra:{}, ot_pay:0, gross:0,
         pf:0, esic:0, tds:0, pt:0, adv:0, total_ded:0, net:0,
@@ -16822,6 +16824,7 @@ function annBuildStatement(records, periodLabel){
       '<td style="padding:8px;font-size:11px;font-weight:800;">'+e.name+
         '<div style="font-size:9px;color:var(--text3);">'+e.code+' &bull; '+e.desig+'</div>'+
         '<div style="font-size:9px;color:#1565C0;">'+e.months+' month(s) &bull; '+e.dept+'</div>'+
+        (e.pan&&e.pan!=='—'?'<div style="font-size:9px;color:#6A1B9A;font-weight:700;">PAN: '+e.pan+'</div>':'')+
       '</td>'+
       td(e.basic)+
       compKeys.map(function(k){return td(e.extra[k]||0);}).join('')+
@@ -16911,7 +16914,7 @@ function annDownloadExcel(){
   var hasOT=data.hasOT, MONTHS=data.MONTHS||['','January','February','March','April','May','June','July','August','September','October','November','December'];
   var compName=typeof coName==='function'?coName():'AIPL';
 
-  var header=['Sr No','Employee','Code','Designation','Department','Month','Days',
+  var header=['Sr No','Employee','Code','PAN','Designation','Department','Month','Days',
     'Basic'].concat(compKeys);
   if(hasOT) header.push('OT Pay');
   header=header.concat(['Gross','PF','ESIC','TDS','Prof Tax','Advance','Total Ded.','Net Salary']);
@@ -16939,14 +16942,14 @@ function annDownloadExcel(){
       }
       var pf=Number(r.pf_employee||0),esic=Number(r.esic_employee||0);
       var tds=Number(r.tds||0),pt=Number(r.profession_tax||0),adv=Number(r.advance_deduct||0);
-      var row=[i+1,e.name,e.code,e.desig,e.dept,(MONTHS[r.month]||r.month)+' '+r.year,days,basic];
+      var row=[i+1,e.name,e.code,e.pan||'—',e.desig,e.dept,(MONTHS[r.month]||r.month)+' '+r.year,days,basic];
       compKeys.forEach(function(k){row.push(rowExtra[k]||0);});
       if(hasOT) row.push(Number(r.ot_pay||0));
       row=row.concat([Number(r.gross||0),pf,esic,tds,pt,adv,pf+esic+tds+pt+adv,Number(r.net_payable||0)]);
       lines.push(row);
     });
     // Employee subtotal row
-    var sub=['','>> SUBTOTAL',e.name,'','',e.months+' months',e.days,e.basic];
+    var sub=['','>> SUBTOTAL',e.name,e.pan||'—','','',e.months+' months',e.days,e.basic];
     compKeys.forEach(function(k){sub.push(e.extra[k]||0);});
     if(hasOT) sub.push(e.ot_pay);
     sub=sub.concat([e.gross,e.pf,e.esic,e.tds,e.pt,e.adv,e.total_ded,e.net]);
@@ -16956,7 +16959,7 @@ function annDownloadExcel(){
 
   // Grand total
   var t=data.totals;
-  var grand=['','GRAND TOTAL','','','','',empList.reduce(function(s,e){return s+e.days;},0),t.basic];
+  var grand=['','GRAND TOTAL','','','','','',empList.reduce(function(s,e){return s+e.days;},0),t.basic];
   compKeys.forEach(function(k){grand.push(t.extra[k]||0);});
   if(hasOT) grand.push(t.ot_pay);
   grand=grand.concat([t.gross,t.pf,t.esic,t.tds,t.pt,t.adv,t.total_ded,t.net]);
@@ -17038,7 +17041,7 @@ function annDownloadPDF(){
       var ded=pf+esic+tds+pt+adv;
       var bg=ri%2===0?'white':'#FAFAFA';
       tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
-        (ri===0?'<td style="padding:4px 5px;font-size:8px;font-weight:800;" rowspan="'+e.monthRecords.length+'">'+e.name+'<br><span style="font-size:7px;color:#888;">'+e.code+'</span></td>':'')+ 
+        (ri===0?'<td style="padding:4px 5px;font-size:8px;font-weight:800;" rowspan="'+e.monthRecords.length+'">'+e.name+'<br><span style="font-size:7px;color:#888;">'+e.code+'</span>'+(e.pan&&e.pan!=='—'?'<br><span style="font-size:7px;color:#6A1B9A;font-weight:700;">PAN: '+e.pan+'</span>':'')+'</td>':'')+ 
         '<td style="padding:4px 5px;font-size:8px;color:#1565C0;font-weight:700;">'+(MONTHS[r.month]||r.month)+' '+r.year+'</td>'+
         c(days,'#555')+c(basic)+
         compKeys.map(function(k){return c(rowExtra[k]||0);}).join('')+
