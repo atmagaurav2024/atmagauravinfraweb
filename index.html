@@ -8395,12 +8395,11 @@ function projModSelChange(){
 async function projModLoadProjects(){
   var sel = document.getElementById('proj-mod-sel');
   if(!sel) return;
-  if(!PROJ_DATA || !PROJ_DATA.length){
-    try{
-      var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
-      PROJ_DATA = Array.isArray(rows) ? rows : [];
-    }catch(e){ PROJ_DATA = []; }
-  }
+  // Always fetch fresh from DB to pick up newly added projects
+  try{
+    var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
+    PROJ_DATA = Array.isArray(rows) ? rows : [];
+  }catch(e){ if(!PROJ_DATA) PROJ_DATA=[]; }
   var prev = PROJ_MOD_SEL_ID;
   sel.innerHTML = '<option value="">— Select Project —</option>'+
     PROJ_DATA.map(function(p){
@@ -8878,66 +8877,7 @@ function openProjForm(id){
 
 function closeProjSheet(){ closeSheet('ov-proj','sh-proj'); }
 
-async function saveProjForm(editId){
-  var name = (document.getElementById('pf-name')||{value:''}).value.trim();
-  if(!name){toast('Project name required','warning');return;}
 
-  // File upload (base64 encode for storage — small files only)
-  var attachments=[];
-  // Existing files (from edit)
-  PF_FILES.forEach(function(f){
-    if(f.url) attachments.push({name:f.name,url:f.url}); // already stored
-  });
-  // New files — encode as base64 data URLs
-  var newFiles=PF_FILES.filter(function(f){return f.file;});
-  if(newFiles.length){
-    try{
-      await Promise.all(newFiles.map(function(f){
-        return new Promise(function(resolve){
-          var reader=new FileReader();
-          reader.onload=function(e){
-            attachments.push({name:f.name,url:e.target.result,fileName:f.file.name,type:f.type});
-            resolve();
-          };
-          reader.readAsDataURL(f.file);
-        });
-      }));
-    }catch(e){console.warn('File encode:',e);}
-  }
-
-  var data = {
-    name:name,
-    code:(document.getElementById('pf-code')||{value:''}).value.trim()||null,
-    client:(document.getElementById('pf-client')||{value:''}).value.trim()||null,
-    status:(document.getElementById('pf-status')||{value:'active'}).value||'active',
-    location:(document.getElementById('pf-location')||{value:''}).value.trim()||null,
-    project_length:parseFloat((document.getElementById('pf-length')||{value:''}).value)||null,
-    coordinates:PF_COORDS.length?JSON.stringify(PF_COORDS):null,
-    tender_cost:parseFloat((document.getElementById('pf-tender')||{value:''}).value)||null,
-    tender_pct:parseFloat((document.getElementById('pf-pct')||{value:'0'}).value)||0,
-    contract_value:parseFloat((document.getElementById('pf-contract')||{value:''}).value)||null,
-    loa_date:(document.getElementById('pf-loa')||{value:''}).value||null,
-    wo_date:(document.getElementById('pf-wo-date')||{value:''}).value||null,
-    completion_date:(document.getElementById('pf-completion')||{value:''}).value||null,
-    description:(document.getElementById('pf-desc')||{value:''}).value.trim()||null,
-    attachments:attachments.length?JSON.stringify(attachments):null
-  };
-  try{
-    if(editId){
-      await sbUpdate('projects',editId,data);
-      var idx=PROJ_DATA.findIndex(function(p){return p.id===editId;});
-      if(idx>-1) PROJ_DATA[idx]=Object.assign(PROJ_DATA[idx],data);
-      toast('Project updated!','success');
-    } else {
-      var res=await sbInsert('projects',data);
-      if(res&&res[0]) PROJ_DATA.push(res[0]);
-      toast('Project added!','success');
-    }
-    closeProjSheet();
-    renderProjList();
-    projModLoadProjects();
-  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
-}
 
 async function deleteProjItem(id){
   try{
