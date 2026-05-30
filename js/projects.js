@@ -1792,7 +1792,20 @@ function execRender(){
       '<div style="padding:10px 14px;background:#FFF8E1;"><span style="font-size:11px;font-weight:800;color:#E65100;">&#9888; Uncategorized Resources</span></div>'+
       '<div style="padding:8px 14px;">'+orphanRes.map(function(r){return resRow(r,'',tCol,tLbl);}).join('')+'</div></div>':'';
 
-  el.innerHTML=itemsHtml+orphanHtml;
+  // Count total items with unallotted RRs
+  var totalUnallotted=itemsWithRes.filter(function(item){
+    return WA_PLANNED.filter(function(r){return r.boq_item_id===item.id;}).some(function(res){
+      var rrApproved=WA_APPROVED_RRS.filter(function(rr){return rr.plan_res_id===res.id;}).reduce(function(s,rr){return s+(parseFloat(rr.qty)||0);},0);
+      var totalAllotted=WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;}).reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
+      return rrApproved>totalAllotted;
+    });
+  }).length;
+
+  var multiBtn=totalUnallotted>1
+    ? '<div style="margin-bottom:10px;"><button onclick="execOpenMultiAllot()" style="width:100%;padding:10px;background:#1B5E20;color:white;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#10010; Allot Multiple BOQ Items at Once ('+totalUnallotted+' items available)</button></div>'
+    : '';
+
+  el.innerHTML=multiBtn+itemsHtml+orphanHtml;
 
   function resRow(res,itemUnit,tCol,tLbl){
     var resUnit=res.unit||itemUnit;
@@ -1836,6 +1849,309 @@ function execRender(){
       '</div>'
     );
   }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// MULTI-ITEM WORK ALLOTMENT
+// ══════════════════════════════════════════════════════════════════════
+async function execOpenMultiAllot(){
+  await loadUomIfNeeded();
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+
+  // Collect ALL pending RRs across ALL BOQ items (with balance > 0)
+  var allPending=[];
+  WA_ITEMS.forEach(function(item){
+    var itemSubIds=WA_SUBS.filter(function(s){return s.boq_item_id===item.id;}).map(function(s){return s.id;});
+    var itemRes=WA_PLANNED.filter(function(r){
+      return r.boq_item_id===item.id||(r.boq_subitem_id&&itemSubIds.includes(r.boq_subitem_id));
+    });
+    itemRes.forEach(function(res){
+      WA_APPROVED_RRS.filter(function(rr){return rr.plan_res_id===res.id;}).forEach(function(rr){
+        var allottedForRR=WA_ALLOT.filter(function(a){return a.rr_id===rr.id;})
+          .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
+        var rrBalance=Math.max(0,(parseFloat(rr.qty)||0)-allottedForRR);
+        if(rrBalance>0){
+          allPending.push({
+            item:item, res:res, rr:rr,
+            rrApprovedQty:parseFloat(rr.qty)||0,
+            allottedForRR:allottedForRR,
+            rrBalance:rrBalance
+          });
+        }
+      });
+    });
+  });
+
+  if(!allPending.length){
+    toast('No pending RR balance to allot across any BOQ item','warning');
+    return;
+  }
+
+  // Sort by BOQ item_code natural sort
+  allPending.sort(function(a,b){
+    var ca=(a.item.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});
+    var cb=(b.item.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});
+    for(var i=0;i<Math.max(ca.length,cb.length);i++){var diff=(ca[i]||0)-(cb[i]||0);if(diff!==0)return diff;}
+    return 0;
+  });
+
+  // ── Party section (same as single-item) ──────────────────────────────
+  var partySection=
+    '<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-bottom:14px;">'+
+      '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Party Details</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+        '<div><label class="flbl">Party Type *</label>'+
+          '<select id="wa-party-type" class="fsel">'+
+            '<option value="">— Select Type —</option>'+
+            '<option value="sc">Subcontractor</option>'+
+            '<option value="vendor">Vendor</option>'+
+            '<option value="labour_contractor">Labour Contractor</option>'+
+            '<option value="labour">Labour</option>'+
+            '<option value="machinery">Machinery</option>'+
+          '</select>'+
+        '</div>'+
+        '<div><label class="flbl">Party Name *</label>'+
+          '<select id="wa-party-name" class="fsel"><option value="">— Select type first —</option></select>'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+        '<div><label class="flbl">Start Date</label><input id="wa-start-date" class="finp" type="date"></div>'+
+        '<div><label class="flbl">End Date</label><input id="wa-end-date" class="finp" type="date"></div>'+
+      '</div>'+
+      '<div><label class="flbl">Scope / Terms</label>'+
+        '<textarea id="wa-scope" class="ftxt" rows="2" placeholder="Common scope for all selected resources..."></textarea>'+
+      '</div>'+
+      '<div><label class="flbl">Document Type (optional)</label>'+
+        '<div style="display:flex;gap:6px;margin-top:4px;">'+
+          '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+            '<input type="radio" name="wa-doc-type" value="wo" style="accent-color:#E65100;">'+
+            '<div><div style="font-size:10px;font-weight:800;">Work Order</div></div>'+
+          '</label>'+
+          '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+            '<input type="radio" name="wa-doc-type" value="po" style="accent-color:#1565C0;">'+
+            '<div><div style="font-size:10px;font-weight:800;">Purchase Order</div></div>'+
+          '</label>'+
+          '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+            '<input type="radio" name="wa-doc-type" value="none" checked style="accent-color:#555;">'+
+            '<div><div style="font-size:10px;font-weight:800;">None</div></div>'+
+          '</label>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
+  // ── Group pending by BOQ item for display ────────────────────────────
+  var itemGroups={};var itemGroupOrder=[];
+  allPending.forEach(function(x){
+    var key=x.item.id;
+    if(!itemGroups[key]){itemGroups[key]={item:x.item,rows:[]};itemGroupOrder.push(key);}
+    itemGroups[key].rows.push(x);
+  });
+
+  var resRowsHtml=itemGroupOrder.map(function(itemId){
+    var g=itemGroups[itemId];
+    var item=g.item;
+    var rowsHtml=g.rows.map(function(x){
+      var res=x.res; var rr=x.rr; var bal=x.rrBalance;
+      var uomOpts=buildUomOpts(res.unit||item.unit||'');
+      return '<div class="wa-res-row" data-res-id="'+res.id+'" style="border:1px solid var(--border);border-radius:10px;margin-bottom:6px;overflow:hidden;">'+
+        '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#FAFAFA;">'+
+          '<input type="checkbox" class="wa-res-chk" data-res-id="'+res.id+'" data-rr-id="'+rr.id+'" data-rr-max="'+bal+'" data-item-id="'+item.id+'" style="width:16px;height:16px;accent-color:#E65100;flex-shrink:0;">'+
+          '<div style="flex:1;">'+
+            '<div style="font-size:12px;font-weight:800;">'+res.party_name+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">'+
+              'RR Approved: <b style="color:#2E7D32;">'+x.rrApprovedQty+' '+( res.unit||'')+'</b>'+
+              ' | Available: <b style="color:#E65100;">'+bal.toFixed(3).replace(/\.?0+$/,'')+'</b>'+
+              (rr.rr_number?' | RR: '+rr.rr_number:'')+
+            '</div>'+
+          '</div>'+
+          '<div class="wa-res-inputs" style="display:none;align-items:center;gap:6px;">'+
+            '<div style="text-align:center;">'+
+              '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Qty</div>'+
+              '<input class="wa-qty-inp finp" data-res-id="'+res.id+'" type="number" step="0.001" max="'+bal+'" value="'+bal+'" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;">'+
+            '</div>'+
+            '<div style="text-align:center;">'+
+              '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Unit</div>'+
+              '<select class="wa-unit-sel fsel" data-res-id="'+res.id+'" style="width:70px;padding:4px;font-size:11px;">'+uomOpts+'</select>'+
+            '</div>'+
+            '<div style="text-align:center;">'+
+              '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Rate (₹)</div>'+
+              '<input class="wa-rate-inp finp" data-res-id="'+res.id+'" type="number" step="0.01" value="'+( res.rate||'')+'" placeholder="0" style="width:90px;padding:4px 6px;font-size:12px;text-align:center;">'+
+            '</div>'+
+            '<div style="text-align:center;">'+
+              '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Amount</div>'+
+              '<div class="wa-est-amt" data-res-id="'+res.id+'" style="font-size:12px;font-weight:800;color:#1565C0;">₹0</div>'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid #F0F0F0;background:white;">'+
+          '<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:4px;">Specification for this resource</label>'+
+          '<textarea class="wa-spec-inp ftxt" data-res-id="'+res.id+'" rows="2"></textarea>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    return '<div style="margin-bottom:12px;">'+
+      '<div style="background:#FFF3E0;border-radius:8px 8px 0 0;padding:8px 12px;display:flex;align-items:center;gap:8px;">'+
+        '<input type="checkbox" id="wa-item-chk-'+itemId+'" onchange="waToggleItemRows(\''+itemId+'\',this.checked)" style="width:15px;height:15px;accent-color:#E65100;">'+
+        '<span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
+        '<span style="font-size:12px;font-weight:800;">'+( item.short_name||item.description)+'</span>'+
+        '<span style="font-size:10px;color:var(--text3);">(tick to select all)</span>'+
+      '</div>'+
+      '<div id="wa-item-rows-'+itemId+'" style="padding:6px 0 0;">'+rowsHtml+'</div>'+
+    '</div>';
+  }).join('');
+
+  document.getElementById('exec-sheet-title').textContent='Allot Work — Multiple BOQ Items';
+  document.getElementById('exec-sheet-body').innerHTML=
+    partySection+
+    '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:8px;">&#9313; Select Resources (across all BOQ items)</div>'+
+    '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;">Tick item header to select all its resources, or tick individual resources</div>'+
+    resRowsHtml;
+
+  var sf=document.getElementById('exec-sheet-foot');
+  sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#E65100;color:white;';
+  sb.innerHTML='&#10003; Save Allotment';
+  sb.onclick=function(){execSaveMultiAllot(projId);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+
+  // Wire events same as single-item allot
+  setTimeout(function(){
+    var body=document.getElementById('exec-sheet-body');
+    if(!body)return;
+
+    // Party type → load party names
+    var ptSel=document.getElementById('wa-party-type');
+    if(ptSel) ptSel.addEventListener('change',function(){
+      execLoadPartyNames(ptSel.value,'wa-party-name');
+    });
+
+    // Checkbox → show/hide qty+rate inputs
+    body.querySelectorAll('.wa-res-chk').forEach(function(chk){
+      chk.addEventListener('change',function(){
+        var row=chk.closest('.wa-res-row');
+        if(!row)return;
+        var inp=row.querySelector('.wa-res-inputs');
+        var spec=row.querySelector('.wa-res-spec-row');
+        if(inp){inp.style.display=chk.checked?'flex':'none';}
+        if(spec){spec.style.display=chk.checked?'block':'none';}
+      });
+    });
+
+    // Qty/Rate → update amount
+    body.querySelectorAll('.wa-qty-inp,.wa-rate-inp').forEach(function(inp){
+      inp.addEventListener('input',function(){
+        var resId=inp.getAttribute('data-res-id');
+        var qty=parseFloat(body.querySelector('.wa-qty-inp[data-res-id="'+resId+'"]').value)||0;
+        var rate=parseFloat(body.querySelector('.wa-rate-inp[data-res-id="'+resId+'"]').value)||0;
+        var amtEl=body.querySelector('.wa-est-amt[data-res-id="'+resId+'"]');
+        if(amtEl)amtEl.textContent='₹'+Math.round(qty*rate).toLocaleString('en-IN');
+      });
+    });
+  },200);
+}
+
+// Toggle all resource rows under a BOQ item header checkbox
+function waToggleItemRows(itemId,checked){
+  var container=document.getElementById('wa-item-rows-'+itemId);
+  if(!container)return;
+  container.querySelectorAll('.wa-res-chk').forEach(function(chk){
+    if(chk.checked!==checked){
+      chk.checked=checked;
+      chk.dispatchEvent(new Event('change'));
+    }
+  });
+}
+
+// Save multi-item allotment — same logic as execSaveAllot but across items
+async function execSaveMultiAllot(projId){
+  var partyType =(document.getElementById('wa-party-type')||{value:''}).value;
+  var partyName =(document.getElementById('wa-party-name')||{value:''}).value;
+  var startDate =(document.getElementById('wa-start-date')||{value:''}).value||null;
+  var endDate   =(document.getElementById('wa-end-date')||{value:''}).value||null;
+  var scope     =(document.getElementById('wa-scope')||{value:''}).value.trim()||null;
+  var docType   = (document.querySelector('input[name="wa-doc-type"]:checked')||{value:'none'}).value;
+
+  if(!partyType||!partyName){toast('Select party type and name','warning');return;}
+
+  // Collect all checked rows
+  var body=document.getElementById('exec-sheet-body');
+  var checked=Array.from(body.querySelectorAll('.wa-res-chk:checked'));
+  if(!checked.length){toast('Select at least one resource to allot','warning');return;}
+
+  var toSave=checked.map(function(chk){
+    var resId=chk.getAttribute('data-res-id');
+    var rrId =chk.getAttribute('data-rr-id');
+    var itemId=chk.getAttribute('data-item-id');
+    var max  =parseFloat(chk.getAttribute('data-rr-max'))||0;
+    var qty  =parseFloat((body.querySelector('.wa-qty-inp[data-res-id="'+resId+'"]')||{value:0}).value)||0;
+    var unit =((body.querySelector('.wa-unit-sel[data-res-id="'+resId+'"]'))||{value:''}).value;
+    var rate =parseFloat((body.querySelector('.wa-rate-inp[data-res-id="'+resId+'"]')||{value:0}).value)||0;
+    var spec =((body.querySelector('.wa-spec-inp[data-res-id="'+resId+'"]'))||{value:''}).value.trim()||null;
+    if(qty<=0||qty>max){toast('Invalid qty for '+resId+' (max '+max+')','warning');return null;}
+    return {resId:resId,rrId:rrId,itemId:itemId,qty:qty,unit:unit,rate:rate,spec:spec};
+  }).filter(Boolean);
+
+  if(toSave.length!==checked.length)return; // validation failed
+
+  toast('Saving '+toSave.length+' allotment(s)...','info');
+
+  var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
+  var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:anonKey;
+
+  var saved=[];
+  var errors=0;
+  for(var i=0;i<toSave.length;i++){
+    var s=toSave[i];
+    var data={
+      project_id:projId,
+      boq_item_id:s.itemId,
+      boq_exec_resource_id:s.resId,
+      rr_id:s.rrId,
+      party_type:partyType,
+      party_name:partyName,
+      qty:s.qty,
+      unit:s.unit,
+      rate:s.rate,
+      amount:Math.round(s.qty*s.rate),
+      start_date:startDate,
+      end_date:endDate,
+      scope:scope,
+      specification:s.spec,
+      exec_type:partyType,
+      created_by:currentUser?currentUser.name:null
+    };
+    try{
+      var res=await fetch(baseUrl+'/rest/v1/work_allotments',{
+        method:'POST',
+        headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify(data)
+      });
+      if(res.ok){
+        var r=await res.json();
+        if(r&&r[0]){WA_ALLOT.push(r[0]);saved.push(r[0]);}
+      } else { errors++; }
+    }catch(e){errors++;console.error(e);}
+  }
+
+  if(errors) toast(errors+' allotment(s) failed to save','warning');
+  else toast(toSave.length+' allotment(s) saved!','success');
+
+  closeSheet('ov-exec','sh-exec');
+
+  // Generate document if selected
+  if(docType!=='none'&&saved.length){
+    var projItem=WA_ITEMS.find(function(it){return it.id===toSave[0].itemId;})||{};
+    var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+    execGenDoc(saved,docType,projItem,proj);
+  }
+
+  execRender();
 }
 
 async function execOpenAllot(itemId){
