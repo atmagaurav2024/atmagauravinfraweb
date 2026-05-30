@@ -3443,6 +3443,72 @@ async function sbDelete(table, id){
   return res.ok;
 }
 
+// ── PDF HELPER: iOS PWA safe PDF viewer ──────────────────────────────────
+// On iOS PWA window.open() breaks out of the app. This shows an in-app overlay instead.
+function openPDF(docHtml){
+  var isIOSPWA = (navigator.standalone === true) ||
+                 (window.matchMedia('(display-mode: standalone)').matches && /iphone|ipad|ipod/i.test(navigator.userAgent));
+
+  if(!isIOSPWA){
+    // Normal browser / Android: open in new tab as before
+    openPDF(docHtml);
+    return;
+  }
+
+  // iOS PWA: render inside a full-screen overlay with Print + Close buttons
+  var existing = document.getElementById('pdf-overlay');
+  if(existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'pdf-overlay';
+  overlay.style.cssText = [
+    'position:fixed','inset:0','z-index:99999',
+    'background:white','display:flex','flex-direction:column',
+    'font-family:Arial,sans-serif'
+  ].join(';');
+
+  // Top bar
+  var bar = document.createElement('div');
+  bar.style.cssText = [
+    'display:flex','align-items:center','justify-content:space-between',
+    'padding:10px 14px','background:#1B5E20','flex-shrink:0',
+    'padding-top:max(10px,env(safe-area-inset-top))'
+  ].join(';');
+  bar.innerHTML =
+    '<div style="color:white;font-size:13px;font-weight:800;">&#128196; Document Preview</div>'+
+    '<div style="display:flex;gap:8px;">'+
+      '<button id="pdf-print-btn" style="background:rgba(255,255,255,.2);color:white;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;">&#128424; Print</button>'+
+      '<button id="pdf-close-btn" style="background:#C62828;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;">&#10005; Close</button>'+
+    '</div>';
+
+  // iframe to render HTML
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'flex:1;border:none;width:100%;';
+  iframe.setAttribute('title','Document Preview');
+
+  overlay.appendChild(bar);
+  overlay.appendChild(iframe);
+  document.body.appendChild(overlay);
+
+  // Write HTML into iframe
+  var iDoc = iframe.contentDocument || iframe.contentWindow.document;
+  // Remove auto-print script from html before writing (don't auto-print on iOS)
+  var safeHtml = docHtml.replace(/<script>window\.onload=function\(\)\{window\.print\(\);\}<\/script>/g,'');
+  iDoc.open(); iDoc.write(safeHtml); iDoc.close();
+
+  // Close button
+  document.getElementById('pdf-close-btn').addEventListener('click', function(){
+    overlay.remove();
+  });
+  // Print button — triggers iframe print
+  document.getElementById('pdf-print-btn').addEventListener('click', function(){
+    try{ iframe.contentWindow.print(); }
+    catch(e){ window.print(); }
+  });
+}
+
+
+
 // ── EMPTY DATA ARRAYS (loaded from Supabase) ──
 var VENDORS = [];
 var MATERIALS = [];
@@ -5952,9 +6018,7 @@ function salDownloadPDF(month, year, label){
     '<script>window.onload=function(){window.print();}<\/script>'+
     '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups to download PDF','warning');}
+  openPDF(html);
 }
 
 function empCalcSalary(empId, gross, netBase, pfEmp, esicEmp, tds){
@@ -6132,9 +6196,7 @@ function downloadSalaryPDF(){
     '<tbody>'+trs+'</tbody>'+
     '<tfoot><tr class="tot"><td colspan="4" style="text-align:right;padding:7px;">TOTAL</td><td style="padding:7px;text-align:right;">&#8377;'+Number(total).toLocaleString('en-IN')+'</td></tr></tfoot></table>'+
     '<script>window.onload=function(){window.print();}<\/script></body></html>';
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups','warning');}
+  openPDF(html);
 }
 
 
@@ -8164,19 +8226,7 @@ function empGenerateOfferLetter(empId){
   '</div></body></html>';
 
   // Open in new tab for print/save as PDF
-  var win=window.open('','_blank');
-  if(win){
-    win.document.write(html);
-    win.document.close();
-    setTimeout(function(){win.print();},800);
-  } else {
-    // Fallback: download as HTML
-    var blob=new Blob([html],{type:'text/html'});
-    var a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='OfferLetter_'+name.replace(/\s+/g,'_')+'.html';
-    a.click();
-  }
+  openPDF(html);
 }
 
 async function empSavePay(){
@@ -9945,9 +9995,7 @@ function rrDownloadPDF(rrId, projName){
 
     '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open PDF','warning');
+  openPDF(html);
 }
 
 
@@ -10575,7 +10623,7 @@ function generateCombinedDoc(allots,title,col,tbg){
     var projSel=document.getElementById('proj-mod-sel');
     if(projSel&&projSel.selectedIndex>=0) proj={name:projSel.options[projSel.selectedIndex].text};
   }
-  var co=COMPANY_DATA||{};var inr=function(n){return "\u20b9"+Number(n||0).toLocaleString("en-IN");};var fmtD=function(d){if(!d)return "";var p=d.split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};var tot=allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);var dn=(title==="WORK ORDER"?"WO":"PO")+"-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-4);var rows=allots.map(function(a,i){var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));return "<tr><td>"+(i+1)+"</td><td>"+a.party_name+(a.scope?"<br><small>"+a.scope+"</small>":"")+"</td><td>"+(a.qty||0)+" "+(a.unit||"")+"</td><td>"+inr(a.rate)+"</td><td>"+inr(amt)+"</td></tr>";}).join("");var html="<!DOCTYPE html><html><head><meta charset=UTF-8><title>"+title+"</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid "+col+";padding-bottom:10px;margin-bottom:12px;}.cn{font-size:17px;font-weight:900;color:"+col+";}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:"+col+";color:white;padding:7px 10px;text-align:left;font-size:11px;}td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:"+tbg+";}.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}@media print{button{display:none;}}</style></head><body><button onclick=\"window.print()\" style=\"background:"+col+";color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;\">Print/Save PDF</button><div class=hdr><div><div class=cn>"+(co.name||"Company")+"</div><div style=\"font-size:10px;color:#666\">"+(co.address||"")+"</div><div style=\"font-size:10px;color:#666\">"+(co.gstin?"GSTIN: "+co.gstin:"")+"</div></div><div style=\"text-align:right\"><div style=\"font-size:19px;font-weight:900;\">"+title+"</div><div style=\"color:#666\">"+dn+"</div><div style=\"color:#666\">Date: "+fmtD(new Date().toISOString().slice(0,10))+"</div><div style=\"color:#666\">Project: "+(proj.name||"")+"</div></div></div><table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>"+rows+"<tr class=tr><td colspan=4 style=\"text-align:right\">Total</td><td>"+inr(tot)+"</td></tr></table><div class=ft><div><div class=sg>Issued By<br><br>"+(co.name||"")+"</div></div><div><div class=sg>Authorized Signatory</div></div></div></body></html>";var w=window.open("","_blank");if(w){w.document.write(html);w.document.close();}else toast("Allow popups","warning");}
+  var co=COMPANY_DATA||{};var inr=function(n){return "\u20b9"+Number(n||0).toLocaleString("en-IN");};var fmtD=function(d){if(!d)return "";var p=d.split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};var tot=allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);var dn=(title==="WORK ORDER"?"WO":"PO")+"-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-4);var rows=allots.map(function(a,i){var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));return "<tr><td>"+(i+1)+"</td><td>"+a.party_name+(a.scope?"<br><small>"+a.scope+"</small>":"")+"</td><td>"+(a.qty||0)+" "+(a.unit||"")+"</td><td>"+inr(a.rate)+"</td><td>"+inr(amt)+"</td></tr>";}).join("");var html="<!DOCTYPE html><html><head><meta charset=UTF-8><title>"+title+"</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid "+col+";padding-bottom:10px;margin-bottom:12px;}.cn{font-size:17px;font-weight:900;color:"+col+";}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:"+col+";color:white;padding:7px 10px;text-align:left;font-size:11px;}td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:"+tbg+";}.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}@media print{button{display:none;}}</style></head><body><button onclick=\"window.print()\" style=\"background:"+col+";color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;\">Print/Save PDF</button><div class=hdr><div><div class=cn>"+(co.name||"Company")+"</div><div style=\"font-size:10px;color:#666\">"+(co.address||"")+"</div><div style=\"font-size:10px;color:#666\">"+(co.gstin?"GSTIN: "+co.gstin:"")+"</div></div><div style=\"text-align:right\"><div style=\"font-size:19px;font-weight:900;\">"+title+"</div><div style=\"color:#666\">"+dn+"</div><div style=\"color:#666\">Date: "+fmtD(new Date().toISOString().slice(0,10))+"</div><div style=\"color:#666\">Project: "+(proj.name||"")+"</div></div></div><table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>"+rows+"<tr class=tr><td colspan=4 style=\"text-align:right\">Total</td><td>"+inr(tot)+"</td></tr></table><div class=ft><div><div class=sg>Issued By<br><br>"+(co.name||"")+"</div></div><div><div class=sg>Authorized Signatory</div></div></div></body></html>";openPDF(html);}
 
 function generateWorkOrder(allot){
   var proj=PROJ_DATA.find(function(p){return p.id===allot.project_id;})||{};
@@ -10638,9 +10686,7 @@ function generateWorkOrder(allot){
       '<div><div class="sig">Accepted By<br><br>'+(allot.party_name||'')+'</div></div>'+
     '</div>'+
     '</body></html>';
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open document','warning');
+  openPDF(html);
 }
 
 function generatePurchaseOrder(allot){
@@ -10706,9 +10752,7 @@ function generatePurchaseOrder(allot){
       '<div><div class="sig">Vendor Acknowledgement<br><br>'+(allot.party_name||'')+'</div></div>'+
     '</div>'+
     '</body></html>';
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open document','warning');
+  openPDF(html);
 }
 
 // Option to regenerate WO/PO from existing allotment row
@@ -11014,10 +11058,7 @@ async function execGenPartyDoc(partyKey, docType){
     '<div><div class="sg">Accepted By<br><br>'+partyName+'</div></div></div>'+
     '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open document','warning');
-
+  openPDF(html);
   // Refresh view
   setTimeout(function(){execRenderAllotted();},500);
 }
@@ -11272,10 +11313,7 @@ async function execGenBatchDoc(batchKey, docType){
 
     '</div></body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open document','warning');
-
+  openPDF(html);
   setTimeout(function(){execRenderAllotted();},400);
 }
 
@@ -12509,9 +12547,7 @@ function execAdvanceReceipt(advId,resName,allotAmt){
     '</div>'+
   '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to download receipt','warning');
+  openPDF(html);
 }
 
 async function execDelAdvance(id){
@@ -12979,9 +13015,7 @@ function billDownloadAdvReceipt(billId, dedId){
     '</div>'+
   '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to download receipt','warning');
+  openPDF(html);
 }
 
 async function execReleaseDeduction(billId,dedId){
@@ -13243,9 +13277,7 @@ function execDownloadBillPDF(billId){
     '</div>'+
   '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to download PDF','warning');
+  openPDF(html);
 }
 
 
@@ -13837,9 +13869,7 @@ function grnDownloadPDF(grnId){
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Authorized By</div></div>'+
     '</div></body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups','warning');
+  openPDF(html);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -15235,9 +15265,7 @@ function downloadPayslipPDF(empId, monthLabel){
     '<script>window.onload=function(){window.print();}<\/script>'+
     '</body></html>';
 
-  var w = window.open('','_blank');
-  if(w){ w.document.write(html); w.document.close(); }
-  else { toast('Allow popups to download PDF','warning'); }
+  openPDF(html);
 }
 
 
@@ -15428,9 +15456,7 @@ function downloadIncrementLetter(empId, newBasic, oldBasic, effectiveDate, remar
     '<script>window.onload=function(){window.print();}<\/script>'+
     '</body></html>';
 
-  var w = window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups to download PDF','warning');}
+  openPDF(html);
 }
 
 
@@ -15520,9 +15546,7 @@ function downloadTransferOrder(empId, type, details){
     '<script>window.onload=function(){window.print();}<\/script>'+
     '</body></html>';
 
-  var w = window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups to download PDF','warning');}
+  openPDF(html);
 }
 
 
@@ -15948,9 +15972,7 @@ function downloadPayFixationOrder(empId, effectiveDate, details){
     '<p style="font-size:10px;color:#888;text-align:center;margin-top:24px;border-top:1px solid #eee;padding-top:8px;">Computer generated order. | '+compName+' | Generated on '+today+'</p>'+
     '</div><script>window.onload=function(){window.print();}<\/script></body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups to download PDF','warning');}
+  openPDF(html);
 }
 
 // ─── Resignation Acceptance Letter PDF ───────────────────────────────────
@@ -16203,9 +16225,7 @@ function downloadIDCard(empId){
     '<script>window.onload=function(){window.print();}<\/script>'+
     '</body></html>';
 
-  var w = window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups to print ID card','warning');}
+  openPDF(html);
 }
 
 function downloadResignationLetter(empId){
@@ -16271,9 +16291,7 @@ function downloadResignationLetter(empId){
     '<p style="font-size:10px;color:#888;text-align:center;margin-top:24px;border-top:1px solid #eee;padding-top:8px;">Computer generated letter. | '+compName+' | Generated on '+today+'</p>'+
     '</div><script>window.onload=function(){window.print();}<\/script></body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups to download PDF','warning');}
+  openPDF(html);
 }
 
 // ════ SALARY PAYMENT TRACKING ════════════════════════════════════════════
@@ -17063,9 +17081,7 @@ function annDownloadPDF(){
     '<script>window.onload=function(){window.print();}<\/script>'+
     '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups to download PDF','warning');}
+  openPDF(html);
 }
 
 
