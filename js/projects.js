@@ -2028,7 +2028,7 @@ async function execOpenMultiAllot(){
     // Party type → load party names
     var ptSel=document.getElementById('wa-party-type');
     if(ptSel) ptSel.addEventListener('change',function(){
-      execLoadPartyNames(ptSel.value,'wa-party-name');
+      waLoadPartyNames(ptSel.value);
     });
 
     // Checkbox → show/hide qty+rate inputs
