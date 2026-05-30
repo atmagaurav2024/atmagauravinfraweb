@@ -4950,6 +4950,9 @@ async function execOpenBill(partyKey,projId){
       '<button onclick="blAddDeduction()" style="font-size:10px;padding:4px 10px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:5px;cursor:pointer;font-weight:700;">+ Add Deduction</button>'+
     '</div>';
 
+  // Reset additions and deductions arrays for fresh form
+  BL_ADDITIONS=[];
+  BL_DEDUCTIONS=[];
   // Calculate initial total
   setTimeout(function(){blUpdateTotal();},50);
 
@@ -5014,7 +5017,7 @@ function blUpdateTotal(){
       addTotal+=parseFloat(amtInp&&amtInp.value)||0;
     }
   });
-  var grossWithAdd=total+addTotal;
+  var grossWithAdd=total+addTotal; // gross = work + additions
   // Sum selected advance adjustments
   var advAdj=0;
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
@@ -5027,10 +5030,11 @@ function blUpdateTotal(){
   var net=Math.max(0,grossWithAdd-advAdj);
   var amtEl=document.getElementById('bl-amount');
   if(amtEl) amtEl.value=Math.round(net);
+  // Show breakdown
   var advEl=document.getElementById('bl-adv-adj-display');
   if(advEl){
     var parts=[];
-    if(addTotal>0) parts.push('Add: ₹'+addTotal.toLocaleString('en-IN'));
+    if(addTotal>0) parts.push('Work: ₹'+total.toLocaleString('en-IN')+' + Add: ₹'+addTotal.toLocaleString('en-IN')+' = Gross: ₹'+Math.round(grossWithAdd).toLocaleString('en-IN'));
     if(advAdj>0)   parts.push('Less Adv: ₹'+advAdj.toLocaleString('en-IN'));
     advEl.textContent=parts.join(' | ');
   }
@@ -5125,7 +5129,9 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   if(!selectedItems.length){toast('Select at least one work item','warning');return;}
 
   // Gross = sum of selected items; Net = Gross - advance adjustment
-  var grossAmount=selectedItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var workAmount=selectedItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var additionsTotal=additions.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var grossAmount=workAmount+additionsTotal;
   amount=Math.max(0,grossAmount-adjAdvTotal);
   if(grossAmount===0){toast('Bill amount cannot be zero','warning');return;}
 
@@ -5522,11 +5528,15 @@ function execDownloadBillPDF(billId){
       '<thead><tr><th style="width:30px;">#</th><th>Resource / Work</th><th style="text-align:right;width:80px;">Qty</th><th style="text-align:right;width:80px;">Rate</th><th style="text-align:right;width:100px;">Amount</th></tr></thead>'+
       '<tbody>'+workRows+'</tbody>'+
       '<tfoot>'+
-        '<tr style="background:#EFF6FF;"><td colspan="4" style="padding:7px 10px;font-weight:900;text-align:right;">Gross Work Total</td>'+
-          '<td style="padding:7px 10px;font-weight:900;text-align:right;color:#1565C0;">'+inr(grossAmt-totalAdds)+'</td></tr>'+
-        (addRows?addRows:'')+
-        (additions.length?'<tr style="background:#E8F5E9;"><td colspan="4" style="padding:7px 10px;font-weight:800;text-align:right;color:#2E7D32;">Gross Bill (incl. additions)</td>'+
-          '<td style="padding:7px 10px;font-weight:900;text-align:right;color:#2E7D32;">'+inr(grossAmt)+'</td></tr>':'')+
+        (additions.length
+          ? '<tr style="background:#EFF6FF;"><td colspan="4" style="padding:7px 10px;font-weight:800;text-align:right;">Work Sub-Total</td>'+
+              '<td style="padding:7px 10px;font-weight:800;text-align:right;color:#1565C0;">'+inr(grossAmt-totalAdds)+'</td></tr>'+
+            addRows+
+            '<tr style="background:#E8F5E9;"><td colspan="4" style="padding:7px 10px;font-weight:900;text-align:right;color:#2E7D32;">Gross Bill Amount</td>'+
+              '<td style="padding:7px 10px;font-weight:900;text-align:right;color:#2E7D32;">'+inr(grossAmt)+'</td></tr>'
+          : '<tr style="background:#EFF6FF;"><td colspan="4" style="padding:7px 10px;font-weight:900;text-align:right;">Gross Bill Amount</td>'+
+              '<td style="padding:7px 10px;font-weight:900;text-align:right;color:#1565C0;">'+inr(grossAmt)+'</td></tr>'
+        )+
         (dedRows?dedRows:'')+
         (relRows?relRows:'')+
         (activeDed.length?'<tr style="background:#FFF3E0;"><td colspan="4" style="padding:7px 10px;font-weight:900;text-align:right;">Net Payable (after deductions)</td>'+
