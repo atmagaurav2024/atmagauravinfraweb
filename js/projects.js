@@ -4897,7 +4897,7 @@ async function execOpenBill(partyKey,projId){
     (function(){
       if(!partyAdvances.length) return '';
       // Use bl-amount (net after advance) as cap — actual bill value
-      var grossBillAmt=parseFloat((document.getElementById('bl-amount')||{value:0}).value)||workRows.reduce(function(s,w){return s+(w.unbilled||0);},0);
+      var grossBillAmt=workRows.reduce(function(s,w){return s+(w.unbilled||0);},0);
       return '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#9315; Advance Adjustment</div>'+
         '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances to adjust against this bill. Amounts are capped to current bill value.</div>'+
@@ -4910,7 +4910,7 @@ async function execOpenBill(partyKey,projId){
           var remaining=Math.max(0,advAmt-adjSoFar);
           var alreadyAdj=remaining<=0; // fully adjusted only when nothing left
           // Auto-cap: if bill < remaining advance, only adjust up to bill amount
-          var defaultAdj=Math.min(remaining, grossBillAmt);
+          var defaultAdj=remaining; // blUpdateTotal will cap to actual bill amount
           return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
               '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+remaining+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
@@ -5045,25 +5045,26 @@ function blUpdateTotal(){
     advAdj+=amt;
     chk.setAttribute('data-amount',amt);
   });
-  // Re-cap each advance adjustment input to gross (in case work amount changed)
+  // Cap each advance input to min(remaining, grossWithAdd) — correct amount
+  var remainingGross=Math.round(grossWithAdd); // gross before any advance
   document.querySelectorAll('.adv-adj-chk:not([disabled])').forEach(function(chk){
     var ai=chk.id.replace('adv-adj-','');
     var amtInp=document.getElementById('adv-adj-amt-'+ai);
     if(amtInp){
-      var max=parseFloat(chk.getAttribute('data-max'))||0;
+      var maxRem=parseFloat(chk.getAttribute('data-max'))||0;
       var cur=parseFloat(amtInp.value)||0;
-      // Cap to min(remaining, grossWithAdd)
-      var cap=Math.min(max, Math.round(grossWithAdd));
-      if(cur>cap){ amtInp.value=cap; chk.setAttribute('data-amount',cap); }
+      var cap=Math.min(maxRem, remainingGross);
+      // Only auto-cap if user hasn't manually set a lower value
+      if(cur>cap || cur===0){ amtInp.value=cap; }
+      chk.setAttribute('data-amount', parseFloat(amtInp.value)||0);
     }
   });
-  var advAdj2=0;
+  var advAdj=0;
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
     var ai=chk.id.replace('adv-adj-','');
     var amtInp=document.getElementById('adv-adj-amt-'+ai);
-    advAdj2+=amtInp?parseFloat(amtInp.value)||0:0;
+    advAdj+=amtInp?parseFloat(amtInp.value)||0:0;
   });
-  advAdj=advAdj2;
   var net=Math.max(0,grossWithAdd-advAdj);
   var amtEl=document.getElementById('bl-amount');
   if(amtEl) amtEl.value=Math.round(net);
