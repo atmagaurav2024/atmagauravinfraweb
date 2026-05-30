@@ -847,9 +847,7 @@ function salDownloadPDF(month, year, label){
     '<script>window.onload=function(){window.print();}<\/script>'+
     '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups to download PDF','warning');}
+  openPDF(html);
 }
 
 function empCalcSalary(empId, gross, netBase, pfEmp, esicEmp, tds){
@@ -1027,9 +1025,7 @@ function downloadSalaryPDF(){
     '<tbody>'+trs+'</tbody>'+
     '<tfoot><tr class="tot"><td colspan="4" style="text-align:right;padding:7px;">TOTAL</td><td style="padding:7px;text-align:right;">&#8377;'+Number(total).toLocaleString('en-IN')+'</td></tr></tfoot></table>'+
     '<script>window.onload=function(){window.print();}<\/script></body></html>';
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else{toast('Allow popups','warning');}
+  openPDF(html);
 }
 
 
