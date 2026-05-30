@@ -4034,7 +4034,7 @@ async function execEditDailyEntry(entryId, itemId){
     var inHand=storeItem?parseFloat(storeItem.qty_in_hand)||0:null;
     var maxQ=fromStore&&inHand!==null?inHand:(outsideQty||balQ);
 
-    return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid '+(fromStore?'#C8E6C9':col);+';border-radius:8px;margin-bottom:6px;background:'+(fromStore?'#F1FBF4':'#FAFAFA')+';">'+
+    return '<div class="dp-res-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid '+(fromStore?'#C8E6C9':col)+';border-radius:8px;margin-bottom:6px;background:'+(fromStore?'#F1FBF4':'#FAFAFA')+';">'+
       '<input type="checkbox" class="dp-res-chk" data-allot-id="'+a.id+'" data-name="'+a.party_name+'" data-type="'+a.exec_type+'" data-unit="'+(a.unit||'')+'" '+(existingUse?'checked':'')+' style="width:15px;height:15px;accent-color:'+col+';flex-shrink:0;">'+
       '<div style="flex:1;min-width:0;">'+
         (fromStore?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>':
@@ -4045,7 +4045,7 @@ async function execEditDailyEntry(entryId, itemId){
           (fromStore&&inHand!==null?'In Store: <b style="color:#2E7D32;">'+inHand.toFixed(2)+'</b> | ':'')+'Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b>'+
         '</div>'+
       '</div>'+
-      '<div class="dp-res-qty-wrap" style="display:flex;align-items:center;gap:4px;">'+
+      '<div class="dp-res-qty-wrap" style="display:'+(existingUse?'flex':'none')+';align-items:center;gap:4px;">'+
         '<div><div style="font-size:9px;color:#E65100;font-weight:700;margin-bottom:2px;">Qty Used *</div>'+
           '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" max="'+maxQ+'" value="'+existingQty+'" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;"></div>'+
         '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
