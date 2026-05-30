@@ -3453,7 +3453,9 @@ function openPDF(docHtml){
 
   if(!isIOSPWA){
     // Normal browser / Android: open in new tab as before
-    openPDF(docHtml);
+    var w=window.open('','_blank');
+    if(w){ w.document.write(docHtml); w.document.close(); }
+    else{ toast('Allow popups to view PDF','warning'); }
     return;
   }
 
