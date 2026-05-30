@@ -4865,13 +4865,41 @@ async function execOpenBill(partyKey,projId){
           '<span id="bl-work-subtotal-amt" style="font-size:14px;font-weight:900;color:#1565C0;">&#8377;0</span>'+
         '</div>'
       : '<div style="font-size:11px;color:var(--text3);padding:8px 0;">No work allotments found for this party.</div>')+
+    // Additions
+    '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:8px;">&#9313; Additions (Tax, Transport etc.)</div>'+
+    '<div id="bl-additions" style="margin-bottom:12px;">'+
+      '<div id="bl-add-list"></div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+        '<button onclick="blAddAddition()" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom Addition</button>'+
+        '<button onclick="blAddPreset(\'GST @18%\',\'pct\',18)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 18%</button>'+
+        '<button onclick="blAddPreset(\'GST @12%\',\'pct\',12)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 12%</button>'+
+        '<button onclick="blAddPreset(\'GST @5%\',\'pct\',5)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 5%</button>'+
+        '<button onclick="blAddPreset(\'Transportation\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Transport</button>'+
+        '<button onclick="blAddPreset(\'Loading / Unloading\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Loading</button>'+
+      '</div>'+
+    '</div>'+
+    // Deductions
+    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">&#9314; Deductions (optional)</div>'+
+    '<div id="bl-deductions">'+
+      '<div id="bl-ded-list"></div>'+
+      '<button onclick="blAddDeduction()" style="font-size:10px;padding:4px 10px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:5px;cursor:pointer;font-weight:700;">+ Add Deduction</button>'+
+    '</div>'+
+
+    // ④ Gross Bill Amount (work + add - ded)
+    '<div style="background:#1B5E20;border-radius:10px;padding:12px 14px;margin:10px 0;display:flex;justify-content:space-between;align-items:center;">'+
+      '<div>'+
+        '<div style="color:white;font-size:12px;font-weight:800;">Gross Bill Amount</div>'+
+        '<div id="bl-gross-breakdown" style="font-size:9px;color:rgba(255,255,255,0.7);margin-top:2px;"></div>'+
+      '</div>'+
+      '<div id="bl-gross-display" style="font-size:22px;font-weight:900;color:white;">&#8377;0</div>'+
+    '</div>'+
     // Advance info
     (function(){
       if(!partyAdvances.length) return '';
       // Cap advance adjustment to current bill amount
       var grossBillAmt=workRows.reduce(function(s,w){return s+(w.unbilled||0);},0);
       return '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
-        '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#128181; Advance Adjustment</div>'+
+        '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#9315; Advance Adjustment</div>'+
         '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances to adjust against this bill. Amounts are capped to current bill value.</div>'+
         partyAdvances.map(function(adv,ai){
           var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
@@ -4923,7 +4951,7 @@ async function execOpenBill(partyKey,projId){
         '<div style="font-size:10px;font-weight:800;color:#2E7D32;border-top:1px solid #C8E6C9;margin-top:6px;padding-top:4px;">Total Released: &#8377;'+Number(totalRelDed).toLocaleString("en-IN")+'</div>'+
       '</div>':'')+ 
     // Bill details
-    '<div style="font-size:11px;font-weight:800;color:#333;margin:12px 0 8px;">&#9313; Bill Details</div>'+
+    '<div style="font-size:11px;font-weight:800;color:#333;margin:12px 0 8px;">&#9316; Bill Details</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
       '<div><label class="flbl">Bill Date *</label><input id="bl-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
       '<div><label class="flbl">Bill Number</label><input id="bl-no" class="finp" value="'+nextBillNo+'"></div>'+
@@ -4936,27 +4964,7 @@ async function execOpenBill(partyKey,projId){
         '<div style="font-size:9px;color:var(--text3);margin-top:2px;">Auto-calculated (advance deducted if selected)</div>'+
       '</div>'+
       '<div><label class="flbl">Description</label><input id="bl-desc" class="finp" placeholder="e.g. RA Bill No.1 for work done upto..."></div>'+
-    '</div>'+
-    // Additions
-    '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:8px;">&#9314; Additions (Tax, Transport etc.)</div>'+
-    '<div id="bl-additions" style="margin-bottom:12px;">'+
-      '<div id="bl-add-list"></div>'+
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
-        '<button onclick="blAddAddition()" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom Addition</button>'+
-        '<button onclick="blAddPreset(\'GST @18%\',\'pct\',18)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 18%</button>'+
-        '<button onclick="blAddPreset(\'GST @12%\',\'pct\',12)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 12%</button>'+
-        '<button onclick="blAddPreset(\'GST @5%\',\'pct\',5)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 5%</button>'+
-        '<button onclick="blAddPreset(\'Transportation\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Transport</button>'+
-        '<button onclick="blAddPreset(\'Loading / Unloading\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Loading</button>'+
-      '</div>'+
-    '</div>'+
-    // Deductions
-    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">&#9315; Deductions (optional)</div>'+
-    '<div id="bl-deductions">'+
-      '<div id="bl-ded-list"></div>'+
-      '<button onclick="blAddDeduction()" style="font-size:10px;padding:4px 10px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:5px;cursor:pointer;font-weight:700;">+ Add Deduction</button>'+
     '</div>';
-
   // Reset additions and deductions arrays for fresh form
   BL_ADDITIONS=[];
   BL_DEDUCTIONS=[];
@@ -5041,13 +5049,18 @@ function blUpdateTotal(){
   var amtEl=document.getElementById('bl-amount');
   if(amtEl) amtEl.value=Math.round(net);
   // Show breakdown
-  var advEl=document.getElementById('bl-adv-adj-display');
-  if(advEl){
+  // Update gross display panel
+  var gDisp=document.getElementById('bl-gross-display');
+  if(gDisp) gDisp.textContent='₹'+Math.round(grossWithAdd).toLocaleString('en-IN');
+  var gBreak=document.getElementById('bl-gross-breakdown');
+  if(gBreak){
     var parts=[];
-    if(addTotal>0) parts.push('Work: ₹'+total.toLocaleString('en-IN')+' + Add: ₹'+addTotal.toLocaleString('en-IN')+' = Gross: ₹'+Math.round(grossWithAdd).toLocaleString('en-IN'));
-    if(advAdj>0)   parts.push('Less Adv: ₹'+advAdj.toLocaleString('en-IN'));
-    advEl.textContent=parts.join(' | ');
+    if(addTotal>0) parts.push('Work ₹'+Math.round(total).toLocaleString('en-IN')+' + Additions ₹'+Math.round(addTotal).toLocaleString('en-IN'));
+    gBreak.textContent=parts.join('');
   }
+  // Update net payable field (gross - advance)
+  var advEl=document.getElementById('bl-adv-adj-display');
+  if(advEl) advEl.textContent=advAdj>0?'Less Advance: ₹'+Math.round(advAdj).toLocaleString('en-IN'):'';
 }
 
 var BL_ADDITIONS=[];
