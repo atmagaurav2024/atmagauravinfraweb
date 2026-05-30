@@ -2105,43 +2105,40 @@ async function execSaveMultiAllot(projId){
   var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
   var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:anonKey;
 
-  var saved=[];
+  // Use same table and columns as single-item execSaveAllot
+  var batchId='batch-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
+  var savedCount=0;
   var errors=0;
   for(var i=0;i<toSave.length;i++){
     var s=toSave[i];
-    var data={
-      project_id:projId,
-      boq_item_id:s.itemId,
-      boq_exec_resource_id:s.resId,
-      rr_id:s.rrId,
-      party_type:partyType,
-      party_name:partyName,
-      qty:s.qty,
-      unit:s.unit,
-      rate:s.rate,
-      amount:Math.round(s.qty*s.rate),
-      start_date:startDate,
-      end_date:endDate,
-      scope:scope,
-      specification:s.spec,
-      exec_type:partyType,
-      created_by:currentUser?currentUser.name:null
-    };
+    var planRes=WA_PLANNED.find(function(r){return r.id===s.resId;})||{};
     try{
-      var res=await fetch(baseUrl+'/rest/v1/work_allotments',{
-        method:'POST',
-        headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify(data)
+      var res=await sbInsert('boq_exec_resources',{
+        project_id:projId,
+        boq_item_id:planRes.boq_item_id||s.itemId||null,
+        boq_subitem_id:planRes.boq_subitem_id||null,
+        boq_exec_resource_id:s.resId,
+        date:new Date().toISOString().slice(0,10),
+        exec_type:partyType,
+        party_name:partyName,
+        qty:s.qty,
+        unit:s.unit||null,
+        rate:s.rate,
+        scope:scope||null,
+        start_date:startDate,
+        end_date:endDate,
+        doc_type:docType==='none'?null:docType,
+        specification:s.spec||null,
+        batch_id:batchId,
+        rr_id:s.rrId||null
       });
-      if(res.ok){
-        var r=await res.json();
-        if(r&&r[0]){WA_ALLOT.push(r[0]);saved.push(r[0]);}
-      } else { errors++; }
-    }catch(e){errors++;console.error(e);}
+      if(res&&res[0]) WA_ALLOT.push(res[0]);
+      savedCount++;
+    }catch(e){errors++;console.error('Multi-allot save error:',e);}
   }
 
-  if(errors) toast(errors+' allotment(s) failed to save','warning');
-  else toast(toSave.length+' allotment(s) saved!','success');
+  if(errors) toast(errors+' allotment(s) failed','error');
+  if(savedCount) toast(savedCount+' allotment(s) saved!','success');
 
   closeSheet('ov-exec','sh-exec');
 
