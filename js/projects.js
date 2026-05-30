@@ -3764,16 +3764,20 @@ async function execOpenDailyEntry(itemId){
   var resourceRows = itemAllots.length
     ? (inStoreRows
         ? '<div style="font-size:10px;font-weight:800;color:#1B5E20;margin-bottom:6px;">&#127981; From Store</div>'+inStoreRows
-        : '<div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-style:italic;">No matching store items for this BOQ item</div>')+
+        : '')+
       (outStoreRows
-        ? '<div style="margin-top:10px;">'+
-            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">'+
-              '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
-              '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Use resources outside store / direct use ('+outStoreAllots.length+')</span>'+
-            '</label>'+
-            '<div id="dp-outside-rows" style="display:none;">'+outStoreRows+'</div>'+
-          '</div>'
-        : '')
+        ? (inStoreRows
+            // If store items exist too → hide outside behind toggle
+            ? '<div style="margin-top:10px;">'+
+                '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">'+
+                  '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
+                  '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Use resources outside store / direct use ('+outStoreAllots.length+')</span>'+
+                '</label>'+
+                '<div id="dp-outside-rows" style="display:none;">'+outStoreRows+'</div>'+
+              '</div>'
+            // No store items → show outside resources directly, no toggle needed
+            : '<div style="font-size:10px;font-weight:800;color:#E65100;margin-bottom:6px;">&#128666; Direct Use / Outside Store</div>'+outStoreRows)
+        : (!inStoreRows ? '<div style="font-size:11px;color:var(--text3);padding:8px 0;font-style:italic;">No resources allotted for this item yet.</div>' : ''))
     : '<div style="font-size:11px;color:var(--text3);padding:8px 0;font-style:italic;">No resources allotted for this item yet.</div>';
 
   document.getElementById('exec-sheet-title').textContent='Daily Progress — '+(item.item_code?item.item_code+' ':'')+(item.short_name||item.description||'');
