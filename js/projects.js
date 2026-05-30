@@ -4490,7 +4490,8 @@ function execRenderBills(){
               '</div>'+
             '</div>'+
             '<span style="font-weight:800;color:'+(remaining<=0?'#9E9E9E':'#F57F17')+';">'+inr(advTotal)+'</span>'+
-            '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+            '<button onclick="execEditAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#1565C0;cursor:pointer;font-size:13px;" title="Edit">&#9998;</button>'+
+            '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;" title="Delete">&#215;</button>'+
           '</div>';
         }).join('')+
       '</div>':'';
@@ -4656,6 +4657,78 @@ function execAdvanceReceipt(advId,resName,allotAmt){
   '</body></html>';
 
   openPDF(html);
+}
+
+async function execEditAdvance(advId){
+  var adv=WA_ADVANCES.find(function(x){return x.id===advId;});
+  if(!adv){toast('Advance not found','error');return;}
+  var a=WA_ALLOT.find(function(x){return x.id===adv.allot_id;})||{};
+  var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+  var resName=planRes.party_name||planRes.resource_category||a.scope||'';
+  var allotAmt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
+  var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
+
+  document.getElementById('exec-sheet-title').textContent='Edit Advance — '+adv.party_name;
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+      '<div style="font-size:11px;font-weight:800;color:#F57F17;">'+adv.party_name+'</div>'+
+      (resName?'<div style="font-size:10px;color:var(--text3);">'+resName+'</div>':'')+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+      '<div><label class="flbl">Date *</label>'+
+        '<input id="adva-date" class="finp" type="date" value="'+(adv.date||'')+'">'+'</div>'+
+      '<div><label class="flbl">Amount (₹) *</label>'+
+        '<input id="adva-amount" class="finp" type="number" step="1" value="'+(adv.amount||'')+'">'+'</div>'+
+    '</div>'+
+    '<label class="flbl">Payment Mode</label>'+
+    '<select id="adva-mode" class="fsel">'+
+      '<option value="">— Select —</option>'+
+      ['Cash','NEFT','RTGS','IMPS','Cheque','UPI','DD'].map(function(m){
+        return '<option value="'+m+'"'+(adv.payment_mode===m?' selected':'')+'>'+m+'</option>';
+      }).join('')+
+    '</select>'+
+    '<label class="flbl">Reference / Cheque No.</label>'+
+    '<input id="adva-ref" class="finp" placeholder="UTR / Cheque number" value="'+(adv.reference||'')+'">'+''+
+    '<label class="flbl">Purpose / Remarks *</label>'+
+    '<input id="adva-purpose" class="finp" value="'+(adv.purpose||'')+'" placeholder="e.g. Mobilization advance...">';
+
+  document.getElementById('exec-sheet-foot').innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#F57F17;color:white;';
+  sb.innerHTML='&#10003; Update Advance';
+  sb.onclick=function(){execUpdateAdvance(advId);};
+  document.getElementById('exec-sheet-foot').appendChild(cb);
+  document.getElementById('exec-sheet-foot').appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execUpdateAdvance(advId){
+  var date  =(document.getElementById('adva-date')||{value:''}).value;
+  var amount=parseFloat((document.getElementById('adva-amount')||{value:0}).value)||0;
+  var mode  =(document.getElementById('adva-mode')||{value:''}).value||null;
+  var ref   =(document.getElementById('adva-ref')||{value:''}).value.trim()||null;
+  var purpose=(document.getElementById('adva-purpose')||{value:''}).value.trim();
+  if(!date||!amount){toast('Date and amount required','warning');return;}
+  if(!purpose){toast('Purpose required','warning');return;}
+
+  var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
+  var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:anonKey;
+  try{
+    var res=await fetch(baseUrl+'/rest/v1/work_advances?id=eq.'+advId,{
+      method:'PATCH',
+      headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({date:date,amount:amount,payment_mode:mode,reference:ref,purpose:purpose})
+    });
+    if(!res.ok){var e=await res.json().catch(function(){return{};});throw new Error(e.message||'Update failed');}
+    // Update in memory
+    var idx=WA_ADVANCES.findIndex(function(x){return x.id===advId;});
+    if(idx>-1) Object.assign(WA_ADVANCES[idx],{date:date,amount:amount,payment_mode:mode,reference:ref,purpose:purpose});
+    toast('Advance updated!','success');
+    closeSheet('ov-exec','sh-exec');
+    execRenderBills();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
 async function execDelAdvance(id){
