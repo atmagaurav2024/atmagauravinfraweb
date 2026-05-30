@@ -4857,7 +4857,14 @@ async function execOpenBill(partyKey,projId){
     '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">'+
       '&#9312; Select Works to Include in this Bill'+
     '</div>'+
-    (workRows.length?workSelRows:'<div style="font-size:11px;color:var(--text3);padding:8px 0;">No work allotments found for this party.</div>')+
+    (workRows.length
+      ? workSelRows+
+        '<div id="bl-work-subtotal" style="display:flex;justify-content:space-between;align-items:center;'+
+          'background:#E3F2FD;border-radius:8px;padding:8px 12px;margin-top:4px;margin-bottom:10px;">'+
+          '<span style="font-size:11px;font-weight:800;color:#1565C0;">&#10003; Work Sub-Total (selected)</span>'+
+          '<span id="bl-work-subtotal-amt" style="font-size:14px;font-weight:900;color:#1565C0;">&#8377;0</span>'+
+        '</div>'
+      : '<div style="font-size:11px;color:var(--text3);padding:8px 0;">No work allotments found for this party.</div>')+
     // Advance info
     (function(){
       if(!partyAdvances.length) return '';
@@ -5003,6 +5010,9 @@ function blUpdateTotal(){
       total+=parseFloat(amtInp&&amtInp.value)||0;
     }
   });
+  // Update work sub-total bar
+  var wsTot=document.getElementById('bl-work-subtotal-amt');
+  if(wsTot) wsTot.textContent='₹'+Math.round(total).toLocaleString('en-IN');
   // Sum additions (flat or % of work total)
   var addTotal=0;
   document.querySelectorAll('.bl-add-row').forEach(function(row){
