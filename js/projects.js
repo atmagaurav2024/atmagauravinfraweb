@@ -3690,24 +3690,37 @@ async function execOpenDailyEntry(itemId){
            (rn?STORE_ITEMS.find(function(s){return s.project_id===projId&&s.item_name===rn;}):null)||null;
   }
 
-  // Split allotments
-  var inStoreAllots=[], outStoreAllots=[];
-  var seenStoreIds={};
+  // Split allotments into 3 buckets:
+  // 1. inStoreAllots   — material resources that have been issued from store
+  // 2. outStoreAllots  — material resources NOT yet issued (or outside store)
+  // 3. directAllots    — non-material resources (labour, SC, machinery) — always visible
+  var inStoreAllots=[], outStoreAllots=[], directAllots=[];
+  var seenIds={};
+  var materialTypes=['vendor','material']; // exec_types that come through store
+
   itemAllots.forEach(function(a){
+    if(seenIds[a.id]) return;
+    seenIds[a.id]=true;
     var rn=getResName(a);
+    var execType=(a.exec_type||'').toLowerCase();
+    var isMaterial = execType==='vendor' || execType==='material';
+
+    if(!isMaterial){
+      // Labour, SC, machinery, labour_contractor → always visible directly
+      directAllots.push({allot:a, resName:rn, outsideQty:parseFloat(a.qty)||0});
+      return;
+    }
+
+    // Material/vendor → check store
     var storeItem=findStoreItem(a, rn);
     var inHand=storeItem?(parseFloat(storeItem.qty_in_hand)||0):0;
     var issuedQty=storeItem?getIssuedQty(a, rn):0;
     var allotQty=parseFloat(a.qty)||0;
 
-    if(storeItem && inHand>0 && issuedQty>0 && !seenStoreIds[storeItem.id]){
-      // Only show in store section if material has actually been issued
-      seenStoreIds[storeItem.id]=true;
+    if(storeItem && issuedQty>0){
       inStoreAllots.push({allot:a, storeItem:storeItem, resName:rn||storeItem.item_name, issuedQty:issuedQty, inHand:inHand});
-    } else if(!seenStoreIds[a.id]){
-      // No store item, or in store but not issued yet → show in outside/direct section
-      var outsideQty=allotQty;
-      outStoreAllots.push({allot:a, resName:rn, outsideQty:outsideQty});
+    } else {
+      outStoreAllots.push({allot:a, resName:rn, outsideQty:allotQty});
     }
   });
 
@@ -3761,10 +3774,19 @@ async function execOpenDailyEntry(itemId){
     return makeResRow(x.allot, col, x.resName, null, false, x.outsideQty);
   }).join('');
 
+  var directRows = directAllots.map(function(x){
+    var col=tCol[x.allot.exec_type]||'#37474F';
+    return makeResRow(x.allot, col, x.resName, null, false, x.outsideQty);
+  }).join('');
+
   var resourceRows = itemAllots.length
-    ? (inStoreRows
-        // Store section — hidden behind toggle, unchecked by default
-        ? '<div style="margin-bottom:6px;">'+
+    ? (directRows
+        // Direct resources (labour/SC/machinery) — always visible, no toggle
+        ? '<div style="font-size:10px;font-weight:800;color:#37474F;margin-bottom:6px;">&#128104;&#8205;&#128267; Resources</div>'+directRows
+        : '')+
+      (inStoreRows
+        // Store material — hidden behind toggle, unchecked by default
+        ? '<div style="margin-top:'+(directRows?'10':'0')+'px;margin-bottom:4px;">'+
             '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'+
               '<input type="checkbox" id="dp-show-store" onchange="document.getElementById(\'dp-store-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#2E7D32;">'+
               '<span style="font-size:10px;font-weight:800;color:#2E7D32;">&#127981; Store Items ('+inStoreAllots.length+')</span>'+
@@ -3773,11 +3795,11 @@ async function execOpenDailyEntry(itemId){
           '</div>'
         : '')+
       (outStoreRows
-        // Outside/direct section — hidden behind toggle, unchecked by default
+        // Outside/direct material — hidden behind toggle, unchecked by default
         ? '<div style="margin-top:8px;">'+
             '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'+
               '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
-              '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Direct Use / Outside Store ('+outStoreAllots.length+')</span>'+
+              '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Direct Use / Outside Store Material ('+outStoreAllots.length+')</span>'+
             '</label>'+
             '<div id="dp-outside-rows" style="display:none;margin-top:6px;">'+outStoreRows+'</div>'+
           '</div>'
