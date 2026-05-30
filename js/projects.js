@@ -3102,7 +3102,17 @@ function execRenderDailyContent(){
   var cumulEntries = WA_DAILY.filter(function(d){return d.date<=selDate;});
 
   // ── 1. BOQ ITEM PROGRESS SUMMARY ───────────────────────────────────────
-  var summaryRows=WA_ITEMS.map(function(item){
+  // Sort by BOQ item sequence (natural sort on item_code e.g. 1, 1.1, 1.2, 2, 10)
+  var sortedItems=WA_ITEMS.slice().sort(function(a,b){
+    var ca=(a.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});
+    var cb=(b.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});
+    for(var i=0;i<Math.max(ca.length,cb.length);i++){
+      var diff=(ca[i]||0)-(cb[i]||0);
+      if(diff!==0) return diff;
+    }
+    return (a.item_code||'').localeCompare(b.item_code||'');
+  });
+  var summaryRows=sortedItems.map(function(item){
     var boqQty  = parseFloat(item.boq_qty||item.qty)||0;
     var jmQty   = WA_JMS.filter(function(j){return j.boq_item_id===item.id;}).reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
     var doneToday  = todayEntries.filter(function(d){return d.boq_item_id===item.id;}).reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
