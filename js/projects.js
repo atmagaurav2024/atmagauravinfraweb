@@ -2143,10 +2143,11 @@ async function execSaveMultiAllot(projId){
   closeSheet('ov-exec','sh-exec');
 
   // Generate document if selected
-  if(docType!=='none'&&saved.length){
+  if(docType!=='none'&&savedCount>0&&WA_ALLOT.length){
+    var lastSaved=WA_ALLOT.slice(-savedCount);
     var projItem=WA_ITEMS.find(function(it){return it.id===toSave[0].itemId;})||{};
     var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
-    execGenDoc(saved,docType,projItem,proj);
+    execGenDoc(lastSaved,docType,projItem,proj);
   }
 
   execRender();
