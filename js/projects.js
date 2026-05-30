@@ -5127,14 +5127,23 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   // Collect adjusted advance IDs
   var adjAdvIds=[];
   var adjAdvTotal=0;
-  var adjAdvDetails=[]; // per-advance: {id, amount}
+  var adjAdvDetails=[]; // per-advance: {id, amount, date, purpose, payment_mode, reference, total_adv}
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
     var aid=chk.getAttribute('data-adv-id');
     var ai=chk.id.replace('adv-adj-','');
     var amtInp=document.getElementById('adv-adj-amt-'+ai);
     var amt=amtInp?parseFloat(amtInp.value)||0:parseFloat(chk.getAttribute('data-amount'))||0;
+    if(amt<=0) return; // skip zero-amount
+    var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
     adjAdvIds.push(aid);
-    adjAdvDetails.push({id:aid, amount:amt});
+    adjAdvDetails.push({
+      id:aid, amount:amt,
+      date:origAdv.date||'',
+      purpose:origAdv.purpose||'',
+      payment_mode:origAdv.payment_mode||'',
+      reference:origAdv.reference||'',
+      total_adv:parseFloat(origAdv.amount)||0
+    });
     adjAdvTotal+=amt;
   });
 
@@ -5483,28 +5492,50 @@ function execDownloadBillPDF(billId){
           if(advDetails.length){
             advDetail='<div style="margin-top:4px;padding-left:10px;">';
             advDetails.forEach(function(ad){
+              // Use stored snapshot data (date/purpose/etc saved at bill time)
+              var date=ad.date||'';
+              var purpose=ad.purpose||'';
+              var mode=ad.payment_mode||'';
+              var ref=ad.reference||'';
+              var totalAdv=ad.total_adv||0;
+              // Also try live WA_ADVANCES for any missing fields
               var origAdv=WA_ADVANCES.find(function(a){return a.id===ad.id;})||{};
+              if(!date) date=origAdv.date||'';
+              if(!purpose) purpose=origAdv.purpose||'';
+              if(!mode) mode=origAdv.payment_mode||'';
+              if(!ref) ref=origAdv.reference||'';
+              if(!totalAdv) totalAdv=parseFloat(origAdv.amount)||0;
+              advDetail+='<div style="font-size:9px;color:#555;padding:3px 0;border-bottom:1px dashed #FFE0B2;">'+
+                '<b>'+fmtD(date)+'</b>'+
+                (purpose?' — '+purpose:'')+
+                (mode?' · '+mode:'')+
+                (ref?' · Ref: '+ref:'')+
+                (totalAdv?' | Total Adv: '+inr(totalAdv):'')+
+                ' | <b style="color:#F57F17;">Adjusted in this bill: '+inr(ad.amount)+'</b>'+
+                '</div>';
+            });
+            advDetail+='</div>';
+          } else if(advIds.length){
+            // Fallback: split total adj proportionally across advances by remaining balance
+            var totalRemaining=advIds.reduce(function(s,aid){
+              var oa=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
+              return s+Math.max(0,(parseFloat(oa.amount)||0)-(parseFloat(oa.adjusted_amount)||0)+(parseFloat(d.amount)||0));
+            },0)||1;
+            advDetail='<div style="margin-top:4px;padding-left:10px;">';
+            advIds.forEach(function(aid){
+              var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
               if(origAdv.id){
+                var advAmt=parseFloat(origAdv.amount)||0;
+                var prevAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-(parseFloat(d.amount)||0));
+                var thisAdv=Math.max(0,advAmt-prevAdj);
+                var thisAdj=advIds.length===1?parseFloat(d.amount)||0:Math.round((thisAdv/totalRemaining)*(parseFloat(d.amount)||0));
                 advDetail+='<div style="font-size:9px;color:#555;padding:2px 0;border-bottom:1px dashed #FFE0B2;">'+
                   '<b>'+fmtD(origAdv.date||'')+'</b>'+
                   (origAdv.purpose?' — '+origAdv.purpose:'')+
                   (origAdv.payment_mode?' · '+origAdv.payment_mode:'')+
                   (origAdv.reference?' · Ref: '+origAdv.reference:'')+
-                  ' | Total Adv: '+inr(origAdv.amount)+
-                  ' | <b style="color:#F57F17;">Adj in this bill: '+inr(ad.amount)+'</b>'+
-                  '</div>';
-              }
-            });
-            advDetail+='</div>';
-          } else if(advIds.length){
-            // Fallback: use advance_ids without per-amount
-            advDetail='<div style="margin-top:4px;padding-left:10px;">';
-            advIds.forEach(function(aid){
-              var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
-              if(origAdv.id){
-                advDetail+='<div style="font-size:9px;color:#555;padding:2px 0;">'+
-                  fmtD(origAdv.date||'')+(origAdv.purpose?' — '+origAdv.purpose:'')+
-                  ' | Total: '+inr(origAdv.amount)+
+                  ' | Total Adv: '+inr(advAmt)+
+                  ' | <b style="color:#F57F17;">Adj in this bill: '+inr(thisAdj)+'</b>'+
                   '</div>';
               }
             });
