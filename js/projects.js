@@ -3061,7 +3061,12 @@ function execRenderDaily(){
 // Show BOQ item picker then open entry form
 function execOpenDailyEntryPicker(){
   if(!WA_ITEMS.length){toast('No BOQ items found','warning');return;}
-  var opts=WA_ITEMS.map(function(item){
+  var opts=WA_ITEMS.slice().sort(function(a,b){
+    var ca=(a.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});
+    var cb=(b.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});
+    for(var i=0;i<Math.max(ca.length,cb.length);i++){var diff=(ca[i]||0)-(cb[i]||0);if(diff!==0)return diff;}
+    return (a.item_code||'').localeCompare(b.item_code||'');
+  }).map(function(item){
     return '<option value="'+item.id+'">['+item.item_code+'] '+(item.short_name||item.description)+'</option>';
   }).join('');
   document.getElementById('exec-sheet-title').textContent='Select BOQ Item';
@@ -3247,7 +3252,7 @@ function execRenderDailyContent(){
     cumulByItem[key].push(d);
   });
 
-  var itemCards=WA_ITEMS.map(function(item){  // show ALL items so + Entry is always available
+  var itemCards=WA_ITEMS.slice().sort(function(a,b){var ca=(a.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});var cb=(b.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});for(var i=0;i<Math.max(ca.length,cb.length);i++){var diff=(ca[i]||0)-(cb[i]||0);if(diff!==0)return diff;}return (a.item_code||'').localeCompare(b.item_code||'');}).map(function(item){  // show ALL items so + Entry is always available
     var todayItemEntries=(todayByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
     var cumulItemEntries=(cumulByItem[item.id]||[]).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
     var doneToday2=todayItemEntries.reduce(function(s,d){return s+(parseFloat(d.qty_done)||0);},0);
