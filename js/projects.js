@@ -1702,9 +1702,7 @@ function rrDownloadPDF(rrId, projName){
 
     '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open PDF','warning');
+  openPDF(html);
 }
 
 
@@ -2332,7 +2330,7 @@ function generateCombinedDoc(allots,title,col,tbg){
     var projSel=document.getElementById('proj-mod-sel');
     if(projSel&&projSel.selectedIndex>=0) proj={name:projSel.options[projSel.selectedIndex].text};
   }
-  var co=COMPANY_DATA||{};var inr=function(n){return "\u20b9"+Number(n||0).toLocaleString("en-IN");};var fmtD=function(d){if(!d)return "";var p=d.split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};var tot=allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);var dn=(title==="WORK ORDER"?"WO":"PO")+"-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-4);var rows=allots.map(function(a,i){var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));return "<tr><td>"+(i+1)+"</td><td>"+a.party_name+(a.scope?"<br><small>"+a.scope+"</small>":"")+"</td><td>"+(a.qty||0)+" "+(a.unit||"")+"</td><td>"+inr(a.rate)+"</td><td>"+inr(amt)+"</td></tr>";}).join("");var html="<!DOCTYPE html><html><head><meta charset=UTF-8><title>"+title+"</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid "+col+";padding-bottom:10px;margin-bottom:12px;}.cn{font-size:17px;font-weight:900;color:"+col+";}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:"+col+";color:white;padding:7px 10px;text-align:left;font-size:11px;}td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:"+tbg+";}.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}@media print{button{display:none;}}</style></head><body><button onclick=\"window.print()\" style=\"background:"+col+";color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;\">Print/Save PDF</button><div class=hdr><div><div class=cn>"+(co.name||"Company")+"</div><div style=\"font-size:10px;color:#666\">"+(co.address||"")+"</div><div style=\"font-size:10px;color:#666\">"+(co.gstin?"GSTIN: "+co.gstin:"")+"</div></div><div style=\"text-align:right\"><div style=\"font-size:19px;font-weight:900;\">"+title+"</div><div style=\"color:#666\">"+dn+"</div><div style=\"color:#666\">Date: "+fmtD(new Date().toISOString().slice(0,10))+"</div><div style=\"color:#666\">Project: "+(proj.name||"")+"</div></div></div><table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>"+rows+"<tr class=tr><td colspan=4 style=\"text-align:right\">Total</td><td>"+inr(tot)+"</td></tr></table><div class=ft><div><div class=sg>Issued By<br><br>"+(co.name||"")+"</div></div><div><div class=sg>Authorized Signatory</div></div></div></body></html>";var w=window.open("","_blank");if(w){w.document.write(html);w.document.close();}else toast("Allow popups","warning");}
+  var co=COMPANY_DATA||{};var inr=function(n){return "\u20b9"+Number(n||0).toLocaleString("en-IN");};var fmtD=function(d){if(!d)return "";var p=d.split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};var tot=allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);var dn=(title==="WORK ORDER"?"WO":"PO")+"-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-4);var rows=allots.map(function(a,i){var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));return "<tr><td>"+(i+1)+"</td><td>"+a.party_name+(a.scope?"<br><small>"+a.scope+"</small>":"")+"</td><td>"+(a.qty||0)+" "+(a.unit||"")+"</td><td>"+inr(a.rate)+"</td><td>"+inr(amt)+"</td></tr>";}).join("");var html="<!DOCTYPE html><html><head><meta charset=UTF-8><title>"+title+"</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid "+col+";padding-bottom:10px;margin-bottom:12px;}.cn{font-size:17px;font-weight:900;color:"+col+";}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:"+col+";color:white;padding:7px 10px;text-align:left;font-size:11px;}td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:"+tbg+";}.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}@media print{button{display:none;}}</style></head><body><button onclick=\"window.print()\" style=\"background:"+col+";color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;\">Print/Save PDF</button><div class=hdr><div><div class=cn>"+(co.name||"Company")+"</div><div style=\"font-size:10px;color:#666\">"+(co.address||"")+"</div><div style=\"font-size:10px;color:#666\">"+(co.gstin?"GSTIN: "+co.gstin:"")+"</div></div><div style=\"text-align:right\"><div style=\"font-size:19px;font-weight:900;\">"+title+"</div><div style=\"color:#666\">"+dn+"</div><div style=\"color:#666\">Date: "+fmtD(new Date().toISOString().slice(0,10))+"</div><div style=\"color:#666\">Project: "+(proj.name||"")+"</div></div></div><table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>"+rows+"<tr class=tr><td colspan=4 style=\"text-align:right\">Total</td><td>"+inr(tot)+"</td></tr></table><div class=ft><div><div class=sg>Issued By<br><br>"+(co.name||"")+"</div></div><div><div class=sg>Authorized Signatory</div></div></div></body></html>";openPDF(html);}
 
 function generateWorkOrder(allot){
   var proj=PROJ_DATA.find(function(p){return p.id===allot.project_id;})||{};
@@ -2395,9 +2393,7 @@ function generateWorkOrder(allot){
       '<div><div class="sig">Accepted By<br><br>'+(allot.party_name||'')+'</div></div>'+
     '</div>'+
     '</body></html>';
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open document','warning');
+  openPDF(html);
 }
 
 function generatePurchaseOrder(allot){
@@ -2463,9 +2459,7 @@ function generatePurchaseOrder(allot){
       '<div><div class="sig">Vendor Acknowledgement<br><br>'+(allot.party_name||'')+'</div></div>'+
     '</div>'+
     '</body></html>';
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open document','warning');
+  openPDF(html);
 }
 
 // Option to regenerate WO/PO from existing allotment row
@@ -2771,10 +2765,7 @@ async function execGenPartyDoc(partyKey, docType){
     '<div><div class="sg">Accepted By<br><br>'+partyName+'</div></div></div>'+
     '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open document','warning');
-
+  openPDF(html);
   // Refresh view
   setTimeout(function(){execRenderAllotted();},500);
 }
@@ -3029,10 +3020,7 @@ async function execGenBatchDoc(batchKey, docType){
 
     '</div></body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to open document','warning');
-
+  openPDF(html);
   setTimeout(function(){execRenderAllotted();},400);
 }
 
@@ -4285,9 +4273,7 @@ function execAdvanceReceipt(advId,resName,allotAmt){
     '</div>'+
   '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to download receipt','warning');
+  openPDF(html);
 }
 
 async function execDelAdvance(id){
@@ -4755,9 +4741,7 @@ function billDownloadAdvReceipt(billId, dedId){
     '</div>'+
   '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to download receipt','warning');
+  openPDF(html);
 }
 
 async function execReleaseDeduction(billId,dedId){
@@ -5019,9 +5003,7 @@ function execDownloadBillPDF(billId){
     '</div>'+
   '</body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups to download PDF','warning');
+  openPDF(html);
 }
 
 
@@ -5619,9 +5601,7 @@ function grnDownloadPDF(grnId){
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Authorized By</div></div>'+
     '</div></body></html>';
 
-  var w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();}
-  else toast('Allow popups','warning');
+  openPDF(html);
 }
 
 // ════════════════════════════════════════════════════════════════
