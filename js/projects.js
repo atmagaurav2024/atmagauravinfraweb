@@ -4896,8 +4896,8 @@ async function execOpenBill(partyKey,projId){
     // Advance info
     (function(){
       if(!partyAdvances.length) return '';
-      // Cap advance adjustment to current bill amount
-      var grossBillAmt=workRows.reduce(function(s,w){return s+(w.unbilled||0);},0);
+      // Use bl-amount (net after advance) as cap — actual bill value
+      var grossBillAmt=parseFloat((document.getElementById('bl-amount')||{value:0}).value)||workRows.reduce(function(s,w){return s+(w.unbilled||0);},0);
       return '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#9315; Advance Adjustment</div>'+
         '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances to adjust against this bill. Amounts are capped to current bill value.</div>'+
@@ -5045,6 +5045,25 @@ function blUpdateTotal(){
     advAdj+=amt;
     chk.setAttribute('data-amount',amt);
   });
+  // Re-cap each advance adjustment input to gross (in case work amount changed)
+  document.querySelectorAll('.adv-adj-chk:not([disabled])').forEach(function(chk){
+    var ai=chk.id.replace('adv-adj-','');
+    var amtInp=document.getElementById('adv-adj-amt-'+ai);
+    if(amtInp){
+      var max=parseFloat(chk.getAttribute('data-max'))||0;
+      var cur=parseFloat(amtInp.value)||0;
+      // Cap to min(remaining, grossWithAdd)
+      var cap=Math.min(max, Math.round(grossWithAdd));
+      if(cur>cap){ amtInp.value=cap; chk.setAttribute('data-amount',cap); }
+    }
+  });
+  var advAdj2=0;
+  document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
+    var ai=chk.id.replace('adv-adj-','');
+    var amtInp=document.getElementById('adv-adj-amt-'+ai);
+    advAdj2+=amtInp?parseFloat(amtInp.value)||0:0;
+  });
+  advAdj=advAdj2;
   var net=Math.max(0,grossWithAdd-advAdj);
   var amtEl=document.getElementById('bl-amount');
   if(amtEl) amtEl.value=Math.round(net);
