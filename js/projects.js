@@ -18,14 +18,16 @@ var PMT_GROUPS = {
 };
 
 // ── Project selector (hidden, kept for compat) ────────────
-async function projModLoadProjects(){
+async function projModLoadProjects(forceFetch){
   var sel = document.getElementById('proj-mod-sel');
   if(!sel) return;
-  // Always fetch fresh from DB to pick up newly added projects
-  try{
-    var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
-    PROJ_DATA = Array.isArray(rows) ? rows : [];
-  }catch(e){ if(!PROJ_DATA) PROJ_DATA=[]; }
+  // Only fetch from DB if cache empty or explicitly forced (after add/edit)
+  if(!PROJ_DATA.length || forceFetch){
+    try{
+      var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
+      PROJ_DATA = Array.isArray(rows) ? rows : [];
+    }catch(e){ if(!PROJ_DATA) PROJ_DATA=[]; }
+  }
   var prev = PROJ_MOD_SEL_ID;
   sel.innerHTML = '<option value="">— Select Project —</option>'+
     PROJ_DATA.map(function(p){
@@ -46,20 +48,11 @@ function projModSelChange(){
 
 // ── Main entry: called from showApp ───────────────────────
 function initProjects(){
-  // Load projects data
-  if(!PROJ_DATA.length){
-    sbFetch('projects',{select:'*',order:'name.asc'})
-      .then(function(rows){
-        PROJ_DATA = Array.isArray(rows) ? rows : [];
-        projModLoadProjects();
-        projModRenderNav();
-        projModLoadTab();
-      }).catch(function(){ projModRenderNav(); projModLoadTab(); });
-  } else {
-    projModLoadProjects();
-    projModRenderNav();
-    projModLoadTab();
-  }
+  // Render nav immediately with cached data (instant UI)
+  projModRenderNav();
+  projModLoadTab();
+  // Then populate project selector (uses cache if available, no extra fetch)
+  projModLoadProjects();
 }
 
 // ── Render the grouped tab nav bar ────────────────────────
@@ -221,17 +214,25 @@ function projModAdd(){
 
 
 // ── PROJECT LIST ──────────────────────────────────────────────────────
-async function loadProjData(){
+async function loadProjData(forceFetch){
   var el = document.getElementById('proj-list'); if(!el) return;
-  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
+
+  // If cache available, render immediately (instant — no loading spinner)
+  if(PROJ_DATA.length && !forceFetch){
+    renderProjList();
+    projModLoadProjects(); // populate selector from cache (fast)
+    return;
+  }
+
+  // First load or force refresh — show spinner while fetching
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading projects...</div>';
   try{
     var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
     PROJ_DATA = Array.isArray(rows) ? rows : [];
     renderProjList();
-    // Also refresh shared selector
-    projModLoadProjects();
+    projModLoadProjects(); // populate selector from freshly loaded cache
   }catch(e){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Error loading projects</div>';
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Error loading projects. Please retry.</div>';
     console.error(e);
   }
 }
@@ -624,15 +625,12 @@ async function saveProjForm(editId){
       } else {
         var saved=await res.json();
         if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(saved[0]);
-        // Force reload so new project appears in selector
-        PROJ_DATA=[]; // clear cache so projModLoadProjects re-fetches
-        await projModLoadProjects();
+        await projModLoadProjects(true); // force re-fetch so new project appears
       }
       toast('Project added! Select it from the dropdown above.','success');
     }
     closeProjSheet();
-    renderProjList();
-    projModLoadProjects();
+    loadProjData(true); // force refresh list + selector after save
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
@@ -641,8 +639,7 @@ async function deleteProjItem(id){
     await sbDelete('projects',id);
     PROJ_DATA=PROJ_DATA.filter(function(p){return p.id!==id;});
     closeProjSheet();
-    renderProjList();
-    projModLoadProjects();
+    loadProjData(true); // force refresh list + selector after save
     toast('Project deleted','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
