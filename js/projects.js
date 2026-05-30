@@ -2145,9 +2145,10 @@ async function execSaveMultiAllot(projId){
   // Generate document if selected
   if(docType!=='none'&&savedCount>0&&WA_ALLOT.length){
     var lastSaved=WA_ALLOT.slice(-savedCount);
-    var projItem=WA_ITEMS.find(function(it){return it.id===toSave[0].itemId;})||{};
-    var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
-    execGenDoc(lastSaved,docType,projItem,proj);
+    if(lastSaved.length){
+      if(docType==='wo') generateCombinedDoc(lastSaved,'WORK ORDER','#E65100','#FFF3E0');
+      else if(docType==='po') generateCombinedDoc(lastSaved,'PURCHASE ORDER','#1565C0','#E3F2FD');
+    }
   }
 
   execRender();
