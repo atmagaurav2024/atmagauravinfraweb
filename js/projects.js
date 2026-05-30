@@ -3997,17 +3997,27 @@ async function execEditDailyEntry(entryId, itemId){
     return pl.party_name||pl.resource_category||a.scope||'';
   }
 
-  var inStoreE=[], outStoreE=[];
-  var seenStoreIdsE={};
+  var inStoreE=[], outStoreE=[], directE=[];
+  var seenIdsE={};
   itemAllots.forEach(function(a){
+    if(seenIdsE[a.id]) return;
+    seenIdsE[a.id]=true;
     var rn=getEditResName(a);
-    var sm=STORE_ITEMS.find(function(s){return s.allot_id===a.id&&(parseFloat(s.qty_in_hand)||0)>0;})||
-           (rn?STORE_ITEMS.find(function(s){return s.project_id===projId&&s.item_name===rn&&(parseFloat(s.qty_in_hand)||0)>0;}):null);
+    var execType=(a.exec_type||'').toLowerCase();
+    var isMaterial=execType==='vendor'||execType==='material';
+    if(!isMaterial){
+      directE.push({allot:a,resName:rn,outsideQty:parseFloat(a.qty)||0});
+      return;
+    }
+    var sm=STORE_ITEMS.find(function(s){return s.allot_id===a.id;})||
+           (rn?STORE_ITEMS.find(function(s){return s.project_id===projId&&s.item_name===rn;}):null);
+    var issuedQty=sm?(STORE_ISSUE_LOG.filter(function(l){return l.store_id===sm.id;}).reduce(function(s,l){return s+(parseFloat(l.qty_issued)||0);},0)):0;
     var allotQty=parseFloat(a.qty)||0;
-    var storeQty=sm?(parseFloat(sm.qty_in_hand)||0):0;
-    var outsideQty=Math.max(0,allotQty-storeQty);
-    if(sm&&!seenStoreIdsE[sm.id]){seenStoreIdsE[sm.id]=true;inStoreE.push({allot:a,storeItem:sm,resName:rn||sm.item_name});}
-    if(outsideQty>0) outStoreE.push({allot:a,resName:rn,outsideQty:outsideQty});
+    if(sm&&issuedQty>0){
+      inStoreE.push({allot:a,storeItem:sm,resName:rn||sm.item_name,issuedQty:issuedQty});
+    } else {
+      outStoreE.push({allot:a,resName:rn,outsideQty:allotQty});
+    }
   });
 
   function makeEditResRow(a, col, rn, storeItem, fromStore, outsideQty){
@@ -4046,15 +4056,22 @@ async function execEditDailyEntry(entryId, itemId){
   var hasExistingStore   = existingRes.some(function(r){return inStoreE.some(function(x){return x.allot.id===r.allot_id;});});
   var hasExistingOutside = existingRes.some(function(r){return outStoreE.some(function(x){return x.allot.id===r.allot_id;});});
 
+  var directEditRows=directE.map(function(x){
+    return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,null,false,x.outsideQty);
+  }).join('');
+
   var resourceRows = itemAllots.length
-    ? (inStoreE.length
-        ? '<div style="margin-bottom:6px;">'+
+    ? (directEditRows
+        ? '<div style="font-size:10px;font-weight:800;color:#37474F;margin-bottom:6px;">&#128104;&#8205;&#128267; Resources</div>'+directEditRows
+        : '')+
+      (inStoreE.length
+        ? '<div style="margin-top:'+(directEditRows?'10':'0')+'px;margin-bottom:4px;">'+
             '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'+
               '<input type="checkbox" id="dp-show-store" '+(hasExistingStore?'checked':'')+' onchange="document.getElementById(\'dp-store-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#2E7D32;">'+
               '<span style="font-size:10px;font-weight:800;color:#2E7D32;">&#127981; Store Items ('+inStoreE.length+')</span>'+
             '</label>'+
             '<div id="dp-store-rows" style="display:'+(hasExistingStore?'block':'none')+';margin-top:6px;">'+
-              inStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,x.storeItem,true);}).join('')+
+              inStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,x.storeItem,true,null,x.issuedQty);}).join('')+
             '</div>'+
           '</div>'
         : '')+
@@ -4062,7 +4079,7 @@ async function execEditDailyEntry(entryId, itemId){
         ? '<div style="margin-top:8px;">'+
             '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'+
               '<input type="checkbox" id="dp-show-outside" '+(hasExistingOutside?'checked':'')+' onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
-              '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Direct Use / Outside Store ('+outStoreE.length+')</span>'+
+              '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Direct Use / Outside Store Material ('+outStoreE.length+')</span>'+
             '</label>'+
             '<div id="dp-outside-rows" style="display:'+(hasExistingOutside?'block':'none')+';margin-top:6px;">'+
               outStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,null,false,x.outsideQty);}).join('')+
