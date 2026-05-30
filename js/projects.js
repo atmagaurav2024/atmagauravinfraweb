@@ -5127,9 +5127,15 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   // Collect adjusted advance IDs
   var adjAdvIds=[];
   var adjAdvTotal=0;
+  var adjAdvDetails=[]; // per-advance: {id, amount}
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
-    adjAdvIds.push(chk.getAttribute('data-adv-id'));
-    adjAdvTotal+=parseFloat(chk.getAttribute('data-amount'))||0;
+    var aid=chk.getAttribute('data-adv-id');
+    var ai=chk.id.replace('adv-adj-','');
+    var amtInp=document.getElementById('adv-adj-amt-'+ai);
+    var amt=amtInp?parseFloat(amtInp.value)||0:parseFloat(chk.getAttribute('data-amount'))||0;
+    adjAdvIds.push(aid);
+    adjAdvDetails.push({id:aid, amount:amt});
+    adjAdvTotal+=amt;
   });
 
   // Collect selected work items
@@ -5161,7 +5167,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   // Collect deductions (include advance adjustment as a deduction line)
   var deductions=[];
   if(adjAdvTotal>0){
-    deductions.push({id:'adv-adj-'+Date.now(),head:'Advance Adjustment',amount:adjAdvTotal,released:false,is_advance_adj:true,advance_ids:adjAdvIds});
+    deductions.push({id:'adv-adj-'+Date.now(),head:'Advance Adjustment',amount:adjAdvTotal,released:false,is_advance_adj:true,advance_ids:adjAdvIds,advance_details:adjAdvDetails});
   }
   document.querySelectorAll('#bl-ded-list > div').forEach(function(row){
     var head=(row.querySelector('.bl-ded-head')||{}).value||'';
@@ -5465,11 +5471,55 @@ function execDownloadBillPDF(billId){
           '</td><td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;color:#2E7D32;font-weight:700;">+'+inr(a.amount)+'</td></tr>';
       }).join('') : '';
 
-  // Deduction rows
+  // Deduction rows — with advance detail for adj entries
   var dedRows=activeDed.length
     ? activeDed.map(function(d){
-        return '<tr><td colspan="4" style="padding:6px 10px;border-bottom:1px solid #EEE;">'+d.head+'</td>'+
-          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;color:#E65100;font-weight:700;">('+inr(d.amount)+')</td></tr>';
+        var isAdvAdj=d.is_advance_adj?true:false;
+        var advDetail='';
+        if(isAdvAdj){
+          // Use per-advance breakdown if available
+          var advDetails=d.advance_details||[];
+          var advIds=d.advance_ids||[];
+          if(advDetails.length){
+            advDetail='<div style="margin-top:4px;padding-left:10px;">';
+            advDetails.forEach(function(ad){
+              var origAdv=WA_ADVANCES.find(function(a){return a.id===ad.id;})||{};
+              if(origAdv.id){
+                advDetail+='<div style="font-size:9px;color:#555;padding:2px 0;border-bottom:1px dashed #FFE0B2;">'+
+                  '<b>'+fmtD(origAdv.date||'')+'</b>'+
+                  (origAdv.purpose?' — '+origAdv.purpose:'')+
+                  (origAdv.payment_mode?' · '+origAdv.payment_mode:'')+
+                  (origAdv.reference?' · Ref: '+origAdv.reference:'')+
+                  ' | Total Adv: '+inr(origAdv.amount)+
+                  ' | <b style="color:#F57F17;">Adj in this bill: '+inr(ad.amount)+'</b>'+
+                  '</div>';
+              }
+            });
+            advDetail+='</div>';
+          } else if(advIds.length){
+            // Fallback: use advance_ids without per-amount
+            advDetail='<div style="margin-top:4px;padding-left:10px;">';
+            advIds.forEach(function(aid){
+              var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
+              if(origAdv.id){
+                advDetail+='<div style="font-size:9px;color:#555;padding:2px 0;">'+
+                  fmtD(origAdv.date||'')+(origAdv.purpose?' — '+origAdv.purpose:'')+
+                  ' | Total: '+inr(origAdv.amount)+
+                  '</div>';
+              }
+            });
+            advDetail+='</div>';
+          }
+        }
+        var purposeNote='';
+        return '<tr style="background:'+(isAdvAdj?'#FFF8E1':'white')+';">'+
+          '<td colspan="4" style="padding:6px 10px;border-bottom:1px solid #EEE;">'+
+            '<span style="background:'+(isAdvAdj?'#FFF8E1':'#FFF3E0')+';color:'+(isAdvAdj?'#F57F17':'#E65100')+
+              ';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:6px;">'+(isAdvAdj?'ADV ADJ':'DED')+'</span>'+
+            d.head+advDetail+purposeNote+
+          '</td>'+
+          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;color:'+(isAdvAdj?'#F57F17':'#E65100')+';font-weight:700;">('+inr(d.amount)+')</td>'+
+        '</tr>';
       }).join('') : '';
 
   var relRows=relDed.length
