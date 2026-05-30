@@ -3700,16 +3700,13 @@ async function execOpenDailyEntry(itemId){
     var issuedQty=storeItem?getIssuedQty(a, rn):0;
     var allotQty=parseFloat(a.qty)||0;
 
-    if(storeItem && inHand>0 && !seenStoreIds[storeItem.id]){
+    if(storeItem && inHand>0 && issuedQty>0 && !seenStoreIds[storeItem.id]){
+      // Only show in store section if material has actually been issued
       seenStoreIds[storeItem.id]=true;
-      // Show in store section — only issued qty can be used
       inStoreAllots.push({allot:a, storeItem:storeItem, resName:rn||storeItem.item_name, issuedQty:issuedQty, inHand:inHand});
-    }
-    // Outside-store: qty allotted but not yet in store
-    var outsideQty=Math.max(0, allotQty-inHand-(storeItem?0:0));
-    // If no store item at all, full allotted qty is outside
-    if(!storeItem) outsideQty=allotQty;
-    if(outsideQty>0){
+    } else if(!seenStoreIds[a.id]){
+      // No store item, or in store but not issued yet → show in outside/direct section
+      var outsideQty=allotQty;
       outStoreAllots.push({allot:a, resName:rn, outsideQty:outsideQty});
     }
   });
