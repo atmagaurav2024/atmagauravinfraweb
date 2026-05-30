@@ -21,13 +21,14 @@ var PMT_GROUPS = {
 async function projModLoadProjects(forceFetch){
   var sel = document.getElementById('proj-mod-sel');
   if(!sel) return;
-  // Only fetch from DB if cache empty or explicitly forced (after add/edit)
-  if(!PROJ_DATA.length || forceFetch){
+  // Fetch only when forced (after add/edit) or cache is empty
+  if(forceFetch || !PROJ_DATA.length){
     try{
       var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
       PROJ_DATA = Array.isArray(rows) ? rows : [];
     }catch(e){ if(!PROJ_DATA) PROJ_DATA=[]; }
   }
+  // Always re-render dropdown from whatever is in PROJ_DATA
   var prev = PROJ_MOD_SEL_ID;
   sel.innerHTML = '<option value="">— Select Project —</option>'+
     PROJ_DATA.map(function(p){
@@ -48,11 +49,14 @@ function projModSelChange(){
 
 // ── Main entry: called from showApp ───────────────────────
 function initProjects(){
-  // Render nav immediately with cached data (instant UI)
+  // 1. Render nav bar immediately (no data needed)
   projModRenderNav();
+  // 2. Render tab content (creates DOM elements like proj-list)
   projModLoadTab();
-  // Then populate project selector (uses cache if available, no extra fetch)
-  projModLoadProjects();
+  // 3. Populate dropdown selector (uses cache, or fetches if empty)
+  //    projModLoadTab → loadProjData already handles the list fetch,
+  //    so only populate the selector here from whatever is in PROJ_DATA
+  if(PROJ_DATA.length) projModLoadProjects();
 }
 
 // ── Render the grouped tab nav bar ────────────────────────
@@ -217,22 +221,25 @@ function projModAdd(){
 async function loadProjData(forceFetch){
   var el = document.getElementById('proj-list'); if(!el) return;
 
-  // If cache available, render immediately (instant — no loading spinner)
+  // Use cache if available and not forcing a refresh
   if(PROJ_DATA.length && !forceFetch){
-    renderProjList();
-    projModLoadProjects(); // populate selector from cache (fast)
+    renderProjList();          // instant render from cache
+    projModLoadProjects();     // populate selector from cache
     return;
   }
 
-  // First load or force refresh — show spinner while fetching
+  // Need to fetch — show spinner
   el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading projects...</div>';
   try{
     var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
     PROJ_DATA = Array.isArray(rows) ? rows : [];
-    renderProjList();
-    projModLoadProjects(); // populate selector from freshly loaded cache
+    // Re-get el in case DOM changed during async fetch
+    var el2 = document.getElementById('proj-list');
+    if(el2) renderProjList();
+    projModLoadProjects();
   }catch(e){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Error loading projects. Please retry.</div>';
+    var el2 = document.getElementById('proj-list');
+    if(el2) el2.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Error loading projects. Tap to retry.</div>';
     console.error(e);
   }
 }
