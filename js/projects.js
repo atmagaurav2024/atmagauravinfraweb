@@ -21,14 +21,14 @@ var PMT_GROUPS = {
 async function projModLoadProjects(forceFetch){
   var sel = document.getElementById('proj-mod-sel');
   if(!sel) return;
-  // Fetch only when forced (after add/edit) or cache is empty
-  if(forceFetch || !PROJ_DATA.length){
+  // Only fetch when forced (after add/edit) — loadProjData handles initial fetch
+  if(forceFetch){
     try{
       var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
       PROJ_DATA = Array.isArray(rows) ? rows : [];
-    }catch(e){ if(!PROJ_DATA) PROJ_DATA=[]; }
+    }catch(e){}
   }
-  // Always re-render dropdown from whatever is in PROJ_DATA
+  // Render dropdown from cache
   var prev = PROJ_MOD_SEL_ID;
   sel.innerHTML = '<option value="">— Select Project —</option>'+
     PROJ_DATA.map(function(p){
@@ -49,13 +49,8 @@ function projModSelChange(){
 
 // ── Main entry: called from showApp ───────────────────────
 function initProjects(){
-  // 1. Render nav bar immediately (no data needed)
   projModRenderNav();
-  // 2. Render tab content (creates DOM elements like proj-list)
   projModLoadTab();
-  // 3. Populate dropdown selector (uses cache, or fetches if empty)
-  //    projModLoadTab → loadProjData already handles the list fetch,
-  //    so only populate the selector here from whatever is in PROJ_DATA
   if(PROJ_DATA.length) projModLoadProjects();
 }
 
@@ -623,8 +618,7 @@ async function saveProjForm(editId){
           }
           var saved=await res2.json();
           if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(saved[0]);
-          PROJ_DATA=[];
-          await projModLoadProjects();
+          await projModLoadProjects(true);
           toast('Project added! (some optional fields not saved — add missing columns to DB)','success');
         } else {
           throw new Error(errBody.message||'Insert failed: '+res.status);
