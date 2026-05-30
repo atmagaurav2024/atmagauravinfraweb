@@ -3763,21 +3763,25 @@ async function execOpenDailyEntry(itemId){
 
   var resourceRows = itemAllots.length
     ? (inStoreRows
-        ? '<div style="font-size:10px;font-weight:800;color:#1B5E20;margin-bottom:6px;">&#127981; From Store</div>'+inStoreRows
+        // Store section — hidden behind toggle, unchecked by default
+        ? '<div style="margin-bottom:6px;">'+
+            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'+
+              '<input type="checkbox" id="dp-show-store" onchange="document.getElementById(\'dp-store-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#2E7D32;">'+
+              '<span style="font-size:10px;font-weight:800;color:#2E7D32;">&#127981; Store Items ('+inStoreAllots.length+')</span>'+
+            '</label>'+
+            '<div id="dp-store-rows" style="display:none;margin-top:6px;">'+inStoreRows+'</div>'+
+          '</div>'
         : '')+
       (outStoreRows
-        ? (inStoreRows
-            // If store items exist too → hide outside behind toggle
-            ? '<div style="margin-top:10px;">'+
-                '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">'+
-                  '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
-                  '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Use resources outside store / direct use ('+outStoreAllots.length+')</span>'+
-                '</label>'+
-                '<div id="dp-outside-rows" style="display:none;">'+outStoreRows+'</div>'+
-              '</div>'
-            // No store items → show outside resources directly, no toggle needed
-            : '<div style="font-size:10px;font-weight:800;color:#E65100;margin-bottom:6px;">&#128666; Direct Use / Outside Store</div>'+outStoreRows)
-        : (!inStoreRows ? '<div style="font-size:11px;color:var(--text3);padding:8px 0;font-style:italic;">No resources allotted for this item yet.</div>' : ''))
+        // Outside/direct section — hidden behind toggle, unchecked by default
+        ? '<div style="margin-top:8px;">'+
+            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'+
+              '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
+              '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Direct Use / Outside Store ('+outStoreAllots.length+')</span>'+
+            '</label>'+
+            '<div id="dp-outside-rows" style="display:none;margin-top:6px;">'+outStoreRows+'</div>'+
+          '</div>'
+        : '')
     : '<div style="font-size:11px;color:var(--text3);padding:8px 0;font-style:italic;">No resources allotted for this item yet.</div>';
 
   document.getElementById('exec-sheet-title').textContent='Daily Progress — '+(item.item_code?item.item_code+' ':'')+(item.short_name||item.description||'');
@@ -4017,18 +4021,28 @@ async function execEditDailyEntry(entryId, itemId){
     '</div>';
   }
 
+  var hasExistingStore   = existingRes.some(function(r){return inStoreE.some(function(x){return x.allot.id===r.allot_id;});});
+  var hasExistingOutside = existingRes.some(function(r){return outStoreE.some(function(x){return x.allot.id===r.allot_id;});});
+
   var resourceRows = itemAllots.length
     ? (inStoreE.length
-        ? '<div style="font-size:10px;font-weight:800;color:#1B5E20;margin-bottom:6px;">&#127981; From Store</div>'+
-          inStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,x.storeItem,true);}).join('')
-        : '<div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-style:italic;">No matching store items</div>')+
-      (outStoreE.length
-        ? '<div style="margin-top:10px;">'+
-            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">'+
-              '<input type="checkbox" id="dp-show-outside" onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;"'+(existingRes.some(function(r){return outStoreE.some(function(x){return x.allot.id===r.allot_id;})})?'checked':'')+'>'+
-              '<span style="font-size:10px;font-weight:800;color:#E65100;">Use resources not in store ('+outStoreE.length+')</span>'+
+        ? '<div style="margin-bottom:6px;">'+
+            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'+
+              '<input type="checkbox" id="dp-show-store" '+(hasExistingStore?'checked':'')+' onchange="document.getElementById(\'dp-store-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#2E7D32;">'+
+              '<span style="font-size:10px;font-weight:800;color:#2E7D32;">&#127981; Store Items ('+inStoreE.length+')</span>'+
             '</label>'+
-            '<div id="dp-outside-rows" style="display:'+(existingRes.some(function(r){return outStoreE.some(function(x){return x.allot.id===r.allot_id;})})?'block':'none')+';">'+
+            '<div id="dp-store-rows" style="display:'+(hasExistingStore?'block':'none')+';margin-top:6px;">'+
+              inStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,x.storeItem,true);}).join('')+
+            '</div>'+
+          '</div>'
+        : '')+
+      (outStoreE.length
+        ? '<div style="margin-top:8px;">'+
+            '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;">'+
+              '<input type="checkbox" id="dp-show-outside" '+(hasExistingOutside?'checked':'')+' onchange="document.getElementById(\'dp-outside-rows\').style.display=this.checked?\'block\':\'none\'" style="width:14px;height:14px;accent-color:#E65100;">'+
+              '<span style="font-size:10px;font-weight:800;color:#E65100;">&#128666; Direct Use / Outside Store ('+outStoreE.length+')</span>'+
+            '</label>'+
+            '<div id="dp-outside-rows" style="display:'+(hasExistingOutside?'block':'none')+';margin-top:6px;">'+
               outStoreE.map(function(x){return makeEditResRow(x.allot,tCol[x.allot.exec_type]||'#37474F',x.resName,null,false,x.outsideQty);}).join('')+
             '</div>'+
           '</div>'
