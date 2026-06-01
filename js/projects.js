@@ -5003,8 +5003,10 @@ function blAdvAdjAmtChange(inp, ai){
   var chk=document.getElementById('adv-adj-'+ai);
   if(!chk) return;
   var max=parseFloat(chk.getAttribute('data-max'))||0;
-  var val=Math.min(Math.max(0,parseFloat(inp.value)||0),max);
+  var cap=Math.min(max, Math.round(parseFloat((document.getElementById('bl-gross-display')||{textContent:'0'}).textContent.replace(/[^0-9.]/g,''))||max));
+  var val=Math.min(Math.max(0,parseFloat(inp.value)||0), cap);
   inp.value=val;
+  inp.setAttribute('data-manual','1'); // mark as manually edited
   chk.setAttribute('data-amount',val);
   blUpdateTotal();
 }
@@ -5045,18 +5047,29 @@ function blUpdateTotal(){
     advAdj+=amt;
     chk.setAttribute('data-amount',amt);
   });
-  // Cap each advance input to min(remaining, grossWithAdd) — correct amount
-  var remainingGross=Math.round(grossWithAdd); // gross before any advance
+  // Cap each advance input to min(remaining, grossWithAdd) — updates whenever gross changes
+  var remainingGross=Math.round(grossWithAdd);
   document.querySelectorAll('.adv-adj-chk:not([disabled])').forEach(function(chk){
     var ai=chk.id.replace('adv-adj-','');
     var amtInp=document.getElementById('adv-adj-amt-'+ai);
     if(amtInp){
       var maxRem=parseFloat(chk.getAttribute('data-max'))||0;
-      var cur=parseFloat(amtInp.value)||0;
       var cap=Math.min(maxRem, remainingGross);
-      // Only auto-cap if user hasn't manually set a lower value
-      if(cur>cap || cur===0){ amtInp.value=cap; }
+      var cur=parseFloat(amtInp.value)||0;
+      var isManual=amtInp.getAttribute('data-manual')==='1';
+      if(!isManual || cur>cap){
+        // Auto-set: not manually edited, OR current exceeds new cap
+        amtInp.value=cap;
+      }
+      amtInp.setAttribute('max', cap);
       chk.setAttribute('data-amount', parseFloat(amtInp.value)||0);
+      // Update "carried forward" display
+      var finalVal=parseFloat(amtInp.value)||0;
+      var nextSpan=amtInp.nextElementSibling;
+      if(nextSpan&&nextSpan.tagName==='SPAN'){
+        nextSpan.innerHTML='of ₹'+Number(maxRem).toLocaleString('en-IN')+
+          (finalVal<maxRem?' <b style="color:#E65100;">(₹'+Number(maxRem-finalVal).toLocaleString('en-IN')+' carried forward)</b>':'');
+      }
     }
   });
   var advAdj=0;
