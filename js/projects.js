@@ -5529,14 +5529,67 @@ async function execReleaseDeduction(billId,dedId){
 async function execOpenPayment(billId,partyKey,projId,balAmount){
   var parts=partyKey.split('::');
   var partyType=parts[0],partyName=parts[1];
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+
+  // Find pending advances for this party
+  var b=WA_BILLS.find(function(x){return x.id===billId;})||{};
+  var partyAdvances=WA_ADVANCES.filter(function(a){
+    return a.party_name===partyName&&a.party_type===partyType&&
+      Math.max(0,(parseFloat(a.amount)||0)-(parseFloat(a.adjusted_amount)||0))>0;
+  });
+
+  // Build advance adjustment rows
+  var advSection='';
+  if(partyAdvances.length){
+    var advRows=partyAdvances.map(function(adv,ai){
+      var advAmt=parseFloat(adv.amount)||0;
+      var adjSoFar=parseFloat(adv.adjusted_amount)||0;
+      var remaining=Math.max(0,advAmt-adjSoFar);
+      var defaultAdj=Math.min(remaining,Math.max(0,balAmount));
+      return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
+          '<input type="checkbox" id="py-adv-chk-'+ai+'" class="py-adv-chk" data-adv-id="'+adv.id+'" data-max="'+remaining+'" checked '+
+            'style="width:15px;height:15px;accent-color:#F57F17;" onchange="pyAdvChange('+ai+')">'+
+          '<div style="flex:1;font-size:11px;">'+
+            (adv.purpose?'<b>'+adv.purpose+'</b> — ':'')+
+            (adv.date||'')+
+            (adv.payment_mode?' · '+adv.payment_mode:'')+
+            (adv.reference?' · Ref: '+adv.reference:'')+
+          '</div>'+
+          '<span style="font-size:10px;color:#F57F17;font-weight:800;">Rem: '+inr(remaining)+'</span>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;padding-left:23px;">'+
+          '<span style="font-size:10px;color:var(--text3);">Adjust:</span>'+
+          '<input id="py-adv-amt-'+ai+'" type="number" value="'+defaultAdj+'" min="0" max="'+remaining+'" '+
+            'style="width:120px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:#F57F17;" '+
+            'oninput="pyUpdateNet()">'+
+          '<span style="font-size:10px;color:var(--text3);">of '+inr(remaining)+'</span>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    advSection=
+      '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+        '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#128181; Adjust Advances Against This Bill</div>'+
+        advRows+
+        '<div style="display:flex;justify-content:space-between;padding-top:8px;font-size:11px;font-weight:800;color:#F57F17;border-top:1px solid #FFE0B2;margin-top:4px;">'+
+          '<span>Total Advance Adjustment</span>'+
+          '<span id="py-adv-total">'+inr(partyAdvances.reduce(function(s,a,i){return s+Math.min(Math.max(0,(parseFloat(a.amount)||0)-(parseFloat(a.adjusted_amount)||0)),Math.max(0,balAmount));},0))+'</span>'+
+        '</div>'+
+      '</div>';
+  }
+
   document.getElementById('exec-sheet-title').textContent='Record Payment';
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:11px;">'+
-      '<div style="font-weight:800;color:#2E7D32;">Balance Due: \u20b9'+Number(balAmount).toLocaleString('en-IN')+'</div>'+
+    '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+      '<div style="font-weight:800;color:#2E7D32;font-size:12px;">Balance Due: '+inr(Math.max(0,balAmount))+'</div>'+
+      '<div id="py-net-display" style="font-size:10px;color:var(--text3);margin-top:3px;"></div>'+
     '</div>'+
+    advSection+
+    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">Cash / Bank Payment</div>'+
     '<div class="g2">'+
       '<div><label class="flbl">Payment Date *</label><input id="py-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
-      '<div><label class="flbl">Amount (₹) *</label><input id="py-amount" class="finp" type="number" value="'+Math.max(0,balAmount)+'"></div>'+
+      '<div><label class="flbl">Cash/Bank Amount (₹)</label><input id="py-amount" class="finp" type="number" value="'+Math.max(0,balAmount)+'"></div>'+
     '</div>'+
     '<div class="g2">'+
       '<div><label class="flbl">Payment Mode</label>'+
@@ -5547,36 +5600,144 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
       '<div><label class="flbl">Reference / UTR</label><input id="py-ref" class="finp" placeholder="UTR/Cheque no."></div>'+
     '</div>'+
     '<label class="flbl">Remarks</label>'+
-    '<input id="py-remarks" class="finp" placeholder="Payment remarks...">';
+    '<input id="py-remarks" class="finp" placeholder="Payment remarks...">'+
+    '<input type="hidden" id="py-bill-id" value="'+billId+'">'+
+    '<input type="hidden" id="py-party-type" value="'+partyType+'">'+
+    '<input type="hidden" id="py-party-name" value="'+partyName+'">';
+
+  // Wire pyUpdateNet after render
+  setTimeout(function(){
+    pyUpdateNet();
+    // Wire amount input too
+    var amtInp=document.getElementById('py-amount');
+    if(amtInp) amtInp.addEventListener('input',pyUpdateNet);
+  },100);
 
   var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
   var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
   cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
   var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#2E7D32;color:white;';
   sb.innerHTML='&#10003; Record Payment';
-  sb.onclick=function(){execSavePayment(billId,partyType,partyName,projId);};
+  sb.onclick=function(){execSavePaymentAdv(projId,balAmount);};
   sf.appendChild(cb);sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
 }
 
-async function execSavePayment(billId,partyType,partyName,projId){
-  var date=gv('py-date'),amount=parseFloat(gv('py-amount'))||0;
-  if(!date||!amount){toast('Date and amount required','warning');return;}
-  try{
-    var res=await sbInsert('work_payments',{
-      project_id:projId,bill_id:billId,
-      party_type:partyType,party_name:partyName,
-      payment_date:date,amount:amount,
-      payment_mode:gv('py-mode')||null,
-      reference:gv('py-ref')||null,
-      remarks:gv('py-remarks')||null
-    });
-    if(res&&res[0]) WA_PAYMENTS.push(res[0]);
-    toast('Payment of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
-    closeSheet('ov-exec','sh-exec');
-    execRenderBills();
-  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+function pyAdvChange(ai){
+  var chk=document.getElementById('py-adv-chk-'+ai);
+  var inp=document.getElementById('py-adv-amt-'+ai);
+  if(inp) inp.disabled=!chk.checked;
+  pyUpdateNet();
 }
+
+function pyUpdateNet(){
+  var advTotal=0;
+  document.querySelectorAll('.py-adv-chk:checked').forEach(function(chk){
+    var ai=chk.id.replace('py-adv-chk-','');
+    var inp=document.getElementById('py-adv-amt-'+ai);
+    advTotal+=inp?parseFloat(inp.value)||0:0;
+  });
+  var cashAmt=parseFloat((document.getElementById('py-amount')||{value:0}).value)||0;
+  var total=advTotal+cashAmt;
+  var advTotEl=document.getElementById('py-adv-total');
+  if(advTotEl) advTotEl.textContent='₹'+Math.round(advTotal).toLocaleString('en-IN');
+  var netEl=document.getElementById('py-net-display');
+  if(netEl && (advTotal>0||cashAmt>0)){
+    netEl.textContent='Total being settled: ₹'+Math.round(total).toLocaleString('en-IN')+
+      (advTotal>0?' (Advance: ₹'+Math.round(advTotal).toLocaleString('en-IN')+')':'')+
+      (cashAmt>0?' (Cash/Bank: ₹'+Math.round(cashAmt).toLocaleString('en-IN')+')':'');
+  }
+}
+
+async function execSavePaymentAdv(projId,balAmount){
+  var billId=gv('py-bill-id');
+  var partyType=gv('py-party-type');
+  var partyName=gv('py-party-name');
+  var date=gv('py-date');
+  var cashAmt=parseFloat(gv('py-amount'))||0;
+  var mode=gv('py-mode')||null;
+  var ref=gv('py-ref')||null;
+  var remarks=gv('py-remarks')||null;
+  if(!date){toast('Payment date required','warning');return;}
+
+  var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
+  var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:anonKey;
+
+  // 1. Collect advance adjustments
+  var advAdjs=[];
+  document.querySelectorAll('.py-adv-chk:checked').forEach(function(chk){
+    var ai=chk.id.replace('py-adv-chk-','');
+    var inp=document.getElementById('py-adv-amt-'+ai);
+    var amt=inp?parseFloat(inp.value)||0:0;
+    var advId=chk.getAttribute('data-adv-id');
+    if(amt>0&&advId) advAdjs.push({id:advId,amt:amt});
+  });
+
+  // 2. Save advance adjustments — update adjusted_amount on each advance
+  //    AND add to bill deductions
+  var advAdjTotal=0;
+  for(var i=0;i<advAdjs.length;i++){
+    var adj=advAdjs[i];
+    var origAdv=WA_ADVANCES.find(function(a){return a.id===adj.id;})||{};
+    var newAdjAmt=(parseFloat(origAdv.adjusted_amount)||0)+adj.amt;
+    advAdjTotal+=adj.amt;
+    try{
+      await fetch(baseUrl+'/rest/v1/work_advances?id=eq.'+adj.id,{
+        method:'PATCH',
+        headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({adjusted_amount:newAdjAmt})
+      });
+      var idx=WA_ADVANCES.findIndex(function(a){return a.id===adj.id;});
+      if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdjAmt;
+    }catch(e){console.warn(e);}
+  }
+
+  // 3. If advances were adjusted, add to bill deductions
+  if(advAdjTotal>0){
+    var bill=WA_BILLS.find(function(b){return b.id===billId;})||{};
+    var deds=[];try{deds=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
+    var advDetails=advAdjs.map(function(adj){
+      var oa=WA_ADVANCES.find(function(a){return a.id===adj.id;})||{};
+      return {id:adj.id,amount:adj.amt,date:oa.date||'',purpose:oa.purpose||'',
+        payment_mode:oa.payment_mode||'',reference:oa.reference||'',total_adv:parseFloat(oa.amount)||0};
+    });
+    deds.push({
+      id:'adv-adj-'+Date.now(),head:'Advance Adjustment',
+      amount:advAdjTotal,released:false,is_advance_adj:true,
+      advance_ids:advAdjs.map(function(a){return a.id;}),
+      advance_details:advDetails
+    });
+    try{
+      await fetch(baseUrl+'/rest/v1/work_bills?id=eq.'+billId,{
+        method:'PATCH',
+        headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({deductions:JSON.stringify(deds)})
+      });
+      if(bill) bill.deductions=JSON.stringify(deds);
+    }catch(e){console.warn(e);}
+  }
+
+  // 4. Save cash payment if amount > 0
+  if(cashAmt>0){
+    try{
+      var res=await sbInsert('work_payments',{
+        project_id:projId,bill_id:billId,
+        party_type:partyType,party_name:partyName,
+        payment_date:date,amount:cashAmt,
+        payment_mode:mode,reference:ref,remarks:remarks
+      });
+      if(res&&res[0]) WA_PAYMENTS.push(res[0]);
+    }catch(e){toast('Payment save error: '+e.message,'error');console.error(e);return;}
+  }
+
+  var settled=advAdjTotal+cashAmt;
+  toast('₹'+Math.round(settled).toLocaleString('en-IN')+' settled'+(advAdjTotal>0?' (incl. advance adj.)':''),'success');
+  closeSheet('ov-exec','sh-exec');
+  execRenderBills();
+}
+
+
 
 function execDownloadBillPDF(billId){
   var b=WA_BILLS.find(function(x){return x.id===billId;});
