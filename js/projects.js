@@ -4245,15 +4245,6 @@ function execRenderBills(){
         allotGroups[key]={resName:resName,partyName:a.party_name,unit:a.unit||'',allotQty:0,allotAmt:0,doneQty:0,doneAmt:0,items:[]};
         allotGroupOrder.push(key);
       }
-      // Advance paid for this allotment
-      var advAmt=WA_ADVANCES.filter(function(x){return x.allot_id===a.id;}).reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
-      // Bill payments for this allotment (via bills that include this allotment)
-      var billPaid=WA_PAYMENTS.filter(function(py){
-        var b=WA_BILLS.find(function(b){return b.id===py.bill_id;});
-        if(!b)return false;
-        var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
-        return si.some(function(x){return x.allot_id===a.id;});
-      }).reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
       // Billed amount for this allotment
       var billedAmt=WA_BILLS.reduce(function(s,b){
         var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
@@ -4264,8 +4255,6 @@ function execRenderBills(){
       allotGroups[key].doneQty+=doneQty;
       allotGroups[key].doneAmt+=Math.round(doneQty*allotRate);
       allotGroups[key].billedAmt=(allotGroups[key].billedAmt||0)+billedAmt;
-      allotGroups[key].advAmt=(allotGroups[key].advAmt||0)+advAmt;
-      allotGroups[key].paidAmt=(allotGroups[key].paidAmt||0)+billPaid;
       allotGroups[key].items.push({a:a,resName:resName,allotQty:allotQty,allotRate:allotRate,doneQty:doneQty,boqItem:boqItem});
     });
 
@@ -4304,16 +4293,83 @@ function execRenderBills(){
         '<td style="padding:7px 10px;font-size:11px;text-align:right;color:'+pctCol+';font-weight:700;">'+g.doneQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span><div style="font-size:9px;color:'+pctCol+';">('+pct+'% of allotted)</div></td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+inr(g.doneAmt)+'</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1A237E;">'+(g.billedAmt?inr(g.billedAmt):'—')+'</td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;color:#F57F17;font-weight:800;">'+(g.advAmt?inr(g.advAmt):'—')+'</td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;color:#558B2F;font-weight:800;">'+(g.paidAmt?inr(g.paidAmt):'—')+'</td>'+
-        (function(){var tot=(g.advAmt||0)+(g.paidAmt||0);return '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(tot)+'</td>';})()+
-        (function(){var bal=g.doneAmt-(g.advAmt||0)-(g.paidAmt||0);return '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:'+(bal>0?'#C62828':bal<0?'#6A1B9A':'#2E7D32')+';">'+inr(bal)+'</td>';})()+ 
       '</tr>'+indivRows;
     }).join('');
 
     // ── Totals — sum from groups ──
     var totAllotAmt=Object.keys(allotGroups).reduce(function(s,k){return s+allotGroups[k].allotAmt;},0);
     var totDoneAmt=Object.keys(allotGroups).reduce(function(s,k){return s+allotGroups[k].doneAmt;},0);
+    var totBilledAmt=Object.keys(allotGroups).reduce(function(s,k){return s+(allotGroups[k].billedAmt||0);},0);
+
+    // ── Party-level additions from all bills ──
+    var partyAddRows='';
+    var totalAddAmt=0;
+    WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;}).forEach(function(b){
+      var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      adds.forEach(function(a){
+        totalAddAmt+=parseFloat(a.amount)||0;
+        partyAddRows+='<tr style="background:#F9FFF9;border-bottom:1px solid #EEE;">'+
+          '<td colspan="4" style="padding:5px 10px;font-size:10px;">'+
+            '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">ADD</span>'+
+            a.head+(a.type==='pct'?' ('+a.pct+'%)':'')+
+            ' <span style="font-size:9px;color:var(--text3);">'+(b.bill_ref||'Bill #'+b.bill_number)+'</span>'+
+          '</td>'+
+          '<td colspan="2" style="padding:5px 10px;font-size:10px;text-align:right;font-weight:800;color:#2E7D32;">+'+inr(a.amount)+'</td>'+
+        '</tr>';
+      });
+    });
+
+    // ── Party-level deductions from all bills ──
+    var partyDedRows='';
+    var totalDedHeld=0;
+    WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;}).forEach(function(b){
+      var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).forEach(function(d){
+        totalDedHeld+=parseFloat(d.amount)||0;
+        partyDedRows+='<tr style="background:#FFF8F8;border-bottom:1px solid #EEE;">'+
+          '<td colspan="4" style="padding:5px 10px;font-size:10px;">'+
+            '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>'+
+            d.head+' <span style="font-size:9px;color:var(--text3);">'+(b.bill_ref||'Bill #'+b.bill_number)+'</span>'+
+            '<button onclick="execReleaseDeduction(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">Release</button>'+
+          '</td>'+
+          '<td colspan="2" style="padding:5px 10px;font-size:10px;text-align:right;font-weight:800;color:#E65100;">-'+inr(d.amount)+'</td>'+
+        '</tr>';
+      });
+    });
+
+    // ── Party-level advance entries ──
+    var partyAdvRows='';
+    var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
+    var totalAdvPaid=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+    var totalAdvAdj=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;}).reduce(function(s,b){
+      var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      return s+ded.filter(function(d){return d.is_advance_adj;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
+    },0);
+    if(pAdvances.length){
+      partyAdvRows+='<tr style="background:#FFF8E1;border-bottom:1px solid #EEE;">'+
+        '<td colspan="4" style="padding:6px 10px;font-size:10px;font-weight:800;color:#F57F17;">'+
+          '&#128181; Advances Paid ('+pAdvances.length+' entries)'+
+          ' <span style="font-size:9px;font-weight:400;color:var(--text3);">Adj: '+inr(totalAdvAdj)+' | Pending: '+inr(totalAdvPaid-totalAdvAdj)+'</span>'+
+        '</td>'+
+        '<td colspan="2" style="padding:6px 10px;text-align:right;font-weight:900;color:#F57F17;">'+inr(totalAdvPaid)+'</td>'+
+      '</tr>';
+      pAdvances.forEach(function(adv){
+        var adjAmt=parseFloat(adv.adjusted_amount)||0;
+        var pending=Math.max(0,(parseFloat(adv.amount)||0)-adjAmt);
+        partyAdvRows+='<tr style="background:#FFFDE7;border-bottom:1px solid #FFF3CD;">'+
+          '<td colspan="4" style="padding:4px 10px 4px 22px;font-size:10px;">'+
+            fmtD(adv.date)+(adv.purpose?' — '+adv.purpose:'')+
+            (adv.payment_mode?' · '+adv.payment_mode:'')+(adv.reference?' · Ref: '+adv.reference:'')+
+            ' <span style="font-size:9px;color:'+(pending>0?'#E65100':'#2E7D32')+';font-weight:700;">'+
+              (pending>0?'Pending: '+inr(pending):'Fully Adjusted')+
+            '</span>'+
+            '<button onclick="execEditAdvance(\''+adv.id+'\')" style="font-size:9px;background:#FFF8E1;color:#1565C0;border:1px solid #BBDEFB;border-radius:3px;padding:1px 5px;cursor:pointer;margin-left:6px;">&#9998;</button>'+
+            '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:2px;">&#215;</button>'+
+          '</td>'+
+          '<td colspan="2" style="padding:4px 10px;text-align:right;font-size:10px;font-weight:700;color:#F57F17;">'+inr(adv.amount)+'</td>'+
+        '</tr>';
+      });
+    }
 
     // ── Bills summary ──
     var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
@@ -4331,8 +4387,8 @@ function execRenderBills(){
     var pPaid=WA_PAYMENTS.filter(function(py){return py.party_name===p.name&&py.party_type===p.type;});
     var totalPaid=pPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
     var netPayable=totalBilled-totalDeductions;
-    var totalPaidAll=totalPaid+totalAdvance;
-    var balDue=netPayable-totalPaidAll;
+    var totalPaidAll=totalPaid+totalAdvAdj; // advance adj + cash payments
+    var balDue=netPayable-totalPaid-totalAdvAdj;
 
     // ── Bills list ──
     var billsList=pBills.length?pBills.map(function(b){
@@ -4480,31 +4536,64 @@ function execRenderBills(){
         '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:#F57F17;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128181; + Advance</button>'+
       '</div>'+
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">'+
-        '<thead><tr style="background:#F8FAFC;">'+
+        '<thead><tr style="background:#F8FAFC;border-bottom:2px solid var(--border);">'+
           '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">RESOURCE / WORK</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED QTY</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED AMT</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;">UTILISED QTY</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">PAYABLE AMT</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1A237E;">BILLED</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#F57F17;">ADVANCE</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#558B2F;">PAYMENT</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">TOTAL PAID</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#C62828;">BALANCE</th>'+
         '</tr></thead>'+
-        '<tbody>'+allotRows+'</tbody>'+
-        '<tfoot><tr style="background:#EFF6FF;border-top:2px solid #1565C0;">'+
-          '<td style="padding:7px 10px;font-size:11px;font-weight:800;">TOTAL</td>'+
+        '<tbody>'+allotRows+
+
+        // Work sub-total row
+        '<tr style="background:#EFF6FF;border-top:2px solid #1565C0;">'+
+          '<td style="padding:7px 10px;font-size:11px;font-weight:800;color:#1565C0;">Work Sub-Total</td>'+
           '<td></td>'+
           '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;">'+inr(totAllotAmt)+'</td>'+
           '<td></td>'+
-          '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1565C0;">'+inr(totDoneAmt)+'</td>'+
-        '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1A237E;">'+inr(totalBilled)+'</td>'+
-        '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</td>'+
-        '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#558B2F;">'+inr(totalPaid)+'</td>'+
-        '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#2E7D32;">'+inr(totalPaidAll)+'</td>'+
-        '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(balDue)+'</td>'+
-        '</tr></tfoot>'+
+          '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#2E7D32;">'+inr(totDoneAmt)+'</td>'+
+          '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1A237E;">'+inr(totalBilled)+'</td>'+
+        '</tr>'+
+
+        // Additions rows (from all bills)
+        partyAddRows+
+
+        // Gross billed (work + additions)
+        (totalAddAmt>0?
+          '<tr style="background:#E8F5E9;border-top:1px solid #C8E6C9;">'+
+            '<td colspan="5" style="padding:6px 10px;font-size:11px;font-weight:800;color:#1B5E20;">Gross Billed (incl. Additions)</td>'+
+            '<td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(totalBilled)+'</td>'+
+          '</tr>':'')+
+
+        // Deductions held rows
+        partyDedRows+
+
+        // Net payable row
+        '<tr style="background:#EFF6FF;border-top:2px solid #1565C0;">'+
+          '<td colspan="5" style="padding:7px 10px;font-size:11px;font-weight:800;color:#1565C0;">Net Payable (after deductions)</td>'+
+          '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</td>'+
+        '</tr>'+
+
+        // Advance entries (party-level)
+        partyAdvRows+
+
+        // Cash payments
+        (totalPaid>0?
+          '<tr style="background:#F0FFF4;border-top:1px solid #C8E6C9;">'+
+            '<td colspan="5" style="padding:6px 10px;font-size:11px;font-weight:800;color:#2E7D32;">Payments (Cash/Bank)</td>'+
+            '<td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</td>'+
+          '</tr>':'')+
+
+        // Balance due row
+        '<tr style="background:'+(balDue>0?'#FFF3F3':'#F0FFF4')+';border-top:2px solid '+(balDue>0?'#C62828':'#2E7D32')+';">'+
+          '<td colspan="5" style="padding:8px 10px;font-size:12px;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+
+            (balDue>0?'Balance Due':'Advance Excess / Overpaid')+
+          '</td>'+
+          '<td style="padding:8px 10px;font-size:13px;text-align:right;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(Math.abs(balDue))+'</td>'+
+        '</tr>'+
+
+        '</tbody>'+
       '</table></div>';
 
     var summaryBar=
