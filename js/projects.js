@@ -4350,93 +4350,124 @@ function execRenderBills(){
       var bNet=(parseFloat(b.bill_amount)||0)-dedTotal;
       var bBal=bNet-bPaidAmt-bRelDed;
 
+      // Parse additions
+      var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var addTotal=adds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var workSubTotal=Math.max(0,(parseFloat(b.bill_amount)||0)-addTotal);
+      var advAdjDeds=activeDed.filter(function(d){return d.is_advance_adj;});
+      var regularDeds=activeDed.filter(function(d){return !d.is_advance_adj;});
+      var advAdjTotal=advAdjDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+
       return '<div style="background:#F8FAFC;border:1px solid #E8EAF6;border-radius:10px;padding:10px 12px;margin-bottom:8px;">'+
         // Bill header
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
           '<span style="background:#E3F2FD;color:#1565C0;font-weight:800;padding:2px 8px;border-radius:4px;font-size:10px;">'+(b.bill_ref||'Bill #'+b.bill_number)+'</span>'+
           '<span style="font-size:10px;color:var(--text3);">'+fmtD(b.bill_date)+'</span>'+
-          '<span style="font-size:10px;color:var(--text3);">'+( b.bill_date||'')+'</span>'+
           (b.description?'<span style="font-size:10px;color:var(--text3);flex:1;">'+b.description+'</span>':'<span style="flex:1;"></span>')+
           '<button onclick="execOpenPayment(\''+b.id+'\',\''+key+'\',\''+projId+'\','+bBal+')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">+ Pay</button>'+
-          '<button onclick="execAddDeduction(\''+b.id+'\')" style="background:#E65100;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">- Deduction</button>'+
-          '<button onclick="execDownloadBillPDF(\''+b.id+'\')" style="background:#558B2F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:700;" title="Download PDF">&#11015; PDF</button>'+
-          '<button onclick="execDelBill(\''+b.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;" title="Delete">&#215;</button>'+
+          '<button onclick="execAddDeduction(\''+b.id+'\')" style="background:#E65100;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">- Ded</button>'+
+          '<button onclick="execDownloadBillPDF(\''+b.id+'\')" style="background:#558B2F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#11015; PDF</button>'+
+          '<button onclick="execDelBill(\''+b.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;">&#215;</button>'+
         '</div>'+
-        // Additions from bill
-        (function(){
-          var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
-          if(!adds.length) return '';
-          return '<div style="margin-bottom:6px;">'+
-            '<div style="font-size:9px;font-weight:800;color:#2E7D32;margin-bottom:4px;">ADDITIONS</div>'+
-            adds.map(function(a){
-              return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;border-bottom:1px solid #F0F0F0;">'+
-                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;">ADD</span>'+
-                '<span style="flex:1;">'+a.head+(a.type==='pct'?' ('+a.pct+'%)':'')+'</span>'+
-                '<span style="font-weight:800;color:#2E7D32;">'+inr(a.amount)+'</span>'+
-              '</div>';
-            }).join('')+
-          '</div>';
-        })()+
-        // Bill amounts grid
-        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:'+(ded.length?'8':'0')+'px;">'+
-          '<div style="text-align:center;background:white;padding:5px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Gross Bill</div><div style="font-size:12px;font-weight:800;">'+inr(b.bill_amount)+'</div></div>'+
-          '<div style="text-align:center;background:white;padding:5px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Deductions</div><div style="font-size:12px;font-weight:800;color:#E65100;">'+inr(dedTotal)+'</div></div>'+
-          '<div style="text-align:center;background:white;padding:5px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Net Payable</div><div style="font-size:12px;font-weight:800;color:#1565C0;">'+inr(bNet)+'</div></div>'+
-          '<div style="text-align:center;background:white;padding:5px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Balance Due</div><div style="font-size:12px;font-weight:800;color:'+(bBal>0?'#C62828':'#2E7D32')+';">'+inr(bBal)+'</div></div>'+
-        '</div>'+
-        // Deductions detail
-        (activeDed.length?
-          '<div style="margin-bottom:6px;">'+
-            '<div style="font-size:9px;font-weight:800;color:#E65100;margin-bottom:4px;">DEDUCTIONS HELD</div>'+
-            activeDed.map(function(d){
-              var isAdvAdj=d.is_advance_adj?true:false;
-              return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:3px 0;border-bottom:1px solid #F0F0F0;">'+
-                '<span style="background:'+(isAdvAdj?'#FFF8E1':'#FFF3E0')+';color:'+(isAdvAdj?'#F57F17':'#E65100')+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;">'+(isAdvAdj?'ADV ADJ':'DED')+'</span>'+
-                '<span style="flex:1;font-weight:700;">'+d.head+'</span>'+
-                '<span style="color:'+(isAdvAdj?'#F57F17':'#E65100')+';font-weight:800;">'+inr(d.amount)+'</span>'+
-                (isAdvAdj?
-                  '<button onclick="billDownloadAdvReceipt(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF8E1;color:#F57F17;border:1px solid #FFE0B2;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;">&#128438; PDF</button>':
-                  '<button onclick="execReleaseDeduction(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;">Release</button>'
-                )+
-                '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;" title="Delete">&#215;</button>'+
-              '</div>';
-            }).join('')+
-          '</div>':'')+
-        (relDed.length?
-          '<div style="margin-bottom:6px;">'+
-            '<div style="font-size:9px;font-weight:800;color:#2E7D32;margin-bottom:4px;">RELEASED DEDUCTIONS (COUNTED AS PAID)</div>'+
-            relDed.map(function(d){
-              return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;">'+
-                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;">REL</span>'+
-                '<span style="flex:1;color:#555;">'+d.head+'</span>'+
-                '<span style="font-weight:800;color:#2E7D32;">'+inr(d.amount)+'</span>'+
-                '<span style="font-size:9px;color:#2E7D32;">&#10003; Released: '+fmtD(d.released_date)+'</span>'+
-              '</div>';
-            }).join('')+
-          '</div>':'')+
-        // Advance adjustments shown as payments
-        (activeDed.filter(function(d){return d.is_advance_adj;}).length?
-          '<div style="margin-bottom:6px;">'+
-            '<div style="font-size:9px;font-weight:800;color:#F57F17;margin-bottom:4px;">ADVANCE ADJUSTED (COUNTED AS PAID)</div>'+
-            activeDed.filter(function(d){return d.is_advance_adj;}).map(function(d){
-              return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;">'+
-                '<span style="flex:1;color:#555;">'+d.head+'</span>'+
-                '<span style="font-weight:800;color:#F57F17;">'+inr(d.amount)+'</span>'+
-              '</div>';
-            }).join('')+
-          '</div>':'')+
-        // Payments
-        (bPaid.length?
-          '<div><div style="font-size:9px;font-weight:800;color:var(--text3);margin-bottom:4px;">PAYMENTS</div>'+
-            bPaid.map(function(py){
-              return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0;border-bottom:1px solid #F8F8F8;">'+
-                '<span style="color:var(--text3);">'+py.payment_date+'</span>'+
-                '<span style="flex:1;font-weight:700;">'+inr(py.amount)+'</span>'+
-                '<span style="color:var(--text3);">'+(py.payment_mode||'')+(py.reference?' · '+py.reference:'')+'</span>'+
-                '<button onclick="execDelPayment(\''+py.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;">&#215;</button>'+
-              '</div>';
-            }).join('')+
-          '</div>':'')+
+
+        // ── Bill Detail Table ──────────────────────────────────────────────
+        '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:360px;">'+
+          // Header
+          '<thead><tr style="background:#E3F2FD;">'+
+            '<th style="padding:5px 8px;text-align:left;font-size:9px;font-weight:800;color:#1565C0;">DESCRIPTION</th>'+
+            '<th style="padding:5px 8px;text-align:right;font-size:9px;font-weight:800;color:#1565C0;">AMOUNT</th>'+
+          '</tr></thead>'+
+          '<tbody>'+
+
+          // Work sub-total row
+          '<tr style="border-bottom:1px solid #EEE;">'+
+            '<td style="padding:6px 8px;font-weight:700;">Work Done</td>'+
+            '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#1565C0;">'+inr(workSubTotal)+'</td>'+
+          '</tr>'+
+
+          // Additions
+          adds.map(function(a){
+            return '<tr style="border-bottom:1px solid #EEE;background:#F9FFF9;">'+
+              '<td style="padding:5px 8px;">'+
+                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">ADD</span>'+
+                a.head+(a.type==='pct'?' ('+a.pct+'%)':'')+
+              '</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#2E7D32;">+ '+inr(a.amount)+'</td>'+
+            '</tr>';
+          }).join('')+
+
+          // Gross total (after additions)
+          (adds.length?
+            '<tr style="border-bottom:2px solid #1B5E20;background:#E8F5E9;">'+
+              '<td style="padding:6px 8px;font-weight:900;color:#1B5E20;">Gross Bill Amount</td>'+
+              '<td style="padding:6px 8px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(b.bill_amount)+'</td>'+
+            '</tr>':'<tr style="border-bottom:2px solid #1B5E20;"><td colspan="2" style="padding:0;"></td></tr>')+
+
+          // Regular deductions
+          regularDeds.map(function(d){
+            return '<tr style="border-bottom:1px solid #EEE;background:#FFF8F8;">'+
+              '<td style="padding:5px 8px;">'+
+                '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>'+
+                d.head+
+                '<button onclick="execReleaseDeduction(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">Release</button>'+
+                '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:3px;">&#215;</button>'+
+              '</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#E65100;">- '+inr(d.amount)+'</td>'+
+            '</tr>';
+          }).join('')+
+
+          // Released deductions
+          relDed.map(function(d){
+            return '<tr style="border-bottom:1px solid #EEE;background:#F9FFF9;">'+
+              '<td style="padding:5px 8px;">'+
+                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">REL</span>'+
+                d.head+' <span style="font-size:9px;color:#2E7D32;">(Released: '+fmtD(d.released_date)+')</span>'+
+              '</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#2E7D32;">+ '+inr(d.amount)+'</td>'+
+            '</tr>';
+          }).join('')+
+
+          // Net payable row
+          '<tr style="border-bottom:2px solid #1565C0;background:#EFF6FF;">'+
+            '<td style="padding:6px 8px;font-weight:900;color:#1565C0;">Net Payable</td>'+
+            '<td style="padding:6px 8px;text-align:right;font-weight:900;color:#1565C0;">'+inr(bNet)+'</td>'+
+          '</tr>'+
+
+          // Advance adjusted — shown as payment rows
+          advAdjDeds.map(function(d){
+            return '<tr style="border-bottom:1px solid #EEE;background:#FFF8E1;">'+
+              '<td style="padding:5px 8px;">'+
+                '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">PAYMENT</span>'+
+                'Advance Adjusted'+
+                '<button onclick="billDownloadAdvReceipt(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF8E1;color:#F57F17;border:1px solid #FFE0B2;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">&#128438; PDF</button>'+
+              '</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#F57F17;">'+inr(d.amount)+' <span style="font-size:9px;font-weight:700;">(Advance Adjusted)</span></td>'+
+            '</tr>';
+          }).join('')+
+
+          // Cash payments
+          bPaid.map(function(py){
+            return '<tr style="border-bottom:1px solid #EEE;">'+
+              '<td style="padding:5px 8px;">'+
+                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">PAYMENT</span>'+
+                fmtD(py.payment_date)+(py.payment_mode?' · '+py.payment_mode:'')+(py.reference?' · '+py.reference:'')+
+                '<button onclick="execDelPayment(\''+py.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:4px;">&#215;</button>'+
+              '</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(py.amount)+'</td>'+
+            '</tr>';
+          }).join('')+
+
+          // Balance due
+          '<tr style="background:'+(bBal>0?'#FFF3F3':'#F0FFF4')+'">'+
+            '<td style="padding:7px 8px;font-weight:900;color:'+(bBal>0?'#C62828':'#2E7D32')+';">'+
+              (bBal>0?'Balance Due':'Paid / Excess')+
+            '</td>'+
+            '<td style="padding:7px 8px;text-align:right;font-weight:900;font-size:13px;color:'+(bBal>0?'#C62828':'#2E7D32')+';">'+
+              inr(Math.abs(bBal))+(bBal<0?' (Excess)':'')+
+            '</td>'+
+          '</tr>'+
+
+          '</tbody></table></div>'+
       '</div>';
     }).join(''):'';
 
