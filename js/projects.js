@@ -5531,11 +5531,21 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
   var partyType=parts[0],partyName=parts[1];
   var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
 
-  // Find pending advances for this party
+  // Ensure advances are loaded
+  if(!WA_ADVANCES.length){
+    try{
+      var advRows=await sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'});
+      WA_ADVANCES=Array.isArray(advRows)?advRows:[];
+    }catch(e){}
+  }
+
+  // Find pending advances for this party (not fully adjusted)
   var b=WA_BILLS.find(function(x){return x.id===billId;})||{};
   var partyAdvances=WA_ADVANCES.filter(function(a){
-    return a.party_name===partyName&&a.party_type===partyType&&
-      Math.max(0,(parseFloat(a.amount)||0)-(parseFloat(a.adjusted_amount)||0))>0;
+    var remaining=Math.max(0,(parseFloat(a.amount)||0)-(parseFloat(a.adjusted_amount)||0));
+    return (a.party_name===partyName||a.party_name===partyName.trim())&&
+           (a.party_type===partyType)&&
+           remaining>0;
   });
 
   // Build advance adjustment rows
