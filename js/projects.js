@@ -5608,7 +5608,7 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
           '<option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option>'+
         '</select>'+
       '</div>'+
-      '<div><label class="flbl">Reference / UTR</label><input id="py-ref" class="finp" placeholder="UTR/Cheque no."></div>'+
+      '<div><label class="flbl">Reference / UTR <span id="py-ref-req" style="color:#C62828;"></span></label><input id="py-ref" class="finp" placeholder="UTR/Cheque no. (required)"></div>'+
     '</div>'+
     '<label class="flbl">Remarks</label>'+
     '<input id="py-remarks" class="finp" placeholder="Payment remarks...">'+
@@ -5622,8 +5622,11 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
     pyUpdateNet();
     var amtInp=document.getElementById('py-amount');
     if(amtInp) amtInp.addEventListener('input',function(){
-      amtInp.setAttribute('data-manual','1'); // user manually changed cash amount
+      amtInp.setAttribute('data-manual','1');
       pyUpdateNet();
+      // Show * on UTR label when cash > 0
+      var reqSpan=document.getElementById('py-ref-req');
+      if(reqSpan) reqSpan.textContent=(parseFloat(amtInp.value)||0)>0?' *':'';
     });
   },100);
 
@@ -5679,6 +5682,7 @@ async function execSavePaymentAdv(projId,balAmount){
   var ref=gv('py-ref')||null;
   var remarks=gv('py-remarks')||null;
   if(!date){toast('Payment date required','warning');return;}
+  if(cashAmt>0&&!ref){toast('Reference / UTR is required for cash/bank payment','warning');return;}
 
   var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
   var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
