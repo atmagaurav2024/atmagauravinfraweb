@@ -4496,6 +4496,7 @@ function execRenderBills(){
                 '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">PAYMENT</span>'+
                 'Advance Adjusted'+
                 '<button onclick="billDownloadAdvReceipt(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF8E1;color:#F57F17;border:1px solid #FFE0B2;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">&#128438; PDF</button>'+
+                '<button onclick="execDeleteAdvAdj(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:4px;" title="Delete advance adjustment">&#215;</button>'+
               '</td>'+
               '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#F57F17;">'+inr(d.amount)+' <span style="font-size:9px;font-weight:700;">(Advance Adjusted)</span></td>'+
             '</tr>';
@@ -5613,14 +5614,17 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
     '<input id="py-remarks" class="finp" placeholder="Payment remarks...">'+
     '<input type="hidden" id="py-bill-id" value="'+billId+'">'+
     '<input type="hidden" id="py-party-type" value="'+partyType+'">'+
-    '<input type="hidden" id="py-party-name" value="'+partyName+'">';
+    '<input type="hidden" id="py-party-name" value="'+partyName+'">'+
+    '<input type="hidden" id="py-bal-due" value="'+Math.max(0,balAmount)+'">';
 
   // Wire pyUpdateNet after render
   setTimeout(function(){
     pyUpdateNet();
-    // Wire amount input too
     var amtInp=document.getElementById('py-amount');
-    if(amtInp) amtInp.addEventListener('input',pyUpdateNet);
+    if(amtInp) amtInp.addEventListener('input',function(){
+      amtInp.setAttribute('data-manual','1'); // user manually changed cash amount
+      pyUpdateNet();
+    });
   },100);
 
   var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
@@ -5647,18 +5651,24 @@ function pyUpdateNet(){
     var inp=document.getElementById('py-adv-amt-'+ai);
     advTotal+=inp?parseFloat(inp.value)||0:0;
   });
-  var cashAmt=parseFloat((document.getElementById('py-amount')||{value:0}).value)||0;
+  // Auto-set cash amount = balance - advance adjustment (unless user manually edited)
+  var balDue=parseFloat((document.getElementById('py-bal-due')||{value:0}).value)||0;
+  var suggestedCash=Math.max(0,Math.round(balDue-advTotal));
+  var cashInp=document.getElementById('py-amount');
+  if(cashInp&&!cashInp.getAttribute('data-manual')) cashInp.value=suggestedCash;
+  var cashAmt=parseFloat((cashInp||{value:0}).value)||0;
   var total=advTotal+cashAmt;
   var advTotEl=document.getElementById('py-adv-total');
   if(advTotEl) advTotEl.textContent='₹'+Math.round(advTotal).toLocaleString('en-IN');
   var netEl=document.getElementById('py-net-display');
-  if(netEl && (advTotal>0||cashAmt>0)){
-    netEl.textContent='Total being settled: ₹'+Math.round(total).toLocaleString('en-IN')+
-      (advTotal>0?' (Advance: ₹'+Math.round(advTotal).toLocaleString('en-IN')+')':'')+
-      (cashAmt>0?' (Cash/Bank: ₹'+Math.round(cashAmt).toLocaleString('en-IN')+')':'');
+  if(netEl){
+    var parts=[];
+    if(advTotal>0) parts.push('Advance: ₹'+Math.round(advTotal).toLocaleString('en-IN'));
+    if(cashAmt>0)  parts.push('Cash/Bank: ₹'+Math.round(cashAmt).toLocaleString('en-IN'));
+    if(total>0)    parts.push('Total: ₹'+Math.round(total).toLocaleString('en-IN'));
+    netEl.textContent=parts.join(' | ');
   }
 }
-
 async function execSavePaymentAdv(projId,balAmount){
   var billId=gv('py-bill-id');
   var partyType=gv('py-party-type');
@@ -6136,6 +6146,65 @@ async function execDelBill(id){
   try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
 }
 
+
+async function execDeleteAdvAdj(billId,dedId){
+  if(!confirm('Delete this advance adjustment?\nThis will restore the advance balance so it can be re-used.')) return;
+  var bill=WA_BILLS.find(function(b){return b.id===billId;});
+  if(!bill) return;
+  var deductions=[];try{deductions=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
+  var ded=deductions.find(function(d){return d.id===dedId;});
+  if(!ded) return;
+
+  // Reverse adjusted_amount on each advance
+  var advDetails=ded.advance_details||[];
+  var advIds=ded.advance_ids||[];
+  var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
+  var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
+  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:anonKey;
+
+  if(advDetails.length){
+    for(var i=0;i<advDetails.length;i++){
+      var ad=advDetails[i];
+      var origAdv=WA_ADVANCES.find(function(a){return a.id===ad.id;})||{};
+      var newAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-(parseFloat(ad.amount)||0));
+      try{
+        await fetch(baseUrl+'/rest/v1/work_advances?id=eq.'+ad.id,{
+          method:'PATCH',
+          headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+          body:JSON.stringify({adjusted_amount:newAdj})
+        });
+        var idx=WA_ADVANCES.findIndex(function(a){return a.id===ad.id;});
+        if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdj;
+      }catch(e){console.warn(e);}
+    }
+  } else if(advIds.length){
+    // Fallback: split reversal proportionally (old records without advance_details)
+    var splitAmt=(parseFloat(ded.amount)||0)/advIds.length;
+    for(var j=0;j<advIds.length;j++){
+      var origAdv=WA_ADVANCES.find(function(a){return a.id===advIds[j];})||{};
+      var newAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-splitAmt);
+      try{
+        await fetch(baseUrl+'/rest/v1/work_advances?id=eq.'+advIds[j],{
+          method:'PATCH',
+          headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+          body:JSON.stringify({adjusted_amount:newAdj})
+        });
+        var idx=WA_ADVANCES.findIndex(function(a){return a.id===advIds[j];});
+        if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdj;
+      }catch(e){console.warn(e);}
+    }
+  }
+
+  // Remove from bill deductions
+  deductions=deductions.filter(function(d){return d.id!==dedId;});
+  try{
+    await sbUpdate('work_bills',billId,{deductions:deductions.length?JSON.stringify(deductions):null});
+    var bidx=WA_BILLS.findIndex(function(b){return b.id===billId;});
+    if(bidx>-1) WA_BILLS[bidx].deductions=deductions.length?JSON.stringify(deductions):null;
+    toast('Advance adjustment deleted — balance restored','success');
+    execRenderBills();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
 
 async function execDeleteDeduction(billId,dedId){
   if(!confirm('Delete this deduction?'))return;
