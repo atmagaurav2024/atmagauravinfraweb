@@ -6004,28 +6004,39 @@ async function execOpenAdvance(partyKey,projId){
   var partyType=parts[0],partyName=parts[1];
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
 
-  // Get allotments for this party
+  // Get WO/PO documents for this party (from allotments with doc_type)
   var partyAllots=WA_ALLOT.filter(function(a){return a.party_name===partyName&&a.exec_type===partyType;});
-  if(!partyAllots.length){toast('No allotments found for this party','warning');return;}
+  var totalAllotAmt=partyAllots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
+  var existingAdv=WA_ADVANCES.filter(function(a){return a.party_name===partyName&&a.party_type===partyType;});
+  var totalAdvPaid=existingAdv.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
 
-  var allotOpts=partyAllots.map(function(a){
-    var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
-    var resLabel=planRes.party_name||planRes.resource_category||a.scope||'Item';
-    var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
-    return '<option value="'+a.id+'">['+resLabel+'] '+a.qty+' '+(a.unit||'')+' @ \u20b9'+a.rate+' = '+inr(amt)+'</option>';
-  }).join('');
+  // Build PO/WO reference options from allotments with doc_type
+  var docRefs=[...new Set(partyAllots.filter(function(a){return a.doc_type&&a.doc_no;}).map(function(a){return a.doc_type.toUpperCase()+' '+a.doc_no;}))];
 
   document.getElementById('exec-sheet-title').textContent='Record Advance — '+partyName;
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:11px;">'+
-      '<div style="font-weight:800;color:#F57F17;margin-bottom:4px;">&#128181; Advance Payment to '+partyName+'</div>'+
-      '<div style="color:var(--text3);">Advance will be deducted from future bill payments</div>'+
+    // Party summary
+    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+      '<div style="font-weight:800;color:#F57F17;font-size:12px;margin-bottom:6px;">&#128181; Advance Payment</div>'+
+      '<div style="display:flex;gap:12px;font-size:11px;">'+
+        '<div><span style="color:var(--text3);">Party: </span><b>'+partyName+'</b></div>'+
+        '<div><span style="color:var(--text3);">Type: </span><b>'+partyType+'</b></div>'+
+      '</div>'+
+      (totalAllotAmt?
+        '<div style="display:flex;gap:12px;font-size:11px;margin-top:4px;">'+
+          '<div><span style="color:var(--text3);">Total Allotted: </span><b>'+inr(totalAllotAmt)+'</b></div>'+
+          (totalAdvPaid?'<div><span style="color:var(--text3);">Advance Paid So Far: </span><b style="color:#F57F17;">'+inr(totalAdvPaid)+'</b></div>':'')+
+        '</div>':'')+
     '</div>'+
-    '<div style="margin-bottom:8px;"><label class="flbl">Allotment / Work Order *</label>'+
-      '<select id="adv-allot" class="fsel">'+
-        '<option value="">— Select Allotment —</option>'+allotOpts+
-      '</select>'+
-    '</div>'+
+    // PO/WO reference (optional)
+    (docRefs.length?
+      '<label class="flbl">Against PO / WO Reference</label>'+
+      '<select id="adv-ref-doc" class="fsel">'+
+        '<option value="">— General / No specific WO/PO —</option>'+
+        docRefs.map(function(r){return '<option value="'+r+'">'+r+'</option>';}).join('')+
+      '</select>':
+      '<label class="flbl">Against PO / WO Reference (optional)</label>'+
+      '<input id="adv-ref-doc" class="finp" placeholder="e.g. WO/2025/001, PO-101">')+
     '<div class="g2">'+
       '<div><label class="flbl">Payment Date *</label><input id="adv-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
       '<div><label class="flbl">Amount (₹) *</label><input id="adv-amount" class="finp" type="number" placeholder="0"></div>'+
@@ -6036,10 +6047,10 @@ async function execOpenAdvance(partyKey,projId){
           '<option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option>'+
         '</select>'+
       '</div>'+
-      '<div><label class="flbl">Reference / UTR</label><input id="adv-ref" class="finp" placeholder="UTR / Cheque no."></div>'+
+      '<div><label class="flbl">UTR / Cheque No.</label><input id="adv-utr" class="finp" placeholder="UTR / Cheque no."></div>'+
     '</div>'+
     '<label class="flbl">Purpose / Remarks *</label>'+
-    '<input id="adv-purpose" class="finp" placeholder="e.g. Mobilization advance, Advance against PO-001">';
+    '<input id="adv-purpose" class="finp" placeholder="e.g. Mobilization advance, Material advance...">';
 
   var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
   var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
@@ -6052,19 +6063,24 @@ async function execOpenAdvance(partyKey,projId){
 }
 
 async function execSaveAdvance(partyType,partyName,projId){
-  var allotId=(document.getElementById('adv-allot')||{}).value||'';
-  var date=gv('adv-date'),amount=parseFloat(gv('adv-amount'))||0;
+  var date=gv('adv-date');
+  var amount=parseFloat(gv('adv-amount'))||0;
   var purpose=(gv('adv-purpose')||'').trim();
-  if(!allotId){toast('Select an allotment','warning');return;}
+  var refDoc=(document.getElementById('adv-ref-doc')||{}).value||'';
+  var utr=gv('adv-utr')||'';
   if(!date||!amount){toast('Date and amount required','warning');return;}
   if(!purpose){toast('Purpose/remarks required','warning');return;}
   try{
     var res=await sbInsert('work_advances',{
-      project_id:projId,party_type:partyType,party_name:partyName,
-      allot_id:allotId,date:date,amount:amount,
+      project_id:projId,
+      party_type:partyType,
+      party_name:partyName,
+      allot_id:null,           // party-level, not resource-level
+      date:date,
+      amount:amount,
       payment_mode:gv('adv-mode')||null,
-      reference:gv('adv-ref')||null,
-      purpose:purpose
+      reference:utr||null,
+      purpose:purpose+(refDoc?' | Ref: '+refDoc:'')
     });
     if(res&&res[0]) WA_ADVANCES.push(res[0]);
     toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
