@@ -6013,16 +6013,32 @@ async function execOpenAdvance(partyKey,projId){
   // Build PO/WO reference options from allotments with doc_type
   // Build PO/WO dropdown from WA_ORDERS for this party
   function fmtOrdDate(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+  // Deduplicate by doc_type+doc_number — one WO/PO may cover multiple resources
+  var seenDocNos={};
   var partyOrders=WA_ORDERS.filter(function(o){
-    return o.party_name===partyName&&o.party_type===partyType;
+    if(o.party_name!==partyName||o.party_type!==partyType) return false;
+    var key=(o.doc_type||'')+'__'+(o.doc_number||'');
+    if(seenDocNos[key]) return false;
+    seenDocNos[key]=true;
+    return true;
   }).sort(function(a,b){return (b.doc_date||'').localeCompare(a.doc_date||'');});
+  // Sum total amount per unique doc_number across all resources
+  var docTotals={};
+  WA_ORDERS.filter(function(o){return o.party_name===partyName&&o.party_type===partyType;}).forEach(function(o){
+    var key=(o.doc_type||'')+'__'+(o.doc_number||'');
+    docTotals[key]=(docTotals[key]||0)+Math.round(o.amount||0);
+  });
   var orderOpts='<option value="">— None / General Advance —</option>'+
     partyOrders.map(function(o){
       var prefix=o.doc_type==='wo'?'WO':'PO';
       var docNo=prefix+'-'+(o.doc_number||'?');
       var dateStr=fmtOrdDate(o.doc_date);
-      var amt=Math.round(o.amount||0);
-      return '<option value="'+docNo+'">'+ docNo+(dateStr?' | '+dateStr:'')+(amt?' | '+inr(amt):'')+' | '+o.party_name+'</option>';
+      var key=(o.doc_type||'')+'__'+(o.doc_number||'');
+      var totalAmt=docTotals[key]||Math.round(o.amount||0);
+      return '<option value="'+docNo+'">'
+        +docNo+(dateStr?' | '+dateStr:'')
+        +' | Total: '+inr(totalAmt)
+        +'</option>';
     }).join('');
 
   document.getElementById('exec-sheet-title').textContent='Record Advance — '+partyName;
