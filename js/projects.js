@@ -5163,8 +5163,10 @@ function blUpdateTotal(){
       addTotal+=parseFloat(amtInp&&amtInp.value)||0;
     }
   });
-  var grossWithAdd=total+addTotal; // gross = work + additions
-  // Sum selected advance adjustments
+  // Sum deductions entered in form
+  var dedTotal=0;
+  document.querySelectorAll('.bl-ded-amt').forEach(function(inp){dedTotal+=parseFloat(inp.value)||0;});
+  var grossWithAdd=total+addTotal-dedTotal; // gross = work + additions - deductions
   var advAdj=0;
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
     var ai=chk.id.replace('adv-adj-','');
@@ -5212,11 +5214,13 @@ function blUpdateTotal(){
   var gDisp=document.getElementById('bl-gross-display');
   if(gDisp) gDisp.textContent='₹'+Math.round(grossWithAdd).toLocaleString('en-IN');
   var gBreak=document.getElementById('bl-gross-breakdown');
+  var gBreak=document.getElementById('bl-gross-breakdown');
   if(gBreak){
-    var parts=[];
-    if(addTotal>0) parts.push('Work ₹'+Math.round(total).toLocaleString('en-IN')+' + Additions ₹'+Math.round(addTotal).toLocaleString('en-IN'));
-    gBreak.textContent=parts.join('');
+    var parts=['Work: ₹'+Math.round(total).toLocaleString('en-IN')];
+    if(addTotal>0) parts.push('+ Add: ₹'+Math.round(addTotal).toLocaleString('en-IN'));
+    if(dedTotal>0) parts.push('− Ded: ₹'+Math.round(dedTotal).toLocaleString('en-IN'));
   }
+    gBreak.textContent=parts.join(' ');
   // Update net payable field (gross - advance)
   var advEl=document.getElementById('bl-adv-adj-display');
   if(advEl) advEl.textContent=advAdj>0?'Less Advance: ₹'+Math.round(advAdj).toLocaleString('en-IN'):'';
@@ -5261,13 +5265,15 @@ function blAddDeduction(){
   div.style.cssText='display:grid;grid-template-columns:1fr 120px 30px;gap:6px;margin-bottom:6px;align-items:center;';
   div.innerHTML=
     '<input class="finp bl-ded-head" placeholder="e.g. Retention Money, Security Deposit..." style="margin:0;">'+
-    '<input class="finp bl-ded-amt" type="number" placeholder="Amount" style="margin:0;text-align:right;">'+
+    '<input class="finp bl-ded-amt" type="number" placeholder="Amount" style="margin:0;text-align:right;" oninput="blUpdateTotal()">'+
     '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
   container.appendChild(div);
+  blUpdateTotal();
 }
 function blRemoveDeduction(id){
   BL_DEDUCTIONS=BL_DEDUCTIONS.filter(function(d){return d.id!==id;});
   var el=document.getElementById(id);if(el)el.remove();
+  blUpdateTotal();
 }
 
 async function execSaveBill(partyType,partyName,projId,billNo){
@@ -5328,7 +5334,8 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   // Gross = sum of selected items; Net = Gross - advance adjustment
   var workAmount=selectedItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
   var additionsTotal=additions.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-  var grossAmount=workAmount+additionsTotal;
+  var deductionsTotal=deductionsList.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var grossAmount=workAmount+additionsTotal-deductionsTotal;
   amount=Math.max(0,grossAmount-adjAdvTotal);
   if(grossAmount===0){toast('Bill amount cannot be zero','warning');return;}
 
