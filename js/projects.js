@@ -6011,7 +6011,19 @@ async function execOpenAdvance(partyKey,projId){
   var totalAdvPaid=existingAdv.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
 
   // Build PO/WO reference options from allotments with doc_type
-  var docRefs=[...new Set(partyAllots.filter(function(a){return a.doc_type&&a.doc_no;}).map(function(a){return a.doc_type.toUpperCase()+' '+a.doc_no;}))];
+  // Build PO/WO dropdown from WA_ORDERS for this party
+  function fmtOrdDate(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+  var partyOrders=WA_ORDERS.filter(function(o){
+    return o.party_name===partyName&&o.party_type===partyType;
+  }).sort(function(a,b){return (b.doc_date||'').localeCompare(a.doc_date||'');});
+  var orderOpts='<option value="">— None / General Advance —</option>'+
+    partyOrders.map(function(o){
+      var prefix=o.doc_type==='wo'?'WO':'PO';
+      var docNo=prefix+'-'+(o.doc_number||'?');
+      var dateStr=fmtOrdDate(o.doc_date);
+      var amt=Math.round(o.amount||0);
+      return '<option value="'+docNo+'">'+ docNo+(dateStr?' | '+dateStr:'')+(amt?' | '+inr(amt):'')+' | '+o.party_name+'</option>';
+    }).join('');
 
   document.getElementById('exec-sheet-title').textContent='Record Advance — '+partyName;
   document.getElementById('exec-sheet-body').innerHTML=
@@ -6028,16 +6040,12 @@ async function execOpenAdvance(partyKey,projId){
           (totalAdvPaid?'<div><span style="color:var(--text3);">Advance Paid So Far: </span><b style="color:#F57F17;">'+inr(totalAdvPaid)+'</b></div>':'')+
         '</div>':'')+
     '</div>'+
-    // PO/WO reference (optional)
-    (docRefs.length?
-      '<label class="flbl">Against PO / WO Reference</label>'+
-      '<select id="adv-ref-doc" class="fsel">'+
-        '<option value="">— General / No specific WO/PO —</option>'+
-        docRefs.map(function(r){return '<option value="'+r+'">'+r+'</option>';}).join('')+
-      '</select>':
-      '<label class="flbl">Against PO / WO Reference (optional)</label>'+
-      '<input id="adv-ref-doc" class="finp" placeholder="e.g. WO/2025/001, PO-101">')+
-    '<div class="g2">'+
+    // PO/WO reference dropdown from WA_ORDERS
+    '<label class="flbl">Against WO / PO Reference</label>'+
+    '<select id="adv-ref-doc" class="fsel">'+orderOpts+'</select>'+
+    (partyOrders.length?'':
+      '<div style="font-size:10px;color:#E65100;margin-top:4px;">No WO/PO found. You can enter a manual reference:</div>'+
+      '<input id="adv-ref-doc-manual" class="finp" placeholder="e.g. WO/2025/001" style="margin-top:4px;">')+
       '<div><label class="flbl">Payment Date *</label><input id="adv-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
       '<div><label class="flbl">Amount (₹) *</label><input id="adv-amount" class="finp" type="number" placeholder="0"></div>'+
     '</div>'+
@@ -6067,6 +6075,8 @@ async function execSaveAdvance(partyType,partyName,projId){
   var amount=parseFloat(gv('adv-amount'))||0;
   var purpose=(gv('adv-purpose')||'').trim();
   var refDoc=(document.getElementById('adv-ref-doc')||{}).value||'';
+  var refManual=(document.getElementById('adv-ref-doc-manual')||{}).value||'';
+  var finalRef=refDoc||refManual||'';
   var utr=gv('adv-utr')||'';
   if(!date||!amount){toast('Date and amount required','warning');return;}
   if(!purpose){toast('Purpose/remarks required','warning');return;}
@@ -6075,12 +6085,12 @@ async function execSaveAdvance(partyType,partyName,projId){
       project_id:projId,
       party_type:partyType,
       party_name:partyName,
-      allot_id:null,           // party-level, not resource-level
+      allot_id:null,
       date:date,
       amount:amount,
       payment_mode:gv('adv-mode')||null,
       reference:utr||null,
-      purpose:purpose+(refDoc?' | Ref: '+refDoc:'')
+      purpose:purpose+(finalRef?' | Against: '+finalRef:'')
     });
     if(res&&res[0]) WA_ADVANCES.push(res[0]);
     toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
