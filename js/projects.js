@@ -5237,61 +5237,28 @@ function blAddAddition(label, type, pct){
   div.className='bl-add-row';
   div.setAttribute('data-add-type', type||'flat');
   div.setAttribute('data-add-pct', pct||0);
-  div.style.cssText='border:1px solid #C8E6C9;border-radius:8px;padding:6px 8px;margin-bottom:6px;';
-  var isPct=(type==='pct');
+  div.style.cssText='display:grid;grid-template-columns:1fr 60px 110px 30px;gap:6px;margin-bottom:6px;align-items:center;';
   div.innerHTML=
-    '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;">'+
-      '<input class="finp bl-add-head" placeholder="e.g. GST, Transportation..." value="'+(label||'')+'" style="margin:0;">'+
-      '<div style="display:flex;border:1px solid #A5D6A7;border-radius:5px;overflow:hidden;">'+
-        '<button onclick="blAddSetType(\''+id+'\',\'flat\')" id="'+id+'-flat" style="padding:4px 8px;font-size:10px;font-weight:800;background:'+(isPct?'white':'#E8F5E9')+';color:'+(isPct?'#999':'#2E7D32')+';border:none;cursor:pointer;">₹ Flat</button>'+
-        '<button onclick="blAddSetType(\''+id+'\',\'pct\')" id="'+id+'-pct" style="padding:4px 8px;font-size:10px;font-weight:800;background:'+(isPct?'#E8F5E9':'white')+';color:'+(isPct?'#2E7D32':'#999')+';border:none;cursor:pointer;">% of Work</button>'+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:4px;">'+
-        '<input class="finp bl-add-pct" id="'+id+'-pct-inp" type="number" step="0.01" min="0" max="100" placeholder="%" value="'+(isPct?pct:'')+'" style="margin:0;width:60px;text-align:right;display:'+(isPct?'block':'none')+'" oninput="blAddCalc(\''+id+'\')" title="% of work sub-total">'+
-        '<span style="font-size:10px;color:var(--text3);">'+(isPct?'₹ (auto)':'₹')+'</span>'+
-      '</div>'+
-      '<button onclick="blRemoveAddition(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>'+
-    '</div>';
+    '<input class="finp bl-add-head" placeholder="e.g. GST, Transportation..." value="'+(label||'')+'" style="margin:0;">'+
+    '<input class="finp bl-add-pct" type="number" step="0.01" min="0" max="100" placeholder="%" value="'+(pct||'')+'" style="margin:0;text-align:right;" oninput="blAddCalc(\''+id+'\')" title="Enter % to auto-calculate amount">'+
+    '<input class="finp bl-add-amt" type="number" placeholder="Amount \u20b9" style="margin:0;text-align:right;color:#2E7D32;font-weight:800;" oninput="blUpdateTotal()">'+
+    '<button onclick="blRemoveAddition(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
   container.appendChild(div);
-  if(isPct) blAddCalc(id);
+  if(pct) blAddCalc(id);
   else blUpdateTotal();
-}
-
-function blAddSetType(id, type){
-  var row=document.getElementById(id);
-  if(!row) return;
-  row.setAttribute('data-add-type', type);
-  var pctInp=document.getElementById(id+'-pct-inp');
-  var amtInp=document.getElementById(id+'-amt');
-  var flatBtn=document.getElementById(id+'-flat');
-  var pctBtn=document.getElementById(id+'-pct');
-  if(type==='pct'){
-    if(pctInp) pctInp.style.display='';
-    if(amtInp){amtInp.setAttribute('readonly','true');amtInp.style.color='#2E7D32';}
-    if(flatBtn){flatBtn.style.background='white';flatBtn.style.color='#999';}
-    if(pctBtn){pctBtn.style.background='#E8F5E9';pctBtn.style.color='#2E7D32';}
-    blAddCalc(id);
-  } else {
-    row.setAttribute('data-add-pct','0');
-    if(pctInp){pctInp.style.display='none';pctInp.value='';}
-    if(amtInp){amtInp.removeAttribute('readonly');amtInp.value='';}
-    if(flatBtn){flatBtn.style.background='#E8F5E9';flatBtn.style.color='#2E7D32';}
-    if(pctBtn){pctBtn.style.background='white';pctBtn.style.color='#999';}
-    blUpdateTotal();
-  }
 }
 
 function blAddCalc(id){
   var row=document.getElementById(id);
   if(!row) return;
-  var pctInp=document.getElementById(id+'-pct-inp');
-  var amtInp=document.getElementById(id+'-amt');
+  var pctInp=row.querySelector('.bl-add-pct');
+  var amtInp=row.querySelector('.bl-add-amt');
   var pct=parseFloat(pctInp&&pctInp.value)||0;
   row.setAttribute('data-add-pct', pct);
+  if(!pct){blUpdateTotal();return;}
   var workEl=document.getElementById('bl-work-subtotal-amt');
   var workAmt=workEl?parseFloat(workEl.textContent.replace(/[^0-9.]/g,''))||0:0;
-  var calcAmt=Math.round(workAmt*pct/100);
-  if(amtInp) amtInp.value=calcAmt;
+  if(amtInp) amtInp.value=Math.round(workAmt*pct/100);
   blUpdateTotal();
 }
 function blAddPreset(label, type, pct){
@@ -5306,80 +5273,37 @@ function blRemoveAddition(id){
 var BL_DEDUCTIONS=[];
 function blAddDeduction(){
   var id='ded-'+Date.now();
-  BL_DEDUCTIONS.push({id:id,head:'',amount:0,type:'flat',pct:0});
+  BL_DEDUCTIONS.push({id:id,head:'',amount:0});
   var container=document.getElementById('bl-ded-list');
   if(!container)return;
   var div=document.createElement('div');
   div.id=id;
   div.className='bl-ded-row';
-  div.setAttribute('data-ded-type','flat');
-  div.style.cssText='border:1px solid #FFE0B2;border-radius:8px;padding:6px 8px;margin-bottom:6px;';
+  div.style.cssText='display:grid;grid-template-columns:1fr 60px 110px 30px;gap:6px;margin-bottom:6px;align-items:center;';
   div.innerHTML=
-    '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;">'+
-      '<input class="finp bl-ded-head" placeholder="e.g. Retention Money, Security Deposit..." style="margin:0;">'+
-      '<div style="display:flex;border:1px solid #FFE0B2;border-radius:5px;overflow:hidden;">'+
-        '<button onclick="blDedSetType(\''+id+'\',\'flat\')" id="'+id+'-flat" style="padding:4px 8px;font-size:10px;font-weight:800;background:#FFF3E0;color:#E65100;border:none;cursor:pointer;">₹ Flat</button>'+
-        '<button onclick="blDedSetType(\''+id+'\',\'pct\')" id="'+id+'-pct" style="padding:4px 8px;font-size:10px;font-weight:800;background:white;color:#999;border:none;cursor:pointer;">% of Gross</button>'+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:4px;">'+
-        '<input class="finp bl-ded-pct" id="'+id+'-pct-inp" type="number" step="0.01" min="0" max="100" placeholder="%" style="margin:0;width:60px;text-align:right;display:none;" oninput="blDedCalc(\''+id+'\')" title="Percentage of gross bill">'+
-        '<input class="finp bl-ded-amt" id="'+id+'-amt" type="number" placeholder="Amount" style="margin:0;width:100px;text-align:right;" oninput="blUpdateTotal()">'+
-        '<span class="bl-ded-unit" id="'+id+'-unit" style="font-size:10px;color:var(--text3);white-space:nowrap;">₹</span>'+
-      '</div>'+
-      '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>'+
-    '</div>';
+    '<input class="finp bl-ded-head" placeholder="e.g. Retention, Security Deposit..." style="margin:0;">'+
+    '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="%" style="margin:0;text-align:right;" oninput="blDedCalc(\''+id+'\')" title="Enter % to auto-calculate amount">'+
+    '<input class="finp bl-ded-amt" type="number" placeholder="Amount ₹" style="margin:0;text-align:right;" oninput="blUpdateTotal()">'+
+    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
   container.appendChild(div);
   blUpdateTotal();
-}
-
-function blDedSetType(id, type){
-  var row=document.getElementById(id);
-  if(!row) return;
-  row.setAttribute('data-ded-type', type);
-  var pctInp=document.getElementById(id+'-pct-inp');
-  var amtInp=document.getElementById(id+'-amt');
-  var unitEl=document.getElementById(id+'-unit');
-  var flatBtn=document.getElementById(id+'-flat');
-  var pctBtn=document.getElementById(id+'-pct');
-  if(type==='pct'){
-    if(pctInp) pctInp.style.display='';
-    if(amtInp){amtInp.setAttribute('readonly','true');amtInp.style.color='#E65100';}
-    if(unitEl) unitEl.textContent='₹ (auto)';
-    if(flatBtn){flatBtn.style.background='white';flatBtn.style.color='#999';}
-    if(pctBtn){pctBtn.style.background='#FFF3E0';pctBtn.style.color='#E65100';}
-    blDedCalc(id);
-  } else {
-    if(pctInp){pctInp.style.display='none';pctInp.value='';}
-    if(amtInp){amtInp.removeAttribute('readonly');amtInp.style.color='';amtInp.value='';}
-    if(unitEl) unitEl.textContent='₹';
-    if(flatBtn){flatBtn.style.background='#FFF3E0';flatBtn.style.color='#E65100';}
-    if(pctBtn){pctBtn.style.background='white';pctBtn.style.color='#999';}
-    blUpdateTotal();
-  }
 }
 
 function blDedCalc(id){
   var row=document.getElementById(id);
   if(!row) return;
-  var pctInp=document.getElementById(id+'-pct-inp');
-  var amtInp=document.getElementById(id+'-amt');
+  var pctInp=row.querySelector('.bl-ded-pct');
+  var amtInp=row.querySelector('.bl-ded-amt');
   var pct=parseFloat(pctInp&&pctInp.value)||0;
-  // Get current gross (work + additions)
-  var gross=parseFloat((document.getElementById('bl-gross-display')||{textContent:'0'}).textContent.replace(/[^0-9.]/g,''))||0;
-  // gross display already has deductions subtracted — use work+add only
-  // So recalc from total and addTotal (stored in data attrs)
+  if(!pct){blUpdateTotal();return;}
+  // Base = work + additions (before deductions)
   var workEl=document.getElementById('bl-work-subtotal-amt');
   var workAmt=workEl?parseFloat(workEl.textContent.replace(/[^0-9.]/g,''))||0:0;
-  // Sum additions
   var addAmt=0;
   document.querySelectorAll('.bl-add-row').forEach(function(r){
-    var type=r.getAttribute('data-add-type')||'flat';
-    var addInp=r.querySelector('.bl-add-amt');
-    addAmt+=parseFloat(addInp&&addInp.value)||0;
+    addAmt+=parseFloat((r.querySelector('.bl-add-amt')||{value:0}).value)||0;
   });
-  var baseForPct=workAmt+addAmt; // % applied on work+additions (before deductions)
-  var calcAmt=Math.round(baseForPct*pct/100);
-  if(amtInp) amtInp.value=calcAmt;
+  if(amtInp) amtInp.value=Math.round((workAmt+addAmt)*pct/100);
   blUpdateTotal();
 }
 function blRemoveDeduction(id){
