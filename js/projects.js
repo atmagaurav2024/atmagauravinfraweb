@@ -4292,7 +4292,7 @@ function execRenderBills(){
         '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+inr(g.allotAmt)+'</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;color:'+pctCol+';font-weight:700;">'+g.doneQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span><div style="font-size:9px;color:'+pctCol+';">('+pct+'% of allotted)</div></td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+inr(g.doneAmt)+'</td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1A237E;">'+(g.billedAmt?inr(g.billedAmt):'—')+'</td>'+
+        '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1A237E;">'+(g.billedAmt?inr(g.billedAmt):'—')+'<div style="font-size:9px;color:var(--text3);font-weight:400;">work only</div></td>'+
       '</tr>'+indivRows;
     }).join('');
 
@@ -4375,10 +4375,15 @@ function execRenderBills(){
     var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
     var totalAdvance=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
     var pBills=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;});
-    var totalBilled=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
+    var totalBilledGross=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
+    var totalAdditions=pBills.reduce(function(s,b){
+      var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      return s+adds.reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
+    },0);
+    var totalBilled=totalBilledGross-totalAdditions; // work sub-total only
     var totalDeductions=pBills.reduce(function(s,b){
       var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
-      return s+ded.filter(function(d){return !d.released;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
+      return s+ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
     },0);
     var totalHeld=pBills.reduce(function(s,b){
       var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
@@ -4386,7 +4391,7 @@ function execRenderBills(){
     },0);
     var pPaid=WA_PAYMENTS.filter(function(py){return py.party_name===p.name&&py.party_type===p.type;});
     var totalPaid=pPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
-    var netPayable=totalBilled-totalDeductions;
+    var netPayable=totalBilledGross-totalDeductions;
     var totalPaidAll=totalPaid+totalAdvAdj; // advance adj + cash payments
     var balDue=netPayable-totalPaid-totalAdvAdj;
 
@@ -4564,7 +4569,7 @@ function execRenderBills(){
         (totalAddAmt>0?
           '<tr style="background:#E8F5E9;border-top:1px solid #C8E6C9;">'+
             '<td colspan="5" style="padding:6px 10px;font-size:11px;font-weight:800;color:#1B5E20;">Gross Billed (incl. Additions)</td>'+
-            '<td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(totalBilled)+'</td>'+
+            '<td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(totalBilledGross)+'</td>'+
           '</tr>':'')+
 
         // Deductions held rows
@@ -4599,7 +4604,7 @@ function execRenderBills(){
 
     var summaryBar=
       '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0;border-top:2px solid var(--border);">'+
-        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">BILLED</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(totalBilled)+'</div></div>'+
+        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">WORK BILLED</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(totalBilled)+'</div></div>'+
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">DEDUCTIONS</div><div style="font-size:12px;font-weight:900;color:#E65100;">'+inr(totalDeductions)+'</div></div>'+
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">NET PAYABLE</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</div></div>'+
         '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">ADVANCE</div><div style="font-size:12px;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</div></div>'+
