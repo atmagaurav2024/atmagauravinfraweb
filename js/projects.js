@@ -5133,7 +5133,7 @@ async function execOpenBill(partyKey,projId){
   WA_BILLS.filter(function(b){return b.party_name===partyName&&b.party_type===partyType;}).forEach(function(b){
     var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
     ded.filter(function(d){return d.released&&!d.is_advance_adj;}).forEach(function(d){
-      partyRelDed.push({head:d.head,amount:d.amount,released_date:d.released_date,bill_no:b.bill_number,bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date});
+      partyRelDed.push({head:d.head,amount:d.amount,released_date:d.released_date,bill_no:b.bill_number,bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date,billId:b.id,dedId:d.id});
     });
   });
   var totalRelDed=partyRelDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
@@ -5281,7 +5281,8 @@ async function execOpenBill(partyKey,projId){
             '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;flex-shrink:0;">REL</span>'+
             '<span style="flex:1;">'+d.head+' <span style="color:var(--text3);">'+(d.bill_ref||'Bill #'+d.bill_no)+' | Released: '+fmtD(d.released_date||'')+'</span></span>'+
             '<b style="color:#2E7D32;">+₹'+Number(d.amount||0).toLocaleString('en-IN')+'</b>'+
-            '<input type="hidden" class="bl-rel-ded-amt" data-head="'+d.head+' (Released: '+(d.bill_ref||'Bill #'+d.bill_no)+')" value="'+Number(d.amount||0)+'">';
+            '<input type="hidden" class="bl-rel-ded-amt" data-head="'+d.head+' (Released: '+(d.bill_ref||'Bill #'+d.bill_no)+')" value="'+Number(d.amount||0)+'">'+
+            '<button onclick="execUndoReleaseAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" style="font-size:9px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:3px;padding:2px 7px;cursor:pointer;font-weight:800;flex-shrink:0;">&#215; Remove</button>';
         }).join('')+
         '<div style="font-size:10px;font-weight:800;color:#2E7D32;border-top:1px solid #C8E6C9;margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;">'+
           '<span>Total Released (added to net payable)</span><span>+₹'+Number(totalRelDed).toLocaleString('en-IN')+'</span>'+
@@ -5825,6 +5826,12 @@ async function execReleaseDeductionAndReopen(billId,dedId,partyKey,projId){
   // Release the deduction then reopen the bill form
   await execReleaseDeduction(billId,dedId);
   // Reopen bill form for same party
+  setTimeout(function(){ execOpenBill(partyKey,projId); },300);
+}
+
+async function execUndoReleaseAndReopen(billId,dedId,partyKey,projId){
+  // Undo release then reopen bill form for same party
+  await execUndoRelease(billId,dedId);
   setTimeout(function(){ execOpenBill(partyKey,projId); },300);
 }
 
