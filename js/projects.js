@@ -5144,7 +5144,12 @@ async function execOpenBill(partyKey,projId){
     var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
     ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).forEach(function(d){
       partyHeldDed.push({billId:b.id,dedId:d.id,head:d.head,amount:d.amount,
-        bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date});
+        bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date,released:false});
+    });
+    ded.filter(function(d){return d.released&&!d.is_advance_adj;}).forEach(function(d){
+      partyHeldDed.push({billId:b.id,dedId:d.id,head:d.head,amount:d.amount,
+        bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date,
+        released:true,released_date:d.released_date});
     });
   });
 
@@ -5261,15 +5266,20 @@ async function execOpenBill(partyKey,projId){
     // Held deductions — show with Release button inside bill form
     (partyHeldDed.length?
       '<div style="background:#FFF3E0;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
-        '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;">&#9888; Held Deductions (Release to include in this bill)</div>'+
+        '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;">&#9888; Deductions — Release to include in bill, click Unrelease to revert</div>'+
         partyHeldDed.map(function(d){
-          return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid #FFE0B2;">'+
-            '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;flex-shrink:0;">DED</span>'+
-            '<span style="flex:1;">'+d.head+' <span style="color:var(--text3);">'+d.bill_ref+'</span></span>'+
-            '<b style="color:#E65100;">&#8377;'+Number(d.amount||0).toLocaleString('en-IN')+'</b>'+
-            '<button onclick="execReleaseDeductionAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" '+
-              'style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:4px;padding:2px 8px;cursor:pointer;font-weight:800;">'+
-              '&#10003; Release</button>'+
+          var isRel=d.released?true:false;
+          return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid '+(isRel?'#C8E6C9':'#FFE0B2')+';">'+
+            '<span style="background:'+(isRel?'#E8F5E9':'#FFF3E0')+';color:'+(isRel?'#2E7D32':'#E65100')+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;flex-shrink:0;">'+(isRel?'REL':'DED')+'</span>'+
+            '<span style="flex:1;">'+d.head+' <span style="color:var(--text3);">'+d.bill_ref+(isRel?' · Released: '+fmtD(d.released_date||''):'')+'</span></span>'+
+            '<b style="color:'+(isRel?'#2E7D32':'#E65100')+'">&#8377;'+Number(d.amount||0).toLocaleString('en-IN')+'</b>'+
+            (isRel
+              ? '<button onclick="execUndoReleaseAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" '+
+                'style="font-size:9px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:4px;padding:2px 8px;cursor:pointer;font-weight:800;">'+
+                '&#215; Unrelease</button>'
+              : '<button onclick="execReleaseDeductionAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" '+
+                'style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:4px;padding:2px 8px;cursor:pointer;font-weight:800;">'+
+                '&#10003; Release</button>')+
           '</div>';
         }).join('')+
       '</div>':'')+ 
