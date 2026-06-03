@@ -4542,7 +4542,6 @@ function execRenderBills(){
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
         '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
         '<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
-        '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:#F57F17;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128181; + Advance</button>'+
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">'+
         '<thead><tr style="background:#F8FAFC;border-bottom:2px solid var(--border);">'+
           '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">RESOURCE / WORK</th>'+
