@@ -4364,7 +4364,7 @@ function execRenderBills(){
           '<td colspan="4" style="padding:5px 10px;font-size:10px;">'+
             '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>'+
             d.head+' <span style="font-size:9px;color:var(--text3);">'+(b.bill_ref||'Bill #'+b.bill_number)+'</span>'+
-            '<button onclick="execReleaseDeduction(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">Release</button>'+
+            
           '</td>'+
           '<td colspan="2" style="padding:5px 10px;font-size:10px;text-align:right;font-weight:800;color:#E65100;">-'+inr(d.amount)+'</td>'+
         '</tr>';
@@ -4611,7 +4611,7 @@ function execRenderBills(){
     var partyHeader='<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
       '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
       '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
-      (BILL_SUBTAB==='abstract'||BILL_SUBTAB==='genbills'?'<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>':'')+
+      (BILL_SUBTAB==='abstract'?'<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>':'')+
     '</div>';
 
     var bodyHtml='';
@@ -5136,6 +5136,16 @@ async function execOpenBill(partyKey,projId){
   });
   var totalRelDed=partyRelDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
 
+  // Held deductions (active, not released) — show with Release option in form
+  var partyHeldDed=[];
+  WA_BILLS.filter(function(b){return b.party_name===partyName&&b.party_type===partyType;}).forEach(function(b){
+    var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+    ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).forEach(function(d){
+      partyHeldDed.push({billId:b.id,dedId:d.id,head:d.head,amount:d.amount,
+        bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date});
+    });
+  });
+
   // Calculate advances for this party
   var partyAdvances=WA_ADVANCES.filter(function(a){
     return a.party_name===partyName&&a.party_type===partyType;
@@ -5246,6 +5256,21 @@ async function execOpenBill(partyKey,projId){
       '</div>';
     })()+
     // Released deductions info
+    // Held deductions — show with Release button inside bill form
+    (partyHeldDed.length?
+      '<div style="background:#FFF3E0;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
+        '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;">&#9888; Held Deductions (Release to include in this bill)</div>'+
+        partyHeldDed.map(function(d){
+          return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid #FFE0B2;">'+
+            '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;flex-shrink:0;">DED</span>'+
+            '<span style="flex:1;">'+d.head+' <span style="color:var(--text3);">'+d.bill_ref+'</span></span>'+
+            '<b style="color:#E65100;">&#8377;'+Number(d.amount||0).toLocaleString('en-IN')+'</b>'+
+            '<button onclick="execReleaseDeductionAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" '+
+              'style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:4px;padding:2px 8px;cursor:pointer;font-weight:800;">'+
+              '&#10003; Release</button>'+
+          '</div>';
+        }).join('')+
+      '</div>':'')+ 
     (totalRelDed>0?
       '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:6px;">&#128176; Released Deductions (payable in this bill)</div>'+
@@ -5784,6 +5809,13 @@ function billDownloadAdvReceipt(billId, dedId){
   '</body></html>';
 
   openPDF(html);
+}
+
+async function execReleaseDeductionAndReopen(billId,dedId,partyKey,projId){
+  // Release the deduction then reopen the bill form
+  await execReleaseDeduction(billId,dedId);
+  // Reopen bill form for same party
+  setTimeout(function(){ execOpenBill(partyKey,projId); },300);
 }
 
 async function execReleaseDeduction(billId,dedId){
