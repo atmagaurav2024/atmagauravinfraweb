@@ -5340,7 +5340,23 @@ function blUpdateTotal(){
   // Sum deductions entered in form
   var dedTotal=0;
   document.querySelectorAll('.bl-ded-amt').forEach(function(inp){dedTotal+=parseFloat(inp.value)||0;});
-  var grossWithAdd=total+addTotal-dedTotal; // gross = work + additions - deductions
+  var netBeforeGst=total+addTotal-dedTotal; // work + additions - deductions
+  // Update net before GST display
+  var nbgEl=document.getElementById('bl-net-before-gst-amt');
+  if(nbgEl) nbgEl.textContent='₹'+Math.round(netBeforeGst).toLocaleString('en-IN');
+  // Sum GST entries (calculated on netBeforeGst)
+  var gstTotal=0;
+  document.querySelectorAll('.bl-gst-row').forEach(function(row){
+    var pctInp=row.querySelector('.bl-gst-pct');
+    var amtInp=row.querySelector('.bl-gst-amt');
+    var pct=parseFloat(pctInp&&pctInp.value)||0;
+    if(pct&&amtInp){
+      var calcAmt=Math.round(netBeforeGst*pct/100);
+      amtInp.value=calcAmt;
+    }
+    gstTotal+=parseFloat(amtInp&&amtInp.value)||0;
+  });
+  var grossWithAdd=netBeforeGst+gstTotal; // final gross = net + GST
   var advAdj=0;
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
     var ai=chk.id.replace('adv-adj-','');
@@ -5388,13 +5404,11 @@ function blUpdateTotal(){
   var gDisp=document.getElementById('bl-gross-display');
   if(gDisp) gDisp.textContent='₹'+Math.round(grossWithAdd).toLocaleString('en-IN');
   var gBreak=document.getElementById('bl-gross-breakdown');
-  var gBreak=document.getElementById('bl-gross-breakdown');
   if(gBreak){
-    var parts=['Work: ₹'+Math.round(total).toLocaleString('en-IN')];
-    if(addTotal>0) parts.push('+ Add: ₹'+Math.round(addTotal).toLocaleString('en-IN'));
-    if(dedTotal>0) parts.push('− Ded: ₹'+Math.round(dedTotal).toLocaleString('en-IN'));
+    var bParts=['Net: ₹'+Math.round(netBeforeGst).toLocaleString('en-IN')];
+    if(gstTotal>0) bParts.push('+ GST: ₹'+Math.round(gstTotal).toLocaleString('en-IN'));
+    gBreak.textContent=bParts.join(' ');
   }
-    gBreak.textContent=parts.join(' ');
   // Update net payable field (gross - advance)
   var advEl=document.getElementById('bl-adv-adj-display');
   if(advEl) advEl.textContent=advAdj>0?'Less Advance: ₹'+Math.round(advAdj).toLocaleString('en-IN'):'';
@@ -5596,7 +5610,11 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     if(head&&amt>0) deductionsList.push({id:'ded-'+Date.now()+'-'+Math.random().toString(36).slice(2,5),head:head,amount:amt,released:false});
   });
   var deductionsTotal=deductionsList.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-  var grossAmount=workAmount+additionsTotal-deductionsTotal;
+  var netBeforeGstSave=workAmount+additionsTotal-deductionsTotal;
+  var gstList=[];document.querySelectorAll('.bl-gst-row').forEach(function(row){var head=(row.querySelector('.bl-gst-head')||{value:''}).value.trim()||'GST';var pct=parseFloat((row.querySelector('.bl-gst-pct')||{value:0}).value)||0;var amt=parseFloat((row.querySelector('.bl-gst-amt')||{value:0}).value)||0;if(amt>0)gstList.push({id:'gst-'+Date.now(),head:head,amount:amt,type:'pct',pct:pct,is_gst:true});});
+  var gstTotal=gstList.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
+  additions=additions.concat(gstList);
+  var grossAmount=netBeforeGstSave+gstTotal;
   amount=Math.max(0,grossAmount-adjAdvTotal);
   if(grossAmount===0){toast('Bill amount cannot be zero','warning');return;}
 
