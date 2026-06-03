@@ -4512,12 +4512,13 @@ function execRenderBills(){
             '</tr>';
           }).join('')+
 
-          // Released deductions
+          // Released deductions — with undo release option
           relDed.map(function(d){
             return '<tr style="border-bottom:1px solid #EEE;background:#F9FFF9;">'+
               '<td style="padding:5px 8px;">'+
                 '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">REL</span>'+
                 d.head+' <span style="font-size:9px;color:#2E7D32;">(Released: '+fmtD(d.released_date)+')</span>'+
+                '<button onclick="execUndoRelease(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">&#8635; Undo Release</button>'+
               '</td>'+
               '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#2E7D32;">+ '+inr(d.amount)+'</td>'+
             '</tr>';
@@ -5825,6 +5826,26 @@ async function execReleaseDeductionAndReopen(billId,dedId,partyKey,projId){
   await execReleaseDeduction(billId,dedId);
   // Reopen bill form for same party
   setTimeout(function(){ execOpenBill(partyKey,projId); },300);
+}
+
+async function execUndoRelease(billId,dedId){
+  if(!confirm('Undo this release? The deduction will go back to held status.')) return;
+  var bill=WA_BILLS.find(function(b){return b.id===billId;});
+  if(!bill) return;
+  var deductions=[];try{deductions=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
+  var ded=deductions.find(function(d){return d.id===dedId;});
+  if(!ded){toast('Deduction not found','error');return;}
+  ded.released=false;
+  delete ded.released_date;
+  delete ded.released_remarks;
+  try{
+    await sbUpdate('work_bills',billId,{deductions:JSON.stringify(deductions)});
+    var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
+    if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
+    toast('Release undone — deduction restored to held','success');
+    if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='genbills') execRenderBills();
+    else execRenderBills();
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 async function execReleaseDeduction(billId,dedId){
