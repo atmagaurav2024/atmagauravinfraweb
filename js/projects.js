@@ -4504,7 +4504,7 @@ function execRenderBills(){
               '<td style="padding:5px 8px;">'+
                 '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>'+
                 d.head+
-                '<button onclick="execReleaseDeduction(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">Release</button>'+
+                
                 '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:3px;">&#215;</button>'+
               '</td>'+
               '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#E65100;">- '+inr(d.amount)+'</td>'+
@@ -4541,17 +4541,14 @@ function execRenderBills(){
             '</tr>';
           }).join('')+
 
-          // Cash payments
-          bPaid.map(function(py){
-            return '<tr style="border-bottom:1px solid #EEE;">'+
-              '<td style="padding:5px 8px;">'+
-                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">PAYMENT</span>'+
-                fmtD(py.payment_date)+(py.payment_mode?' · '+py.payment_mode:'')+(py.reference?' · '+py.reference:'')+
-                '<button onclick="execDelPayment(\''+py.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:4px;">&#215;</button>'+
-              '</td>'+
-              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(py.amount)+'</td>'+
-            '</tr>';
-          }).join('')+
+          // Cash payments — shown in Payments tab; here just show total
+          (bPaidAmt>0?'<tr style="background:#F0FFF4;border-bottom:1px solid #EEE;">'+
+            '<td style="padding:5px 8px;">'+
+              '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">PAYMENT</span>'+
+              bPaid.length+' payment(s) — see Payments tab for details'+
+            '</td>'+
+            '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(bPaidAmt)+'</td>'+
+          '</tr>':'')+
 
           // Balance due
           '<tr style="background:'+(bBal>0?'#FFF3F3':'#F0FFF4')+'">'+
@@ -4614,7 +4611,7 @@ function execRenderBills(){
     var partyHeader='<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
       '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
       '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
-      (BILL_SUBTAB==='genbills'?'<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>':'')+
+      (BILL_SUBTAB==='abstract'||BILL_SUBTAB==='genbills'?'<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>':'')+
     '</div>';
 
     var bodyHtml='';
@@ -4769,8 +4766,10 @@ function execRenderPaymentsCore(el, projId){
               '<td style="padding:4px 8px;color:var(--text3);">'+(p.reference||'\u2014')+'</td>'+
               '<td style="padding:4px 8px;color:var(--text3);">'+(p.remarks||'')+'</td>'+
               '<td style="padding:4px 8px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(p.amount)+'</td>'+
-              '<td style="padding:4px 8px;"><button onclick="execDelPayment(\''+p.id+'\');" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;">&#215;</button></td>'+
-            '</tr>';
+              '<td style="padding:4px 8px;">'+
+                '<button onclick="execPaymentSlip(\''+p.id+'\')" style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:3px;padding:2px 6px;cursor:pointer;font-weight:700;">&#11015; Slip</button>'+
+                '<button onclick="execDelPayment(\''+p.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;">&#215;</button>'+
+              '</td></tr>';
           }).join('')+
           '<tr style="background:#E8F5E9;font-weight:800;"><td colspan="5" style="padding:5px 8px;">Total Cash/Bank</td><td style="padding:5px 8px;text-align:right;color:#2E7D32;">'+inr(totalCash)+'</td><td></td></tr>'+
         '</table>'+
@@ -4805,7 +4804,7 @@ function execRenderPaymentsCore(el, projId){
           '<div style="color:white;font-size:13px;font-weight:800;">'+g.name+'</div>'+
           '<div style="color:rgba(255,255,255,0.7);font-size:10px;">'+g.type+'</div>'+
         '</div>'+
-
+        '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128181; + Advance</button>'+
       '</div>'+
       '<div style="padding:10px 12px;">'+
         summaryHtml+
@@ -6529,6 +6528,43 @@ async function execDeleteDeduction(billId,dedId){
     toast('Deduction deleted','success');
     if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   }catch(e){toast('Error: '+e.message,'error');}
+}
+
+function execPaymentSlip(payId){
+  var p=WA_PAYMENTS.find(function(x){return x.id===payId;});
+  if(!p){toast('Payment not found','error');return;}
+  var bill=WA_BILLS.find(function(b){return b.id===p.bill_id;})||{};
+  var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+  var projSel=document.getElementById('proj-mod-sel');
+  var projName=projSel&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'';
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+  function fmtD(d){if(!d)return '—';var pts=d.split('-');return pts.length===3?pts[2]+'/'+pts[1]+'/'+pts[0]:d;}
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Payment Receipt</title>'+
+    '<style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px;}'+
+    'h2{color:#1B5E20;margin:0;} .title{background:#2E7D32;color:white;padding:8px 16px;font-size:14px;font-weight:bold;letter-spacing:2px;text-align:center;margin:12px 0;}'+
+    '.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #EEE;}'+
+    '.lbl{color:#555;font-size:11px;} .val{font-weight:bold;}'+
+    '.amt-box{background:#E8F5E9;border:2px solid #2E7D32;border-radius:8px;padding:16px;text-align:center;margin:16px 0;}'+
+    '.amt{font-size:24px;font-weight:900;color:#1B5E20;}'+
+    '.footer{margin-top:40px;display:flex;justify-content:space-between;border-top:1px solid #333;padding-top:8px;font-size:10px;}'+
+    '@media print{.noprint{display:none;}}</style></head><body>'+
+    '<h2>'+(co.name||'CENH Construction')+'</h2>'+
+    (co.address?'<p style="margin:4px 0;color:#555;font-size:11px;">'+co.address+'</p>':'')+
+    '<div class="title">PAYMENT RECEIPT</div>'+
+    '<div class="row"><span class="lbl">Receipt No.</span><span class="val">PAY-'+payId.slice(-6).toUpperCase()+'</span></div>'+
+    '<div class="row"><span class="lbl">Payment Date</span><span class="val">'+fmtD(p.payment_date)+'</span></div>'+
+    '<div class="row"><span class="lbl">Project</span><span class="val">'+projName+'</span></div>'+
+    '<div class="row"><span class="lbl">Party Name</span><span class="val">'+p.party_name+'</span></div>'+
+    '<div class="row"><span class="lbl">Party Type</span><span class="val">'+(p.party_type||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Bill Reference</span><span class="val">'+(bill.bill_ref||'Bill #'+(bill.bill_number||'?'))+'</span></div>'+
+    '<div class="row"><span class="lbl">Payment Mode</span><span class="val">'+(p.payment_mode||'—')+'</span></div>'+
+    '<div class="row"><span class="lbl">Reference / UTR</span><span class="val">'+(p.reference||'—')+'</span></div>'+
+    (p.remarks?'<div class="row"><span class="lbl">Remarks</span><span class="val">'+p.remarks+'</span></div>':'')+
+    '<div class="amt-box"><div class="lbl">Amount Paid</div><div class="amt">'+inr(p.amount)+'</div></div>'+
+    '<div class="footer"><span>Date: '+new Date().toLocaleDateString('en-IN')+'</span><span>Authorised Signatory</span></div>'+
+    '<div class="noprint" style="text-align:center;margin:20px;"><button onclick="window.print()" style="padding:8px 20px;background:#1B5E20;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">⤓ Print / Save PDF</button></div>'+
+    '</body></html>';
+  openPDF(html);
 }
 
 async function execDelPayment(id){
