@@ -1275,11 +1275,11 @@ function execSwitchTab(){
 }
 
 // Full fetch — called on project change or after save/delete to refresh data
-async function execLoadItems(){
+async function execLoadItems(silent){
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var el=document.getElementById('exec-content');
-  if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';return;}
-  if(el) el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
+  if(!projId){if(el&&!silent)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';return;}
+  if(el&&!silent) el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
   var safe=function(p){return p.catch(function(){return [];});};
   try{
     var r=await Promise.all([
@@ -1313,7 +1313,7 @@ async function execLoadItems(){
     STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
-  execRenderSubTab();
+  if(!silent) execRenderSubTab();
 }
 
 function execRenderShell(){ execRenderSubTab(); }
@@ -4659,11 +4659,14 @@ function execRenderPayments(){
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
   function fmtD(d){if(!d)return '\u2014';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 
-  // Load advances and payments if needed
-  if(!WA_ADVANCES.length&&projId){
-    sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'})
-      .then(function(r){WA_ADVANCES=Array.isArray(r)?r:[];execRenderPayments();}).catch(function(){});
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
+  // If core data not loaded yet, load it first then re-render this tab
+  if(!WA_ALLOT.length&&projId){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading payments...</div>';
+    execLoadItems(true).then(function(){   // silent=true: don't overwrite exec-content
+      if(WA_SUBTAB==='payments') execRenderPayments();
+    }).catch(function(){
+      el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Error loading. Please try again.</div>';
+    });
     return;
   }
 
