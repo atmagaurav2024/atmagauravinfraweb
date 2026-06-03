@@ -70,8 +70,7 @@ function projModRenderNav(){
     {id:'projects',        label:'Projects'},
     {id:'preconstruction', label:'Pre-construction', group:true},
     {id:'construction',    label:'Construction',     group:true},
-    {id:'bills',           label:'Bills'},
-    {id:'payments',        label:'Payments'},
+    {id:'bills',           label:'Bills & Payments'},
     {id:'orders',          label:'Orders'}
   ];
 
@@ -196,7 +195,6 @@ function projModLoadTab(){
     grn:       {cont:'grn-content',   sel:'grn-proj-sel',   fn: function(){ grnLoadItems(); }},
     store:     {cont:'store-content', sel:'store-proj-sel', fn: function(){ storeLoadItems(); }},
     bills:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills';    execSwitchTab(); }},
-    payments:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='payments'; execSwitchTab(); }},
     orders:    {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders';   execSwitchTab(); }}
   };
 
@@ -1721,7 +1719,6 @@ async function execRenderSubTab(){
   else if(WA_SUBTAB==='allotted') execRenderAllotted();
   else if(WA_SUBTAB==='daily') execRenderDaily();
   else if(WA_SUBTAB==='bills') execRenderBills();
-  else if(WA_SUBTAB==='payments') execRenderPayments();
   else if(WA_SUBTAB==='orders') execRenderOrders();
   else if(WA_SUBTAB==='grn') grnRender();
   else if(WA_SUBTAB==='store') storeRender();
@@ -4206,6 +4203,13 @@ function billsToggleGroup(grpId){
   allRows.forEach(function(r){r.style.display=isHidden?'table-row':'none';});
 }
 
+var BILL_SUBTAB='abstract'; // abstract | genbills | payments
+
+function billsSubTab(tab){
+  BILL_SUBTAB=tab;
+  execRenderBills();
+}
+
 function execRenderBills(){
   var el=document.getElementById('exec-content');if(!el)return;
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
@@ -4213,8 +4217,34 @@ function execRenderBills(){
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
 
+  // ── Sub-tab bar ─────────────────────────────────────────────────────────
+  var tabs=[
+    {id:'abstract',  label:'Abstract'},
+    {id:'genbills',  label:'Generated Bills'},
+    {id:'payments',  label:'Payments'}
+  ];
+  var tabBar='<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;">'+
+    tabs.map(function(t){
+      var active=BILL_SUBTAB===t.id;
+      return '<button onclick="billsSubTab(\''+t.id+'\')" style="'+
+        'padding:10px 18px;font-size:11px;font-weight:800;border:none;cursor:pointer;'+
+        'background:'+(active?'white':'#F8FAFC')+';'+
+        'color:'+(active?'#1565C0':'var(--text3)')+';'+
+        'border-bottom:'+(active?'2px solid #1565C0':'2px solid transparent')+';'+
+        'margin-bottom:-2px;">'+t.label+'</button>';
+    }).join('')+
+  '</div>';
+
+  // Payments sub-tab
+  if(BILL_SUBTAB==='payments'){
+    el.innerHTML=tabBar+'<div id="bills-pay-content" style="padding:8px;"></div>';
+    var payEl=document.getElementById('bills-pay-content');
+    if(payEl) execRenderPaymentsCore(payEl, projId);
+    return;
+  }
+
   if(!WA_ALLOT.length){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No allotments yet</div>';
+    el.innerHTML=tabBar+'<div style="text-align:center;padding:40px;color:var(--text3);">No allotments yet</div>';
     return;
   }
 
@@ -4226,7 +4256,8 @@ function execRenderBills(){
     parties[key].allots.push(a);
   });
 
-  el.innerHTML=Object.keys(parties).map(function(key){
+  // Show tab bar + render correct sub-tab
+  var contentHtml=Object.keys(parties).map(function(key){
     var p=parties[key];
     var col=tCol[p.type]||'#37474F';
 
@@ -4579,23 +4610,48 @@ function execRenderBills(){
         rightCol+
       '</div>';
 
+    // Party header (shared)
+    var partyHeader='<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
+      '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
+      '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
+      (BILL_SUBTAB==='genbills'?'<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>':'')+
+    '</div>';
+
+    var bodyHtml='';
+    if(BILL_SUBTAB==='abstract'){
+      // Abstract: allotment table only
+      bodyHtml=tableHtml;
+    } else {
+      // Generated Bills: bills list only
+      bodyHtml=billsList
+        ? '<div style="padding:10px 12px;">'+billsList+'</div>'
+        : '<div style="padding:20px;text-align:center;color:var(--text3);font-size:11px;">No bills generated yet</div>';
+    }
+
     return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
-      '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
-        '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
-        '<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
-      '</div>'+
-      threeCol+
+      partyHeader+bodyHtml+
     '</div>';
   }).join('');
+
+  // Render content for current sub-tab (contentHtml already built per subtab in return above)
+  el.innerHTML=tabBar+'<div style="padding:8px;">'+contentHtml+'</div>';
 }
 
 
 // ════ ADVANCE PAYMENT (from Allotted Work tab) ══════════════════════════
+function execRenderPaymentsInEl(el, projId){
+  if(!el||!projId) return;
+  execRenderPaymentsCore(el, projId);
+}
+
 function execRenderPayments(){
   var el=document.getElementById('exec-content');
   if(!el) return;
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  execRenderPaymentsCore(el, projId);
+}
+
+function execRenderPaymentsCore(el, projId){
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
   function fmtD(d){if(!d)return '\u2014';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 
@@ -5627,7 +5683,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     BL_DEDUCTIONS=[];
     window._blWorkRows=null;
     closeSheet('ov-exec','sh-exec');
-    if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+    if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
@@ -5648,7 +5704,7 @@ async function execAddDeduction(billId){
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
     toast(head+' deduction added','success');
-    if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+    if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -5769,7 +5825,7 @@ async function execReleaseDeduction(billId,dedId){
       if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
       toast('Deduction released — ₹'+Number(ded.amount||0).toLocaleString('en-IN')+' on '+relDate,'success');
       closeSheet('ov-exec','sh-exec');
-      if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+      if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
     }catch(e){toast('Error: '+e.message,'error');}
   };
   sf.appendChild(cb);sf.appendChild(sb);
@@ -6007,7 +6063,7 @@ async function execSavePaymentAdv(projId,balAmount){
   var settled=advAdjTotal+cashAmt;
   toast('₹'+Math.round(settled).toLocaleString('en-IN')+' settled'+(advAdjTotal>0?' (incl. advance adj.)':''),'success');
   closeSheet('ov-exec','sh-exec');
-  if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+  if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
 }
 
 
@@ -6382,7 +6438,7 @@ async function execSaveAdvance(partyType,partyName,projId){
 async function execDelAdvance(id){
   if(!confirm('Delete this advance payment record?'))return;
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
-  if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+  if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   try{await sbDelete('work_advances',id);}catch(e){console.error(e);}
   toast('Advance deleted','success');
 }
@@ -6396,7 +6452,7 @@ async function execDelBill(id){
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
-  if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+  if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
 }
 
@@ -6456,7 +6512,7 @@ async function execDeleteAdvAdj(billId,dedId){
     var bidx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(bidx>-1) WA_BILLS[bidx].deductions=deductions.length?JSON.stringify(deductions):null;
     toast('Advance adjustment deleted — balance restored','success');
-    if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+    if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -6471,14 +6527,14 @@ async function execDeleteDeduction(billId,dedId){
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx].deductions=deductions.length?JSON.stringify(deductions):null;
     toast('Deduction deleted','success');
-    if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+    if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
 async function execDelPayment(id){
   if(!confirm('Delete this payment record?'))return;
   WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.id!==id;});
-  if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
+  if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   try{await sbDelete('work_payments',id);}catch(e){console.error(e);}
 }
 
