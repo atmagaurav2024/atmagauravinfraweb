@@ -4557,56 +4557,10 @@ function execRenderBills(){
           '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1A237E;">'+inr(totalBilled)+'</td>'+
         '</tr>'+
 
-        // Additions rows (from all bills)
-        partyAddRows+
-
-        // Gross billed (work + additions)
-        (totalAddAmt>0?
-          '<tr style="background:#E8F5E9;border-top:1px solid #C8E6C9;">'+
-            '<td colspan="5" style="padding:6px 10px;font-size:11px;font-weight:800;color:#1B5E20;">Gross Billed (incl. Additions)</td>'+
-            '<td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(totalBilledGross)+'</td>'+
-          '</tr>':'')+
-
-        // Deductions held rows
-        partyDedRows+
-
-        // Net payable row
-        '<tr style="background:#EFF6FF;border-top:2px solid #1565C0;">'+
-          '<td colspan="5" style="padding:7px 10px;font-size:11px;font-weight:800;color:#1565C0;">Net Payable (after deductions)</td>'+
-          '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</td>'+
-        '</tr>'+
-
-        // Advance entries (party-level)
-        partyAdvRows+
-
-        // Cash payments
-        (totalPaid>0?
-          '<tr style="background:#F0FFF4;border-top:1px solid #C8E6C9;">'+
-            '<td colspan="5" style="padding:6px 10px;font-size:11px;font-weight:800;color:#2E7D32;">Payments (Cash/Bank)</td>'+
-            '<td style="padding:6px 10px;font-size:12px;text-align:right;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</td>'+
-          '</tr>':'')+
-
-        // Balance due row
-        '<tr style="background:'+(balDue>0?'#FFF3F3':'#F0FFF4')+';border-top:2px solid '+(balDue>0?'#C62828':'#2E7D32')+';">'+
-          '<td colspan="5" style="padding:8px 10px;font-size:12px;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+
-            (balDue>0?'Balance Due':'Advance Excess / Overpaid')+
-          '</td>'+
-          '<td style="padding:8px 10px;font-size:13px;text-align:right;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(Math.abs(balDue))+'</td>'+
-        '</tr>'+
-
         '</tbody>'+
       '</table></div>';
 
-    // ── Summary column (middle) ──────────────────────────────────────────
-    var summaryCol=
-      '<div style="display:flex;flex-direction:column;gap:0;border-left:2px solid var(--border);border-right:2px solid var(--border);min-width:140px;">'+
-        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#F8FAFC;"><div style="font-size:9px;color:var(--text3);font-weight:700;">WORK BILLED</div><div style="font-size:13px;font-weight:900;color:#1A237E;">'+inr(totalBilled)+'</div></div>'+
-        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#FFF8F8;"><div style="font-size:9px;color:var(--text3);font-weight:700;">DEDUCTIONS</div><div style="font-size:13px;font-weight:900;color:#E65100;">'+inr(totalDeductions)+'</div></div>'+
-        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#EFF6FF;"><div style="font-size:9px;color:var(--text3);font-weight:700;">NET PAYABLE</div><div style="font-size:13px;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</div></div>'+
-        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#FFF8E1;"><div style="font-size:9px;color:var(--text3);font-weight:700;">ADVANCE</div><div style="font-size:13px;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</div></div>'+
-        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#F0FFF4;"><div style="font-size:9px;color:var(--text3);font-weight:700;">PAYMENT</div><div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
-        '<div style="padding:8px 10px;text-align:center;background:'+(balDue>0?'#FFF3F3':'#F0FFF4')+';"><div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE</div><div style="font-size:13px;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(Math.abs(balDue))+'</div></div>'+
-      '</div>';
+
 
     // ── Bills & Payments column (right) ──────────────────────────────────
     var rightCol=
@@ -4618,11 +4572,10 @@ function execRenderBills(){
           '</div>':'<div style="padding:20px;text-align:center;color:var(--text3);font-size:11px;">No bills yet</div>')+
       '</div>';
 
-    // ── Three-column layout ───────────────────────────────────────────────
+    // ── Two-column layout: allotment table | bills ───────────────────────
     var threeCol=
       '<div style="display:flex;border-top:2px solid var(--border);overflow-x:auto;">'+
-        '<div style="flex:2;min-width:300px;overflow-x:auto;">'+tableHtml+'</div>'+
-        summaryCol+
+        '<div style="flex:2;min-width:300px;overflow-x:auto;border-right:2px solid var(--border);">'+tableHtml+'</div>'+
         rightCol+
       '</div>';
 
