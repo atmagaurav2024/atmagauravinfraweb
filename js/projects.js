@@ -4543,7 +4543,6 @@ function execRenderBills(){
         '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
         '<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
         '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:#F57F17;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128181; + Advance</button>'+
-      '</div>'+
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">'+
         '<thead><tr style="background:#F8FAFC;border-bottom:2px solid var(--border);">'+
           '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">RESOURCE / WORK</th>'+
@@ -4781,11 +4780,26 @@ function execRenderPayments(){
       '</div>':'';
 
     // Summary bar
+    // Calculate billed amount for this party
+    var partyBills=WA_BILLS.filter(function(b){return b.party_name===g.name&&b.party_type===g.type;});
+    var totalBilledAmt=partyBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
+    var totalDedHeldAmt=partyBills.reduce(function(s,b){
+      var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      return s+ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
+    },0);
+    var netPayableAmt=totalBilledAmt-totalDedHeldAmt;
+    var balanceDue=netPayableAmt-totalPaid;
+
     var summaryHtml=
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Advances Paid</div><div style="font-size:13px;font-weight:900;color:#F57F17;">'+inr(totalAdv)+'</div></div>'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Cash/Bank Paid</div><div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inr(totalCash)+'</div></div>'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Total Paid (excl. adv pending)</div><div style="font-size:13px;font-weight:900;color:#1565C0;">'+inr(totalPaid)+'</div></div>'+
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Billed Amount</div><div style="font-size:12px;font-weight:900;color:#1A237E;">'+inr(totalBilledAmt)+'</div></div>'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Net Payable</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(netPayableAmt)+'</div></div>'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Total Paid</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:'+(balanceDue>0?'#C62828':'#2E7D32')+';">Balance Due</div><div style="font-size:12px;font-weight:900;color:'+(balanceDue>0?'#C62828':'#2E7D32')+';">'+inr(Math.abs(balanceDue))+(balanceDue<0?' Cr':'')+'</div></div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:8px;">'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Advances Paid</div><div style="font-size:12px;font-weight:900;color:#F57F17;">'+inr(totalAdv)+'</div></div>'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Cash/Bank Paid</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalCash)+'</div></div>'+
       '</div>';
 
     return '<div style="background:#F8FAFC;border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;">'+
@@ -4794,7 +4808,7 @@ function execRenderPayments(){
           '<div style="color:white;font-size:13px;font-weight:800;">'+g.name+'</div>'+
           '<div style="color:rgba(255,255,255,0.7);font-size:10px;">'+g.type+'</div>'+
         '</div>'+
-        '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\');" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">+ Advance</button>'+
+
       '</div>'+
       '<div style="padding:10px 12px;">'+
         summaryHtml+
