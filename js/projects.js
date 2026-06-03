@@ -70,7 +70,8 @@ function projModRenderNav(){
     {id:'projects',        label:'Projects'},
     {id:'preconstruction', label:'Pre-construction', group:true},
     {id:'construction',    label:'Construction',     group:true},
-    {id:'bills',           label:'Bills & Payments'},
+    {id:'bills',           label:'Bills'},
+    {id:'payments',        label:'Payments'},
     {id:'orders',          label:'Orders'}
   ];
 
@@ -195,6 +196,7 @@ function projModLoadTab(){
     grn:       {cont:'grn-content',   sel:'grn-proj-sel',   fn: function(){ grnLoadItems(); }},
     store:     {cont:'store-content', sel:'store-proj-sel', fn: function(){ storeLoadItems(); }},
     bills:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills';    execSwitchTab(); }},
+    payments:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='payments'; execSwitchTab(); }},
     orders:    {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders';   execSwitchTab(); }}
   };
 
@@ -1719,6 +1721,7 @@ async function execRenderSubTab(){
   else if(WA_SUBTAB==='allotted') execRenderAllotted();
   else if(WA_SUBTAB==='daily') execRenderDaily();
   else if(WA_SUBTAB==='bills') execRenderBills();
+  else if(WA_SUBTAB==='payments') execRenderPayments();
   else if(WA_SUBTAB==='orders') execRenderOrders();
   else if(WA_SUBTAB==='grn') grnRender();
   else if(WA_SUBTAB==='store') storeRender();
@@ -4649,6 +4652,162 @@ function execRenderBills(){
 
 
 // ════ ADVANCE PAYMENT (from Allotted Work tab) ══════════════════════════
+function execRenderPayments(){
+  var el=document.getElementById('exec-content');
+  if(!el) return;
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
+  function fmtD(d){if(!d)return '\u2014';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+
+  // Load advances and payments if needed
+  if(!WA_ADVANCES.length&&projId){
+    sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'})
+      .then(function(r){WA_ADVANCES=Array.isArray(r)?r:[];execRenderPayments();}).catch(function(){});
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
+    return;
+  }
+
+  // Build party groups from allotments
+  var partyGroups={};
+  WA_ALLOT.filter(function(a){return a.project_id===projId;}).forEach(function(a){
+    var key=(a.exec_type||'')+'::'+a.party_name;
+    if(!partyGroups[key]) partyGroups[key]={type:a.exec_type,name:a.party_name,advances:[],payments:[],billAdjs:[]};
+  });
+  // Add advances
+  WA_ADVANCES.filter(function(a){return a.project_id===projId;}).forEach(function(a){
+    var key=(a.party_type||'')+'::'+a.party_name;
+    if(!partyGroups[key]) partyGroups[key]={type:a.party_type,name:a.party_name,advances:[],payments:[],billAdjs:[]};
+    partyGroups[key].advances.push(a);
+  });
+  // Add cash payments
+  WA_PAYMENTS.filter(function(p){return p.project_id===projId;}).forEach(function(p){
+    var key=(p.party_type||'')+'::'+p.party_name;
+    if(!partyGroups[key]) partyGroups[key]={type:p.party_type,name:p.party_name,advances:[],payments:[],billAdjs:[]};
+    partyGroups[key].payments.push(p);
+  });
+  // Add advance adjustments from bills
+  WA_BILLS.filter(function(b){return b.project_id===projId;}).forEach(function(b){
+    var key=(b.party_type||'')+'::'+b.party_name;
+    var deds=[];try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+    deds.filter(function(d){return d.is_advance_adj;}).forEach(function(d){
+      if(!partyGroups[key]) partyGroups[key]={type:b.party_type,name:b.party_name,advances:[],payments:[],billAdjs:[]};
+      partyGroups[key].billAdjs.push({bill:b,ded:d});
+    });
+  });
+
+  var keys=Object.keys(partyGroups);
+  if(!keys.length){
+    el.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text3);">No payment records found for this project.</div>';
+    return;
+  }
+
+  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+
+  var html=keys.map(function(key){
+    var g=partyGroups[key];
+    var col=tCol[g.type]||'#37474F';
+    var totalAdv=g.advances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+    var totalCash=g.payments.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+    var totalAdjusted=g.billAdjs.reduce(function(s,x){return s+(parseFloat(x.ded.amount)||0);},0);
+    var totalPaid=totalCash+totalAdjusted;
+
+    // Advances section
+    var advHtml=g.advances.length?
+      '<div style="margin-bottom:10px;">'+
+        '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:4px;">&#128181; ADVANCES PAID</div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+
+          '<tr style="background:#FFF8E1;"><th style="padding:4px 8px;text-align:left;">Date</th><th style="padding:4px 8px;text-align:left;">Purpose</th><th style="padding:4px 8px;text-align:left;">Mode</th><th style="padding:4px 8px;text-align:left;">Ref</th><th style="padding:4px 8px;text-align:right;">Amount</th><th style="padding:4px 8px;text-align:right;">Adjusted</th><th style="padding:4px 8px;text-align:right;">Pending</th><th style="padding:4px 8px;"></th></tr>'+
+          g.advances.map(function(a){
+            var adjAmt=parseFloat(a.adjusted_amount)||0;
+            var pending=Math.max(0,(parseFloat(a.amount)||0)-adjAmt);
+            return '<tr style="border-bottom:1px solid #FFF3CD;">'+
+              '<td style="padding:4px 8px;">'+fmtD(a.date)+'</td>'+
+              '<td style="padding:4px 8px;">'+( a.purpose||'\u2014')+'</td>'+
+              '<td style="padding:4px 8px;color:var(--text3);">'+(a.payment_mode||'\u2014')+'</td>'+
+              '<td style="padding:4px 8px;color:var(--text3);">'+(a.reference||'\u2014')+'</td>'+
+              '<td style="padding:4px 8px;text-align:right;font-weight:800;color:#F57F17;">'+inr(a.amount)+'</td>'+
+              '<td style="padding:4px 8px;text-align:right;color:#E65100;">'+( adjAmt>0?inr(adjAmt):'\u2014')+'</td>'+
+              '<td style="padding:4px 8px;text-align:right;font-weight:800;color:'+(pending>0?'#C62828':'#2E7D32')+';">'+( pending>0?inr(pending):'Fully Adj.')+'</td>'+
+              '<td style="padding:4px 8px;display:flex;gap:4px;">'+
+                '<button onclick="execEditAdvance(\''+a.id+'\');" style="font-size:9px;background:#FFF8E1;color:#1565C0;border:1px solid #BBDEFB;border-radius:3px;padding:1px 5px;cursor:pointer;">&#9998;</button>'+
+                '<button onclick="execDelAdvance(\''+a.id+'\');" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;">&#215;</button>'+
+              '</td>'+
+            '</tr>';
+          }).join('')+
+          '<tr style="background:#FFF3CD;font-weight:800;"><td colspan="4" style="padding:5px 8px;">Total Advances</td><td style="padding:5px 8px;text-align:right;color:#F57F17;">'+inr(totalAdv)+'</td><td style="padding:5px 8px;text-align:right;color:#E65100;">'+inr(totalAdjusted)+'</td><td style="padding:5px 8px;text-align:right;color:'+(totalAdv-totalAdjusted>0?'#C62828':'#2E7D32')+';">'+inr(totalAdv-totalAdjusted)+'</td><td></td></tr>'+
+        '</table>'+
+      '</div>':'';
+
+    // Bill advance adjustments
+    var adjHtml=g.billAdjs.length?
+      '<div style="margin-bottom:10px;">'+
+        '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:4px;">&#9951; ADVANCE ADJUSTED IN BILLS</div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+
+          '<tr style="background:#FFF8E1;"><th style="padding:4px 8px;text-align:left;">Bill Ref</th><th style="padding:4px 8px;text-align:left;">Bill Date</th><th style="padding:4px 8px;text-align:right;">Advance Adj.</th></tr>'+
+          g.billAdjs.map(function(x){
+            return '<tr style="border-bottom:1px solid #FFF3CD;">'+
+              '<td style="padding:4px 8px;font-weight:700;">'+(x.bill.bill_ref||'Bill #'+x.bill.bill_number)+'</td>'+
+              '<td style="padding:4px 8px;color:var(--text3);">'+fmtD(x.bill.bill_date)+'</td>'+
+              '<td style="padding:4px 8px;text-align:right;font-weight:800;color:#F57F17;">'+inr(x.ded.amount)+'</td>'+
+            '</tr>';
+          }).join('')+
+          '<tr style="background:#FFF3CD;font-weight:800;"><td colspan="2" style="padding:5px 8px;">Total Adjusted</td><td style="padding:5px 8px;text-align:right;color:#F57F17;">'+inr(totalAdjusted)+'</td></tr>'+
+        '</table>'+
+      '</div>':'';
+
+    // Cash payments
+    var cashHtml=g.payments.length?
+      '<div style="margin-bottom:10px;">'+
+        '<div style="font-size:10px;font-weight:800;color:#2E7D32;margin-bottom:4px;">&#128176; CASH / BANK PAYMENTS</div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+
+          '<tr style="background:#E8F5E9;"><th style="padding:4px 8px;text-align:left;">Date</th><th style="padding:4px 8px;text-align:left;">Bill Ref</th><th style="padding:4px 8px;text-align:left;">Mode</th><th style="padding:4px 8px;text-align:left;">Ref/UTR</th><th style="padding:4px 8px;text-align:left;">Remarks</th><th style="padding:4px 8px;text-align:right;">Amount</th><th style="padding:4px 8px;"></th></tr>'+
+          g.payments.map(function(p){
+            var bill=WA_BILLS.find(function(b){return b.id===p.bill_id;})||{};
+            return '<tr style="border-bottom:1px solid #F0F0F0;">'+
+              '<td style="padding:4px 8px;">'+fmtD(p.payment_date)+'</td>'+
+              '<td style="padding:4px 8px;font-size:9px;color:var(--text3);">'+(bill.bill_ref||'Bill #'+(bill.bill_number||'?'))+'</td>'+
+              '<td style="padding:4px 8px;color:var(--text3);">'+(p.payment_mode||'\u2014')+'</td>'+
+              '<td style="padding:4px 8px;color:var(--text3);">'+(p.reference||'\u2014')+'</td>'+
+              '<td style="padding:4px 8px;color:var(--text3);">'+(p.remarks||'')+'</td>'+
+              '<td style="padding:4px 8px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(p.amount)+'</td>'+
+              '<td style="padding:4px 8px;"><button onclick="execDelPayment(\''+p.id+'\');" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;">&#215;</button></td>'+
+            '</tr>';
+          }).join('')+
+          '<tr style="background:#E8F5E9;font-weight:800;"><td colspan="5" style="padding:5px 8px;">Total Cash/Bank</td><td style="padding:5px 8px;text-align:right;color:#2E7D32;">'+inr(totalCash)+'</td><td></td></tr>'+
+        '</table>'+
+      '</div>':'';
+
+    // Summary bar
+    var summaryHtml=
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Advances Paid</div><div style="font-size:13px;font-weight:900;color:#F57F17;">'+inr(totalAdv)+'</div></div>'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Cash/Bank Paid</div><div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inr(totalCash)+'</div></div>'+
+        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Total Paid (excl. adv pending)</div><div style="font-size:13px;font-weight:900;color:#1565C0;">'+inr(totalPaid)+'</div></div>'+
+      '</div>';
+
+    return '<div style="background:#F8FAFC;border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;">'+
+      '<div style="background:'+col+';padding:10px 14px;display:flex;align-items:center;gap:10px;">'+
+        '<div style="flex:1;">'+
+          '<div style="color:white;font-size:13px;font-weight:800;">'+g.name+'</div>'+
+          '<div style="color:rgba(255,255,255,0.7);font-size:10px;">'+g.type+'</div>'+
+        '</div>'+
+        '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\');" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">+ Advance</button>'+
+      '</div>'+
+      '<div style="padding:10px 12px;">'+
+        summaryHtml+
+        advHtml+
+        adjHtml+
+        cashHtml+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML='<div style="padding:12px;">'+
+    '<div style="font-size:13px;font-weight:800;margin-bottom:12px;">&#128176; Payments Summary</div>'+
+    html+
+  '</div>';
+}
+
 async function execOpenAdvanceAllot(allotId){
   var a=WA_ALLOT.find(function(x){return x.id===allotId;});
   if(!a){toast('Allotment not found','error');return;}
@@ -4868,7 +5027,8 @@ async function execUpdateAdvance(advId){
     if(idx>-1) Object.assign(WA_ADVANCES[idx],{date:date,amount:amount,payment_mode:mode,reference:ref,purpose:purpose});
     toast('Advance updated!','success');
     closeSheet('ov-exec','sh-exec');
-    execRenderBills();
+    if(WA_SUBTAB==='payments') execRenderPayments();
+    else execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
@@ -4992,32 +5152,45 @@ async function execOpenBill(partyKey,projId){
         '</div>'
       : '<div style="font-size:11px;color:var(--text3);padding:8px 0;">No work allotments found for this party.</div>')+
     // Additions
-    '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:8px;">&#9313; Additions (Tax, Transport etc.)</div>'+
-    '<div id="bl-additions" style="margin-bottom:12px;">'+
+    // ③ Additions (Transport, Custom — on work sub-total)
+    '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:8px;">&#9313; Additions (on Work Sub-Total)</div>'+
+    '<div id="bl-additions" style="margin-bottom:8px;">'+
       '<div id="bl-add-list"></div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
-        '<button onclick="blAddAddition()" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom Addition</button>'+
-        '<button onclick="blAddPreset(\'GST @18%\',\'pct\',18)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 18%</button>'+
-        '<button onclick="blAddPreset(\'GST @12%\',\'pct\',12)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 12%</button>'+
-        '<button onclick="blAddPreset(\'GST @5%\',\'pct\',5)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 5%</button>'+
+        '<button onclick="blAddAddition()" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom</button>'+
         '<button onclick="blAddPreset(\'Transportation\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Transport</button>'+
         '<button onclick="blAddPreset(\'Loading / Unloading\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Loading</button>'+
       '</div>'+
     '</div>'+
-    // Deductions
-    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">&#9314; Deductions (optional)</div>'+
-    '<div id="bl-deductions">'+
+    // ④ Deductions (on work sub-total)
+    '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:8px;">&#9314; Deductions (on Work Sub-Total)</div>'+
+    '<div id="bl-deductions" style="margin-bottom:8px;">'+
       '<div id="bl-ded-list"></div>'+
       '<button onclick="blAddDeduction()" style="font-size:10px;padding:4px 10px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:5px;cursor:pointer;font-weight:700;">+ Add Deduction</button>'+
     '</div>'+
-
-    // ④ Gross Bill Amount (work + add - ded)
+    // Net before GST display
+    '<div style="display:flex;justify-content:space-between;align-items:center;background:#E3F2FD;border-radius:8px;padding:8px 12px;margin-bottom:10px;">'+
+      '<span style="font-size:11px;font-weight:800;color:#1565C0;">Net before GST (Work + Add − Ded)</span>'+
+      '<span id="bl-net-before-gst-amt" style="font-size:14px;font-weight:900;color:#1565C0;">₹0</span>'+
+    '</div>'+
+    // ⑤ GST (on net before GST)
+    '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:8px;">&#9315; GST (on Net before GST)</div>'+
+    '<div id="bl-gst-section" style="margin-bottom:10px;">'+
+      '<div id="bl-gst-list"></div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+        '<button onclick="blAddGst(18)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 18%</button>'+
+        '<button onclick="blAddGst(12)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 12%</button>'+
+        '<button onclick="blAddGst(5)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 5%</button>'+
+        '<button onclick="blAddGst(0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom %</button>'+
+      '</div>'+
+    '</div>'+
+    // ⑥ Gross Bill Amount (net + GST)
     '<div style="background:#1B5E20;border-radius:10px;padding:12px 14px;margin:10px 0;display:flex;justify-content:space-between;align-items:center;">'+
       '<div>'+
         '<div style="color:white;font-size:12px;font-weight:800;">Gross Bill Amount</div>'+
         '<div id="bl-gross-breakdown" style="font-size:9px;color:rgba(255,255,255,0.7);margin-top:2px;"></div>'+
       '</div>'+
-      '<div id="bl-gross-display" style="font-size:22px;font-weight:900;color:white;">&#8377;0</div>'+
+      '<div id="bl-gross-display" style="font-size:22px;font-weight:900;color:white;">₹0</div>'+
     '</div>'+
     // Advance info
     (function(){
@@ -5091,9 +5264,10 @@ async function execOpenBill(partyKey,projId){
       '</div>'+
       '<div><label class="flbl">Description</label><input id="bl-desc" class="finp" placeholder="e.g. RA Bill No.1 for work done upto..."></div>'+
     '</div>';
-  // Reset additions and deductions arrays for fresh form
+  // Reset additions, deductions, gst arrays for fresh form
   BL_ADDITIONS=[];
   BL_DEDUCTIONS=[];
+  BL_GST=[];
   // Calculate initial total
   setTimeout(function(){blUpdateTotal();},50);
 
@@ -5237,11 +5411,11 @@ function blAddAddition(label, type, pct){
   div.className='bl-add-row';
   div.setAttribute('data-add-type', type||'flat');
   div.setAttribute('data-add-pct', pct||0);
-  div.style.cssText='display:grid;grid-template-columns:1fr 60px 110px 30px;gap:6px;margin-bottom:6px;align-items:center;';
+  div.style.cssText='display:grid;grid-template-columns:1fr 80px 120px 30px;gap:6px;margin-bottom:6px;align-items:center;';
   div.innerHTML=
     '<input class="finp bl-add-head" placeholder="e.g. GST, Transportation..." value="'+(label||'')+'" style="margin:0;">'+
-    '<input class="finp bl-add-pct" type="number" step="0.01" min="0" max="100" placeholder="%" value="'+(pct||'')+'" style="margin:0;text-align:right;" oninput="blAddCalc(\''+id+'\')" title="Enter % to auto-calculate amount">'+
-    '<input class="finp bl-add-amt" type="number" placeholder="Amount \u20b9" style="margin:0;text-align:right;color:#2E7D32;font-weight:800;" oninput="blUpdateTotal()">'+
+    '<input class="finp bl-add-pct" type="number" step="0.01" min="0" max="100" placeholder="% of work" value="'+(pct||'')+'" style="margin:0;text-align:right;" oninput="blAddCalc(\''+id+'\')" title="Enter % to auto-calculate amount">'+
+    '<input class="finp bl-add-amt" type="number" placeholder="Amount \u20b9" style="margin:0;text-align:right;color:#2E7D32;font-weight:800;" oninput="blAddAmtManual(\''+id+'\')" >'+
     '<button onclick="blRemoveAddition(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
   container.appendChild(div);
   if(pct) blAddCalc(id);
@@ -5261,11 +5435,51 @@ function blAddCalc(id){
   if(amtInp) amtInp.value=Math.round(workAmt*pct/100);
   blUpdateTotal();
 }
+function blAddAmtManual(id){
+  // User typed amount directly — clear % field
+  var row=document.getElementById(id);
+  if(!row) return;
+  var pctInp=row.querySelector('.bl-add-pct');
+  if(pctInp) pctInp.value='';
+  row.setAttribute('data-add-pct','0');
+  blUpdateTotal();
+}
 function blAddPreset(label, type, pct){
   blAddAddition(label, type, pct);
 }
 function blRemoveAddition(id){
   BL_ADDITIONS=BL_ADDITIONS.filter(function(d){return d.id!==id;});
+  var el=document.getElementById(id);if(el)el.remove();
+  blUpdateTotal();
+}
+
+var BL_GST=[];
+function blAddGst(pct){
+  var id='gst-'+Date.now();
+  BL_GST.push({id:id});
+  var container=document.getElementById('bl-gst-list');
+  if(!container)return;
+  var div=document.createElement('div');
+  div.id=id;
+  div.className='bl-gst-row';
+  div.style.cssText='display:grid;grid-template-columns:1fr 80px 120px 30px;gap:6px;margin-bottom:6px;align-items:center;';
+  div.innerHTML=
+    '<input class="finp bl-gst-head" placeholder="GST description" value="'+(pct?'GST @'+pct+'%':'')+'" style="margin:0;">'+
+    '<input class="finp bl-gst-pct" type="number" step="0.01" min="0" max="100" placeholder="% of net" value="'+(pct||'')+'" style="margin:0;text-align:right;" oninput="blUpdateTotal()" title="% of net before GST">'+
+    '<input class="finp bl-gst-amt" type="number" placeholder="Amount ₹" style="margin:0;text-align:right;color:#2E7D32;font-weight:800;" oninput="blGstAmtManual(\''+id+'\')" >'+
+    '<button onclick="blRemoveGst(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
+  container.appendChild(div);
+  blUpdateTotal();
+}
+function blGstAmtManual(id){
+  var row=document.getElementById(id);
+  if(!row) return;
+  var pctInp=row.querySelector('.bl-gst-pct');
+  if(pctInp) pctInp.value='';
+  blUpdateTotal();
+}
+function blRemoveGst(id){
+  BL_GST=BL_GST.filter(function(g){return g.id!==id;});
   var el=document.getElementById(id);if(el)el.remove();
   blUpdateTotal();
 }
@@ -5279,11 +5493,11 @@ function blAddDeduction(){
   var div=document.createElement('div');
   div.id=id;
   div.className='bl-ded-row';
-  div.style.cssText='display:grid;grid-template-columns:1fr 60px 110px 30px;gap:6px;margin-bottom:6px;align-items:center;';
+  div.style.cssText='display:grid;grid-template-columns:1fr 80px 120px 30px;gap:6px;margin-bottom:6px;align-items:center;';
   div.innerHTML=
     '<input class="finp bl-ded-head" placeholder="e.g. Retention, Security Deposit..." style="margin:0;">'+
-    '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="%" style="margin:0;text-align:right;" oninput="blDedCalc(\''+id+'\')" title="Enter % to auto-calculate amount">'+
-    '<input class="finp bl-ded-amt" type="number" placeholder="Amount ₹" style="margin:0;text-align:right;" oninput="blUpdateTotal()">'+
+    '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="% of work" style="margin:0;text-align:right;" oninput="blDedCalc(\''+id+'\')" title="Enter % to auto-calculate amount">'+
+    '<input class="finp bl-ded-amt" type="number" placeholder="Amount \u20b9" style="margin:0;text-align:right;" oninput="blDedAmtManual(\''+id+'\')" >'+
     '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
   container.appendChild(div);
   blUpdateTotal();
@@ -5296,14 +5510,18 @@ function blDedCalc(id){
   var amtInp=row.querySelector('.bl-ded-amt');
   var pct=parseFloat(pctInp&&pctInp.value)||0;
   if(!pct){blUpdateTotal();return;}
-  // Base = work + additions (before deductions)
+  // Base = work sub-total only (same as addition base)
   var workEl=document.getElementById('bl-work-subtotal-amt');
   var workAmt=workEl?parseFloat(workEl.textContent.replace(/[^0-9.]/g,''))||0:0;
-  var addAmt=0;
-  document.querySelectorAll('.bl-add-row').forEach(function(r){
-    addAmt+=parseFloat((r.querySelector('.bl-add-amt')||{value:0}).value)||0;
-  });
-  if(amtInp) amtInp.value=Math.round((workAmt+addAmt)*pct/100);
+  if(amtInp) amtInp.value=Math.round(workAmt*pct/100);
+  blUpdateTotal();
+}
+function blDedAmtManual(id){
+  // User typed amount directly — clear % field
+  var row=document.getElementById(id);
+  if(!row) return;
+  var pctInp=row.querySelector('.bl-ded-pct');
+  if(pctInp) pctInp.value='';
   blUpdateTotal();
 }
 function blRemoveDeduction(id){
@@ -5433,7 +5651,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     BL_DEDUCTIONS=[];
     window._blWorkRows=null;
     closeSheet('ov-exec','sh-exec');
-    execRenderBills();
+    if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
@@ -5454,7 +5672,7 @@ async function execAddDeduction(billId){
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
     toast(head+' deduction added','success');
-    execRenderBills();
+    if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -5575,7 +5793,7 @@ async function execReleaseDeduction(billId,dedId){
       if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
       toast('Deduction released — ₹'+Number(ded.amount||0).toLocaleString('en-IN')+' on '+relDate,'success');
       closeSheet('ov-exec','sh-exec');
-      execRenderBills();
+      if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
     }catch(e){toast('Error: '+e.message,'error');}
   };
   sf.appendChild(cb);sf.appendChild(sb);
@@ -5813,7 +6031,7 @@ async function execSavePaymentAdv(projId,balAmount){
   var settled=advAdjTotal+cashAmt;
   toast('₹'+Math.round(settled).toLocaleString('en-IN')+' settled'+(advAdjTotal>0?' (incl. advance adj.)':''),'success');
   closeSheet('ov-exec','sh-exec');
-  execRenderBills();
+  if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
 }
 
 
@@ -6180,14 +6398,15 @@ async function execSaveAdvance(partyType,partyName,projId){
     if(res&&res[0]) WA_ADVANCES.push(res[0]);
     toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
     closeSheet('ov-exec','sh-exec');
-    execRenderBills();
+    if(WA_SUBTAB==='payments') execRenderPayments();
+    else execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
 async function execDelAdvance(id){
   if(!confirm('Delete this advance payment record?'))return;
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
-  execRenderBills();
+  if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
   try{await sbDelete('work_advances',id);}catch(e){console.error(e);}
   toast('Advance deleted','success');
 }
@@ -6201,7 +6420,7 @@ async function execDelBill(id){
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
-  execRenderBills();
+  if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
   try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
 }
 
@@ -6261,7 +6480,7 @@ async function execDeleteAdvAdj(billId,dedId){
     var bidx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(bidx>-1) WA_BILLS[bidx].deductions=deductions.length?JSON.stringify(deductions):null;
     toast('Advance adjustment deleted — balance restored','success');
-    execRenderBills();
+    if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -6276,14 +6495,14 @@ async function execDeleteDeduction(billId,dedId){
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx].deductions=deductions.length?JSON.stringify(deductions):null;
     toast('Deduction deleted','success');
-    execRenderBills();
+    if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
 async function execDelPayment(id){
   if(!confirm('Delete this payment record?'))return;
   WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.id!==id;});
-  execRenderBills();
+  if(WA_SUBTAB==='payments') execRenderPayments(); else execRenderBills();
   try{await sbDelete('work_payments',id);}catch(e){console.error(e);}
 }
 
