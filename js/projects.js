@@ -4295,7 +4295,7 @@ function execRenderBills(){
         '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+inr(g.allotAmt)+'</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;color:'+pctCol+';font-weight:700;">'+g.doneQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span><div style="font-size:9px;color:'+pctCol+';">('+pct+'% of allotted)</div></td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+inr(g.doneAmt)+'</td>'+
-        '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1A237E;">'+(g.billedAmt?inr(g.billedAmt):'—')+'<div style="font-size:9px;color:var(--text3);font-weight:400;">work only</div></td>'+
+        '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1A237E;">'+(g.billedAmt?inr(g.billedAmt):'—')+'</td>'+
       '</tr>'+indivRows;
     }).join('');
 
@@ -4536,23 +4536,17 @@ function execRenderBills(){
       '</div>';
     }).join(''):'';
 
-    var cardTop=
-      '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
-      '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
-        '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
-        '<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
-      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">'+
+    var tableHtml='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">'+
         '<thead><tr style="background:#F8FAFC;border-bottom:2px solid var(--border);">'+
           '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">RESOURCE / WORK</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED QTY</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED AMT</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;">UTILISED QTY</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#2E7D32;">PAYABLE AMT</th>'+
-          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1A237E;">BILLED</th>'+
+          '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1A237E;">WORK BILLED</th>'+
+
         '</tr></thead>'+
         '<tbody>'+allotRows+
-
         // Work sub-total row
         '<tr style="background:#EFF6FF;border-top:2px solid #1565C0;">'+
           '<td style="padding:7px 10px;font-size:11px;font-weight:800;color:#1565C0;">Work Sub-Total</td>'+
@@ -4603,48 +4597,43 @@ function execRenderBills(){
         '</tbody>'+
       '</table></div>';
 
-    var summaryBar=
-      '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0;border-top:2px solid var(--border);">'+
-        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">WORK BILLED</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(totalBilled)+'</div></div>'+
-        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">DEDUCTIONS</div><div style="font-size:12px;font-weight:900;color:#E65100;">'+inr(totalDeductions)+'</div></div>'+
-        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">NET PAYABLE</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</div></div>'+
-        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">ADVANCE</div><div style="font-size:12px;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</div></div>'+
-        '<div style="padding:8px 6px;text-align:center;border-right:1px solid var(--border);"><div style="font-size:9px;color:var(--text3);font-weight:700;">PAYMENT</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
-        '<div style="padding:8px 6px;text-align:center;"><div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE</div><div style="font-size:12px;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(balDue)+'</div></div>'+
+    // ── Summary column (middle) ──────────────────────────────────────────
+    var summaryCol=
+      '<div style="display:flex;flex-direction:column;gap:0;border-left:2px solid var(--border);border-right:2px solid var(--border);min-width:140px;">'+
+        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#F8FAFC;"><div style="font-size:9px;color:var(--text3);font-weight:700;">WORK BILLED</div><div style="font-size:13px;font-weight:900;color:#1A237E;">'+inr(totalBilled)+'</div></div>'+
+        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#FFF8F8;"><div style="font-size:9px;color:var(--text3);font-weight:700;">DEDUCTIONS</div><div style="font-size:13px;font-weight:900;color:#E65100;">'+inr(totalDeductions)+'</div></div>'+
+        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#EFF6FF;"><div style="font-size:9px;color:var(--text3);font-weight:700;">NET PAYABLE</div><div style="font-size:13px;font-weight:900;color:#1565C0;">'+inr(netPayable)+'</div></div>'+
+        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#FFF8E1;"><div style="font-size:9px;color:var(--text3);font-weight:700;">ADVANCE</div><div style="font-size:13px;font-weight:900;color:#F57F17;">'+inr(totalAdvance)+'</div></div>'+
+        '<div style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);background:#F0FFF4;"><div style="font-size:9px;color:var(--text3);font-weight:700;">PAYMENT</div><div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
+        '<div style="padding:8px 10px;text-align:center;background:'+(balDue>0?'#FFF3F3':'#F0FFF4')+';"><div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE</div><div style="font-size:13px;font-weight:900;color:'+(balDue>0?'#C62828':balDue<0?'#6A1B9A':'#2E7D32')+';">'+inr(Math.abs(balDue))+'</div></div>'+
       '</div>';
 
-    var advancesList=pAdvances.length?
-      '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
-        '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:8px;">ADVANCE PAYMENTS</div>'+
-        pAdvances.map(function(adv){
-          var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
-          var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
-          var resLabel=planRes.party_name||planRes.resource_category||allot.scope||'';
-          var adjSoFar=parseFloat(adv.adjusted_amount)||0;
-          var advTotal=parseFloat(adv.amount)||0;
-          var remaining=Math.max(0,advTotal-adjSoFar);
-          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F5F5F5;font-size:11px;">'+
-            '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;">'+(remaining<=0?'ADJ':'ADV')+'</span>'+
-            '<div style="flex:1;">'+(resLabel?'<b>'+resLabel+'</b> — ':'')+(adv.purpose||'')+
-              '<div style="font-size:9px;color:var(--text3);">'+adv.date+' '+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+
-                (adjSoFar?'<span style="color:#E65100;margin-left:6px;"> Adj: '+inr(adjSoFar)+'</span>':'')+
-                (remaining>0&&adjSoFar?'<span style="color:#2E7D32;margin-left:4px;"> Rem: '+inr(remaining)+'</span>':'')+
-              '</div>'+
-            '</div>'+
-            '<span style="font-weight:800;color:'+(remaining<=0?'#9E9E9E':'#F57F17')+';">'+inr(advTotal)+'</span>'+
-            '<button onclick="execEditAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#1565C0;cursor:pointer;font-size:13px;" title="Edit">&#9998;</button>'+
-            '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;" title="Delete">&#215;</button>'+
-          '</div>';
-        }).join('')+
-      '</div>':'';
+    // ── Bills & Payments column (right) ──────────────────────────────────
+    var rightCol=
+      '<div style="flex:1;min-width:260px;">'+
+        (billsList?
+          '<div style="padding:10px 12px;">'+
+            '<div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:8px;">BILLS &amp; PAYMENTS</div>'+
+            billsList+
+          '</div>':'<div style="padding:20px;text-align:center;color:var(--text3);font-size:11px;">No bills yet</div>')+
+      '</div>';
 
-    var billsSection=billsList?
-      '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
-        '<div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:8px;">BILLS &amp; PAYMENTS</div>'+
-        billsList+
-      '</div>':'';
+    // ── Three-column layout ───────────────────────────────────────────────
+    var threeCol=
+      '<div style="display:flex;border-top:2px solid var(--border);overflow-x:auto;">'+
+        '<div style="flex:2;min-width:300px;overflow-x:auto;">'+tableHtml+'</div>'+
+        summaryCol+
+        rightCol+
+      '</div>';
 
-    return cardTop + summaryBar + advancesList + billsSection + '</div>';
+    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
+      '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
+        '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
+        '<button onclick="execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
+      '</div>'+
+      threeCol+
+    '</div>';
   }).join('');
 }
 
