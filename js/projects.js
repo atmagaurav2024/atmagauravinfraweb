@@ -4461,7 +4461,8 @@ function execRenderBills(){
           (b.description?'<span style="font-size:10px;color:var(--text3);flex:1;">'+b.description+'</span>':'<span style="flex:1;"></span>')+
           '<button onclick="execOpenPayment(\''+b.id+'\',\''+key+'\',\''+projId+'\','+bBal+')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">+ Pay</button>'+
           '<button onclick="execAddDeduction(\''+b.id+'\')" style="background:#E65100;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">- Ded</button>'+
-          '<button onclick="execEditBill(\\''+b.id+'\\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#9998; Edit</button>'+
+          '<button onclick="execEditBill(\''+b.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#9998; Edit</button>'+
+
           '<button onclick="execDownloadBillPDF(\''+b.id+'\')" style="background:#558B2F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#11015; PDF</button>'+
           '<button onclick="execDelBill(\''+b.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;">&#215;</button>'+
         '</div>'+
@@ -5145,12 +5146,7 @@ async function execOpenBill(partyKey,projId){
     var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
     ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).forEach(function(d){
       partyHeldDed.push({billId:b.id,dedId:d.id,head:d.head,amount:d.amount,
-        bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date,released:false});
-    });
-    ded.filter(function(d){return d.released&&!d.is_advance_adj;}).forEach(function(d){
-      partyHeldDed.push({billId:b.id,dedId:d.id,head:d.head,amount:d.amount,
-        bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date,
-        released:true,released_date:d.released_date});
+        bill_ref:b.bill_ref||('Bill #'+b.bill_number),bill_date:b.bill_date});
     });
   });
 
@@ -5267,20 +5263,15 @@ async function execOpenBill(partyKey,projId){
     // Held deductions — show with Release button inside bill form
     (partyHeldDed.length?
       '<div style="background:#FFF3E0;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
-        '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;">&#9888; Deductions — Release to include in bill, click Unrelease to revert</div>'+
+        '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;">&#9888; Held Deductions (Release to include in this bill)</div>'+
         partyHeldDed.map(function(d){
-          var isRel=d.released?true:false;
-          return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid '+(isRel?'#C8E6C9':'#FFE0B2')+';">'+
-            '<span style="background:'+(isRel?'#E8F5E9':'#FFF3E0')+';color:'+(isRel?'#2E7D32':'#E65100')+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;flex-shrink:0;">'+(isRel?'REL':'DED')+'</span>'+
-            '<span style="flex:1;">'+d.head+' <span style="color:var(--text3);">'+d.bill_ref+(isRel?' · Released: '+fmtD(d.released_date||''):'')+'</span></span>'+
-            '<b style="color:'+(isRel?'#2E7D32':'#E65100')+'">&#8377;'+Number(d.amount||0).toLocaleString('en-IN')+'</b>'+
-            (isRel
-              ? '<button onclick="execUndoReleaseAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" '+
-                'style="font-size:9px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:4px;padding:2px 8px;cursor:pointer;font-weight:800;">'+
-                '&#215; Unrelease</button>'
-              : '<button onclick="execReleaseDeductionAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" '+
-                'style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:4px;padding:2px 8px;cursor:pointer;font-weight:800;">'+
-                '&#10003; Release</button>')+
+          return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid #FFE0B2;">'+
+            '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;flex-shrink:0;">DED</span>'+
+            '<span style="flex:1;">'+d.head+' <span style="color:var(--text3);">'+d.bill_ref+'</span></span>'+
+            '<b style="color:#E65100;">&#8377;'+Number(d.amount||0).toLocaleString('en-IN')+'</b>'+
+            '<button onclick="execReleaseDeductionAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" '+
+              'style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:4px;padding:2px 8px;cursor:pointer;font-weight:800;">'+
+              '&#10003; Release</button>'+
           '</div>';
         }).join('')+
       '</div>':'')+ 
@@ -6539,22 +6530,24 @@ function execEditBill(billId){
   var b=WA_BILLS.find(function(x){return x.id===billId;});
   if(!b){toast('Bill not found','error');return;}
   openSheet('ov-exec','sh-exec');
-  document.getElementById('exec-sheet-title').textContent='Edit Bill \u2014 '+(b.bill_ref||'Bill #'+b.bill_number);
+  document.getElementById('exec-sheet-title').textContent='Edit Bill — '+(b.bill_ref||'Bill #'+b.bill_number);
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:14px;">Edit Bill Details</div>'+
     '<label class="flbl">Bill Reference</label>'+
     '<input class="finp" id="ebl-ref" value="'+(b.bill_ref||'')+'">'+
     '<label class="flbl">Bill Date *</label>'+
     '<input class="finp" type="date" id="ebl-date" value="'+(b.bill_date||'')+'">'+
-    '<label class="flbl">Bill Amount (\u20b9) *</label>'+
+    '<label class="flbl">Bill Amount (₹) *</label>'+
     '<input class="finp" type="number" id="ebl-amount" value="'+(b.bill_amount||0)+'">'+
     '<label class="flbl">Description</label>'+
     '<input class="finp" id="ebl-desc" placeholder="Optional description" value="'+(b.description||'')+'">'+
-    '<div style="background:#FFF8E1;border:1px solid #FFE0B2;border-radius:8px;padding:10px;font-size:11px;color:#E65100;margin-top:8px;">\u26a0 Editing the bill amount does not recalculate work items or deductions. Use with care.</div>';
+    '<div style="background:#FFF8E1;border:1px solid #FFE0B2;border-radius:8px;padding:10px;font-size:11px;color:#E65100;margin-top:8px;">'+
+      '⚠ Editing the bill amount does not recalculate work items or deductions. Use with care.'+
+    '</div>';
   var foot=document.getElementById('exec-sheet-foot');
   if(foot) foot.innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-exec\',\'sh-exec\')">Cancel</button>'+
-    '<button class="btn btn-navy" onclick="execSaveBillEdit(\''+(b.id)+'\')">&#128190; Save Changes</button>';
+    '<button class="btn btn-navy" onclick="execSaveBillEdit(\''+b.id+'\')">&#128190; Save Changes</button>';
 }
 
 async function execSaveBillEdit(billId){
@@ -6576,6 +6569,7 @@ async function execSaveBillEdit(billId){
     toast('Bill updated successfully','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
+
 
 
 async function execDeleteAdvAdj(billId,dedId){
