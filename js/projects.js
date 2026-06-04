@@ -4461,6 +4461,7 @@ function execRenderBills(){
           (b.description?'<span style="font-size:10px;color:var(--text3);flex:1;">'+b.description+'</span>':'<span style="flex:1;"></span>')+
           '<button onclick="execOpenPayment(\''+b.id+'\',\''+key+'\',\''+projId+'\','+bBal+')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">+ Pay</button>'+
           '<button onclick="execAddDeduction(\''+b.id+'\')" style="background:#E65100;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">- Ded</button>'+
+          '<button onclick="execEditBill(\\''+b.id+'\\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#9998; Edit</button>'+
           '<button onclick="execDownloadBillPDF(\''+b.id+'\')" style="background:#558B2F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#11015; PDF</button>'+
           '<button onclick="execDelBill(\''+b.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;">&#215;</button>'+
         '</div>'+
@@ -6532,6 +6533,48 @@ async function execDelBill(id){
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
   if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
   try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
+}
+
+function execEditBill(billId){
+  var b=WA_BILLS.find(function(x){return x.id===billId;});
+  if(!b){toast('Bill not found','error');return;}
+  openSheet('ov-exec','sh-exec');
+  document.getElementById('exec-sheet-title').textContent='Edit Bill \u2014 '+(b.bill_ref||'Bill #'+b.bill_number);
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:14px;">Edit Bill Details</div>'+
+    '<label class="flbl">Bill Reference</label>'+
+    '<input class="finp" id="ebl-ref" value="'+(b.bill_ref||'')+'">'+
+    '<label class="flbl">Bill Date *</label>'+
+    '<input class="finp" type="date" id="ebl-date" value="'+(b.bill_date||'')+'">'+
+    '<label class="flbl">Bill Amount (\u20b9) *</label>'+
+    '<input class="finp" type="number" id="ebl-amount" value="'+(b.bill_amount||0)+'">'+
+    '<label class="flbl">Description</label>'+
+    '<input class="finp" id="ebl-desc" placeholder="Optional description" value="'+(b.description||'')+'">'+
+    '<div style="background:#FFF8E1;border:1px solid #FFE0B2;border-radius:8px;padding:10px;font-size:11px;color:#E65100;margin-top:8px;">\u26a0 Editing the bill amount does not recalculate work items or deductions. Use with care.</div>';
+  var foot=document.getElementById('exec-sheet-foot');
+  if(foot) foot.innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-exec\',\'sh-exec\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="execSaveBillEdit(\''+(b.id)+'\')">&#128190; Save Changes</button>';
+}
+
+async function execSaveBillEdit(billId){
+  var date=gv('ebl-date'), amount=parseFloat(gv('ebl-amount'));
+  if(!date){toast('Bill date required','warning');return;}
+  if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
+  var payload={
+    bill_date:date,
+    bill_amount:Math.round(amount),
+    bill_ref:gv('ebl-ref')||null,
+    description:gv('ebl-desc')||null
+  };
+  try{
+    await sbUpdate('work_bills',billId,payload);
+    var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
+    if(idx>-1) WA_BILLS[idx]=Object.assign({},WA_BILLS[idx],payload);
+    closeSheet('ov-exec','sh-exec');
+    execRenderBills();
+    toast('Bill updated successfully','success');
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 
