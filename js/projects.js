@@ -4450,8 +4450,10 @@ function execRenderBills(){
       var bAdvAdj=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       // Released deductions count as paid (released back to party)
       var bRelDed=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-      var bNet=(parseFloat(b.bill_amount)||0)-dedTotal;
-      var bBal=bNet-bPaidAmt-bRelDed;
+      // regularDedTotal computed here using activeDed (regularDeds defined later but same filter)
+      var regularDedTotal=activeDed.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var bNet=(parseFloat(b.bill_amount)||0)-regularDedTotal;
+      var bBal=bNet-bPaidAmt-bAdvAdj-bRelDed;
 
       // Parse additions
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
@@ -5786,8 +5788,9 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   var gstList=[];document.querySelectorAll('.bl-gst-row').forEach(function(row){var head=(row.querySelector('.bl-gst-head')||{value:''}).value.trim()||'GST';var pct=parseFloat((row.querySelector('.bl-gst-pct')||{value:0}).value)||0;var amt=parseFloat((row.querySelector('.bl-gst-amt')||{value:0}).value)||0;if(amt>0)gstList.push({id:'gst-'+Date.now(),head:head,amount:amt,type:'pct',pct:pct,is_gst:true});});
   var gstTotal=gstList.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
   additions=additions.concat(gstList);
-  var grossAmount=netBeforeGstSave+gstTotal;
-  amount=Math.max(0,grossAmount-adjAdvTotal);
+  // grossAmount = work + all additions (incl GST) — deductions stored separately
+  var grossAmount=workAmount+additionsTotal+gstTotal;
+  amount=Math.max(0,grossAmount-deductionsTotal-adjAdvTotal);
   if(grossAmount===0){toast('Bill amount cannot be zero','warning');return;}
 
   // Collect deductions (include advance adjustment as a deduction line)
@@ -7042,13 +7045,13 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
   var relDedTotal=additions.filter(function(a){return a.is_released_ded;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   var dedTotal=deductions.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var gstTotal=gstList.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
-  var grossAmount=workAmount+addTotal+relDedTotal-dedTotal+gstTotal-adjAdvTotal;
+  var grossAmount=workAmount+addTotal+relDedTotal+gstTotal; // true gross, deductions stored separately
   if(grossAmount<=0){toast('Bill amount cannot be zero','warning');return;}
 
   var payload={
     bill_date:date,
     bill_number:parseInt(gv('bl-no'))||billNo,
-    bill_amount:Math.round(workAmount+addTotal+relDedTotal-dedTotal+gstTotal),
+    bill_amount:Math.round(grossAmount),
     selected_items:JSON.stringify(selectedItems),
     additions:additions.length?JSON.stringify(additions):null,
     deductions:deductions.length?JSON.stringify(deductions):null,
