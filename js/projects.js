@@ -4513,7 +4513,7 @@ function execRenderBills(){
             '</tr>';
           }).join('')+
 
-          // Released deductions (retention released — payable)
+          // Released deductions (retention released — payable back to party)
           relDedAdds.map(function(a){
             return '<tr style="border-bottom:1px solid #EEE;background:#F0FFF4;">'+
               '<td style="padding:5px 8px;">'+
@@ -4524,11 +4524,35 @@ function execRenderBills(){
             '</tr>';
           }).join('')+
 
-          // Sub-total before GST (only if GST exists)
+          // Regular deductions
+          regularDeds.map(function(d){
+            return '<tr style="border-bottom:1px solid #EEE;background:#FFF8F8;">'+
+              '<td style="padding:5px 8px;">'+
+                '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>'+
+                d.head+
+                '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:3px;">&#215;</button>'+
+              '</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#E65100;">- '+inr(d.amount)+'</td>'+
+            '</tr>';
+          }).join('')+
+
+          // Released deductions from source bills — info only with undo option
+          relDed.map(function(d){
+            return '<tr style="border-bottom:1px solid #EEE;background:#F9FFF9;">'+
+              '<td style="padding:5px 8px;">'+
+                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">REL</span>'+
+                d.head+' <span style="font-size:9px;color:#2E7D32;">(Released: '+fmtD(d.released_date)+')</span>'+
+                '<button onclick="execUndoRelease(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">&#8635; Undo</button>'+
+              '</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#9E9E9E;font-size:9px;">held</td>'+
+            '</tr>';
+          }).join('')+
+
+          // Net before GST (shown when GST exists)
           (gstAdds.length?
             '<tr style="border-bottom:1px solid #C8E6C9;background:#E8F5E9;">'+
               '<td style="padding:5px 8px;font-weight:800;color:#1B5E20;">Net before GST</td>'+
-              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#1B5E20;">'+inr(workSubTotal+nonGstAddTotal+relDedAddTotal)+'</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#1B5E20;">'+inr(workSubTotal+nonGstAddTotal+relDedAddTotal-dedTotal)+'</td>'+
             '</tr>':'')+
 
           // GST rows
@@ -4542,39 +4566,14 @@ function execRenderBills(){
             '</tr>';
           }).join('')+
 
-          // Gross total (after all additions)
+          // Gross Bill Amount (after all additions, before deductions — only if additions exist)
           (adds.length?
             '<tr style="border-bottom:2px solid #1B5E20;background:#E8F5E9;">'+
               '<td style="padding:6px 8px;font-weight:900;color:#1B5E20;">Gross Bill Amount</td>'+
               '<td style="padding:6px 8px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(b.bill_amount)+'</td>'+
             '</tr>':'<tr style="border-bottom:2px solid #1B5E20;"><td colspan="2" style="padding:0;"></td></tr>')+
 
-          // Regular deductions
-          regularDeds.map(function(d){
-            return '<tr style="border-bottom:1px solid #EEE;background:#FFF8F8;">'+
-              '<td style="padding:5px 8px;">'+
-                '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>'+
-                d.head+
-                
-                '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:3px;">&#215;</button>'+
-              '</td>'+
-              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#E65100;">- '+inr(d.amount)+'</td>'+
-            '</tr>';
-          }).join('')+
-
-          // Released deductions — with undo release option
-          relDed.map(function(d){
-            return '<tr style="border-bottom:1px solid #EEE;background:#F9FFF9;">'+
-              '<td style="padding:5px 8px;">'+
-                '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">REL</span>'+
-                d.head+' <span style="font-size:9px;color:#2E7D32;">(Released: '+fmtD(d.released_date)+')</span>'+
-                '<button onclick="execUndoRelease(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">&#8635; Undo Release</button>'+
-              '</td>'+
-              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#2E7D32;">+ '+inr(d.amount)+'</td>'+
-            '</tr>';
-          }).join('')+
-
-          // Net payable row
+          // Net Payable (after deductions)
           '<tr style="border-bottom:2px solid #1565C0;background:#EFF6FF;">'+
             '<td style="padding:6px 8px;font-weight:900;color:#1565C0;">Net Payable</td>'+
             '<td style="padding:6px 8px;text-align:right;font-weight:900;color:#1565C0;">'+inr(bNet)+'</td>'+
