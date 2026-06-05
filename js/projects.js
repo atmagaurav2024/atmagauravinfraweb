@@ -4743,15 +4743,18 @@ function execRenderPaymentsCore(el, projId){
       '<div style="margin-bottom:10px;">'+
         '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:4px;">&#9951; ADVANCE ADJUSTED IN BILLS</div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+
-          '<tr style="background:#FFF8E1;"><th style="padding:4px 8px;text-align:left;">Bill Ref</th><th style="padding:4px 8px;text-align:left;">Bill Date</th><th style="padding:4px 8px;text-align:right;">Advance Adj.</th></tr>'+
+          '<tr style="background:#FFF8E1;"><th style="padding:4px 8px;text-align:left;">Bill Ref</th><th style="padding:4px 8px;text-align:left;">Bill Date</th><th style="padding:4px 8px;text-align:right;">Advance Adj.</th><th style="padding:4px 8px;"></th></tr>'+
           g.billAdjs.map(function(x){
             return '<tr style="border-bottom:1px solid #FFF3CD;">'+
               '<td style="padding:4px 8px;font-weight:700;">'+(x.bill.bill_ref||'Bill #'+x.bill.bill_number)+'</td>'+
               '<td style="padding:4px 8px;color:var(--text3);">'+fmtD(x.bill.bill_date)+'</td>'+
               '<td style="padding:4px 8px;text-align:right;font-weight:800;color:#F57F17;">'+inr(x.ded.amount)+'</td>'+
+              '<td style="padding:4px 8px;">'+
+                '<button onclick="execDeleteAdvAdj(\''+x.bill.id+'\',\''+x.ded.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;" title="Delete advance adjustment">&#215;</button>'+
+              '</td>'+
             '</tr>';
           }).join('')+
-          '<tr style="background:#FFF3CD;font-weight:800;"><td colspan="2" style="padding:5px 8px;">Total Adjusted</td><td style="padding:5px 8px;text-align:right;color:#F57F17;">'+inr(totalAdjusted)+'</td></tr>'+
+          '<tr style="background:#FFF3CD;font-weight:800;"><td colspan="3" style="padding:5px 8px;">Total Adjusted</td><td style="padding:5px 8px;text-align:right;color:#F57F17;">'+inr(totalAdjusted)+'</td></tr>'+
         '</table>'+
       '</div>':'';
 
@@ -5263,17 +5266,34 @@ async function execOpenBill(partyKey,projId){
     // Held deductions — show with Release button inside bill form
     (partyHeldDed.length?
       '<div style="background:#FFF3E0;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
-        '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;">&#9888; Held Deductions (Release to include in this bill)</div>'+
-        partyHeldDed.map(function(d){
-          return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid #FFE0B2;">'+
-            '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;flex-shrink:0;">DED</span>'+
-            '<span style="flex:1;">'+d.head+' <span style="color:var(--text3);">'+d.bill_ref+'</span></span>'+
-            '<b style="color:#E65100;">&#8377;'+Number(d.amount||0).toLocaleString('en-IN')+'</b>'+
-            '<button onclick="execReleaseDeductionAndReopen(\''+d.billId+'\',\''+d.dedId+'\',\''+partyKey+'\',\''+projId+'\')" '+
-              'style="font-size:9px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:4px;padding:2px 8px;cursor:pointer;font-weight:800;">'+
-              '&#10003; Release</button>'+
+        '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;">&#128274; Held Deductions — Release in this bill</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Check to release & include amount as payable in this bill</div>'+
+        partyHeldDed.map(function(d,di){
+          var uid='hd-'+d.billId+'-'+d.dedId;
+          return '<div id="'+uid+'-wrap" style="border:1px solid #FFE0B2;border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#FFFBF5;">'+
+            '<div style="display:flex;align-items:center;gap:8px;">'+
+              '<input type="checkbox" id="'+uid+'" class="bl-held-ded-chk"'+
+                ' data-bill-id="'+d.billId+'"'+
+                ' data-ded-id="'+d.dedId+'"'+
+                ' data-amount="'+Number(d.amount||0)+'"'+
+                ' data-head="'+d.head+'"'+
+                ' style="width:15px;height:15px;accent-color:#2E7D32;flex-shrink:0;"'+
+                ' onchange="blHeldDedToggle(\''+uid+'\');">'+
+              '<div style="flex:1;">'+
+                '<div style="font-size:11px;font-weight:800;color:#BF360C;">'+d.head+'</div>'+
+                '<div style="font-size:9px;color:var(--text3);">'+d.bill_ref+' | &#8377;'+Number(d.amount||0).toLocaleString('en-IN')+'</div>'+
+              '</div>'+
+              '<b style="color:#E65100;font-size:12px;">&#8377;'+Number(d.amount||0).toLocaleString('en-IN')+'</b>'+
+            '</div>'+
+            '<div id="'+uid+'-date" style="display:none;margin-top:8px;display:none;">'+
+              '<label style="font-size:9px;color:var(--text3);font-weight:700;">Release Date *</label>'+
+              '<input type="date" class="finp bl-held-ded-date" id="'+uid+'-dateinp"'+
+                ' style="margin:2px 0 0;font-size:11px;" value="'+new Date().toISOString().slice(0,10)+'"'+
+                ' onchange="blUpdateTotal()">'+
+            '</div>'+
           '</div>';
         }).join('')+
+        '<div style="font-size:9px;color:#E65100;margin-top:6px;">&#128161; Releasing adds the retention amount as payable in this bill and records the release date.</div>'+
       '</div>':'')+ 
     (totalRelDed>0?
       '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
@@ -5351,6 +5371,14 @@ function blAdvAdjAmtChange(inp, ai){
   blUpdateTotal();
 }
 
+function blHeldDedToggle(uid){
+  var chk=document.getElementById(uid);
+  var dateDiv=document.getElementById(uid+'-date');
+  if(!chk||!dateDiv) return;
+  dateDiv.style.display=chk.checked?'block':'none';
+  blUpdateTotal();
+}
+
 function blUpdateTotal(){
   var total=0;
   document.querySelectorAll('.bl-work-chk').forEach(function(chk){
@@ -5384,6 +5412,10 @@ function blUpdateTotal(){
   var relDedTotal=0;
   document.querySelectorAll('.bl-rel-ded-amt').forEach(function(inp){
     relDedTotal+=parseFloat(inp.value)||0;
+  });
+  // Also include inline-released held deductions (checked in this bill form)
+  document.querySelectorAll('.bl-held-ded-chk:checked').forEach(function(chk){
+    relDedTotal+=parseFloat(chk.getAttribute('data-amount'))||0;
   });
   var netBeforeGst=total+addTotal-dedTotal+relDedTotal; // work + additions - deductions + released
   // Update net before GST display
@@ -5607,6 +5639,22 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     var head=inp.getAttribute('data-head')||'Released Deduction';
     if(amt>0) additions.push({head:head,amount:amt,type:'flat',pct:0,is_released_ded:true});
   });
+  // Collect inline-released held deductions (checked in the form)
+  var inlineReleases=[];
+  document.querySelectorAll('.bl-held-ded-chk:checked').forEach(function(chk){
+    var billId=chk.getAttribute('data-bill-id');
+    var dedId=chk.getAttribute('data-ded-id');
+    var amt=parseFloat(chk.getAttribute('data-amount'))||0;
+    var head=chk.getAttribute('data-head')||'Released Deduction';
+    var uid=chk.id;
+    var dateInp=document.getElementById(uid+'-dateinp');
+    var relDate=dateInp?dateInp.value:date;
+    if(!relDate){toast('Release date required for: '+head,'warning');return;}
+    if(amt>0){
+      additions.push({head:head+' (Released)',amount:amt,type:'flat',pct:0,is_released_ded:true});
+      inlineReleases.push({billId:billId,dedId:dedId,relDate:relDate});
+    }
+  });
 
   // Collect adjusted advance IDs
   var adjAdvIds=[];
@@ -5716,7 +5764,27 @@ async function execSaveBill(partyType,partyName,projId,billNo){
         });
       }
     }
-    toast(billRef+' generated'+(adjAdvTotal?' — advance ₹'+adjAdvTotal.toLocaleString('en-IN')+' adjusted':''),'success');
+    // Process inline deduction releases — mark them as released in their source bills
+    if(inlineReleases.length){
+      for(var ri=0;ri<inlineReleases.length;ri++){
+        var ir=inlineReleases[ri];
+        var srcBill=WA_BILLS.find(function(b){return b.id===ir.billId;});
+        if(!srcBill) continue;
+        var srcDeds=[];try{srcDeds=srcBill.deductions?JSON.parse(srcBill.deductions):[];}catch(e){}
+        var srcDed=srcDeds.find(function(d){return d.id===ir.dedId;});
+        if(srcDed){
+          srcDed.released=true;
+          srcDed.released_date=ir.relDate;
+          srcDed.released_in_bill=res[0].id;
+          try{
+            await sbUpdate('work_bills',ir.billId,{deductions:JSON.stringify(srcDeds)});
+            var bidx=WA_BILLS.findIndex(function(b){return b.id===ir.billId;});
+            if(bidx>-1) WA_BILLS[bidx].deductions=JSON.stringify(srcDeds);
+          }catch(e){console.warn('Release update failed:',e);}
+        }
+      }
+    }
+    toast(billRef+' generated'+(adjAdvTotal?' — advance ₹'+adjAdvTotal.toLocaleString('en-IN')+' adjusted':'')+(inlineReleases.length?' — '+inlineReleases.length+' deduction(s) released':''),'success');
     BL_DEDUCTIONS=[];
     window._blWorkRows=null;
     closeSheet('ov-exec','sh-exec');
