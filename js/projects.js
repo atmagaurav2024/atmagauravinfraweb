@@ -4552,7 +4552,7 @@ function execRenderBills(){
           (gstAdds.length?
             '<tr style="border-bottom:1px solid #C8E6C9;background:#E8F5E9;">'+
               '<td style="padding:5px 8px;font-weight:800;color:#1B5E20;">Net before GST</td>'+
-              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#1B5E20;">'+inr(workSubTotal+nonGstAddTotal+relDedAddTotal-dedTotal)+'</td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#1B5E20;">'+inr(workSubTotal+nonGstAddTotal+relDedAddTotal-regularDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0))+'</td>'+
             '</tr>':'')+
 
           // GST rows
