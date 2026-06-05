@@ -4412,9 +4412,13 @@ function execRenderBills(){
     var totalBilledGross=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
     var totalAdditions=pBills.reduce(function(s,b){
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
-      return s+adds.reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
+      return s+adds.filter(function(a){return !a.is_released_ded;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
     },0);
-    var totalBilled=totalBilledGross-totalAdditions; // work sub-total only
+    var totalReleasedDedAdds=pBills.reduce(function(s,b){
+      var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      return s+adds.filter(function(a){return a.is_released_ded;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
+    },0);
+    var totalBilled=totalBilledGross-totalAdditions-totalReleasedDedAdds; // work sub-total only
     var totalDeductions=pBills.reduce(function(s,b){
       var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       return s+ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
@@ -4588,6 +4592,24 @@ function execRenderBills(){
           '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#2E7D32;">'+inr(totDoneAmt)+'</td>'+
           '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1A237E;">'+inr(totalBilled)+'</td>'+
         '</tr>'+
+        // Additions row (only if any additions exist)
+        (totalAdditions>0?
+          '<tr style="background:#F1F8E9;">'+
+            '<td colspan="5" style="padding:5px 10px;font-size:10px;font-weight:700;color:#2E7D32;">+ Additions (GST, Transport, etc.)</td>'+
+            '<td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:800;color:#2E7D32;">+'+inr(totalAdditions)+'</td>'+
+          '</tr>':'') +
+        // Deductions row (only if any deductions exist)
+        (totalDeductions>0?
+          '<tr style="background:#FFF3E0;">'+
+            '<td colspan="5" style="padding:5px 10px;font-size:10px;font-weight:700;color:#E65100;">− Deductions (Retention, Security Deposit, etc.)</td>'+
+            '<td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:800;color:#E65100;">−'+inr(totalDeductions)+'</td>'+
+          '</tr>':'') +
+        // Gross Billed Total row (only if additions or deductions exist)
+        ((totalAdditions>0||totalDeductions>0)?
+          '<tr style="background:#1A237E;">'+
+            '<td colspan="5" style="padding:7px 10px;font-size:11px;font-weight:900;color:white;">Gross Billed Total</td>'+
+            '<td style="padding:7px 10px;font-size:13px;text-align:right;font-weight:900;color:white;">'+inr(totalBilledGross)+'</td>'+
+          '</tr>':'') +
 
         '</tbody>'+
       '</table></div>';
