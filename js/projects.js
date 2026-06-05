@@ -6660,8 +6660,8 @@ async function execEditBill(billId){
       '<div id="bl-add-list"></div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
         '<button onclick="blAddAddition()" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom</button>'+
-        '<button onclick="blAddPreset('Transportation','flat',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Transport</button>'+
-        '<button onclick="blAddPreset('Loading / Unloading','flat',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Loading</button>'+
+        '<button onclick="blAddPreset(\'Transportation\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Transport</button>'+
+        '<button onclick="blAddPreset(\'Loading / Unloading\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Loading</button>'+
       '</div>'+
     '</div>'+
     '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:8px;">④ Deductions</div>'+
@@ -6761,22 +6761,6 @@ async function execEditBill(billId){
 }
 
 // Helper: pre-fill an addition row with existing amount (no auto-recalc)
-function blAddAddition(label, type, pct, existingAmt){
-  var id='add-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
-  BL_ADDITIONS.push({id:id});
-  var container=document.getElementById('bl-add-list');if(!container)return;
-  var div=document.createElement('div');
-  div.id=id;div.className='bl-add-row';
-  div.setAttribute('data-add-type',type||'flat');
-  div.setAttribute('data-add-pct',pct||0);
-  div.style.cssText='display:grid;grid-template-columns:1fr 80px 120px 30px;gap:6px;margin-bottom:6px;align-items:center;';
-  div.innerHTML=
-    '<input class="finp bl-add-head" placeholder="e.g. Transportation..." value="'+(label||'')+'" style="margin:0;">'+
-    '<input class="finp bl-add-pct" type="number" step="0.01" min="0" max="100" placeholder="%" value="'+(pct||'')+'" style="margin:0;text-align:right;" oninput="blAddCalc(''+id+'')" title="% of work">'+
-    '<input class="finp bl-add-amt" type="number" placeholder="Amount" value="'+(existingAmt||'')+'" style="margin:0;text-align:right;color:#2E7D32;font-weight:800;" oninput="blAddAmtManual(''+id+'')">'+
-    '<button onclick="blRemoveAddition(''+id+'')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>';
-  container.appendChild(div);
-}
 
 function blAddDeductionPrefill(head, amount){
   var id='ded-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
@@ -6787,9 +6771,9 @@ function blAddDeductionPrefill(head, amount){
   div.style.cssText='display:grid;grid-template-columns:1fr 80px 120px 30px;gap:6px;margin-bottom:6px;align-items:center;';
   div.innerHTML=
     '<input class="finp bl-ded-head" placeholder="e.g. Retention..." value="'+(head||'')+'" style="margin:0;">'+
-    '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="%" style="margin:0;text-align:right;" oninput="blDedCalc(''+id+'')" title="% of work">'+
-    '<input class="finp bl-ded-amt" type="number" placeholder="Amount" value="'+(amount||'')+'" style="margin:0;text-align:right;" oninput="blDedAmtManual(''+id+'')">'+
-    '<button onclick="blRemoveDeduction(''+id+'')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>';
+    '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="%" style="margin:0;text-align:right;" oninput="blDedCalc(\''+id+'\')" title="% of work">'+
+    '<input class="finp bl-ded-amt" type="number" placeholder="Amount" value="'+(amount||'')+'" style="margin:0;text-align:right;" oninput="blDedAmtManual(\''+id+'\')">'+
+    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>';
   container.appendChild(div);
 }
 
@@ -6803,8 +6787,8 @@ function blAddGstPrefill(head, pct, amount){
   div.innerHTML=
     '<input class="finp bl-gst-head" placeholder="GST description" value="'+(head||'')+'" style="margin:0;">'+
     '<input class="finp bl-gst-pct" type="number" step="0.01" min="0" max="100" placeholder="%" value="'+(pct||'')+'" style="margin:0;text-align:right;" oninput="blUpdateTotal()" title="% of net before GST">'+
-    '<input class="finp bl-gst-amt" type="number" placeholder="Amount" value="'+(amount||'')+'" style="margin:0;text-align:right;color:#2E7D32;font-weight:800;" oninput="blGstAmtManual(''+id+'')">'+
-    '<button onclick="blRemoveGst(''+id+'')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>';
+    '<input class="finp bl-gst-amt" type="number" placeholder="Amount" value="'+(amount||'')+'" style="margin:0;text-align:right;color:#2E7D32;font-weight:800;" oninput="blGstAmtManual(\''+id+'\')">'+
+    '<button onclick="blRemoveGst(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>';
   container.appendChild(div);
 }
 
