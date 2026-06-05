@@ -4410,15 +4410,19 @@ function execRenderBills(){
     var totalAdvance=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
     var pBills=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;});
     var totalBilledGross=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
+    var totalGst=pBills.reduce(function(s,b){
+      var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      return s+adds.filter(function(a){return a.is_gst;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
+    },0);
     var totalAdditions=pBills.reduce(function(s,b){
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
-      return s+adds.filter(function(a){return !a.is_released_ded;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
+      return s+adds.filter(function(a){return !a.is_released_ded&&!a.is_gst;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
     },0);
     var totalReleasedDedAdds=pBills.reduce(function(s,b){
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
       return s+adds.filter(function(a){return a.is_released_ded;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
     },0);
-    var totalBilled=totalBilledGross-totalAdditions-totalReleasedDedAdds; // work sub-total only
+    var totalBilled=totalBilledGross-totalAdditions-totalGst-totalReleasedDedAdds; // work sub-total only
     var totalDeductions=pBills.reduce(function(s,b){
       var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       return s+ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
@@ -4592,11 +4596,17 @@ function execRenderBills(){
           '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#2E7D32;">'+inr(totDoneAmt)+'</td>'+
           '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:900;color:#1A237E;">'+inr(totalBilled)+'</td>'+
         '</tr>'+
-        // Additions row (only if any additions exist)
+        // Additions row (only if any non-GST additions exist)
         (totalAdditions>0?
           '<tr style="background:#F1F8E9;">'+
-            '<td colspan="5" style="padding:5px 10px;font-size:10px;font-weight:700;color:#2E7D32;">+ Additions (GST, Transport, etc.)</td>'+
+            '<td colspan="5" style="padding:5px 10px;font-size:10px;font-weight:700;color:#2E7D32;">+ Additions (Transport, etc.)</td>'+
             '<td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:800;color:#2E7D32;">+'+inr(totalAdditions)+'</td>'+
+          '</tr>':'') +
+        // GST row (only if any GST exists)
+        (totalGst>0?
+          '<tr style="background:#E8F5E9;">'+
+            '<td colspan="5" style="padding:5px 10px;font-size:10px;font-weight:700;color:#1B5E20;">+ GST</td>'+
+            '<td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:800;color:#1B5E20;">+'+inr(totalGst)+'</td>'+
           '</tr>':'') +
         // Deductions row (only if any deductions exist)
         (totalDeductions>0?
@@ -4604,8 +4614,8 @@ function execRenderBills(){
             '<td colspan="5" style="padding:5px 10px;font-size:10px;font-weight:700;color:#E65100;">− Deductions (Retention, Security Deposit, etc.)</td>'+
             '<td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:800;color:#E65100;">−'+inr(totalDeductions)+'</td>'+
           '</tr>':'') +
-        // Gross Billed Total row (only if additions or deductions exist)
-        ((totalAdditions>0||totalDeductions>0)?
+        // Gross Billed Total row (only if any extras exist)
+        ((totalAdditions>0||totalGst>0||totalDeductions>0)?
           '<tr style="background:#1A237E;">'+
             '<td colspan="5" style="padding:7px 10px;font-size:11px;font-weight:900;color:white;">Gross Billed Total</td>'+
             '<td style="padding:7px 10px;font-size:13px;text-align:right;font-weight:900;color:white;">'+inr(totalBilledGross)+'</td>'+
@@ -6605,17 +6615,54 @@ async function execDelAdvance(id){
   toast('Advance deleted','success');
 }
 async function execDelBill(id){
+  var bill=WA_BILLS.find(function(b){return b.id===id;});
+  if(!bill) return;
   var hasPaid=WA_PAYMENTS.some(function(p){return p.bill_id===id;});
-  var msg=hasPaid?'This bill has payments.\\nDeleting will also delete all related payments. Continue?':'Delete this bill?';
-  if(!confirm(msg))return;
+  // Check for released deductions that came from other bills
+  var billDeds=[];try{billDeds=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
+  var billAdds=[];try{billAdds=bill.additions?JSON.parse(bill.additions):[];}catch(e){}
+  var hasRelDed=billAdds.some(function(a){return a.is_released_ded;});
+  var msgParts=['Delete this bill?'];
+  if(hasPaid) msgParts=['This bill has payments. Deleting will also delete all related payments.'];
+  if(hasRelDed) msgParts.push('This bill includes released deductions — those will be restored to held status.');
+  if(!confirm(msgParts.join('\n')+'\nContinue?')) return;
   if(hasPaid){
     var relPays=WA_PAYMENTS.filter(function(p){return p.bill_id===id;});
     for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);}catch(e){}
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
+  // Restore released deductions in source bills back to held status
+  if(hasRelDed){
+    // Find all other bills that have deductions marked released_in_bill===id
+    var srcBillsToUpdate={};
+    WA_BILLS.forEach(function(srcBill){
+      if(srcBill.id===id) return;
+      var srcDeds=[];try{srcDeds=srcBill.deductions?JSON.parse(srcBill.deductions):[];}catch(e){}
+      var changed=false;
+      srcDeds.forEach(function(d){
+        if(d.released && d.released_in_bill===id){
+          d.released=false;
+          delete d.released_date;
+          delete d.released_remarks;
+          delete d.released_in_bill;
+          changed=true;
+        }
+      });
+      if(changed){
+        srcBillsToUpdate[srcBill.id]=srcDeds;
+        // Update in memory
+        var bidx=WA_BILLS.findIndex(function(b){return b.id===srcBill.id;});
+        if(bidx>-1) WA_BILLS[bidx].deductions=JSON.stringify(srcDeds);
+      }
+    });
+    // Persist all source bill updates
+    for(var srcId in srcBillsToUpdate){
+      try{await sbUpdate('work_bills',srcId,{deductions:JSON.stringify(srcBillsToUpdate[srcId])});}catch(e){console.warn('Unrelease failed for bill',srcId,e);}
+    }
+  }
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
   if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
-  try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
+  try{await sbDelete('work_bills',id);toast('Bill deleted'+(hasRelDed?' — held deductions restored':''),'success');}catch(e){console.error(e);}
 }
 
 async function execEditBill(billId){
