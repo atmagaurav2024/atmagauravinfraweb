@@ -5696,7 +5696,9 @@ async function execSaveBill(partyType,partyName,projId,billNo){
       });
     }
   });
-  if(!selectedItems.length){toast('Select at least one work item','warning');return;}
+  var hasInlineRel=document.querySelectorAll('.bl-held-ded-chk:checked').length>0;
+  var hasRelDed=document.querySelectorAll('.bl-rel-ded-amt').length>0;
+  if(!selectedItems.length&&!hasInlineRel&&!hasRelDed){toast('Select at least one work item, or release a held deduction','warning');return;}
 
   // Gross = sum of selected items; Net = Gross - advance adjustment
   var workAmount=selectedItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
