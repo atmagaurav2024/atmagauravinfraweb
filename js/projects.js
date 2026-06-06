@@ -2824,6 +2824,15 @@ function execRenderSales(){
     }
     var billsHtml=sBills.map(function(b){
       var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+      var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var deds=[];try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      var nonGstAdds=adds.filter(function(a){return !a.is_gst;});
+      var gstAdds=adds.filter(function(a){return a.is_gst;});
+      var workAmt=items.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+      var addAmt=nonGstAdds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var gstAmt=gstAdds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var netBeforeGst=workAmt+addAmt-dedAmt;
       var collapseId='sb-'+b.id;
       return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;background:#F3E5F5;" '+
@@ -2831,7 +2840,7 @@ function execRenderSales(){
           '<span class="sb-arrow" style="color:#7B1FA2;font-size:11px;">&#9654;</span>'+
           '<div style="flex:1;">'+
             '<div style="font-size:13px;font-weight:800;">'+(b.bill_ref||'Sales Bill #'+b.bill_number)+'</div>'+
-            '<div style="font-size:10px;color:var(--text3);">'+fmtD(b.bill_date)+(b.description?' \u2014 '+b.description:'')+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">'+fmtD(b.bill_date)+'</div>'+
           '</div>'+
           '<div style="text-align:right;">'+
             '<div style="font-size:14px;font-weight:900;color:#4A148C;">'+inr(b.bill_amount)+'</div>'+
@@ -2850,7 +2859,35 @@ function execRenderSales(){
                 '<td style="padding:5px 10px;text-align:right;font-weight:800;color:#4A148C;">'+inr(x.amount)+'</td>'+
               '</tr>';
             }).join('')+
-            '<tr style="background:#F3E5F5;font-weight:900;"><td colspan="4" style="padding:6px 10px;">Total</td><td style="padding:6px 10px;text-align:right;color:#4A148C;">'+inr(b.bill_amount)+'</td></tr>'+
+            // Work sub-total row
+            (adds.length||deds.length?
+              '<tr style="background:#EDE7F6;"><td colspan="4" style="padding:5px 10px;font-weight:800;color:#7B1FA2;">Work Sub-Total</td><td style="padding:5px 10px;text-align:right;font-weight:900;color:#4A148C;">'+inr(workAmt)+'</td></tr>':'') +
+            // Non-GST additions
+            nonGstAdds.map(function(a){
+              return '<tr style="background:#F9FFF9;border-bottom:1px solid #EEE;">'+
+                '<td style="padding:5px 10px;"><span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:4px;">ADD</span>'+a.head+(a.type==='pct'?' ('+a.pct+'%)':'')+'</td>'+
+                '<td colspan="3"></td><td style="padding:5px 10px;text-align:right;font-weight:800;color:#2E7D32;">+'+inr(a.amount)+'</td>'+
+              '</tr>';
+            }).join('')+
+            // Deductions
+            deds.map(function(d){
+              return '<tr style="background:#FFF8F8;border-bottom:1px solid #EEE;">'+
+                '<td style="padding:5px 10px;"><span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:4px;">DED</span>'+d.head+'</td>'+
+                '<td colspan="3"></td><td style="padding:5px 10px;text-align:right;font-weight:800;color:#E65100;">-'+inr(d.amount)+'</td>'+
+              '</tr>';
+            }).join('')+
+            // Net before GST
+            (gstAdds.length?
+              '<tr style="background:#E8F5E9;border-bottom:1px solid #C8E6C9;"><td colspan="4" style="padding:5px 10px;font-weight:800;color:#1B5E20;">Net before GST</td><td style="padding:5px 10px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(netBeforeGst)+'</td></tr>':'') +
+            // GST rows
+            gstAdds.map(function(a){
+              return '<tr style="background:#F9FFF9;border-bottom:1px solid #EEE;">'+
+                '<td style="padding:5px 10px;"><span style="background:#E8F5E9;color:#1B5E20;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:4px;">GST</span>'+a.head+(a.pct?' ('+a.pct+'%)':'')+'</td>'+
+                '<td colspan="3"></td><td style="padding:5px 10px;text-align:right;font-weight:800;color:#1B5E20;">+'+inr(a.amount)+'</td>'+
+              '</tr>';
+            }).join('')+
+            // Gross total
+            '<tr style="background:#4A148C;"><td colspan="4" style="padding:6px 10px;font-weight:900;color:white;">Gross Total</td><td style="padding:6px 10px;text-align:right;font-weight:900;color:white;">'+inr(b.bill_amount)+'</td></tr>'+
           '</table>'+
         '</div>'+
       '</div>';
