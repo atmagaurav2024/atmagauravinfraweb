@@ -4265,6 +4265,7 @@ function execRenderBills(){
       var k=ptype+'::'+a.party_name;
       if(!partyMap[k]) partyMap[k]={name:a.party_name,type:ptype};
     });
+    var grandGross=0,grandPaid=0,grandBal=0;
     var summaryRows=Object.keys(partyMap).map(function(k){
       var p=partyMap[k];
       var col=tColS[p.type]||'#607D8B';
@@ -4287,6 +4288,7 @@ function execRenderBills(){
       var totalPaid=cashPaid+advAdj;
       var balDue=netPayable-totalPaid;
       var balColor=balDue>0?'#E65100':'#2E7D32';
+      grandGross+=grossBilled; grandPaid+=totalPaid; grandBal+=balDue;
       return '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:'+col+'10;display:flex;align-items:center;gap:8px;">'+
           '<span style="background:'+col+'20;color:'+col+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;">'+(tLblS[p.type]||p.type)+'</span>'+
@@ -4308,6 +4310,23 @@ function execRenderBills(){
         '</div>'+
       '</div>';
     }).join('');
+    var totalRow='<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;border:2px solid #1A237E;border-radius:10px;margin-top:4px;overflow:hidden;">'+
+      '<div style="padding:10px 14px;background:#1A237E;display:flex;align-items:center;">'+
+        '<span style="font-size:12px;font-weight:900;color:white;">TOTAL</span>'+
+      '</div>'+
+      '<div style="padding:10px 14px;background:#1A237E;text-align:right;">'+
+        '<div style="font-size:9px;color:rgba(255,255,255,0.7);font-weight:700;">GROSS BILLED</div>'+
+        '<div style="font-size:14px;font-weight:900;color:white;">'+inr(grandGross)+'</div>'+
+      '</div>'+
+      '<div style="padding:10px 14px;background:#1A237E;text-align:right;">'+
+        '<div style="font-size:9px;color:rgba(255,255,255,0.7);font-weight:700;">PAID + ADV ADJ</div>'+
+        '<div style="font-size:14px;font-weight:900;color:#B9F6CA;">'+inr(grandPaid)+'</div>'+
+      '</div>'+
+      '<div style="padding:10px 14px;background:#1A237E;text-align:right;">'+
+        '<div style="font-size:9px;color:rgba(255,255,255,0.7);font-weight:700;">BALANCE DUE</div>'+
+        '<div style="font-size:14px;font-weight:900;color:'+(grandBal>0?'#FFCC80':'#B9F6CA')+';">'+inr(Math.abs(grandBal))+(grandBal<0?' Cr':'')+'</div>'+
+      '</div>'+
+    '</div>';
     el.innerHTML=tabBar+'<div style="padding:10px;">'+
       '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;margin-bottom:4px;padding:0 2px;">'+
         '<div style="font-size:9px;font-weight:800;color:var(--text3);padding:4px 14px;">PARTY</div>'+
@@ -4316,6 +4335,7 @@ function execRenderBills(){
         '<div style="font-size:9px;font-weight:800;color:#E65100;text-align:right;padding:4px 14px;">BALANCE</div>'+
       '</div>'+
       (summaryRows||'<div style="text-align:center;padding:40px;color:var(--text3);">No data yet</div>')+
+      totalRow+
     '</div>';
     return;
   }
