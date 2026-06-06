@@ -7845,9 +7845,14 @@ function execPrintOrderCombined(docType, docNum){
   var orders=WA_ORDERS.filter(function(o){return o.doc_type===docType&&(o.doc_number||'?')===String(docNum);});
   if(!orders.length){toast('No orders found','warning');return;}
   var allots=orders.map(function(o){
-    var allot=WA_ALLOT.find(function(a){return a.id===o.allot_id;})||{};
-    return Object.assign({},allot,{qty:o.qty,rate:o.rate,unit:o.unit,party_name:o.party_name,exec_type:o.party_type,project_id:o.project_id,scope:allot.scope||''});
-  });
-  if(docType==='wo') generateCombinedDoc(allots,'WORK ORDER','#E65100','#FFF3E0');
-  else generateCombinedDoc(allots,'PURCHASE ORDER','#1565C0','#E3F2FD');
+    return WA_ALLOT.find(function(a){return a.id===o.allot_id;});
+  }).filter(Boolean);
+  if(!allots.length){toast('Allotments not found','warning');return;}
+  if(allots.length===1){
+    if(docType==='wo') generateWorkOrder(allots[0]);
+    else generatePurchaseOrder(allots[0]);
+  } else {
+    if(docType==='wo') generateCombinedDoc(allots,'WORK ORDER','#E65100','#FFF3E0');
+    else generateCombinedDoc(allots,'PURCHASE ORDER','#1565C0','#E3F2FD');
+  }
 }
