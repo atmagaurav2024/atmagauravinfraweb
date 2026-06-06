@@ -4696,9 +4696,23 @@ function execRenderBills(){
       bodyHtml=tableHtml;
     } else {
       // Generated Bills: bills list only
-      bodyHtml=billsList
+      var collapseId='gb-party-'+key.replace(/[^a-z0-9]/gi,'-');
+      var bodyInner=billsList
         ? '<div style="padding:10px 12px;">'+billsList+'</div>'
         : '<div style="padding:20px;text-align:center;color:var(--text3);font-size:11px;">No bills generated yet</div>';
+      bodyHtml='<div id="'+collapseId+'" style="display:none;">'+bodyInner+'</div>';
+    }
+
+    // Make party header clickable for genbills collapse
+    if(BILL_SUBTAB==='genbills'){
+      partyHeader='<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;" '+
+        'onclick="var b=document.getElementById(\'gb-party-'+key.replace(/[^a-z0-9]/gi,'-')+'\');if(b){var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';this.querySelector(\'.collapse-arrow\').textContent=open?\'\u25b6\':\'\u25bc\';}"'+
+        '>'+
+        '<span style="color:'+col+';font-size:11px;" class="collapse-arrow">&#9654;</span>'+
+        '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
+        '<button onclick="event.stopPropagation();execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
+      '</div>';
     }
 
     return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
@@ -4877,19 +4891,35 @@ function execRenderPaymentsCore(el, projId){
         '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Cash/Bank Paid</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalCash)+'</div></div>'+
       '</div>';
 
+    // Balance to be adjusted = balanceDue - pending advances
+    var pendingAdv=totalAdv-totalAdjusted;
+    var balFigure=balanceDue-pendingAdv;
+    var balFigureColor=balFigure>0?'#E65100':'#2E7D32';
+    var balFigureStr=(balFigure>0?'+':'')+inr(Math.abs(balFigure))+(balFigure<0?' Cr':'');
+    var payCollapseId='pay-party-'+key.replace(/[^a-z0-9]/gi,'-');
+
     return '<div style="background:#F8FAFC;border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;">'+
-      '<div style="background:'+col+';padding:10px 14px;display:flex;align-items:center;gap:10px;">'+
+      '<div style="background:'+col+';padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;" '+
+        'onclick="var b=document.getElementById(\''+payCollapseId+'\');if(b){var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';this.querySelector(\'.pay-arrow\').textContent=open?\'\u25b6\':\'\u25bc\';}"'+
+        '>'+
+        '<span class="pay-arrow" style="color:rgba(255,255,255,0.8);font-size:11px;">&#9654;</span>'+
         '<div style="flex:1;">'+
           '<div style="color:white;font-size:13px;font-weight:800;">'+g.name+'</div>'+
           '<div style="color:rgba(255,255,255,0.7);font-size:10px;">'+g.type+'</div>'+
         '</div>'+
-        '<button onclick="execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128181; + Advance</button>'+
+        '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:4px 10px;text-align:right;">'+
+          '<div style="font-size:9px;color:rgba(255,255,255,0.7);">Bal − Adv Pending</div>'+
+          '<div style="font-size:13px;font-weight:900;color:'+(balFigure>0?'#FFCC80':'#B9F6CA')+';">'+(balFigure>0?'+':'')+inr(Math.abs(balFigure))+(balFigure<0?' Cr':'')+'</div>'+
+        '</div>'+
+        '<button onclick="event.stopPropagation();execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128181; + Advance</button>'+
       '</div>'+
-      '<div style="padding:10px 12px;">'+
-        summaryHtml+
-        advHtml+
-        adjHtml+
-        cashHtml+
+      '<div id="'+payCollapseId+'" style="display:none;">'+
+        '<div style="padding:10px 12px;">'+
+          summaryHtml+
+          advHtml+
+          adjHtml+
+          cashHtml+
+        '</div>'+
       '</div>'+
     '</div>';
   }).join('');
