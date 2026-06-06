@@ -4203,7 +4203,7 @@ function billsToggleGroup(grpId){
   allRows.forEach(function(r){r.style.display=isHidden?'table-row':'none';});
 }
 
-var BILL_SUBTAB='abstract'; // abstract | genbills | payments
+var BILL_SUBTAB='summary'; // summary | abstract | genbills | payments
 
 function billsSubTab(tab){
   BILL_SUBTAB=tab;
@@ -4219,8 +4219,9 @@ function execRenderBills(){
 
   // ── Sub-tab bar ─────────────────────────────────────────────────────────
   var tabs=[
-    {id:'abstract',  label:'Abstract'},
-    {id:'genbills',  label:'Generated Bills'},
+    {id:'summary',   label:'Abstract'},
+    {id:'abstract',  label:'Generate Bills'},
+    {id:'genbills',  label:'View Bills'},
     {id:'payments',  label:'Payments'}
   ];
   var tabBar='<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;">'+
@@ -4234,6 +4235,72 @@ function execRenderBills(){
         'margin-bottom:-2px;">'+t.label+'</button>';
     }).join('')+
   '</div>';
+
+  // Summary (Abstract overview) sub-tab
+  if(BILL_SUBTAB==='summary'){
+    var inrL=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
+    var tLblS={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+    var tColS={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+    // Build party list from allotments
+    var partyMap={};
+    WA_ALLOT.filter(function(a){return a.project_id===projId;}).forEach(function(a){
+      var k=a.party_type+'::'+a.party_name;
+      if(!partyMap[k]) partyMap[k]={name:a.party_name,type:a.party_type};
+    });
+    var summaryRows=Object.keys(partyMap).map(function(k){
+      var p=partyMap[k];
+      var col=tColS[p.type]||'#607D8B';
+      var pBills=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;});
+      var grossBilled=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
+      var totalDedHeld=pBills.reduce(function(s,b){
+        var d=[];try{d=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+        return s+d.filter(function(x){return !x.released&&!x.is_advance_adj;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+      },0);
+      var netPayable=grossBilled-totalDedHeld;
+      var pPaid=WA_PAYMENTS.filter(function(py){return py.party_name===p.name&&py.party_type===p.type;});
+      var cashPaid=pPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
+      var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
+      var totalAdv=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var advAdj=pBills.reduce(function(s,b){
+        var d=[];try{d=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+        return s+d.filter(function(x){return x.is_advance_adj;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+      },0);
+      var advPending=Math.max(0,totalAdv-advAdj);
+      var totalPaidAll=cashPaid+advAdj+advPending; // paid + adj + pending adv
+      var balDue=netPayable-cashPaid-advAdj;
+      var balColor=balDue>0?'#E65100':'#2E7D32';
+      return '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">'+
+        '<div style="padding:10px 14px;background:'+col+'10;display:flex;align-items:center;gap:8px;">'+
+          '<span style="background:'+col+'20;color:'+col+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;">'+(tLblS[p.type]||p.type)+'</span>'+
+          '<span style="font-size:12px;font-weight:800;">'+p.name+'</span>'+
+        '</div>'+
+        '<div style="padding:10px 14px;background:#EFF6FF;text-align:right;border-left:1px solid var(--border);">'+
+          '<div style="font-size:9px;color:var(--text3);font-weight:700;">GROSS BILLED</div>'+
+          '<div style="font-size:13px;font-weight:900;color:#1A237E;">'+inrL(grossBilled)+'</div>'+
+          (totalDedHeld>0?'<div style="font-size:9px;color:#E65100;">−'+inrL(totalDedHeld)+' ded</div>':'')+ 
+        '</div>'+
+        '<div style="padding:10px 14px;background:#E8F5E9;text-align:right;border-left:1px solid var(--border);">'+
+          '<div style="font-size:9px;color:var(--text3);font-weight:700;">PAID + ADV</div>'+
+          '<div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inrL(cashPaid+advAdj)+'</div>'+
+          (advPending>0?'<div style="font-size:9px;color:#F57F17;">+'+inrL(advPending)+' adv pending</div>':'')+ 
+        '</div>'+
+        '<div style="padding:10px 14px;background:'+(balDue>0?'#FFF3E0':'#F1F8E9')+';text-align:right;border-left:1px solid var(--border);">'+
+          '<div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE DUE</div>'+
+          '<div style="font-size:13px;font-weight:900;color:'+balColor+';">'+inrL(Math.abs(balDue))+(balDue<0?' Cr':'')+'</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    el.innerHTML=tabBar+'<div style="padding:10px;">'+
+      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;margin-bottom:4px;padding:0 2px;">'+
+        '<div style="font-size:9px;font-weight:800;color:var(--text3);padding:4px 14px;">PARTY</div>'+
+        '<div style="font-size:9px;font-weight:800;color:#1A237E;text-align:right;padding:4px 14px;">GROSS BILLED</div>'+
+        '<div style="font-size:9px;font-weight:800;color:#2E7D32;text-align:right;padding:4px 14px;">PAID + ADV</div>'+
+        '<div style="font-size:9px;font-weight:800;color:#E65100;text-align:right;padding:4px 14px;">BALANCE</div>'+
+      '</div>'+
+      (summaryRows||'<div style="text-align:center;padding:40px;color:var(--text3);">No data yet</div>')+
+    '</div>';
+    return;
+  }
 
   // Payments sub-tab
   if(BILL_SUBTAB==='payments'){
@@ -4683,6 +4750,8 @@ function execRenderBills(){
         rightCol+
       '</div>';
 
+    var absCollapseId='abs-party-'+key.replace(/[^a-z0-9]/gi,'-');
+
     // Party header (shared)
     var partyHeader='<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
       '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
@@ -4692,8 +4761,16 @@ function execRenderBills(){
 
     var bodyHtml='';
     if(BILL_SUBTAB==='abstract'){
-      // Abstract: allotment table only
-      bodyHtml=tableHtml;
+      // Generate Bills tab: collapsible allotment table
+      partyHeader='<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;" '+
+        'onclick="var b=document.getElementById(\''+absCollapseId+'\');if(b){var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';this.querySelector(\'.abs-arrow\').textContent=open?\'\u25b6\':\'\u25bc\';}"'+
+        '>'+
+        '<span class="abs-arrow" style="color:'+col+';font-size:11px;">&#9654;</span>'+
+        '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
+        '<button onclick="event.stopPropagation();execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
+      '</div>';
+      bodyHtml='<div id="'+absCollapseId+'" style="display:none;">'+tableHtml+'</div>';
     } else {
       // Generated Bills: bills list only
       var collapseId='gb-party-'+key.replace(/[^a-z0-9]/gi,'-');
