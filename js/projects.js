@@ -2794,41 +2794,90 @@ function execRenderOrders(){
   }
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var fmtD=function(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
 
-  // Group by doc_type then sort by doc_number
-  var grouped={wo:[],po:[]};
-  WA_ORDERS.forEach(function(o){ if(o.doc_type==='wo') grouped.wo.push(o); else grouped.po.push(o); });
-  grouped.wo.sort(function(a,b){return (a.doc_number||'').localeCompare(b.doc_number||'');});
-  grouped.po.sort(function(a,b){return (a.doc_number||'').localeCompare(b.doc_number||'');});
+  // Group by doc_type + doc_number (one card per unique order number)
+  var byNum={wo:{},po:{}};
+  WA_ORDERS.forEach(function(o){
+    var type=o.doc_type==='wo'?'wo':'po';
+    var num=o.doc_number||'?';
+    if(!byNum[type][num]) byNum[type][num]={num:num,party_name:o.party_name,party_type:o.party_type,doc_date:o.doc_date,items:[],totalAmt:0};
+    byNum[type][num].items.push(o);
+    byNum[type][num].totalAmt+=parseFloat(o.amount)||0;
+  });
 
-  var renderGroup=function(orders, label, col){
-    if(!orders.length) return '';
+  var renderGroup=function(numMap, label, col, docPrefix){
+    var keys=Object.keys(numMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+    if(!keys.length) return '';
     return '<div style="margin-bottom:16px;">'+
-      '<div style="font-size:11px;font-weight:800;color:'+col+';padding:6px 0;margin-bottom:6px;border-bottom:2px solid '+col+'20;">'+label+' ('+orders.length+')</div>'+
-      orders.map(function(o){
-        var docNo=(o.doc_type==='wo'?'WO':'PO')+'-'+(o.doc_number||'?');
-        var fmtD=function(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
-        var col2=tCol[o.party_type]||'#37474F';
-        return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:10px;">'+
-          '<div style="width:42px;height:42px;border-radius:10px;background:'+col+'15;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">&#128196;</div>'+
-          '<div style="flex:1;min-width:0;">'+
-            '<div style="font-size:13px;font-weight:800;">'+docNo+'</div>'+
-            '<div style="font-size:11px;font-weight:700;color:var(--navy);">'+o.party_name+'</div>'+
-            '<div style="font-size:10px;color:var(--text3);">'+(tLbl[o.party_type]||o.party_type)+' &bull; '+(o.qty||0)+' '+(o.unit||'')+' @ &#8377;'+(o.rate||0)+' &bull; '+fmtD(o.doc_date)+'</div>'+
+      '<div style="font-size:11px;font-weight:800;color:'+col+';padding:6px 0;margin-bottom:6px;border-bottom:2px solid '+col+'20;">'+label+' ('+keys.length+')</div>'+
+      keys.map(function(num){
+        var g=numMap[num];
+        var docNo=docPrefix+'-'+num;
+        var collapseId='ord-'+docPrefix+'-'+num.replace(/[^a-z0-9]/gi,'-');
+        return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
+          // Header — clickable to expand
+          '<div style="padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;" '+
+            'onclick="var b=document.getElementById(\''+collapseId+'\');if(b){var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';this.querySelector(\'.ord-arrow\').textContent=open?\'\u25b6\':\'\u25bc\';}"'+
+          '>'+
+            '<div style="width:42px;height:42px;border-radius:10px;background:'+col+'15;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">&#128196;</div>'+
+            '<div style="flex:1;min-width:0;">'+
+              '<div style="display:flex;align-items:center;gap:6px;">'+
+                '<span class="ord-arrow" style="color:'+col+';font-size:11px;">&#9654;</span>'+
+                '<span style="font-size:13px;font-weight:800;">'+docNo+'</span>'+
+                '<span style="font-size:10px;background:'+col+'15;color:'+col+';padding:1px 6px;border-radius:4px;font-weight:700;">'+g.items.length+' item'+(g.items.length>1?'s':'')+'</span>'+
+              '</div>'+
+              '<div style="font-size:11px;font-weight:700;color:var(--navy);margin-top:2px;">'+g.party_name+'</div>'+
+              '<div style="font-size:10px;color:var(--text3);">'+(tLbl[g.party_type]||g.party_type)+' &bull; '+fmtD(g.doc_date)+'</div>'+
+            '</div>'+
+            '<div style="text-align:right;flex-shrink:0;">'+
+              '<div style="font-size:15px;font-weight:900;color:'+col+';">&#8377;'+Math.round(g.totalAmt).toLocaleString('en-IN')+'</div>'+
+            '</div>'+
           '</div>'+
-          '<div style="text-align:right;flex-shrink:0;">'+
-            '<div style="font-size:15px;font-weight:900;color:'+col+';">&#8377;'+Math.round(o.amount||0).toLocaleString('en-IN')+'</div>'+
-            '<button onclick="execPrintOrder(\''+o.id+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:4px;">&#128438; Print</button>'+
-            '<button onclick="execDeleteOrder(\''+o.id+'\')" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;margin-top:4px;margin-left:4px;">&#215;</button>'+
+          // Collapsed items list
+          '<div id="'+collapseId+'" style="display:none;border-top:1px solid var(--border);">'+
+            '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+
+              '<thead><tr style="background:#F8FAFC;">'+
+                '<th style="padding:6px 10px;text-align:left;color:var(--text3);">RESOURCE / ITEM</th>'+
+                '<th style="padding:6px 10px;text-align:right;color:var(--text3);">QTY</th>'+
+                '<th style="padding:6px 10px;text-align:right;color:var(--text3);">UNIT</th>'+
+                '<th style="padding:6px 10px;text-align:right;color:var(--text3);">RATE</th>'+
+                '<th style="padding:6px 10px;text-align:right;color:var(--text3);">AMOUNT</th>'+
+                '<th style="padding:6px 10px;"></th>'+
+              '</tr></thead>'+
+              '<tbody>'+
+              g.items.map(function(o){
+                var allot=WA_ALLOT.find(function(a){return a.id===o.allot_id;})||{};
+                var resName=allot.scope||o.resource_name||o.party_name||'';
+                return '<tr style="border-bottom:1px solid #F0F0F0;">'+
+                  '<td style="padding:6px 10px;font-weight:700;">'+resName+'</td>'+
+                  '<td style="padding:6px 10px;text-align:right;">'+(o.qty||0)+'</td>'+
+                  '<td style="padding:6px 10px;text-align:right;color:var(--text3);">'+(o.unit||'')+'</td>'+
+                  '<td style="padding:6px 10px;text-align:right;">&#8377;'+(o.rate||0)+'</td>'+
+                  '<td style="padding:6px 10px;text-align:right;font-weight:800;color:'+col+';">&#8377;'+Math.round(o.amount||0).toLocaleString('en-IN')+'</td>'+
+                  '<td style="padding:6px 10px;display:flex;gap:4px;justify-content:flex-end;">'+
+                    '<button onclick="event.stopPropagation();execPrintOrder(\''+o.id+'\')" style="background:'+col+';color:white;border:none;border-radius:5px;padding:2px 8px;font-size:9px;font-weight:800;cursor:pointer;">&#128438; Print</button>'+
+                    '<button onclick="event.stopPropagation();execDeleteOrder(\''+o.id+'\')" style="background:#FEE2E2;color:#C62828;border:none;border-radius:5px;padding:2px 6px;font-size:9px;font-weight:800;cursor:pointer;">&#215;</button>'+
+                  '</td>'+
+                '</tr>';
+              }).join('')+
+              '<tr style="background:#F8FAFC;font-weight:900;">'+
+                '<td colspan="4" style="padding:6px 10px;font-size:11px;">Total</td>'+
+                '<td style="padding:6px 10px;text-align:right;font-size:12px;color:'+col+';">&#8377;'+Math.round(g.totalAmt).toLocaleString('en-IN')+'</td>'+
+                '<td></td>'+
+              '</tr>'+
+              '</tbody>'+
+            '</table>'+
           '</div>'+
         '</div>';
       }).join('')+
     '</div>';
   };
 
-  el.innerHTML=
-    renderGroup(grouped.wo,'Work Orders','#E65100')+
-    renderGroup(grouped.po,'Purchase Orders','#1565C0');
+  el.innerHTML='<div style="padding:8px;">'+
+    renderGroup(byNum.wo,'Work Orders','#E65100','WO')+
+    renderGroup(byNum.po,'Purchase Orders','#1565C0','PO')+
+  '</div>';
 }
 
 function execPrintOrder(orderId){
