@@ -4251,23 +4251,31 @@ function execRenderBills(){
       var p=partyMap[k];
       var col=tColS[p.type]||'#607D8B';
       var pBills=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;});
+      // Gross billed = sum of bill_amount
       var grossBilled=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
+      // Held deductions (retention/security — not advance adj, not released)
       var totalDedHeld=pBills.reduce(function(s,b){
         var d=[];try{d=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
         return s+d.filter(function(x){return !x.released&&!x.is_advance_adj;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
       },0);
+      // Net payable = gross - held deductions
       var netPayable=grossBilled-totalDedHeld;
+      // Cash payments
       var pPaid=WA_PAYMENTS.filter(function(py){return py.party_name===p.name&&py.party_type===p.type;});
       var cashPaid=pPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
-      var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
-      var totalAdv=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      // Advance adjusted in bills
       var advAdj=pBills.reduce(function(s,b){
         var d=[];try{d=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
         return s+d.filter(function(x){return x.is_advance_adj;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
       },0);
+      // Advances given (total)
+      var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
+      var totalAdv=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var advPending=Math.max(0,totalAdv-advAdj);
-      var totalPaidAll=cashPaid+advAdj+advPending; // paid + adj + pending adv
-      var balDue=netPayable-cashPaid-advAdj;
+      // totalPaid = cash paid + advance adjusted in bills (mirrors payments tab formula)
+      var totalPaid=cashPaid+advAdj;
+      // Balance due = net payable - cash paid - advance adj
+      var balDue=netPayable-totalPaid;
       var balColor=balDue>0?'#E65100':'#2E7D32';
       return '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:'+col+'10;display:flex;align-items:center;gap:8px;">'+
@@ -4277,12 +4285,12 @@ function execRenderBills(){
         '<div style="padding:10px 14px;background:#EFF6FF;text-align:right;border-left:1px solid var(--border);">'+
           '<div style="font-size:9px;color:var(--text3);font-weight:700;">GROSS BILLED</div>'+
           '<div style="font-size:13px;font-weight:900;color:#1A237E;">'+inrL(grossBilled)+'</div>'+
-          (totalDedHeld>0?'<div style="font-size:9px;color:#E65100;">−'+inrL(totalDedHeld)+' ded</div>':'')+ 
+          (totalDedHeld>0?'<div style="font-size:9px;color:#E65100;margin-top:2px;">Net: '+inrL(netPayable)+'</div>':'')+ 
         '</div>'+
         '<div style="padding:10px 14px;background:#E8F5E9;text-align:right;border-left:1px solid var(--border);">'+
-          '<div style="font-size:9px;color:var(--text3);font-weight:700;">PAID + ADV</div>'+
-          '<div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inrL(cashPaid+advAdj)+'</div>'+
-          (advPending>0?'<div style="font-size:9px;color:#F57F17;">+'+inrL(advPending)+' adv pending</div>':'')+ 
+          '<div style="font-size:9px;color:var(--text3);font-weight:700;">PAID + ADV ADJ</div>'+
+          '<div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inrL(totalPaid)+'</div>'+
+          (advPending>0?'<div style="font-size:9px;color:#F57F17;margin-top:2px;">+'+inrL(advPending)+' adv pending</div>':'')+ 
         '</div>'+
         '<div style="padding:10px 14px;background:'+(balDue>0?'#FFF3E0':'#F1F8E9')+';text-align:right;border-left:1px solid var(--border);">'+
           '<div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE DUE</div>'+
