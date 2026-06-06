@@ -3408,7 +3408,7 @@ async function execGenBatchDoc(batchKey, docType){
     '</div></body></html>';
 
   openPDF(html);
-  setTimeout(function(){execRenderAllotted();},400);
+  setTimeout(function(){if(WA_SUBTAB==='orders')execRenderOrders();else execRenderAllotted();},400);
 }
 
 function execViewOrder(orderId){
@@ -4967,7 +4967,7 @@ async function execSaveAdvanceAllot(allotId,partyType,partyName,projId,resName,a
       closeSheet('ov-exec','sh-exec');
       // Download receipt automatically
       execAdvanceReceipt(res[0].id,resName,allotAmt);
-      execRenderAllotted();
+      if(WA_SUBTAB==='orders')execRenderOrders();else execRenderAllotted();
     }
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
@@ -5126,7 +5126,7 @@ async function execUpdateAdvance(advId){
 async function execDelAdvance(id){
   if(!confirm('Delete this advance payment record?'))return;
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
-  execRenderAllotted();
+  if(WA_SUBTAB==='orders')execRenderOrders();else execRenderAllotted();
   try{await sbDelete('work_advances',id);}catch(e){console.error(e);}
   toast('Advance deleted','success');
 }
