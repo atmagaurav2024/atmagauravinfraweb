@@ -4250,7 +4250,7 @@ function execRenderBills(){
     var summaryRows=Object.keys(partyMap).map(function(k){
       var p=partyMap[k];
       var col=tColS[p.type]||'#607D8B';
-      var pBills=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;});
+      var pBills=WA_BILLS.filter(function(b){return b.project_id===projId&&b.party_name===p.name&&b.party_type===p.type;});
       // Gross billed = sum of bill_amount
       var grossBilled=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
       // Held deductions (retention/security — not advance adj, not released)
@@ -4261,7 +4261,7 @@ function execRenderBills(){
       // Net payable = gross - held deductions
       var netPayable=grossBilled-totalDedHeld;
       // Cash payments
-      var pPaid=WA_PAYMENTS.filter(function(py){return py.party_name===p.name&&py.party_type===p.type;});
+      var pPaid=WA_PAYMENTS.filter(function(py){return py.project_id===projId&&py.party_name===p.name&&py.party_type===p.type;});
       var cashPaid=pPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
       // Advance adjusted in bills
       var advAdj=pBills.reduce(function(s,b){
@@ -4269,7 +4269,7 @@ function execRenderBills(){
         return s+d.filter(function(x){return x.is_advance_adj;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
       },0);
       // Advances given (total)
-      var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
+      var pAdvances=WA_ADVANCES.filter(function(a){return a.project_id===projId&&a.party_name===p.name&&a.party_type===p.type;});
       var totalAdv=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var advPending=Math.max(0,totalAdv-advAdj);
       // totalPaid = cash paid + advance adjusted in bills (mirrors payments tab formula)
