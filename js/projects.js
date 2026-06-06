@@ -1230,7 +1230,7 @@ async function planDelRes(id){
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
 var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[];
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
-var WA_SUBTAB='allot'; // allot | allotted | daily | bills
+var WA_SUBTAB='orders'; // allot | allotted | daily | bills | orders
 
 var WA_LOADED_PROJ = ''; // track which project data is currently loaded
 
@@ -1722,6 +1722,7 @@ async function execRenderSubTab(){
   else if(WA_SUBTAB==='orders') execRenderOrders();
   else if(WA_SUBTAB==='grn') grnRender();
   else if(WA_SUBTAB==='store') storeRender();
+  else if(WA_SUBTAB==='orders') execRenderOrders();
 }
 
 
@@ -3149,8 +3150,11 @@ async function execGenPartyDoc(partyKey, docType){
     '</body></html>';
 
   openPDF(html);
-  // Refresh view
-  setTimeout(function(){execRenderAllotted();},500);
+  // Refresh view — stay on current tab
+  setTimeout(function(){
+    if(WA_SUBTAB==='orders') execRenderOrders();
+    else execRenderAllotted();
+  },500);
 }
 
 
