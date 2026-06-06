@@ -4482,7 +4482,6 @@ function execRenderBills(){
           '<span style="font-size:10px;color:var(--text3);">'+fmtD(b.bill_date)+'</span>'+
           (b.description?'<span style="font-size:10px;color:var(--text3);flex:1;">'+b.description+'</span>':'<span style="flex:1;"></span>')+
           '<button onclick="execOpenPayment(\''+b.id+'\',\''+key+'\',\''+projId+'\','+bBal+')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">+ Pay</button>'+
-          '<button onclick="execAddDeduction(\''+b.id+'\')" style="background:#E65100;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">- Ded</button>'+
           '<button onclick="execEditBill(\''+b.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#9998; Edit</button>'+
 
           '<button onclick="execDownloadBillPDF(\''+b.id+'\')" style="background:#558B2F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:700;">&#11015; PDF</button>'+
