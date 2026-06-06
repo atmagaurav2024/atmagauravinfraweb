@@ -5851,6 +5851,8 @@ function blAdvAdjAmtChange(inp, ai){
 }
 
 function blUpdateTotal(){
+  // If on sales tab, delegate to slUpdateTotal
+  if(document.getElementById('sl-work-subtotal')){slUpdateTotal();return;}
   var total=0;
   document.querySelectorAll('.bl-work-chk').forEach(function(chk){
     if(chk.checked){
@@ -5988,7 +5990,7 @@ function blAddCalc(id){
   var pct=parseFloat(pctInp&&pctInp.value)||0;
   row.setAttribute('data-add-pct', pct);
   if(!pct){blUpdateTotal();return;}
-  var workEl=document.getElementById('bl-work-subtotal-amt');
+  var workEl=document.getElementById('bl-work-subtotal-amt')||document.getElementById('sl-work-subtotal');
   var workAmt=workEl?parseFloat(workEl.textContent.replace(/[^0-9.]/g,''))||0:0;
   if(amtInp) amtInp.value=Math.round(workAmt*pct/100);
   blUpdateTotal();
@@ -6069,7 +6071,7 @@ function blDedCalc(id){
   var pct=parseFloat(pctInp&&pctInp.value)||0;
   if(!pct){blUpdateTotal();return;}
   // Base = work sub-total only (same as addition base)
-  var workEl=document.getElementById('bl-work-subtotal-amt');
+  var workEl=document.getElementById('bl-work-subtotal-amt')||document.getElementById('sl-work-subtotal');
   var workAmt=workEl?parseFloat(workEl.textContent.replace(/[^0-9.]/g,''))||0:0;
   if(amtInp) amtInp.value=Math.round(workAmt*pct/100);
   blUpdateTotal();
