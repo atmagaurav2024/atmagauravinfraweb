@@ -1230,7 +1230,7 @@ async function planDelRes(id){
 
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
-var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[];
+var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[];
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_SUBTAB='orders'; // allot | allotted | daily | bills | orders
 
@@ -1294,7 +1294,8 @@ async function execLoadItems(silent){
       safe(sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'})),
       safe(sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+projId,order:'item_name.asc'})),
       safe(sbFetch('store_issue_log',{select:'*',filter:'project_id=eq.'+projId,order:'issue_date.desc'})),
-      safe(sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'}))
+      safe(sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'})),
+      safe(sbFetch('sales_bills',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'}))
     ]);
     WA_ITEMS=Array.isArray(r[0])?r[0]:[];
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -1310,6 +1311,7 @@ async function execLoadItems(silent){
     STORE_ITEMS=Array.isArray(r[9])?r[9]:[];
     STORE_ISSUE_LOG=Array.isArray(r[10])?r[10]:[];
     WA_ADVANCES=Array.isArray(r[11])?r[11]:[];
+    WA_SALES_BILLS=Array.isArray(r[12])?r[12]:[];
     STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
@@ -2815,7 +2817,7 @@ function execRenderSales(){
 
   if(SALES_SUBTAB==='viewbills'){
     // View generated sales bills
-    var sBills=WA_BILLS.filter(function(b){return b.project_id===projId&&b.bill_type==='sales';});
+    var sBills=WA_SALES_BILLS.filter(function(b){return b.project_id===projId;});
     if(!sBills.length){
       el.innerHTML=tabBar+'<div style="text-align:center;padding:40px;color:var(--text3);">No sales bills generated yet</div>';
       return;
@@ -2873,7 +2875,7 @@ function execRenderSales(){
 
   // Already billed qty per item (from existing sales bills)
   var prevBilledByItem={};
-  WA_BILLS.filter(function(b){return b.project_id===projId&&b.bill_type==='sales';}).forEach(function(b){
+  WA_SALES_BILLS.filter(function(b){return b.project_id===projId;}).forEach(function(b){
     var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
     si.forEach(function(x){prevBilledByItem[x.item_id]=(prevBilledByItem[x.item_id]||0)+(parseFloat(x.billed_qty)||0);});
   });
@@ -2904,6 +2906,7 @@ function execRenderSales(){
         '<div style="font-size:9px;color:'+pctCol+';">('+pct+'%)</div>'+
       '</td>'+
       '<td style="padding:8px 10px;text-align:right;font-size:10px;color:var(--text3);">'+prevBilled.toFixed(2).replace(/\.?0+$/,'')+'</td>'+
+      '<td style="padding:8px 10px;text-align:right;font-size:11px;color:#4A148C;font-weight:700;">'+inr(rate)+'</td>'+
       '<td style="padding:8px 10px;text-align:right;">'+
         '<input type="number" class="finp sl-qty-inp" data-item-id="'+item.id+'" data-rate="'+rate+'" '+
           'value="'+unbilledQty.toFixed(2).replace(/\.?0+$/,'')+'" min="0" step="0.01" '+
@@ -2915,7 +2918,7 @@ function execRenderSales(){
   }).join('');
 
   // Next bill number
-  var prevSalesBills=WA_BILLS.filter(function(b){return b.project_id===projId&&b.bill_type==='sales';});
+  var prevSalesBills=WA_SALES_BILLS.filter(function(b){return b.project_id===projId;});
   var nextBillNo=prevSalesBills.length+1;
 
   el.innerHTML=tabBar+
@@ -2944,6 +2947,7 @@ function execRenderSales(){
               '<th style="padding:7px 10px;font-size:9px;text-align:right;color:var(--text3);">BOQ QTY</th>'+
               '<th style="padding:7px 10px;font-size:9px;text-align:right;color:var(--text3);">DONE (DPR)</th>'+
               '<th style="padding:7px 10px;font-size:9px;text-align:right;color:var(--text3);">PREV BILLED</th>'+
+              '<th style="padding:7px 10px;font-size:9px;text-align:right;color:var(--text3);">RATE</th>'+
               '<th style="padding:7px 10px;font-size:9px;text-align:right;color:var(--text3);">BILL QTY</th>'+
               '<th style="padding:7px 10px;font-size:9px;text-align:right;color:#4A148C;">AMOUNT</th>'+
             '</tr></thead>'+
@@ -3007,25 +3011,22 @@ async function execSaveSalesBill(){
   if(!selectedItems.length){toast('Select at least one item with qty > 0','warning');return;}
 
   var totalAmt=selectedItems.reduce(function(s,x){return s+x.amount;},0);
-  var prevSalesBills=WA_BILLS.filter(function(b){return b.project_id===projId&&b.bill_type==='sales';});
+  var prevSalesBills=WA_SALES_BILLS.filter(function(b){return b.project_id===projId;});
   var nextBillNo=prevSalesBills.length+1;
   var billRef=ref||('SALES/'+new Date().getFullYear()+'/'+String(nextBillNo).padStart(4,'0'));
 
   try{
     toast('Saving...','info');
-    var res=await sbInsert('work_bills',{
+    var res=await sbInsert('sales_bills',{
       project_id:projId,
-      bill_type:'sales',
       bill_number:nextBillNo,
       bill_ref:billRef,
       bill_date:date,
       bill_amount:totalAmt,
-      selected_items:JSON.stringify(selectedItems),
-      party_type:'client',
-      party_name:'Client'
+      selected_items:JSON.stringify(selectedItems)
     });
     if(res&&res[0]){
-      WA_BILLS.push(res[0]);
+      WA_SALES_BILLS.push(res[0]);
       toast(billRef+' generated \u2014 '+'\u20b9'+totalAmt.toLocaleString('en-IN'),'success');
       SALES_SUBTAB='viewbills';
       execRenderSales();
@@ -3035,9 +3036,9 @@ async function execSaveSalesBill(){
 
 async function execDelSalesBill(id){
   if(!confirm('Delete this sales bill?')) return;
-  WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
+  WA_SALES_BILLS=WA_SALES_BILLS.filter(function(b){return b.id!==id;});
   execRenderSales();
-  try{await sbDelete('work_bills',id);}catch(e){console.error(e);}
+  try{await sbDelete('sales_bills',id);}catch(e){console.error(e);}
   toast('Sales bill deleted','success');
 }
 
