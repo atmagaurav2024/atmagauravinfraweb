@@ -4977,11 +4977,8 @@ function execRenderPaymentsCore(el, projId){
         '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Cash/Bank Paid</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalCash)+'</div></div>'+
       '</div>';
 
-    // Balance to be adjusted = balanceDue - pending advances
-    var pendingAdv=totalAdv-totalAdjusted;
-    var balFigure=balanceDue-pendingAdv;
-    var balFigureColor=balFigure>0?'#E65100':'#2E7D32';
-    var balFigureStr=(balFigure>0?'+':'')+inr(Math.abs(balFigure))+(balFigure<0?' Cr':'');
+    // Balance due = netPayable - cashPaid - advAdj (same as abstract tab)
+    var balFigure=balanceDue; // netPayable - totalPaid (cash + advAdj)
     var payCollapseId='pay-party-'+key.replace(/[^a-z0-9]/gi,'-');
 
     return '<div style="background:#F8FAFC;border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;">'+
@@ -4994,7 +4991,7 @@ function execRenderPaymentsCore(el, projId){
           '<div style="color:rgba(255,255,255,0.7);font-size:10px;">'+g.type+'</div>'+
         '</div>'+
         '<div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:4px 10px;text-align:right;">'+
-          '<div style="font-size:9px;color:rgba(255,255,255,0.7);">Bal − Adv Pending</div>'+
+          '<div style="font-size:9px;color:rgba(255,255,255,0.7);">Balance Due</div>'+
           '<div style="font-size:13px;font-weight:900;color:'+(balFigure>0?'#FFCC80':'#B9F6CA')+';">'+(balFigure>0?'+':'')+inr(Math.abs(balFigure))+(balFigure<0?' Cr':'')+'</div>'+
         '</div>'+
         '<button onclick="event.stopPropagation();execOpenAdvance(\''+key+'\',\''+projId+'\')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.5);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128181; + Advance</button>'+
