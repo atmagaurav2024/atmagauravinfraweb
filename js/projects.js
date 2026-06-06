@@ -2954,8 +2954,49 @@ function execRenderSales(){
             '<tbody>'+itemRows+'</tbody>'+
           '</table>'+
         '</div>'+
+        // Work sub-total bar
+        '<div style="padding:8px 14px;background:#EDE7F6;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
+          '<span style="font-size:11px;font-weight:800;color:#4A148C;">Work Sub-Total</span>'+
+          '<span style="font-size:13px;font-weight:900;color:#4A148C;" id="sl-work-subtotal">'+inr(0)+'</span>'+
+        '</div>'+
+
+        // Additions
+        '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
+          '<div style="font-size:10px;font-weight:800;color:#2E7D32;margin-bottom:6px;">+ ADDITIONS</div>'+
+          '<div id="bl-add-list"></div>'+
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+            '<button onclick="blAddAddition()" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom</button>'+
+            '<button onclick="blAddPreset(\'Transportation\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Transport</button>'+
+            '<button onclick="blAddPreset(\'Loading / Unloading\',\'flat\',0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;border-radius:5px;cursor:pointer;font-weight:700;">+ Loading</button>'+
+          '</div>'+
+        '</div>'+
+
+        // Deductions
+        '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
+          '<div style="font-size:10px;font-weight:800;color:#E65100;margin-bottom:6px;">− DEDUCTIONS</div>'+
+          '<div id="bl-ded-list"></div>'+
+          '<button onclick="blAddDeduction()" style="font-size:10px;padding:4px 10px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:5px;cursor:pointer;font-weight:700;">+ Add Deduction</button>'+
+        '</div>'+
+
+        // Net before GST
+        '<div style="padding:6px 14px;background:#F3E5F5;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
+          '<span style="font-size:10px;font-weight:800;color:#7B1FA2;">Net before GST</span>'+
+          '<span style="font-size:12px;font-weight:900;color:#7B1FA2;" id="bl-net-before-gst-amt">'+inr(0)+'</span>'+
+        '</div>'+
+
+        // GST
+        '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
+          '<div style="font-size:10px;font-weight:800;color:#1B5E20;margin-bottom:6px;">+ GST</div>'+
+          '<div id="bl-gst-list"></div>'+
+          '<div style="display:flex;gap:6px;">'+
+            '<button onclick="blAddGst(18)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 18%</button>'+
+            '<button onclick="blAddGst(12)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 12%</button>'+
+            '<button onclick="blAddGst(5)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 5%</button>'+
+          '</div>'+
+        '</div>'+
+
         '<div style="padding:10px 14px;border-top:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#F8F0FD;">'+
-          '<div style="font-size:13px;font-weight:900;color:#4A148C;">Total: <span id="sl-total">'+inr(0)+'</span></div>'+
+          '<div style="font-size:13px;font-weight:900;color:#4A148C;">Gross Total: <span id="sl-total">'+inr(0)+'</span></div>'+
           '<button onclick="execSaveSalesBill()" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:800;cursor:pointer;">&#128203; Generate Sales Bill</button>'+
         '</div>'+
       '</div>'+
@@ -2967,7 +3008,7 @@ function execRenderSales(){
 
 function slUpdateTotal(){
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:0});};
-  var total=0;
+  var workTotal=0;
   document.querySelectorAll('.sl-qty-inp').forEach(function(inp){
     var itemId=inp.getAttribute('data-item-id');
     var rate=parseFloat(inp.getAttribute('data-rate'))||0;
@@ -2976,10 +3017,38 @@ function slUpdateTotal(){
     var amt=Math.round(qty*rate);
     var amtEl=document.getElementById('sl-amt-'+itemId);
     if(amtEl) amtEl.textContent=inr(amt);
-    total+=amt;
+    workTotal+=amt;
   });
+  var wsTot=document.getElementById('sl-work-subtotal');
+  if(wsTot) wsTot.textContent=inr(workTotal);
+  // Additions
+  var addTotal=0;
+  document.querySelectorAll('.bl-add-row').forEach(function(row){
+    var type=row.getAttribute('data-add-type')||'flat';
+    var pct=parseFloat(row.getAttribute('data-add-pct'))||0;
+    var amtInp=row.querySelector('.bl-add-amt');
+    if(type==='pct'){var calcAmt=Math.round(workTotal*pct/100);if(amtInp){amtInp.value=calcAmt;amtInp.setAttribute('readonly','true');}addTotal+=calcAmt;}
+    else{addTotal+=parseFloat(amtInp&&amtInp.value)||0;}
+  });
+  // Deductions
+  var dedTotal=0;
+  document.querySelectorAll('.bl-ded-amt').forEach(function(inp){dedTotal+=parseFloat(inp.value)||0;});
+  // Net before GST
+  var netBeforeGst=workTotal+addTotal-dedTotal;
+  var nbgEl=document.getElementById('bl-net-before-gst-amt');
+  if(nbgEl) nbgEl.textContent=inr(Math.round(netBeforeGst));
+  // GST
+  var gstTotal=0;
+  document.querySelectorAll('.bl-gst-row').forEach(function(row){
+    var pctInp=row.querySelector('.bl-gst-pct');
+    var amtInp=row.querySelector('.bl-gst-amt');
+    var pct=parseFloat(pctInp&&pctInp.value)||0;
+    if(pct&&amtInp){var calcAmt=Math.round(netBeforeGst*pct/100);amtInp.value=calcAmt;}
+    gstTotal+=parseFloat(amtInp&&amtInp.value)||0;
+  });
+  var grossTotal=netBeforeGst+gstTotal;
   var totEl=document.getElementById('sl-total');
-  if(totEl) totEl.textContent=inr(total);
+  if(totEl) totEl.textContent=inr(Math.round(grossTotal));
 }
 
 async function execSaveSalesBill(){
@@ -3010,7 +3079,35 @@ async function execSaveSalesBill(){
 
   if(!selectedItems.length){toast('Select at least one item with qty > 0','warning');return;}
 
-  var totalAmt=selectedItems.reduce(function(s,x){return s+x.amount;},0);
+  // Collect additions
+  var additions=[];
+  document.querySelectorAll('.bl-add-row').forEach(function(row){
+    var head=(row.querySelector('.bl-add-head')||{value:''}).value.trim()||'Addition';
+    var type=row.getAttribute('data-add-type')||'flat';
+    var pct=parseFloat(row.getAttribute('data-add-pct'))||0;
+    var amt=parseFloat((row.querySelector('.bl-add-amt')||{value:0}).value)||0;
+    if(amt>0) additions.push({head:head,type:type,pct:pct,amount:amt});
+  });
+  // Collect deductions
+  var deductions=[];
+  document.querySelectorAll('#bl-ded-list > div').forEach(function(row){
+    var head=(row.querySelector('.bl-ded-head')||{value:''}).value.trim();
+    var amt=parseFloat((row.querySelector('.bl-ded-amt')||{value:0}).value)||0;
+    if(head&&amt>0) deductions.push({head:head,amount:amt});
+  });
+  // Collect GST
+  document.querySelectorAll('.bl-gst-row').forEach(function(row){
+    var head=(row.querySelector('.bl-gst-head')||{value:''}).value.trim()||'GST';
+    var pct=parseFloat((row.querySelector('.bl-gst-pct')||{value:0}).value)||0;
+    var amt=parseFloat((row.querySelector('.bl-gst-amt')||{value:0}).value)||0;
+    if(amt>0) additions.push({head:head,type:'pct',pct:pct,amount:amt,is_gst:true});
+  });
+
+  var workAmt=selectedItems.reduce(function(s,x){return s+x.amount;},0);
+  var addAmt=additions.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var gstAmt=additions.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var dedAmt=deductions.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var totalAmt=workAmt+addAmt+gstAmt-dedAmt;
   var prevSalesBills=WA_SALES_BILLS.filter(function(b){return b.project_id===projId;});
   var nextBillNo=prevSalesBills.length+1;
   var billRef=ref||('SALES/'+new Date().getFullYear()+'/'+String(nextBillNo).padStart(4,'0'));
@@ -3023,10 +3120,13 @@ async function execSaveSalesBill(){
       bill_ref:billRef,
       bill_date:date,
       bill_amount:totalAmt,
-      selected_items:JSON.stringify(selectedItems)
+      selected_items:JSON.stringify(selectedItems),
+      additions:additions.length?JSON.stringify(additions):null,
+      deductions:deductions.length?JSON.stringify(deductions):null
     });
     if(res&&res[0]){
       WA_SALES_BILLS.push(res[0]);
+      BL_DEDUCTIONS=[];BL_GST=[];
       toast(billRef+' generated \u2014 '+'\u20b9'+totalAmt.toLocaleString('en-IN'),'success');
       SALES_SUBTAB='viewbills';
       execRenderSales();
