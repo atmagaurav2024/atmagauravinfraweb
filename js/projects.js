@@ -4244,8 +4244,9 @@ function execRenderBills(){
     // Build party list from allotments
     var partyMap={};
     WA_ALLOT.filter(function(a){return a.project_id===projId;}).forEach(function(a){
-      var k=a.party_type+'::'+a.party_name;
-      if(!partyMap[k]) partyMap[k]={name:a.party_name,type:a.party_type};
+      var ptype=a.exec_type||a.party_type||'';
+      var k=ptype+'::'+a.party_name;
+      if(!partyMap[k]) partyMap[k]={name:a.party_name,type:ptype};
     });
     var summaryRows=Object.keys(partyMap).map(function(k){
       var p=partyMap[k];
