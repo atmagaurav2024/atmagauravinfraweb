@@ -1230,7 +1230,7 @@ async function planDelRes(id){
 
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
-var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[];
+var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[],WA_SALES_PAYMENTS=[];
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_SUBTAB='orders'; // allot | allotted | daily | bills | orders
 
@@ -1295,7 +1295,8 @@ async function execLoadItems(silent){
       safe(sbFetch('store_inventory',{select:'*',filter:'project_id=eq.'+projId,order:'item_name.asc'})),
       safe(sbFetch('store_issue_log',{select:'*',filter:'project_id=eq.'+projId,order:'issue_date.desc'})),
       safe(sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'})),
-      safe(sbFetch('sales_bills',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'}))
+      safe(sbFetch('sales_bills',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
+      safe(sbFetch('sales_payments',{select:'*',filter:'project_id=eq.'+projId,order:'payment_date.desc'}))
     ]);
     WA_ITEMS=Array.isArray(r[0])?r[0]:[];
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -1312,6 +1313,7 @@ async function execLoadItems(silent){
     STORE_ISSUE_LOG=Array.isArray(r[10])?r[10]:[];
     WA_ADVANCES=Array.isArray(r[11])?r[11]:[];
     WA_SALES_BILLS=Array.isArray(r[12])?r[12]:[];
+    WA_SALES_PAYMENTS=Array.isArray(r[13])?r[13]:[];
     STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
@@ -2791,6 +2793,238 @@ function execRegenDoc(allotId, docType){
 
 // ── Daily Progress ─────────────────────────────────────────────────────
 // ── Orders Tab ─────────────────────────────────────────────────────────
+async function execSalesBillPay(billId, billAmt){
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var paidAmt=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.sales_bill_id===billId;}).reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+  var balDue=Math.max(0,(parseFloat(billAmt)||0)-paidAmt);
+  document.getElementById('exec-sheet-title').textContent='Record Payment';
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+      '<div style="font-weight:800;color:#2E7D32;font-size:12px;">Balance Due: ₹'+balDue.toLocaleString('en-IN')+'</div>'+
+    '</div>'+
+    '<label class="flbl">Payment Date *</label>'+
+    '<input type="date" id="spy-date" class="finp" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Amount *</label>'+
+    '<input type="number" id="spy-amount" class="finp" value="'+balDue+'" step="0.01" min="0">'+
+    '<label class="flbl">Mode</label>'+
+    '<select id="spy-mode" class="fsel"><option value="">Select</option><option>NEFT</option><option>RTGS</option><option>IMPS</option><option>Cheque</option><option>Cash</option><option>UPI</option></select>'+
+    '<label class="flbl">Reference / UTR</label>'+
+    '<input type="text" id="spy-ref" class="finp" placeholder="UTR / Cheque No.">'+
+    '<label class="flbl">Remarks</label>'+
+    '<input type="text" id="spy-remarks" class="finp" placeholder="Optional remarks">';
+  var foot=document.getElementById('exec-sheet-foot');foot.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#2E7D32;color:white;';
+  sb.innerHTML='✓ Save Payment';
+  sb.onclick=function(){execSaveSalesPayment(billId,projId);};
+  foot.appendChild(cb);foot.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execSaveSalesPayment(billId,projId){
+  var date=(document.getElementById('spy-date')||{value:''}).value;
+  var amount=parseFloat((document.getElementById('spy-amount')||{value:0}).value)||0;
+  var mode=(document.getElementById('spy-mode')||{value:''}).value;
+  var ref=(document.getElementById('spy-ref')||{value:''}).value.trim();
+  var remarks=(document.getElementById('spy-remarks')||{value:''}).value.trim();
+  if(!date){toast('Payment date required','warning');return;}
+  if(!amount||amount<=0){toast('Enter payment amount','warning');return;}
+  try{
+    var res=await sbInsert('sales_payments',{
+      project_id:projId,sales_bill_id:billId,
+      payment_date:date,amount:amount,
+      payment_mode:mode||null,reference:ref||null,remarks:remarks||null
+    });
+    if(res&&res[0]){
+      if(!WA_SALES_PAYMENTS) WA_SALES_PAYMENTS=[];
+      WA_SALES_PAYMENTS.push(res[0]);
+      toast('₹'+amount.toLocaleString('en-IN')+' payment recorded','success');
+      closeSheet('ov-exec','sh-exec');
+      execRenderSales();
+    }
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+async function execDelSalesPayment(id){
+  if(!confirm('Delete this payment?')) return;
+  WA_SALES_PAYMENTS=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.id!==id;});
+  execRenderSales();
+  try{await sbDelete('sales_payments',id);}catch(e){console.error(e);}
+  toast('Payment deleted','success');
+}
+
+async function execEditSalesBill(billId){
+  var b=WA_SALES_BILLS.find(function(x){return x.id===billId;});
+  if(!b){toast('Bill not found','warning');return;}
+  var projId=b.project_id;
+  var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+  var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+  var deds=[];try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+
+  var itemRows=items.map(function(x){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0F0F0;">'+
+      '<div style="flex:1;font-size:11px;">'+(x.item_code?'<b>['+x.item_code+']</b> ':'')+x.item_name+'</div>'+
+      '<div style="font-size:10px;color:var(--text3);">'+inr(x.rate)+'/'+x.unit+'</div>'+
+      '<input type="number" class="finp sbe-qty" data-item-id="'+x.item_id+'" data-rate="'+x.rate+'" value="'+x.billed_qty+'" step="0.01" min="0" style="width:80px;text-align:right;" oninput="sbeUpdateTotal()">'+
+      '<div style="font-size:11px;font-weight:800;color:#4A148C;width:80px;text-align:right;" id="sbe-amt-'+x.item_id+'">'+inr(x.amount)+'</div>'+
+    '</div>';
+  }).join('');
+
+  document.getElementById('exec-sheet-title').textContent='Edit Sales Bill';
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<label class="flbl">Bill Date</label>'+
+    '<input type="date" id="sbe-date" class="finp" value="'+(b.bill_date||'')+'">'+
+    '<label class="flbl">Bill Ref</label>'+
+    '<input type="text" id="sbe-ref" class="finp" value="'+(b.bill_ref||'')+'">'+
+    '<div style="margin:10px 0;font-size:10px;font-weight:800;color:var(--text3);">BOQ ITEMS</div>'+
+    itemRows+
+    '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;font-weight:900;color:#4A148C;">'+
+      '<span>Total</span><span id="sbe-total">'+inr(b.bill_amount)+'</span>'+
+    '</div>';
+  var foot=document.getElementById('exec-sheet-foot');foot.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#4A148C;color:white;';
+  sb.innerHTML='✓ Save Changes';
+  sb.onclick=function(){execSaveSalesBillEdit(billId,adds,deds);};
+  foot.appendChild(cb);foot.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+function sbeUpdateTotal(){
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+  var total=0;
+  document.querySelectorAll('.sbe-qty').forEach(function(inp){
+    var rate=parseFloat(inp.getAttribute('data-rate'))||0;
+    var qty=parseFloat(inp.value)||0;
+    var amt=Math.round(qty*rate);
+    var itemId=inp.getAttribute('data-item-id');
+    var amtEl=document.getElementById('sbe-amt-'+itemId);
+    if(amtEl) amtEl.textContent=inr(amt);
+    total+=amt;
+  });
+  var totEl=document.getElementById('sbe-total');
+  if(totEl) totEl.textContent=inr(total);
+}
+
+async function execSaveSalesBillEdit(billId,adds,deds){
+  var date=(document.getElementById('sbe-date')||{value:''}).value;
+  var ref=(document.getElementById('sbe-ref')||{value:''}).value.trim();
+  if(!date){toast('Bill date required','warning');return;}
+  var b=WA_SALES_BILLS.find(function(x){return x.id===billId;})||{};
+  var origItems=[];try{origItems=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+  var updatedItems=[];
+  document.querySelectorAll('.sbe-qty').forEach(function(inp){
+    var itemId=inp.getAttribute('data-item-id');
+    var rate=parseFloat(inp.getAttribute('data-rate'))||0;
+    var qty=parseFloat(inp.value)||0;
+    var orig=origItems.find(function(x){return x.item_id===itemId;})||{};
+    if(qty>0) updatedItems.push(Object.assign({},orig,{billed_qty:qty,amount:Math.round(qty*rate)}));
+  });
+  var addAmt=(adds||[]).filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var gstAmt=(adds||[]).filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var dedAmt=(deds||[]).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var workAmt=updatedItems.reduce(function(s,x){return s+x.amount;},0);
+  var totalAmt=workAmt+addAmt+gstAmt-dedAmt;
+  try{
+    await sbUpdate('sales_bills',billId,{
+      bill_date:date,bill_ref:ref||b.bill_ref,
+      bill_amount:totalAmt,
+      selected_items:JSON.stringify(updatedItems)
+    });
+    var idx=WA_SALES_BILLS.findIndex(function(x){return x.id===billId;});
+    if(idx>-1) WA_SALES_BILLS[idx]=Object.assign(WA_SALES_BILLS[idx],{bill_date:date,bill_ref:ref||b.bill_ref,bill_amount:totalAmt,selected_items:JSON.stringify(updatedItems)});
+    toast('Bill updated','success');
+    closeSheet('ov-exec','sh-exec');
+    execRenderSales();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+function execPrintSalesBill(billId){
+  var b=WA_SALES_BILLS.find(function(x){return x.id===billId;});
+  if(!b){toast('Bill not found','warning');return;}
+  var projId=b.project_id;
+  var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+  var co=COMPANY_DATA||{};
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+  var fmtD=function(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
+  var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+  var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+  var deds=[];try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+  var nonGstAdds=adds.filter(function(a){return !a.is_gst;});
+  var gstAdds=adds.filter(function(a){return a.is_gst;});
+  var workAmt=items.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var addAmt=nonGstAdds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var netBeforeGst=workAmt+addAmt-dedAmt;
+  var col='#4A148C';
+  var rows=items.map(function(x,i){
+    return '<tr><td>'+(i+1)+'</td>'+
+      '<td>'+(x.item_code?'<span style="font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:1px 4px;border-radius:3px;margin-right:4px;">'+x.item_code+'</span>':'')+x.item_name+'</td>'+
+      '<td style="text-align:right;">'+x.billed_qty+' '+(x.unit||'')+'</td>'+
+      '<td style="text-align:right;">'+inr(x.rate)+'</td>'+
+      '<td style="text-align:right;font-weight:700;">'+inr(x.amount)+'</td></tr>';
+  }).join('');
+  var addRows=nonGstAdds.map(function(a){
+    return '<tr><td colspan="4" style="text-align:right;color:#2E7D32;">+ '+a.head+(a.type==='pct'?' ('+a.pct+'%)':'')+'</td><td style="text-align:right;color:#2E7D32;">'+inr(a.amount)+'</td></tr>';
+  }).join('');
+  var dedRows=deds.map(function(d){
+    return '<tr><td colspan="4" style="text-align:right;color:#E65100;">− '+d.head+'</td><td style="text-align:right;color:#E65100;">'+inr(d.amount)+'</td></tr>';
+  }).join('');
+  var gstRows=gstAdds.map(function(a){
+    return '<tr><td colspan="4" style="text-align:right;color:#1B5E20;">+ '+a.head+(a.pct?' ('+a.pct+'%)':'')+'</td><td style="text-align:right;color:#1B5E20;">'+inr(a.amount)+'</td></tr>';
+  }).join('');
+  var html=
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Bill</title><style>'+
+    'body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;color:#222;}'+
+    '.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+col+';padding-bottom:12px;margin-bottom:12px;}'+
+    '.co-name{font-size:18px;font-weight:900;color:'+col+';}'+
+    'table{width:100%;border-collapse:collapse;margin:10px 0;}'+
+    'th{background:'+col+';color:white;padding:7px 10px;text-align:left;font-size:11px;}'+
+    'td{padding:7px 10px;border-bottom:1px solid #EEE;}'+
+    '.total-row td{font-weight:900;background:#F3E5F5;font-size:13px;}'+
+    '.footer{margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:40px;}'+
+    '.sig{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}'+
+    '@media print{button{display:none;}}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="background:'+col+';color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px;">&#128438; Print / Save PDF</button>'+
+    '<div class="header">'+
+      '<div><div class="co-name">'+(co.name||'Company Name')+'</div>'+
+        '<div style="font-size:10px;color:#666;margin-top:4px;">'+(co.address||'')+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div style="text-align:right;">'+
+        '<div style="font-size:20px;font-weight:900;">SALES BILL</div>'+
+        '<div style="font-size:12px;color:#666;">'+(b.bill_ref||'Bill #'+b.bill_number)+'</div>'+
+        '<div style="font-size:12px;color:#666;">Date: '+fmtD(b.bill_date)+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">'+
+      '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
+        '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">PROJECT</div>'+
+        '<div style="font-weight:800;font-size:13px;">'+(proj.name||'')+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(proj.location||proj.code||'')+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<table>'+
+      '<tr><th>#</th><th>Description</th><th>Qty</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>'+
+      rows+
+      (addRows||dedRows?'<tr><td colspan="4" style="text-align:right;font-weight:800;">Work Sub-Total</td><td style="text-align:right;font-weight:800;">'+inr(workAmt)+'</td></tr>':'')+
+      addRows+dedRows+
+      (gstAdds.length?'<tr><td colspan="4" style="text-align:right;font-weight:800;">Net before GST</td><td style="text-align:right;font-weight:800;">'+inr(netBeforeGst)+'</td></tr>':'')+
+      gstRows+
+      '<tr class="total-row"><td colspan="4" style="text-align:right;">Gross Total</td><td style="text-align:right;">'+inr(b.bill_amount)+'</td></tr>'+
+    '</table>'+
+    '<div class="footer">'+
+      '<div><div class="sig">Authorized Signatory<br><br>'+(co.name||'')+'</div></div>'+
+      '<div><div class="sig">Received By / Client</div></div>'+
+    '</div>'+
+    '</body></html>';
+  openPDF(html);
+}
+
+
 function salesSubTab(tab){ SALES_SUBTAB=tab; execRenderSales(); }
 
 function execRenderSales(){
@@ -2844,7 +3078,12 @@ function execRenderSales(){
           '</div>'+
           '<div style="text-align:right;">'+
             '<div style="font-size:14px;font-weight:900;color:#4A148C;">'+inr(b.bill_amount)+'</div>'+
-            '<button onclick="event.stopPropagation();execDelSalesBill(\''+b.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;" title="Delete">&#215;</button>'+
+            '<div style="display:flex;gap:4px;margin-top:4px;">'+
+              '<button onclick="event.stopPropagation();execSalesBillPay(\''+b.id+'\','+b.bill_amount+')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">+ Pay</button>'+
+              '<button onclick="event.stopPropagation();execEditSalesBill(\''+b.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#9998; Edit</button>'+
+              '<button onclick="event.stopPropagation();execPrintSalesBill(\''+b.id+'\')" style="background:#4A148C;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#128438; PDF</button>'+
+              '<button onclick="event.stopPropagation();execDelSalesBill(\''+b.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;">&#215;</button>'+
+            '</div>'+
           '</div>'+
         '</div>'+
         '<div id="'+collapseId+'" style="display:none;">'+
@@ -2889,6 +3128,27 @@ function execRenderSales(){
             // Gross total
             '<tr style="background:#4A148C;"><td colspan="4" style="padding:6px 10px;font-weight:900;color:white;">Gross Total</td><td style="padding:6px 10px;text-align:right;font-weight:900;color:white;">'+inr(b.bill_amount)+'</td></tr>'+
           '</table>'+
+          // Payments section
+          (function(){
+            var bPays=WA_SALES_PAYMENTS?WA_SALES_PAYMENTS.filter(function(p){return p.sales_bill_id===b.id;}):[];
+            if(!bPays.length) return '';
+            var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+            var balDue=b.bill_amount-paidAmt;
+            return '<div style="padding:8px 14px;border-top:1px solid var(--border);background:#F8FAFC;">'+
+              '<div style="font-size:10px;font-weight:800;color:#2E7D32;margin-bottom:4px;">&#128176; PAYMENTS</div>'+
+              bPays.map(function(p){return '<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #F0F0F0;">'+
+                '<span>'+p.payment_date+(p.payment_mode?' · '+p.payment_mode:'')+(p.reference?' · '+p.reference:'')+'</span>'+
+                '<div style="display:flex;align-items:center;gap:6px;">'+
+                  '<span style="font-weight:800;color:#2E7D32;">'+inr(p.amount)+'</span>'+
+                  '<button onclick="execDelSalesPayment(\''+p.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;">&#215;</button>'+
+                '</div>'+
+              '</div>';}).join('')+
+              '<div style="display:flex;justify-content:space-between;padding-top:5px;font-size:11px;font-weight:800;">'+
+                '<span>Balance Due</span>'+
+                '<span style="color:'+(balDue>0?'#C62828':'#2E7D32')+';">'+inr(Math.abs(balDue))+(balDue<0?' Cr':'')+'</span>'+
+              '</div>'+
+            '</div>';
+          })()+
         '</div>'+
       '</div>';
     }).join('');
