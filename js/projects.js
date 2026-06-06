@@ -2832,6 +2832,7 @@ function execRenderOrders(){
             '</div>'+
             '<div style="text-align:right;flex-shrink:0;">'+
               '<div style="font-size:15px;font-weight:900;color:'+col+';">&#8377;'+Math.round(g.totalAmt).toLocaleString('en-IN')+'</div>'+
+              '<button onclick="event.stopPropagation();execPrintOrderCombined(\''+docPrefix.toLowerCase()+'\',\''+num+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:3px 12px;font-size:10px;font-weight:800;cursor:pointer;margin-top:5px;">&#128438; Print All</button>'+
             '</div>'+
           '</div>'+
           // Collapsed items list
@@ -2887,6 +2888,92 @@ function execPrintOrder(orderId){
   var merged=Object.assign({},allot,{qty:o.qty,rate:o.rate,unit:o.unit,party_name:o.party_name,exec_type:o.party_type,project_id:o.project_id,scope:allot.scope||''});
   if(o.doc_type==='wo') generateWorkOrder(merged);
   else generatePurchaseOrder(merged);
+}
+
+function execPrintOrderCombined(docType, docNum){
+  var orders=WA_ORDERS.filter(function(o){return o.doc_type===docType&&(o.doc_number||'?')===String(docNum);});
+  if(!orders.length){toast('No orders found','warning');return;}
+  var first=orders[0];
+  var proj=PROJ_DATA.find(function(p){return p.id===first.project_id;})||{};
+  var co=COMPANY_DATA||{};
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+  var fmtD=function(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
+  var isWO=docType==='wo';
+  var docLabel=isWO?'WORK ORDER':'PURCHASE ORDER';
+  var accentCol=isWO?'#E65100':'#1565C0';
+  var totalBg=isWO?'#FFF3E0':'#E3F2FD';
+  var docNo=(isWO?'WO':'PO')+'-'+docNum;
+  var totalAmt=orders.reduce(function(s,o){return s+(parseFloat(o.amount)||0);},0);
+  var rows=orders.map(function(o,i){
+    var allot=WA_ALLOT.find(function(a){return a.id===o.allot_id;})||{};
+    var desc=allot.scope||o.resource_name||('Item '+(i+1));
+    var amt=Math.round(parseFloat(o.amount)||((parseFloat(o.qty)||0)*(parseFloat(o.rate)||0)));
+    return '<tr>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+(i+1)+'. '+desc+'</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+(o.qty||0)+'</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+(o.unit||'')+'</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+inr(o.rate)+'</td>'+
+      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:700;">'+inr(amt)+'</td>'+
+    '</tr>';
+  }).join('');
+  var html=
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+docLabel+'</title><style>'+
+    'body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;color:#222;}'+
+    '.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+accentCol+';padding-bottom:12px;margin-bottom:12px;}'+
+    '.co-name{font-size:18px;font-weight:900;color:'+accentCol+';}'+
+    '.doc-title{font-size:20px;font-weight:900;color:#333;text-align:right;}'+
+    'table{width:100%;border-collapse:collapse;margin:10px 0;}'+
+    'th{background:'+accentCol+';color:white;padding:7px 10px;text-align:left;font-size:11px;}'+
+    'td{padding:7px 10px;border-bottom:1px solid #EEE;}'+
+    '.total-row td{font-weight:900;background:'+totalBg+';font-size:13px;}'+
+    '.footer{margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:40px;}'+
+    '.sig{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}'+
+    '@media print{button{display:none;}}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="background:'+accentCol+';color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px;">🖨 Print / Save PDF</button>'+
+    '<div class="header">'+
+      '<div><div class="co-name">'+(co.name||'Company Name')+'</div>'+
+        '<div style="font-size:10px;color:#666;margin-top:4px;">'+(co.address||'')+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div><div class="doc-title">'+docLabel+'</div>'+
+        '<div style="font-size:12px;color:#666;text-align:right;">'+docNo+'</div>'+
+        '<div style="font-size:12px;color:#666;text-align:right;">Date: '+fmtD(first.doc_date||new Date().toISOString().slice(0,10))+'</div></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">'+
+      '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
+        '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+(isWO?'TO':'VENDOR / SUPPLIER')+'</div>'+
+        '<div style="font-weight:800;font-size:13px;">'+first.party_name+'</div>'+
+        '<div style="font-size:10px;color:#666;text-transform:uppercase;">'+(first.party_type||'')+'</div>'+
+      '</div>'+
+      '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
+        '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+(isWO?'PROJECT':'DELIVERY / SITE')+'</div>'+
+        '<div style="font-weight:800;font-size:13px;">'+(proj.name||'')+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(proj.location||proj.code||'')+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<table>'+
+      '<tr><th>#</th><th>'+(isWO?'Description of Work':'Item / Material')+'</th><th>Qty</th><th>Unit</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>'+
+      orders.map(function(o,i){
+        var allot=WA_ALLOT.find(function(a){return a.id===o.allot_id;})||{};
+        var desc=allot.scope||o.resource_name||('Item '+(i+1));
+        var amt=Math.round(parseFloat(o.amount)||((parseFloat(o.qty)||0)*(parseFloat(o.rate)||0)));
+        return '<tr>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+(i+1)+'</td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+desc+'</td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+(o.qty||0)+'</td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+(o.unit||'')+'</td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+inr(o.rate)+'</td>'+
+          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:700;">'+inr(amt)+'</td>'+
+        '</tr>';
+      }).join('')+
+      '<tr class="total-row"><td colspan="5" style="text-align:right;">Total Amount</td><td>'+inr(Math.round(totalAmt))+'</td></tr>'+
+    '</table>'+
+    '<div class="footer">'+
+      '<div><div class="sig">'+(isWO?'Issued By':'Authorized Signatory')+'<br><br>'+(co.name||'')+'</div></div>'+
+      '<div><div class="sig">'+(isWO?'Accepted By':'Vendor Acknowledgement')+'<br><br>'+first.party_name+'</div></div>'+
+    '</div>'+
+    '</body></html>';
+  openPDF(html);
 }
 
 async function execDeleteOrder(id){
