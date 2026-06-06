@@ -2891,6 +2891,7 @@ function execPrintOrder(orderId){
 }
 
 function execPrintOrderCombined(docType, docNum){
+  // Collect all allotments linked to this doc_number
   var orders=WA_ORDERS.filter(function(o){return o.doc_type===docType&&(o.doc_number||'?')===String(docNum);});
   if(!orders.length){toast('No orders found','warning');return;}
   var first=orders[0];
@@ -2899,25 +2900,26 @@ function execPrintOrderCombined(docType, docNum){
   var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
   var fmtD=function(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
   var isWO=docType==='wo';
-  var docLabel=isWO?'WORK ORDER':'PURCHASE ORDER';
+  var docNo=(isWO?'WO':'PO')+'-'+docNum;
   var accentCol=isWO?'#E65100':'#1565C0';
   var totalBg=isWO?'#FFF3E0':'#E3F2FD';
-  var docNo=(isWO?'WO':'PO')+'-'+docNum;
   var totalAmt=orders.reduce(function(s,o){return s+(parseFloat(o.amount)||0);},0);
-  var rows=orders.map(function(o,i){
+
+  // Build allotments array with full allot data (same as execRegenDoc does per item)
+  var allots=orders.map(function(o){
     var allot=WA_ALLOT.find(function(a){return a.id===o.allot_id;})||{};
-    var desc=allot.scope||o.resource_name||('Item '+(i+1));
-    var amt=Math.round(parseFloat(o.amount)||((parseFloat(o.qty)||0)*(parseFloat(o.rate)||0)));
-    return '<tr>'+
-      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+(i+1)+'. '+desc+'</td>'+
-      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+(o.qty||0)+'</td>'+
-      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+(o.unit||'')+'</td>'+
-      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+inr(o.rate)+'</td>'+
-      '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:700;">'+inr(amt)+'</td>'+
-    '</tr>';
-  }).join('');
+    return Object.assign({},allot,{qty:o.qty,rate:o.rate,unit:o.unit,party_name:o.party_name,exec_type:o.party_type,project_id:o.project_id,scope:allot.scope||''});
+  });
+
+  var docLabel=isWO?'WORK ORDER':'PURCHASE ORDER';
+  var toLabel=isWO?'TO':'VENDOR / SUPPLIER';
+  var siteLabel=isWO?'PROJECT':'DELIVERY / SITE';
+  var descLabel=isWO?'Description of Work':'Item / Material';
+  var footLeft=isWO?'Issued By':'Authorized Signatory';
+  var footRight=isWO?'Accepted By':'Vendor Acknowledgement';
+
   var html=
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+docLabel+'</title><style>'+
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+docLabel+' '+docNo+'</title><style>'+
     'body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;color:#222;}'+
     '.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+accentCol+';padding-bottom:12px;margin-bottom:12px;}'+
     '.co-name{font-size:18px;font-weight:900;color:'+accentCol+';}'+
@@ -2932,45 +2934,64 @@ function execPrintOrderCombined(docType, docNum){
     '</style></head><body>'+
     '<button onclick="window.print()" style="background:'+accentCol+';color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px;">🖨 Print / Save PDF</button>'+
     '<div class="header">'+
-      '<div><div class="co-name">'+(co.name||'Company Name')+'</div>'+
+      '<div>'+
+        '<div class="co-name">'+(co.name||'Company Name')+'</div>'+
         '<div style="font-size:10px;color:#666;margin-top:4px;">'+(co.address||'')+'</div>'+
-        '<div style="font-size:10px;color:#666;">'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div></div>'+
-      '<div><div class="doc-title">'+docLabel+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div>'+
+      '</div>'+
+      '<div>'+
+        '<div class="doc-title">'+docLabel+'</div>'+
         '<div style="font-size:12px;color:#666;text-align:right;">'+docNo+'</div>'+
-        '<div style="font-size:12px;color:#666;text-align:right;">Date: '+fmtD(first.doc_date||new Date().toISOString().slice(0,10))+'</div></div>'+
+        '<div style="font-size:12px;color:#666;text-align:right;">Date: '+fmtD(first.doc_date||new Date().toISOString().slice(0,10))+'</div>'+
+      '</div>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
-        '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+(isWO?'TO':'VENDOR / SUPPLIER')+'</div>'+
+        '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+toLabel+'</div>'+
         '<div style="font-weight:800;font-size:13px;">'+first.party_name+'</div>'+
         '<div style="font-size:10px;color:#666;text-transform:uppercase;">'+(first.party_type||'')+'</div>'+
       '</div>'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
-        '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+(isWO?'PROJECT':'DELIVERY / SITE')+'</div>'+
+        '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+siteLabel+'</div>'+
         '<div style="font-weight:800;font-size:13px;">'+(proj.name||'')+'</div>'+
         '<div style="font-size:10px;color:#666;">'+(proj.location||proj.code||'')+'</div>'+
       '</div>'+
     '</div>'+
     '<table>'+
-      '<tr><th>#</th><th>'+(isWO?'Description of Work':'Item / Material')+'</th><th>Qty</th><th>Unit</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>'+
-      orders.map(function(o,i){
-        var allot=WA_ALLOT.find(function(a){return a.id===o.allot_id;})||{};
-        var desc=allot.scope||o.resource_name||('Item '+(i+1));
-        var amt=Math.round(parseFloat(o.amount)||((parseFloat(o.qty)||0)*(parseFloat(o.rate)||0)));
+      '<tr>'+
+        '<th style="width:30px;">#</th>'+
+        '<th>'+descLabel+'</th>'+
+        '<th style="text-align:right;">Qty</th>'+
+        '<th style="text-align:right;">Unit</th>'+
+        '<th style="text-align:right;">Rate (₹)</th>'+
+        '<th style="text-align:right;">Amount (₹)</th>'+
+      '</tr>'+
+      allots.map(function(a,i){
+        var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
+        var desc=a.scope||(a.party_name||'Item '+(i+1));
         return '<tr>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+(i+1)+'</td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+desc+'</td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+(o.qty||0)+'</td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+(o.unit||'')+'</td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+inr(o.rate)+'</td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:700;">'+inr(amt)+'</td>'+
+          '<td>'+(i+1)+'</td>'+
+          '<td>'+desc+'</td>'+
+          '<td style="text-align:right;">'+(a.qty||0)+'</td>'+
+          '<td style="text-align:right;">'+(a.unit||'')+'</td>'+
+          '<td style="text-align:right;">'+inr(a.rate)+'</td>'+
+          '<td style="text-align:right;font-weight:700;">'+inr(amt)+'</td>'+
         '</tr>';
       }).join('')+
-      '<tr class="total-row"><td colspan="5" style="text-align:right;">Total Amount</td><td>'+inr(Math.round(totalAmt))+'</td></tr>'+
+      '<tr class="total-row">'+
+        '<td colspan="5" style="text-align:right;">Total Amount</td>'+
+        '<td style="text-align:right;">'+inr(Math.round(totalAmt))+'</td>'+
+      '</tr>'+
     '</table>'+
+    (allots[0]&&(allots[0].start_date||allots[0].end_date)?
+      '<div style="background:#F8FAFC;border-radius:8px;padding:10px;margin:10px 0;font-size:11px;">'+
+        (allots[0].start_date?(isWO?'Start Date: ':'Delivery From: ')+'<b>'+fmtD(allots[0].start_date)+'</b>  ':'')+
+        (allots[0].end_date?(isWO?'End Date: ':'Delivery By: ')+'<b>'+fmtD(allots[0].end_date)+'</b>':'')+
+      '</div>':'')+
+    (!isWO?'<div style="background:#FFFDE7;border-radius:8px;padding:10px;margin:10px 0;font-size:10px;color:#666;">Please supply the above items as per specifications. Delivery receipt (GRN) required at site.</div>':'')+
     '<div class="footer">'+
-      '<div><div class="sig">'+(isWO?'Issued By':'Authorized Signatory')+'<br><br>'+(co.name||'')+'</div></div>'+
-      '<div><div class="sig">'+(isWO?'Accepted By':'Vendor Acknowledgement')+'<br><br>'+first.party_name+'</div></div>'+
+      '<div><div class="sig">'+footLeft+'<br><br>'+(co.name||'')+'</div></div>'+
+      '<div><div class="sig">'+footRight+'<br><br>'+first.party_name+'</div></div>'+
     '</div>'+
     '</body></html>';
   openPDF(html);
