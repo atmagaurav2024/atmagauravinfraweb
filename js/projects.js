@@ -4842,18 +4842,20 @@ function execDailyDownloadExcel(){
   });
   lines.push([]);
   lines.push(['ITEM-WISE SUMMARY']);
-  lines.push(['Item Code','Description / Detail','Label','Qty','Unit','Amount']);
+  lines.push(['Item Code','Description / Detail','Label','Qty','Unit','Amount','Rate Arrived']);
   var grandTotal2=0;
   execDailyItemSummaries(rows).forEach(function(s){
-    lines.push([s.item.item_code||'',s.item.short_name||s.item.description||'','Total Qty Executed',s.totalQtyDone,s.unit,'']);
+    lines.push([s.item.item_code||'',s.item.short_name||s.item.description||'','Total Qty Executed',s.totalQtyDone,s.unit,'','']);
     s.resources.forEach(function(r){
-      lines.push(['','  '+r.type+': '+r.party,'Qty Utilised',r.totalQty,r.unit,r.totalAmount]);
+      var rateArrived=r.totalQty>0?(r.totalAmount/r.totalQty):0;
+      lines.push(['','  '+r.type+': '+r.party,'Qty Utilised',r.totalQty,r.unit,r.totalAmount,rateArrived]);
     });
-    lines.push(['','','ITEM TOTAL AMOUNT','','',s.itemTotalAmount]);
+    var itemRateArrived=s.totalQtyDone>0?(s.itemTotalAmount/s.totalQtyDone):0;
+    lines.push(['','','ITEM TOTAL AMOUNT','','',s.itemTotalAmount,itemRateArrived]);
     lines.push([]);
     grandTotal2+=s.itemTotalAmount;
   });
-  lines.push(['','GRAND TOTAL','','','',grandTotal2]);
+  lines.push(['','GRAND TOTAL','','','',grandTotal2,'']);
   var csv=lines.map(function(row){
     return row.map(function(cell){
       var s=String(cell==null?'':cell);
@@ -4930,29 +4932,35 @@ function execDailyDownloadPDF(){
   var grandTotal2=0;
   var totalsRows=itemSummaries.map(function(s){
     grandTotal2+=s.itemTotalAmount;
+    var itemRateArrived=s.totalQtyDone>0?(s.itemTotalAmount/s.totalQtyDone):0;
     var head='<tr style="background:#FFF3E0;">'+
       '<td style="padding:6px 8px;font-size:9px;font-family:monospace;font-weight:800;">'+(s.item.item_code||'')+'</td>'+
-      '<td style="padding:6px 8px;font-size:9px;font-weight:800;" colspan="2">'+(s.item.short_name||s.item.description||'')+'</td>'+
-      '<td style="padding:6px 8px;font-size:9px;text-align:right;font-weight:800;color:#E65100;">Total Qty Executed: '+s.totalQtyDone+' '+s.unit+'</td>'+
+      '<td style="padding:6px 8px;font-size:9px;font-weight:800;">'+(s.item.short_name||s.item.description||'')+'</td>'+
+      '<td style="padding:6px 8px;font-size:9px;text-align:right;font-weight:800;color:#E65100;">'+s.totalQtyDone+' '+s.unit+'</td>'+
+      '<td></td>'+
       '<td></td>'+
     '</tr>';
     var resRows=s.resources.map(function(r){
+      var rateArrived=r.totalQty>0?(r.totalAmount/r.totalQty):0;
       return '<tr style="border-bottom:1px solid #F5F5F5;">'+
         '<td></td>'+
         '<td style="padding:5px 8px 5px 20px;font-size:9px;">'+r.type+': '+r.party+'</td>'+
         '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+r.totalQty+' '+r.unit+'</td>'+
-        '<td colspan="2" style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+Math.round(r.totalAmount).toLocaleString('en-IN')+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+Math.round(r.totalAmount).toLocaleString('en-IN')+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+rateArrived.toFixed(2)+'</td>'+
       '</tr>';
     }).join('');
     var totRow='<tr style="border-bottom:2px solid #FFCC80;background:#FFF8F0;">'+
-      '<td colspan="3"></td>'+
-      '<td colspan="2" style="padding:6px 8px;font-size:9px;font-weight:900;text-align:right;color:#E65100;">Item Total: \u20b9'+Math.round(s.itemTotalAmount).toLocaleString('en-IN')+'</td>'+
+      '<td colspan="3" style="padding:6px 8px;font-size:9px;font-weight:900;text-align:right;color:#E65100;">Item Total</td>'+
+      '<td style="padding:6px 8px;font-size:9px;font-weight:900;text-align:right;color:#E65100;">\u20b9'+Math.round(s.itemTotalAmount).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:6px 8px;font-size:9px;font-weight:900;text-align:right;color:#E65100;">\u20b9'+itemRateArrived.toFixed(2)+'</td>'+
     '</tr>';
     return head+resRows+totRow;
   }).join('')+
     '<tr style="background:#E65100;color:white;">'+
       '<td colspan="3" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
-      '<td colspan="2" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(grandTotal2).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(grandTotal2).toLocaleString('en-IN')+'</td>'+
+      '<td></td>'+
     '</tr>';
 
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Daily Progress - '+projName+'</title>'+
@@ -4984,9 +4992,10 @@ function execDailyDownloadPDF(){
     '<div class="sec-title">Item-wise Summary (Qty Executed &amp; Resource Utilisation)</div>'+
     '<table><thead><tr style="background:#1B5E20;color:white;">'+
       '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:left;">Item Code</th>'+
-      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:left;" colspan="2">Description / Resource</th>'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:left;">Description / Resource</th>'+
       '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:right;">Qty</th>'+
       '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:right;">Amount</th>'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:right;">Rate Arrived</th>'+
     '</tr></thead><tbody>'+totalsRows+'</tbody></table>'+
     '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
       compName+' | Daily Progress Statement | '+projName+' | Generated on '+today+
