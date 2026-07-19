@@ -1542,6 +1542,13 @@ input,select,textarea{font-size:16px !important;}
       </div>
     </div>
 
+    <div class="sec-title">&#128202; Key Metrics</div>
+    <div id="dash-kpi-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">
+      <div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--text3);font-size:13px;background:white;border-radius:14px;">&#9203; Loading insights...</div>
+    </div>
+
+    <div id="dash-kra-section"></div>
+
     <div class="sec-title">&#128276; Recent Activity</div>
     <div id="dash-activity-feed"><div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">No recent activity</div></div>
 
@@ -2283,6 +2290,173 @@ function updateAllStats(){}
 var USER_PERMISSIONS={};
 var COMPANY_DATA={};
 async function preloadCompanyData(){try{var r=await sbFetch('company_details',{select:'*',order:'id.asc'});COMPANY_DATA=(Array.isArray(r)&&r.length)?r[0]:{};}catch(e){COMPANY_DATA={};}}
+
+// ── DASHBOARD: KPI + KRA INSIGHTS ─────────────────────────────────────────
+async function loadDashboardInsights(){
+  var gridEl=document.getElementById('dash-kpi-grid');
+  var kraEl=document.getElementById('dash-kra-section');
+  if(!gridEl) return;
+  var inr=function(n){
+    var v=Math.round(Number(n||0));
+    if(Math.abs(v)>=10000000) return '\u20b9'+(v/10000000).toFixed(2)+'Cr';
+    if(Math.abs(v)>=100000) return '\u20b9'+(v/100000).toFixed(2)+'L';
+    return '\u20b9'+v.toLocaleString('en-IN');
+  };
+  var safe=function(p){return p.catch(function(){return [];});};
+  try{
+    var r=await Promise.all([
+      safe(sbFetch('projects',{select:'id,name,status'})),
+      safe(sbFetch('employees',{select:'id,status'})),
+      safe(sbFetch('boq_items',{select:'project_id,boq_qty,rate'})),
+      safe(sbFetch('work_bills',{select:'project_id,party_name,party_type,bill_amount,deductions'})),
+      safe(sbFetch('work_payments',{select:'project_id,party_name,party_type,amount'})),
+      safe(sbFetch('sales_bills',{select:'project_id,bill_amount'})),
+      safe(sbFetch('sales_payments',{select:'project_id,amount'})),
+      safe(sbFetch('resource_requisitions',{select:'id,status',filter:'status=eq.pending'})),
+      safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'}))
+    ]);
+    var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], workBills=r[3]||[], workPayments=r[4]||[],
+        salesBills=r[5]||[], salesPayments=r[6]||[], pendingRRs=r[7]||[], storeItems=r[8]||[];
+
+    var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
+    var activeStatuses=['active','in-progress','rr','planning'];
+    var activeProjects=projects.filter(function(p){return activeStatuses.indexOf(p.status)>-1;}).length;
+
+    var activeWorkforce=employees.filter(function(e){return e.status==='active';}).length;
+
+    // Contract value per project (BOQ qty * rate)
+    var contractByProj={};
+    boqItems.forEach(function(it){
+      var v=(parseFloat(it.boq_qty)||0)*(parseFloat(it.rate)||0);
+      contractByProj[it.project_id]=(contractByProj[it.project_id]||0)+v;
+    });
+    var totalContractValue=Object.keys(contractByProj).reduce(function(s,k){return s+contractByProj[k];},0);
+
+    // Work bills: net payable (gross - active deductions) per project & per party
+    var executedByProj={}, payableByParty={};
+    var totalGrossBilled=0, totalDedHeld=0;
+    workBills.forEach(function(b){
+      var ded=[]; try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      var activeDed=ded.filter(function(d){return !d.released;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var gross=parseFloat(b.bill_amount)||0;
+      var net=gross-activeDed;
+      totalGrossBilled+=gross; totalDedHeld+=activeDed;
+      executedByProj[b.project_id]=(executedByProj[b.project_id]||0)+net;
+      var pk=(b.party_type||'')+'::'+b.party_name;
+      if(!payableByParty[pk]) payableByParty[pk]={name:b.party_name,type:b.party_type,net:0,paid:0};
+      payableByParty[pk].net+=net;
+    });
+    var totalExecuted=totalGrossBilled-totalDedHeld;
+    workPayments.forEach(function(p){
+      var pk=(p.party_type||'')+'::'+p.party_name;
+      if(!payableByParty[pk]) payableByParty[pk]={name:p.party_name,type:p.party_type,net:0,paid:0};
+      payableByParty[pk].paid+=(parseFloat(p.amount)||0);
+    });
+    var totalPaidToParties=workPayments.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+    var totalPayable=Math.max(0,totalExecuted-totalPaidToParties);
+
+    // Sales: billed vs collected, per project for receivables
+    var salesByProj={}, salesPaidByProj={};
+    salesBills.forEach(function(b){salesByProj[b.project_id]=(salesByProj[b.project_id]||0)+(parseFloat(b.bill_amount)||0);});
+    salesPayments.forEach(function(p){salesPaidByProj[p.project_id]=(salesPaidByProj[p.project_id]||0)+(parseFloat(p.amount)||0);});
+    var totalSalesBilled=Object.keys(salesByProj).reduce(function(s,k){return s+salesByProj[k];},0);
+    var totalSalesCollected=Object.keys(salesPaidByProj).reduce(function(s,k){return s+salesPaidByProj[k];},0);
+    var totalReceivable=Math.max(0,totalSalesBilled-totalSalesCollected);
+
+    // Low stock: qty in hand <= min_qty (min_qty>0), grouped by item+project
+    var stockGroups={};
+    storeItems.forEach(function(it){
+      var key=it.project_id+'__'+(it.item_name||'').toLowerCase()+'__'+(it.unit||'').toLowerCase();
+      if(!stockGroups[key]) stockGroups[key]={project_id:it.project_id,item_name:it.item_name,unit:it.unit||'',qty:0,min_qty:parseFloat(it.min_qty)||0};
+      stockGroups[key].qty+=(parseFloat(it.qty_in_hand)||0);
+    });
+    var lowStock=Object.keys(stockGroups).map(function(k){return stockGroups[k];}).filter(function(g){return g.min_qty>0&&g.qty<=g.min_qty;});
+
+    var execPct=totalContractValue>0?Math.min(100,Math.round(totalExecuted/totalContractValue*100)):0;
+
+    // ── KPI cards ──
+    function kpiCard(icon,label,value,sub,color){
+      return '<div style="background:white;border-radius:14px;padding:14px;border-left:3px solid '+color+';">'+
+        '<div style="font-size:18px;">'+icon+'</div>'+
+        '<div style="font-size:19px;font-weight:900;color:'+color+';margin-top:4px;">'+value+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);font-weight:700;margin-top:1px;">'+label+'</div>'+
+        (sub?'<div style="font-size:9px;color:var(--text3);margin-top:2px;">'+sub+'</div>':'')+
+      '</div>';
+    }
+    gridEl.innerHTML=
+      kpiCard('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'total projects','#1565C0')+
+      kpiCard('&#128119;','WORKFORCE',activeWorkforce,'active employees','#2E7D32')+
+      kpiCard('&#128203;','CONTRACT VALUE',inr(totalContractValue),'across all BOQs','#6A1B9A')+
+      kpiCard('&#128295;','WORK EXECUTED',inr(totalExecuted),execPct+'% of contract value','#E65100')+
+      kpiCard('&#128176;','SALES BILLED',inr(totalSalesBilled),inr(totalSalesCollected)+' collected','#1565C0')+
+      kpiCard('&#128202;','RECEIVABLE',inr(totalReceivable),'from clients','#00838F')+
+      kpiCard('&#128181;','PAYABLE',inr(totalPayable),'to vendors/contractors','#C62828')+
+      kpiCard('&#9203;','PENDING RRs',pendingRRs.length,'awaiting approval','#F57F17')+
+      kpiCard('&#128230;','LOW STOCK',lowStock.length,'items below min qty','#B71C1C');
+
+    // ── KRA: Project-wise execution progress ──
+    var projRows=projects.filter(function(p){return contractByProj[p.id]>0;})
+      .sort(function(a,b){return (contractByProj[b.id]||0)-(contractByProj[a.id]||0);})
+      .slice(0,6)
+      .map(function(p){
+        var cv=contractByProj[p.id]||0;
+        var ex=executedByProj[p.id]||0;
+        var pct=cv>0?Math.min(100,Math.round(ex/cv*100)):0;
+        var barColor=pct>=80?'#2E7D32':(pct>=40?'#F57F17':'#C62828');
+        return '<div style="margin-bottom:10px;">'+
+          '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">'+
+            '<span style="font-weight:700;">'+p.name+'</span>'+
+            '<span style="color:var(--text3);">'+inr(ex)+' / '+inr(cv)+' ('+pct+'%)</span>'+
+          '</div>'+
+          '<div style="background:#EEE;border-radius:6px;height:7px;overflow:hidden;">'+
+            '<div style="background:'+barColor+';height:100%;width:'+pct+'%;"></div>'+
+          '</div>'+
+        '</div>';
+      }).join('');
+
+    // ── KRA: Top receivables by project ──
+    var recvRows=Object.keys(salesByProj).map(function(pid){
+      var bal=(salesByProj[pid]||0)-(salesPaidByProj[pid]||0);
+      return {name:projName[pid]||'Unknown Project',bal:bal};
+    }).filter(function(x){return x.bal>1;}).sort(function(a,b){return b.bal-a.bal;}).slice(0,5);
+
+    // ── KRA: Top payables by party ──
+    var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+    var payRows=Object.keys(payableByParty).map(function(k){
+      var g=payableByParty[k];
+      return {name:g.name,type:tLbl[g.type]||g.type||'',bal:g.net-g.paid};
+    }).filter(function(x){return x.bal>1;}).sort(function(a,b){return b.bal-a.bal;}).slice(0,5);
+
+    function listRow(label,sub,val,color){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #F5F5F5;">'+
+        '<div><div style="font-size:12px;font-weight:700;">'+label+'</div>'+(sub?'<div style="font-size:9px;color:var(--text3);">'+sub+'</div>':'')+'</div>'+
+        '<div style="font-size:12px;font-weight:800;color:'+color+';">'+val+'</div>'+
+      '</div>';
+    }
+
+    function kraCard(title,color,inner){
+      return '<div style="background:white;border-radius:14px;padding:14px;margin-bottom:12px;">'+
+        '<div style="font-size:12px;font-weight:800;color:'+color+';margin-bottom:8px;">'+title+'</div>'+
+        inner+
+      '</div>';
+    }
+
+    var lowStockRows=lowStock.slice(0,5).map(function(g){
+      return listRow(g.item_name,(projName[g.project_id]||'')+' &bull; min '+g.min_qty+' '+g.unit,g.qty+' '+g.unit,'#C62828');
+    }).join('');
+
+    kraEl.innerHTML=
+      (projRows?kraCard('&#128208; Project-wise Execution Progress','#1565C0',projRows):'')+
+      (recvRows.length?kraCard('&#128202; Top Receivables (from clients)','#00838F',recvRows.map(function(x){return listRow(x.name,'',inr(x.bal),'#00838F');}).join('')):'')+
+      (payRows.length?kraCard('&#128181; Top Payables (to vendors/contractors)','#C62828',payRows.map(function(x){return listRow(x.name,x.type,inr(x.bal),'#C62828');}).join('')):'')+
+      (lowStockRows?kraCard('&#128230; Low Stock Alerts','#B71C1C',lowStockRows):'');
+
+  }catch(e){
+    console.error('Dashboard insights error:',e);
+    gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);font-size:12px;background:white;border-radius:14px;">Could not load insights. Pull to refresh.</div>';
+  }
+}
+
 function canAccess(m,p){if(!currentUser)return false;if(currentUser.role==='admin')return true;if(!Object.keys(USER_PERMISSIONS).length)return true;var mp=USER_PERMISSIONS[m];return mp?mp[p]!==false:false;}
 async function loadUserPermissions(){try{if(!currentUser)return;var r=await sbFetch('access_permissions',{select:'*',filter:'employee_id=eq.'+currentUser.id});if(Array.isArray(r)){var perms={};r.forEach(function(row){if(!perms[row.module])perms[row.module]={};perms[row.module][row.permission]=row.granted;});USER_PERMISSIONS=perms;}}catch(e){}}
 function initProjects(){if(typeof projModRenderNav==='function'){projModRenderNav();projModLoadTab();}}
@@ -2334,7 +2508,7 @@ function showApp(name){
     if(el) el.classList.toggle('on', n===name||(n==='home'&&(name==='dashboard'||isProjectTab)));
   });
   if(name==='attendance'&&!window._attInit){window._attInit=true;initAttendance();}
-  if(name==='dashboard'&&!window._coLoaded){window._coLoaded=true;preloadCompanyData();}
+  if(name==='dashboard'){ loadDashboardInsights(); if(!window._coLoaded){window._coLoaded=true;preloadCompanyData();} }
   if(name==='registry'){initRegistry();startSync();}
   else if(name==='employees'){initEmpMgmt();}
   else if(isProjectTab){ initProjects(); }
