@@ -16746,7 +16746,7 @@ function annBuildStatement(records, periodLabel){
       }
     });
     rows += '<tr style="background:#FFF8E1;border-bottom:2px solid #FFD54F;">'+
-      '<td colspan="2" style="padding:5px 8px 5px 24px;font-size:10px;font-weight:800;color:#F57F17;">'+e.months+' months total</td>'+
+      '<td colspan="3" style="padding:5px 8px 5px 24px;font-size:10px;font-weight:800;color:#F57F17;">'+e.months+' months total</td>'+
       '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;">'+inr(e.basic)+'</td>'+
       compKeys.map(function(k){return '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;">'+inr(subTotExtra[k]||0)+'</td>';}).join('')+
       (hasOT?'<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;">'+inr(e.ot_pay)+'</td>':'')+
