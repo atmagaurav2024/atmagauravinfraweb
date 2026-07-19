@@ -6092,7 +6092,7 @@ function execRenderBills(){
     {id:'genbills',  label:'View Bills'},
     {id:'payments',  label:'Payments'}
   ];
-  var tabBar='<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;">'+
+  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;">'+
     tabs.map(function(t){
       var active=BILL_SUBTAB===t.id;
       return '<button onclick="billsSubTab(\''+t.id+'\')" style="'+
@@ -6102,6 +6102,9 @@ function execRenderBills(){
         'border-bottom:'+(active?'2px solid #1565C0':'2px solid transparent')+';'+
         'margin-bottom:-2px;">'+t.label+'</button>';
     }).join('')+
+    '<div style="flex:1;"></div>'+
+    '<button onclick="purchaseBillsRegDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;">&#128202; Excel</button>'+
+    '<button onclick="purchaseBillsRegDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;">&#128196; PDF</button>'+
   '</div>';
 
   // Summary (Abstract overview) sub-tab
@@ -6615,6 +6618,140 @@ function execRenderBills(){
 
   // Render content for current sub-tab (contentHtml already built per subtab in return above)
   el.innerHTML=tabBar+'<div style="padding:8px;">'+contentHtml+'</div>';
+}
+
+function purchaseBillsRegRows(){
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var pBills=WA_BILLS.filter(function(b){return b.project_id===projId;}).slice().sort(function(a,b){return (a.bill_date||'').localeCompare(b.bill_date||'');});
+  return pBills.map(function(b){
+    var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+    var activeDed=ded.filter(function(d){return !d.released;});
+    var relDed=ded.filter(function(d){return d.released;});
+    var dedTotal=activeDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+    var relTotal=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+    var advAdjTotal=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+    var bPaid=WA_PAYMENTS.filter(function(py){return py.bill_id===b.id;});
+    var bPaidAmt=bPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
+    var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+    var addTotal=adds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+    var gross=parseFloat(b.bill_amount)||0;
+    var workAmt=Math.max(0,gross-addTotal);
+    var net=gross-dedTotal;
+    var bal=net-bPaidAmt-relTotal;
+    return {b:b,workAmt:workAmt,addTotal:addTotal,gross:gross,dedTotal:dedTotal,advAdjTotal:advAdjTotal,net:net,paid:bPaidAmt,bal:bal};
+  });
+}
+function purchaseBillsRegDownloadExcel(){
+  var rows=purchaseBillsRegRows();
+  if(!rows.length){toast('No purchase bills to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  function fmtD5(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var header=['Bill Ref/No','Date','Party','Party Type','Description','Work Amount','Additions','Gross Amount','Deductions Held','Net Payable','Paid','Balance Due'];
+  var lines=[[compName],['Purchase Bills Register - '+projName],[''],header];
+  var t={work:0,add:0,gross:0,ded:0,net:0,paid:0,bal:0};
+  rows.forEach(function(row){
+    var b=row.b;
+    t.work+=row.workAmt;t.add+=row.addTotal;t.gross+=row.gross;t.ded+=row.dedTotal;t.net+=row.net;t.paid+=row.paid;t.bal+=row.bal;
+    lines.push([b.bill_ref||('Bill #'+b.bill_number),fmtD5(b.bill_date),b.party_name,tLbl[b.party_type]||b.party_type||'',b.description||'',row.workAmt,row.addTotal,row.gross,row.dedTotal,row.net,row.paid,row.bal]);
+  });
+  lines.push(['','','','GRAND TOTAL','',t.work,t.add,t.gross,t.ded,t.net,t.paid,t.bal]);
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='PurchaseBillsRegister_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('Purchase Bills Register Excel downloaded','success');
+}
+function purchaseBillsRegDownloadPDF(){
+  var rows=purchaseBillsRegRows();
+  if(!rows.length){toast('No purchase bills to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  function fmtD5(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#1565C0;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">Bill Ref/No</th>'+
+    '<th style="'+thStyle+'text-align:center;">Date</th>'+
+    '<th style="'+thStyle+'text-align:left;">Party</th>'+
+    '<th style="'+thStyle+'text-align:left;">Type</th>'+
+    '<th style="'+thStyle+'">Gross Amount</th>'+
+    '<th style="'+thStyle+'">Deductions</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">Net Payable</th>'+
+    '<th style="'+thStyle+'">Paid</th>'+
+    '<th style="'+thStyle+'background:#B71C1C;">Balance Due</th>'+
+  '</tr>';
+  var tbody='';
+  var t={gross:0,ded:0,net:0,paid:0,bal:0};
+  rows.forEach(function(row,i){
+    var b=row.b;
+    t.gross+=row.gross;t.ded+=row.dedTotal;t.net+=row.net;t.paid+=row.paid;t.bal+=row.bal;
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+(b.bill_ref||('Bill #'+b.bill_number))+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD5(b.bill_date)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+b.party_name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(tLbl[b.party_type]||b.party_type||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Math.round(row.gross).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Math.round(row.dedTotal).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+Math.round(row.net).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Math.round(row.paid).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:'+(row.bal>0?'#C62828':'#2E7D32')+';">\u20b9'+Math.round(Math.abs(row.bal)).toLocaleString('en-IN')+(row.bal<0?' Cr':'')+'</td>'+
+    '</tr>';
+  });
+  tbody+='<tr style="background:#1565C0;color:white;">'+
+    '<td colspan="4" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.gross).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.ded).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.net).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.paid).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.bal).toLocaleString('en-IN')+'</td>'+
+  '</tr>';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Purchase Bills Register - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #1565C0;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#1565C0;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#1565C0;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Purchase Bills Register &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Purchase Bills Register | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 
