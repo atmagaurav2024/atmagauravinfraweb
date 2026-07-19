@@ -3604,7 +3604,7 @@ function execRenderSales(){
     {id:'genbill', label:'Generate Bill'},
     {id:'viewbills',label:'View Bills'}
   ];
-  var tabBar='<div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;">'+
+  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;">'+
     tabs.map(function(t){
       var active=SALES_SUBTAB===t.id;
       return '<button onclick="salesSubTab(\''+t.id+'\')" style="'+
@@ -3614,6 +3614,9 @@ function execRenderSales(){
         'border-bottom:'+(active?'2px solid #4A148C':'2px solid transparent')+';'+
         'margin-bottom:-2px;">'+t.label+'</button>';
     }).join('')+
+    '<div style="flex:1;"></div>'+
+    '<button onclick="salesRegDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;">&#128202; Excel</button>'+
+    '<button onclick="salesRegDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;">&#128196; PDF</button>'+
   '</div>';
 
   if(SALES_SUBTAB==='viewbills'){
@@ -3868,6 +3871,140 @@ function execRenderSales(){
 
   // Calculate initial total
   slUpdateTotal();
+}
+
+function salesRegRows(){
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var sBills=WA_SALES_BILLS.filter(function(b){return b.project_id===projId;});
+  return sBills.map(function(b){
+    var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+    var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+    var deds=[];try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+    var nonGstAdds=adds.filter(function(a){return !a.is_gst;});
+    var gstAdds=adds.filter(function(a){return a.is_gst;});
+    var workAmt=items.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+    var addAmt=nonGstAdds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+    var gstAmt=gstAdds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+    var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+    var bPays=WA_SALES_PAYMENTS?WA_SALES_PAYMENTS.filter(function(p){return p.sales_bill_id===b.id;}):[];
+    var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+    var balDue=(parseFloat(b.bill_amount)||0)-paidAmt;
+    return {b:b,workAmt:workAmt,addAmt:addAmt,gstAmt:gstAmt,dedAmt:dedAmt,paidAmt:paidAmt,balDue:balDue};
+  });
+}
+function salesRegDownloadExcel(){
+  var rows=salesRegRows();
+  if(!rows.length){toast('No sales bills to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  function fmtD3(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var header=['Bill Number','Bill Ref','Date','Work Amount','Additions','Deductions','GST','Bill Amount','Paid Amount','Balance Due'];
+  var lines=[[compName],['Sales Register - '+projName],[''],header];
+  var t={work:0,add:0,ded:0,gst:0,bill:0,paid:0,bal:0};
+  rows.forEach(function(row){
+    var b=row.b;
+    t.work+=row.workAmt;t.add+=row.addAmt;t.ded+=row.dedAmt;t.gst+=row.gstAmt;t.bill+=(parseFloat(b.bill_amount)||0);t.paid+=row.paidAmt;t.bal+=row.balDue;
+    lines.push([b.bill_number,b.bill_ref||'',fmtD3(b.bill_date),row.workAmt,row.addAmt,row.dedAmt,row.gstAmt,b.bill_amount,row.paidAmt,row.balDue]);
+  });
+  lines.push(['','','GRAND TOTAL',t.work,t.add,t.ded,t.gst,t.bill,t.paid,t.bal]);
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='SalesRegister_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('Sales Register Excel downloaded','success');
+}
+function salesRegDownloadPDF(){
+  var rows=salesRegRows();
+  if(!rows.length){toast('No sales bills to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  function fmtD3(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#4A148C;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">Bill Number</th>'+
+    '<th style="'+thStyle+'text-align:left;">Bill Ref</th>'+
+    '<th style="'+thStyle+'text-align:center;">Date</th>'+
+    '<th style="'+thStyle+'">Work Amount</th>'+
+    '<th style="'+thStyle+'">Additions</th>'+
+    '<th style="'+thStyle+'">Deductions</th>'+
+    '<th style="'+thStyle+'">GST</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">Bill Amount</th>'+
+    '<th style="'+thStyle+'">Paid Amount</th>'+
+    '<th style="'+thStyle+'background:#B71C1C;">Balance Due</th>'+
+  '</tr>';
+  var tbody='';
+  var t={work:0,add:0,ded:0,gst:0,bill:0,paid:0,bal:0};
+  rows.forEach(function(row,i){
+    var b=row.b;
+    t.work+=row.workAmt;t.add+=row.addAmt;t.ded+=row.dedAmt;t.gst+=row.gstAmt;t.bill+=(parseFloat(b.bill_amount)||0);t.paid+=row.paidAmt;t.bal+=row.balDue;
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+b.bill_number+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(b.bill_ref||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD3(b.bill_date)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Math.round(row.workAmt).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Math.round(row.addAmt).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Math.round(row.dedAmt).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Math.round(row.gstAmt).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+Math.round(b.bill_amount||0).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Math.round(row.paidAmt).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:'+(row.balDue>0?'#C62828':'#2E7D32')+';">\u20b9'+Math.round(Math.abs(row.balDue)).toLocaleString('en-IN')+(row.balDue<0?' Cr':'')+'</td>'+
+    '</tr>';
+  });
+  tbody+='<tr style="background:#4A148C;color:white;">'+
+    '<td colspan="3" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.work).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.add).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.ded).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.gst).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.bill).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.paid).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(t.bal).toLocaleString('en-IN')+'</td>'+
+  '</tr>';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Register - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #4A148C;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#4A148C;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#4A148C;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Sales Register &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Sales Register | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 function slUpdateTotal(){
