@@ -16780,6 +16780,15 @@ function annBuildStatement(records, periodLabel){
     '<th style="padding:7px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;background:#1B5E20;">Net Salary</th>'+
   '</tr>';
 
+  // ── Shared column widths (locks outer table and inner month-detail ─────
+  //    tables to identical widths, since separate <table> elements size
+  //    their columns independently based on their own content otherwise)
+  var colWidths=[30,150,90,70];
+  compKeys.forEach(function(){colWidths.push(70);});
+  if(hasOT) colWidths.push(60);
+  colWidths.push(75,60,60,60,60,60,75,85);
+  var colgroupHTML='<colgroup>'+colWidths.map(function(w){return '<col style="width:'+w+'px;">';}).join('')+'</colgroup>';
+
   // ── Body: each employee row + hidden month detail ─────────────────────
   var colCount=5+compKeys.length+(hasOT?1:0)+7; // for colspan
   var tbody=empList.map(function(e,i){
@@ -16806,7 +16815,8 @@ function annBuildStatement(records, periodLabel){
     // Hidden detail rows
     var detailRows='<tr id="'+uid+'" style="display:none;">'+
       '<td colspan="'+(colCount)+'" style="padding:0;">'+
-        '<table style="width:100%;border-collapse:collapse;">'+
+        '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">'+
+          colgroupHTML+
           buildMonthRows(e,colCount)+
         '</table>'+
       '</td>'+
@@ -16847,7 +16857,8 @@ function annBuildStatement(records, periodLabel){
         '</div>'+
       '</div>'+
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
-        '<table style="width:100%;border-collapse:collapse;min-width:820px;">'+
+        '<table style="width:100%;border-collapse:collapse;min-width:820px;table-layout:fixed;">'+
+          colgroupHTML+
           '<thead>'+thead+'</thead>'+
           '<tbody>'+tbody+'</tbody>'+
           '<tfoot>'+tfoot+'</tfoot>'+
