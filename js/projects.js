@@ -8900,11 +8900,124 @@ function grnRender(){
   }
 
   el.innerHTML=
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'+
       '<div style="font-size:13px;font-weight:800;color:#558B2F;">&#128230; Goods Received Notes — '+projName+'</div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button onclick="grnDownloadAllExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
+        '<button onclick="grnDownloadAllPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
+      '</div>'+
     '</div>'+
     summaryBar+pendingSection+
     (grnList||(!pending.length?'<div style="text-align:center;padding:30px;color:var(--text3);background:white;border-radius:12px;">No vendor allotments found for this project</div>':''));
+}
+function grnDownloadAllExcel(){
+  if(!GRN_ITEMS.length){toast('No GRN records to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var stLbl={accepted:'Accepted',rejected:'Rejected',partial:'Partial'};
+  function fmtD2(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var header=['GRN Number','Date','Resource','Party','BOQ Item','Ordered Qty','Received Qty','Unit','Status','Approval Status','Created By','Remarks'];
+  var lines=[[compName],['GRN Statement - '+projName],[''],header];
+  GRN_ITEMS.forEach(function(g){
+    var allot=GRN_ALLOTS.find(function(a){return a.id===g.allot_id;})||{};
+    var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+    var resName=planRes.party_name||planRes.resource_category||'';
+    var boqItem=WA_ITEMS.find(function(i){return i.id===allot.boq_item_id;})||{};
+    lines.push([g.grn_number,fmtD2(g.grn_date),resName,allot.party_name||'',(boqItem.item_code?'['+boqItem.item_code+'] ':'')+(boqItem.short_name||boqItem.description||''),allot.qty||'',g.qty_received,g.unit||allot.unit||'',stLbl[g.status]||g.status,g.approval_status==='approved'?'Approved':'Pending',g.created_by||'',g.remarks||'']);
+  });
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='GRN_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('GRN Excel downloaded','success');
+}
+function grnDownloadAllPDF(){
+  if(!GRN_ITEMS.length){toast('No GRN records to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var stLbl={accepted:'Accepted',rejected:'Rejected',partial:'Partial'};
+  var stCol={accepted:'#2E7D32',rejected:'#C62828',partial:'#F57F17'};
+  function fmtD2(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#558B2F;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">GRN Number</th>'+
+    '<th style="'+thStyle+'text-align:center;">Date</th>'+
+    '<th style="'+thStyle+'text-align:left;">Resource</th>'+
+    '<th style="'+thStyle+'text-align:left;">Party</th>'+
+    '<th style="'+thStyle+'text-align:left;">BOQ Item</th>'+
+    '<th style="'+thStyle+'">Ordered</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">Received</th>'+
+    '<th style="'+thStyle+'text-align:center;">Status</th>'+
+    '<th style="'+thStyle+'text-align:center;">Approval</th>'+
+    '<th style="'+thStyle+'text-align:left;">Created By</th>'+
+    '<th style="'+thStyle+'text-align:left;">Remarks</th>'+
+  '</tr>';
+  var tbody='';
+  GRN_ITEMS.forEach(function(g,i){
+    var allot=GRN_ALLOTS.find(function(a){return a.id===g.allot_id;})||{};
+    var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+    var resName=planRes.party_name||planRes.resource_category||'';
+    var boqItem=WA_ITEMS.find(function(x){return x.id===allot.boq_item_id;})||{};
+    var sc=stCol[g.status]||'#555';
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+g.grn_number+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD2(g.grn_date)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+resName+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(allot.party_name||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(boqItem.item_code?'['+boqItem.item_code+'] ':'')+(boqItem.short_name||boqItem.description||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(allot.qty||'')+' '+(allot.unit||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">'+g.qty_received+' '+(g.unit||allot.unit||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;font-weight:700;color:'+sc+';">'+(stLbl[g.status]||g.status)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(g.approval_status==='approved'?'Approved':'Pending')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(g.created_by||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(g.remarks||'')+'</td>'+
+    '</tr>';
+  });
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GRN Statement - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #558B2F;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#558B2F;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#558B2F;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>GRN Statement &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | GRN Statement | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 function grnOpenForm(allotId, projId){
@@ -9333,8 +9446,12 @@ function storeRender(){
   }).join('');
 
   el.innerHTML=
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'+
       '<div style="font-size:13px;font-weight:800;color:#6A1B9A;">&#127981; Store — '+projName+'</div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button onclick="storeDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
+        '<button onclick="storeDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
+      '</div>'+
     '</div>'+
     summaryBar+
     '<div style="background:white;border-radius:14px;overflow:hidden;">'+
@@ -9384,6 +9501,143 @@ function storeRender(){
         '</table>'+
         '</div></div>';
     })();
+}
+function storeGroupedItems(){
+  var grouped={},groupOrder=[];
+  STORE_ITEMS.forEach(function(item){
+    var key=(item.item_name||'').toLowerCase()+'__'+(item.unit||'').toLowerCase();
+    if(!grouped[key]){
+      grouped[key]={item_name:item.item_name,unit:item.unit||'',qty_in_hand:0,qty_issued:0,min_qty:parseFloat(item.min_qty)||0,last_grn_date:item.last_grn_date||''};
+      groupOrder.push(key);
+    }
+    grouped[key].qty_in_hand+=(parseFloat(item.qty_in_hand)||0);
+    grouped[key].qty_issued+=(parseFloat(item.qty_issued)||0);
+    if(item.last_grn_date&&item.last_grn_date>grouped[key].last_grn_date) grouped[key].last_grn_date=item.last_grn_date;
+  });
+  return groupOrder.map(function(k){return grouped[k];});
+}
+function storeDownloadExcel(){
+  var items=storeGroupedItems();
+  if(!items.length){toast('Store is empty, nothing to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  function fmtD2(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var header=['Material','In Hand','Issued','Total In','Unit','Last GRN Date'];
+  var lines=[[compName],['Store Inventory - '+projName],[''],header];
+  items.forEach(function(g){
+    lines.push([g.item_name,g.qty_in_hand,g.qty_issued,g.qty_in_hand+g.qty_issued,g.unit,fmtD2(g.last_grn_date)]);
+  });
+  var projLogs=STORE_ISSUE_LOG.filter(function(l){return l.project_id===(STORE_PROJ_ID||'');});
+  if(projLogs.length){
+    lines.push([]);
+    lines.push(['ISSUE LOG']);
+    lines.push(['Material','Qty Issued','Unit','Issued To','Date','Status']);
+    projLogs.forEach(function(log){
+      lines.push([log.item_name||'',parseFloat(log.qty_issued)||0,log.unit||'',log.issued_to||'',fmtD2(log.issue_date),(log.status||'available')]);
+    });
+  }
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Store_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('Store Excel downloaded','success');
+}
+function storeDownloadPDF(){
+  var items=storeGroupedItems();
+  if(!items.length){toast('Store is empty, nothing to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  function fmtD2(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#6A1B9A;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">Material</th>'+
+    '<th style="'+thStyle+'background:#4A148C;">In Hand</th>'+
+    '<th style="'+thStyle+'">Issued</th>'+
+    '<th style="'+thStyle+'">Total In</th>'+
+    '<th style="'+thStyle+'text-align:center;">Unit</th>'+
+    '<th style="'+thStyle+'text-align:center;">Last GRN Date</th>'+
+  '</tr>';
+  var tbody='';
+  items.forEach(function(g,i){
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-weight:700;">'+g.item_name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#6A1B9A;">'+g.qty_in_hand.toFixed(2)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;color:#E65100;">'+g.qty_issued.toFixed(2)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(g.qty_in_hand+g.qty_issued).toFixed(2)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+g.unit+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD2(g.last_grn_date)+'</td>'+
+    '</tr>';
+  });
+
+  var projLogs=STORE_ISSUE_LOG.filter(function(l){return l.project_id===(STORE_PROJ_ID||'');});
+  var logSection='';
+  if(projLogs.length){
+    var logThead='<tr style="background:#4A148C;color:white;">'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:left;">Material</th>'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:right;">Qty Issued</th>'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:left;">Issued To</th>'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:center;">Date</th>'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:center;">Status</th>'+
+    '</tr>';
+    var logTbody=projLogs.map(function(log,i){
+      var bg=i%2===0?'white':'#FAFAFA';
+      return '<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+        '<td style="padding:5px 8px;font-size:9px;">'+(log.item_name||'')+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(parseFloat(log.qty_issued)||0).toFixed(2)+' '+(log.unit||'')+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;">'+(log.issued_to||'')+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD2(log.issue_date)+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(log.status||'available')+'</td>'+
+      '</tr>';
+    }).join('');
+    logSection='<div class="sec-title">Issue Log</div><table><thead>'+logThead+'</thead><tbody>'+logTbody+'</tbody></table>';
+  }
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Store Inventory - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #6A1B9A;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#6A1B9A;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:16px;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '.sec-title{font-size:11px;font-weight:800;color:#6A1B9A;margin-bottom:6px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#6A1B9A;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Store Inventory &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    logSection+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Store Inventory | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 function storeIssue(itemId){
