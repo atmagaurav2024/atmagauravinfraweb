@@ -825,12 +825,125 @@ async function jmLoadItems(){
 function jmRender(){
   var el=document.getElementById('jm-content');if(!el)return;
   if(!JM_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items. Add BOQ items first.</div>';return;}
-  el.innerHTML=JM_ITEMS.map(function(item){
+  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="jmDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="jmDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+    JM_ITEMS.map(function(item){
     var boqQty=parseFloat(item.boq_qty)||0;var iJMs=JM_JMS.filter(function(j){return j.boq_item_id===item.id;});
     var totalJM=iJMs.reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
     var balance=boqQty-totalJM;var pct=boqQty>0?Math.min(100,Math.round(totalJM/boqQty*100)):0;
     return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;">'+(item.short_name||item.description)+'</div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:var(--text3);background:#F3F4F6;display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+'</div><div style="font-size:10px;color:var(--text3);">'+jm.date+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
   }).join('');
+}
+function jmProjName(){var projId=(document.getElementById('jm-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
+function jmDownloadExcel(){
+  if(!JM_ITEMS.length){toast('No BOQ items to export','warning');return;}
+  var projName=jmProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var header=['Item Code','Description','Unit','BOQ Qty','JM No','Date','JM Qty','Reference','Item Balance'];
+  var lines=[[compName],['Joint Measurement (JM) Statement - '+projName],[''],header];
+  JM_ITEMS.forEach(function(item){
+    var boqQty=parseFloat(item.boq_qty)||0;
+    var iJMs=JM_JMS.filter(function(j){return j.boq_item_id===item.id;});
+    var totalJM=iJMs.reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+    var balance=boqQty-totalJM;
+    if(iJMs.length){
+      iJMs.forEach(function(jm){
+        lines.push([item.item_code,item.short_name||item.description,item.unit,boqQty,'JM-'+jm.jm_number,jm.date,parseFloat(jm.jm_qty)||0,jm.reference||'',balance]);
+      });
+    } else {
+      lines.push([item.item_code,item.short_name||item.description,item.unit,boqQty,'','','','',balance]);
+    }
+  });
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='JM_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('JM Excel downloaded','success');
+}
+function jmDownloadPDF(){
+  if(!JM_ITEMS.length){toast('No BOQ items to export','warning');return;}
+  var projName=jmProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#283593;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">Item Code</th>'+
+    '<th style="'+thStyle+'text-align:left;">Description</th>'+
+    '<th style="'+thStyle+'text-align:center;">Unit</th>'+
+    '<th style="'+thStyle+'">BOQ Qty</th>'+
+    '<th style="'+thStyle+'text-align:center;">JM No</th>'+
+    '<th style="'+thStyle+'text-align:center;">Date</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">JM Qty</th>'+
+    '<th style="'+thStyle+'text-align:left;">Reference</th>'+
+    '<th style="'+thStyle+'">Item Balance</th>'+
+  '</tr>';
+  var tbody='';
+  JM_ITEMS.forEach(function(item,i){
+    var boqQty=parseFloat(item.boq_qty)||0;
+    var iJMs=JM_JMS.filter(function(j){return j.boq_item_id===item.id;});
+    var totalJM=iJMs.reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+    var balance=boqQty-totalJM;
+    var balColor=balance<0?'#C62828':'#283593';
+    var bg=i%2===0?'white':'#FAFAFA';
+    var rows=iJMs.length?iJMs:[null];
+    rows.forEach(function(jm,ri){
+      tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+        (ri===0?'<td style="padding:5px 8px;font-size:9px;font-family:monospace;font-weight:700;" rowspan="'+rows.length+'">'+item.item_code+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;" rowspan="'+rows.length+'">'+(item.short_name||item.description)+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:center;" rowspan="'+rows.length+'">'+item.unit+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:right;" rowspan="'+rows.length+'">'+boqQty+'</td>':'')+
+        (jm?
+          '<td style="padding:5px 8px;font-size:9px;text-align:center;">JM-'+jm.jm_number+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+jm.date+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">'+(parseFloat(jm.jm_qty)||0)+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;">'+(jm.reference||'')+'</td>'
+          :'<td colspan="3" style="padding:5px 8px;font-size:9px;color:var(--text3);text-align:center;">No JMs yet</td>'+'<td></td>')+
+        (ri===0?'<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:800;color:'+balColor+';" rowspan="'+rows.length+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</td>':'')+
+      '</tr>';
+    });
+  });
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>JM Statement - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #283593;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#283593;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#283593;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Joint Measurement (JM) Statement &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Joint Measurement Statement | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 function jmOpenAdd(itemId,boqQty,unit,editJM){
   var iJMs=JM_JMS.filter(function(j){return j.boq_item_id===itemId;});
