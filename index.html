@@ -2298,72 +2298,76 @@ async function loadDashboardInsights(){
   if(!gridEl) return;
   var inr=function(n){
     var v=Math.round(Number(n||0));
-    if(Math.abs(v)>=10000000) return '\u20b9'+(v/10000000).toFixed(2)+'Cr';
-    if(Math.abs(v)>=100000) return '\u20b9'+(v/100000).toFixed(2)+'L';
-    return '\u20b9'+v.toLocaleString('en-IN');
+    var sign=v<0?'-':'';
+    v=Math.abs(v);
+    if(v>=10000000) return sign+'\u20b9'+(v/10000000).toFixed(2)+'Cr';
+    if(v>=100000) return sign+'\u20b9'+(v/100000).toFixed(2)+'L';
+    return sign+'\u20b9'+v.toLocaleString('en-IN');
   };
   var safe=function(p){return p.catch(function(){return [];});};
   try{
     var r=await Promise.all([
       safe(sbFetch('projects',{select:'id,name,status'})),
       safe(sbFetch('employees',{select:'id,status'})),
-      safe(sbFetch('boq_items',{select:'project_id,boq_qty,rate'})),
-      safe(sbFetch('work_bills',{select:'project_id,party_name,party_type,bill_amount,deductions'})),
-      safe(sbFetch('work_payments',{select:'project_id,party_name,party_type,amount'})),
-      safe(sbFetch('sales_bills',{select:'project_id,bill_amount'})),
-      safe(sbFetch('sales_payments',{select:'project_id,amount'})),
+      safe(sbFetch('boq_items',{select:'id,project_id,item_code,short_name,description,unit,boq_qty,rate'})),
+      safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,exec_type,rate',filter:'exec_type=neq.planned'})),
+      safe(sbFetch('work_daily_progress',{select:'id,project_id,boq_item_id,qty_done,resources_used'})),
       safe(sbFetch('resource_requisitions',{select:'id,status',filter:'status=eq.pending'})),
       safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'}))
     ]);
-    var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], workBills=r[3]||[], workPayments=r[4]||[],
-        salesBills=r[5]||[], salesPayments=r[6]||[], pendingRRs=r[7]||[], storeItems=r[8]||[];
+    var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
+        pendingRRs=r[5]||[], storeItems=r[6]||[];
 
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
     var activeStatuses=['active','in-progress','rr','planning'];
     var activeProjects=projects.filter(function(p){return activeStatuses.indexOf(p.status)>-1;}).length;
-
     var activeWorkforce=employees.filter(function(e){return e.status==='active';}).length;
 
-    // Contract value per project (BOQ qty * rate)
-    var contractByProj={};
-    boqItems.forEach(function(it){
-      var v=(parseFloat(it.boq_qty)||0)*(parseFloat(it.rate)||0);
-      contractByProj[it.project_id]=(contractByProj[it.project_id]||0)+v;
-    });
-    var totalContractValue=Object.keys(contractByProj).reduce(function(s,k){return s+contractByProj[k];},0);
+    // ── Profit/Loss per BOQ item ──────────────────────────────────────────
+    // Revenue = qty executed (from daily progress) x BOQ contract rate
+    // Cost    = sum of (resource qty used x that resource's allotted rate)
+    var boqById={}; boqItems.forEach(function(it){boqById[it.id]=it;});
+    var resById={}; execResources.forEach(function(res){resById[res.id]=res;});
 
-    // Work bills: net payable (gross - active deductions) per project & per party
-    var executedByProj={}, payableByParty={};
-    var totalGrossBilled=0, totalDedHeld=0;
-    workBills.forEach(function(b){
-      var ded=[]; try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
-      var activeDed=ded.filter(function(d){return !d.released;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-      var gross=parseFloat(b.bill_amount)||0;
-      var net=gross-activeDed;
-      totalGrossBilled+=gross; totalDedHeld+=activeDed;
-      executedByProj[b.project_id]=(executedByProj[b.project_id]||0)+net;
-      var pk=(b.party_type||'')+'::'+b.party_name;
-      if(!payableByParty[pk]) payableByParty[pk]={name:b.party_name,type:b.party_type,net:0,paid:0};
-      payableByParty[pk].net+=net;
+    var itemStats={}; // boq_item_id -> {qtyDone, cost}
+    dailyProgress.forEach(function(d){
+      if(!d.boq_item_id) return;
+      if(!itemStats[d.boq_item_id]) itemStats[d.boq_item_id]={qtyDone:0,cost:0};
+      itemStats[d.boq_item_id].qtyDone+=(parseFloat(d.qty_done)||0);
+      var resources=[]; try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
+      resources.forEach(function(rUse){
+        var res=resById[rUse.allot_id];
+        var rate=res?(parseFloat(res.rate)||0):0;
+        itemStats[d.boq_item_id].cost+=(parseFloat(rUse.qty)||0)*rate;
+      });
     });
-    var totalExecuted=totalGrossBilled-totalDedHeld;
-    workPayments.forEach(function(p){
-      var pk=(p.party_type||'')+'::'+p.party_name;
-      if(!payableByParty[pk]) payableByParty[pk]={name:p.party_name,type:p.party_type,net:0,paid:0};
-      payableByParty[pk].paid+=(parseFloat(p.amount)||0);
+
+    var itemPL=Object.keys(itemStats).map(function(itemId){
+      var item=boqById[itemId];
+      if(!item) return null;
+      var stat=itemStats[itemId];
+      var revenue=stat.qtyDone*(parseFloat(item.rate)||0);
+      var profit=revenue-stat.cost;
+      return {item:item,projName:projName[item.project_id]||'Unknown Project',qtyDone:stat.qtyDone,revenue:revenue,cost:stat.cost,profit:profit};
+    }).filter(Boolean).filter(function(x){return x.qtyDone>0;});
+
+    var totalRevenue=itemPL.reduce(function(s,x){return s+x.revenue;},0);
+    var totalCost=itemPL.reduce(function(s,x){return s+x.cost;},0);
+    var totalProfit=totalRevenue-totalCost;
+    var marginPct=totalRevenue>0?Math.round(totalProfit/totalRevenue*100):0;
+
+    // ── Project-wise profit/loss ──
+    var plByProj={};
+    itemPL.forEach(function(x){
+      var pid=x.item.project_id;
+      if(!plByProj[pid]) plByProj[pid]={revenue:0,cost:0,profit:0};
+      plByProj[pid].revenue+=x.revenue; plByProj[pid].cost+=x.cost; plByProj[pid].profit+=x.profit;
     });
-    var totalPaidToParties=workPayments.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
-    var totalPayable=Math.max(0,totalExecuted-totalPaidToParties);
+    var projPLRows=Object.keys(plByProj).map(function(pid){
+      return {name:projName[pid]||'Unknown Project',revenue:plByProj[pid].revenue,cost:plByProj[pid].cost,profit:plByProj[pid].profit};
+    }).sort(function(a,b){return b.profit-a.profit;});
 
-    // Sales: billed vs collected, per project for receivables
-    var salesByProj={}, salesPaidByProj={};
-    salesBills.forEach(function(b){salesByProj[b.project_id]=(salesByProj[b.project_id]||0)+(parseFloat(b.bill_amount)||0);});
-    salesPayments.forEach(function(p){salesPaidByProj[p.project_id]=(salesPaidByProj[p.project_id]||0)+(parseFloat(p.amount)||0);});
-    var totalSalesBilled=Object.keys(salesByProj).reduce(function(s,k){return s+salesByProj[k];},0);
-    var totalSalesCollected=Object.keys(salesPaidByProj).reduce(function(s,k){return s+salesPaidByProj[k];},0);
-    var totalReceivable=Math.max(0,totalSalesBilled-totalSalesCollected);
-
-    // Low stock: qty in hand <= min_qty (min_qty>0), grouped by item+project
+    // ── Low stock ──
     var stockGroups={};
     storeItems.forEach(function(it){
       var key=it.project_id+'__'+(it.item_name||'').toLowerCase()+'__'+(it.unit||'').toLowerCase();
@@ -2371,8 +2375,6 @@ async function loadDashboardInsights(){
       stockGroups[key].qty+=(parseFloat(it.qty_in_hand)||0);
     });
     var lowStock=Object.keys(stockGroups).map(function(k){return stockGroups[k];}).filter(function(g){return g.min_qty>0&&g.qty<=g.min_qty;});
-
-    var execPct=totalContractValue>0?Math.min(100,Math.round(totalExecuted/totalContractValue*100)):0;
 
     // ── KPI cards ──
     function kpiCard(icon,label,value,sub,color){
@@ -2383,57 +2385,23 @@ async function loadDashboardInsights(){
         (sub?'<div style="font-size:9px;color:var(--text3);margin-top:2px;">'+sub+'</div>':'')+
       '</div>';
     }
+    var plColor=totalProfit>=0?'#2E7D32':'#C62828';
     gridEl.innerHTML=
-      kpiCard('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'total projects','#1565C0')+
+      kpiCard(totalProfit>=0?'&#128200;':'&#128201;','NET PROFIT / LOSS',inr(totalProfit),marginPct+'% margin',plColor)+
+      kpiCard('&#128176;','REVENUE (EXECUTED)',inr(totalRevenue),'qty done \u00d7 BOQ rate','#1565C0')+
+      kpiCard('&#128295;','COST (EXECUTED)',inr(totalCost),'resource cost incurred','#E65100')+
+      kpiCard('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'total projects','#6A1B9A')+
       kpiCard('&#128119;','WORKFORCE',activeWorkforce,'active employees','#2E7D32')+
-      kpiCard('&#128203;','CONTRACT VALUE',inr(totalContractValue),'across all BOQs','#6A1B9A')+
-      kpiCard('&#128295;','WORK EXECUTED',inr(totalExecuted),execPct+'% of contract value','#E65100')+
-      kpiCard('&#128176;','SALES BILLED',inr(totalSalesBilled),inr(totalSalesCollected)+' collected','#1565C0')+
-      kpiCard('&#128202;','RECEIVABLE',inr(totalReceivable),'from clients','#00838F')+
-      kpiCard('&#128181;','PAYABLE',inr(totalPayable),'to vendors/contractors','#C62828')+
       kpiCard('&#9203;','PENDING RRs',pendingRRs.length,'awaiting approval','#F57F17')+
       kpiCard('&#128230;','LOW STOCK',lowStock.length,'items below min qty','#B71C1C');
 
-    // ── KRA: Project-wise execution progress ──
-    var projRows=projects.filter(function(p){return contractByProj[p.id]>0;})
-      .sort(function(a,b){return (contractByProj[b.id]||0)-(contractByProj[a.id]||0);})
-      .slice(0,6)
-      .map(function(p){
-        var cv=contractByProj[p.id]||0;
-        var ex=executedByProj[p.id]||0;
-        var pct=cv>0?Math.min(100,Math.round(ex/cv*100)):0;
-        var barColor=pct>=80?'#2E7D32':(pct>=40?'#F57F17':'#C62828');
-        return '<div style="margin-bottom:10px;">'+
-          '<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">'+
-            '<span style="font-weight:700;">'+p.name+'</span>'+
-            '<span style="color:var(--text3);">'+inr(ex)+' / '+inr(cv)+' ('+pct+'%)</span>'+
-          '</div>'+
-          '<div style="background:#EEE;border-radius:6px;height:7px;overflow:hidden;">'+
-            '<div style="background:'+barColor+';height:100%;width:'+pct+'%;"></div>'+
-          '</div>'+
-        '</div>';
-      }).join('');
-
-    // ── KRA: Top receivables by project ──
-    var recvRows=Object.keys(salesByProj).map(function(pid){
-      var bal=(salesByProj[pid]||0)-(salesPaidByProj[pid]||0);
-      return {name:projName[pid]||'Unknown Project',bal:bal};
-    }).filter(function(x){return x.bal>1;}).sort(function(a,b){return b.bal-a.bal;}).slice(0,5);
-
-    // ── KRA: Top payables by party ──
-    var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-    var payRows=Object.keys(payableByParty).map(function(k){
-      var g=payableByParty[k];
-      return {name:g.name,type:tLbl[g.type]||g.type||'',bal:g.net-g.paid};
-    }).filter(function(x){return x.bal>1;}).sort(function(a,b){return b.bal-a.bal;}).slice(0,5);
-
+    // ── KRA sections ──
     function listRow(label,sub,val,color){
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #F5F5F5;">'+
         '<div><div style="font-size:12px;font-weight:700;">'+label+'</div>'+(sub?'<div style="font-size:9px;color:var(--text3);">'+sub+'</div>':'')+'</div>'+
-        '<div style="font-size:12px;font-weight:800;color:'+color+';">'+val+'</div>'+
+        '<div style="font-size:12px;font-weight:800;color:'+color+';white-space:nowrap;">'+val+'</div>'+
       '</div>';
     }
-
     function kraCard(title,color,inner){
       return '<div style="background:white;border-radius:14px;padding:14px;margin-bottom:12px;">'+
         '<div style="font-size:12px;font-weight:800;color:'+color+';margin-bottom:8px;">'+title+'</div>'+
@@ -2441,15 +2409,28 @@ async function loadDashboardInsights(){
       '</div>';
     }
 
+    var topProfit=itemPL.slice().sort(function(a,b){return b.profit-a.profit;}).slice(0,5)
+      .filter(function(x){return x.profit>0;})
+      .map(function(x){return listRow((x.item.item_code?'['+x.item.item_code+'] ':'')+(x.item.short_name||x.item.description||''),x.projName,inr(x.profit),'#2E7D32');}).join('');
+
+    var topLoss=itemPL.slice().sort(function(a,b){return a.profit-b.profit;}).slice(0,5)
+      .filter(function(x){return x.profit<0;})
+      .map(function(x){return listRow((x.item.item_code?'['+x.item.item_code+'] ':'')+(x.item.short_name||x.item.description||''),x.projName,inr(x.profit),'#C62828');}).join('');
+
+    var projPLHtml=projPLRows.slice(0,8).map(function(p){
+      return listRow(p.name,inr(p.revenue)+' rev &bull; '+inr(p.cost)+' cost',inr(p.profit),p.profit>=0?'#2E7D32':'#C62828');
+    }).join('');
+
     var lowStockRows=lowStock.slice(0,5).map(function(g){
       return listRow(g.item_name,(projName[g.project_id]||'')+' &bull; min '+g.min_qty+' '+g.unit,g.qty+' '+g.unit,'#C62828');
     }).join('');
 
     kraEl.innerHTML=
-      (projRows?kraCard('&#128208; Project-wise Execution Progress','#1565C0',projRows):'')+
-      (recvRows.length?kraCard('&#128202; Top Receivables (from clients)','#00838F',recvRows.map(function(x){return listRow(x.name,'',inr(x.bal),'#00838F');}).join('')):'')+
-      (payRows.length?kraCard('&#128181; Top Payables (to vendors/contractors)','#C62828',payRows.map(function(x){return listRow(x.name,x.type,inr(x.bal),'#C62828');}).join('')):'')+
-      (lowStockRows?kraCard('&#128230; Low Stock Alerts','#B71C1C',lowStockRows):'');
+      (projPLHtml?kraCard('&#128202; Project-wise Profit / Loss','#1565C0',projPLHtml):'')+
+      (topProfit?kraCard('&#128200; Most Profitable Items','#2E7D32',topProfit):'')+
+      (topLoss?kraCard('&#128201; Most Loss-Making Items','#C62828',topLoss):'')+
+      (lowStockRows?kraCard('&#128230; Low Stock Alerts','#B71C1C',lowStockRows):'')+
+      (!itemPL.length?'<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;background:white;border-radius:14px;">No executed work logged yet \u2014 profit/loss appears once Daily Progress entries are recorded.</div>':'');
 
   }catch(e){
     console.error('Dashboard insights error:',e);
