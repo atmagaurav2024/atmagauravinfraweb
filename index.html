@@ -8479,7 +8479,7 @@ var PROJ_MOD_SEL_ID = '';           // selected project id
 
 var PMT_GROUPS = {
   preconstruction: ['boq','jm','planning'],
-  construction:    ['rr','execution','allotted','daily','grn','store']
+  construction:    ['rr','execution','allotted','daily','executedwork','grn','store']
 };
 
 // ── Project selector (hidden, kept for compat) ────────────
@@ -8497,7 +8497,7 @@ function projModRenderNav(){
   var hasProjId=!!PROJ_MOD_SEL_ID;
   var onProjects=PROJ_MOD_TAB==='projects';
 
-  var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',grn:'GRN',store:'Store'};
+  var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',executedwork:'Executed Work',grn:'GRN',store:'Store'};
   var activeGroup='';
   if(PMT_GROUPS.preconstruction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='preconstruction';
   else if(PMT_GROUPS.construction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='construction';

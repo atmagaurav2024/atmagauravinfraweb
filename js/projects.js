@@ -193,6 +193,7 @@ function projModLoadTab(){
     execution: {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allot';    execSwitchTab(); }},
     allotted:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='allotted'; execSwitchTab(); }},
     daily:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='daily';    execSwitchTab(); }},
+    executedwork: {cont:'exec-content', sel:'exec-proj-sel', fn: function(){ WA_SUBTAB='executedwork'; execSwitchTab(); }},
     grn:       {cont:'grn-content',   sel:'grn-proj-sel',   fn: function(){ grnLoadItems(); }},
     store:     {cont:'store-content', sel:'store-proj-sel', fn: function(){ storeLoadItems(); }},
     bills:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills';    execSwitchTab(); }},
@@ -2173,6 +2174,7 @@ async function execRenderSubTab(){
   }
   else if(WA_SUBTAB==='allotted') execRenderAllotted();
   else if(WA_SUBTAB==='daily') execRenderDaily();
+  else if(WA_SUBTAB==='executedwork') execRenderExecutedWork();
   else if(WA_SUBTAB==='bills') execRenderBills();
   else if(WA_SUBTAB==='orders') execRenderOrders();
   else if(WA_SUBTAB==='sales') execRenderSales();
@@ -5271,6 +5273,66 @@ function execDailyDownloadPDF(){
     '</body></html>';
 
   openPDF(html);
+}
+
+function execRenderExecutedWork(){
+  var el=document.getElementById('exec-content');if(!el)return;
+  var rows=execDailyFlattenRows();
+  if(!rows.length){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128203;</div><div style="font-weight:700;margin-top:8px;">No executed work logged yet</div><div style="font-size:12px;margin-top:4px;">Log progress in the Daily Progress tab first</div></div>';
+    return;
+  }
+  var summaries=execDailyItemSummaries(rows);
+  var grandTotal=summaries.reduce(function(s,x){return s+x.itemTotalAmount;},0);
+  var inr=function(n){return '\u20b9'+Math.round(Number(n||0)).toLocaleString('en-IN');};
+
+  var cards=summaries.map(function(s){
+    var itemRateArrived=s.totalQtyDone>0?(s.itemTotalAmount/s.totalQtyDone):0;
+    var resRows=s.resources.map(function(r){
+      var rateArrived=r.totalQty>0?(r.totalAmount/r.totalQty):0;
+      return '<tr style="border-bottom:1px solid #F5F5F5;">'+
+        '<td style="padding:6px 8px;font-size:11px;">'+r.type+': '+r.party+'</td>'+
+        '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+r.totalQty+' '+r.unit+'</td>'+
+        '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#2E7D32;">'+inr(r.totalAmount)+'</td>'+
+        '<td style="padding:6px 8px;font-size:11px;text-align:right;color:var(--text3);">'+inr(rateArrived)+'</td>'+
+      '</tr>';
+    }).join('');
+    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+      '<div style="padding:10px 14px;background:#FFF3E0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'+
+        '<div>'+
+          '<span style="font-size:11px;font-family:monospace;font-weight:800;color:#E65100;">'+(s.item.item_code||'')+'</span>'+
+          '<span style="font-size:12px;font-weight:800;margin-left:8px;">'+(s.item.short_name||s.item.description||'')+'</span>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:800;color:#E65100;">Total Qty Executed: '+s.totalQtyDone+' '+s.unit+'</div>'+
+      '</div>'+
+      (resRows?'<table style="width:100%;border-collapse:collapse;">'+
+        '<thead><tr style="background:#FAFAFA;">'+
+          '<th style="padding:5px 8px;font-size:9px;font-weight:800;text-align:left;color:var(--text3);">RESOURCE</th>'+
+          '<th style="padding:5px 8px;font-size:9px;font-weight:800;text-align:right;color:var(--text3);">QTY UTILISED</th>'+
+          '<th style="padding:5px 8px;font-size:9px;font-weight:800;text-align:right;color:var(--text3);">AMOUNT</th>'+
+          '<th style="padding:5px 8px;font-size:9px;font-weight:800;text-align:right;color:var(--text3);">RATE ARRIVED</th>'+
+        '</tr></thead><tbody>'+resRows+'</tbody></table>'
+        :'<div style="padding:10px 14px;font-size:11px;color:var(--text3);">No resources logged against this item</div>')+
+      '<div style="padding:8px 14px;background:#FFF8F0;display:flex;justify-content:flex-end;gap:16px;align-items:center;border-top:2px solid #FFCC80;">'+
+        '<span style="font-size:11px;font-weight:800;color:#E65100;">Item Total: '+inr(s.itemTotalAmount)+'</span>'+
+        '<span style="font-size:10px;color:var(--text3);">Rate Arrived: '+inr(itemRateArrived)+'</span>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'+
+      '<div style="font-size:13px;font-weight:800;color:#E65100;">&#9989; Executed Work &mdash; Item-wise Summary</div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button onclick="execDailyDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
+        '<button onclick="execDailyDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
+      '</div>'+
+    '</div>'+
+    cards+
+    '<div style="background:#E65100;color:white;border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:4px;">'+
+      '<span style="font-size:13px;font-weight:800;">GRAND TOTAL</span>'+
+      '<span style="font-size:16px;font-weight:900;">'+inr(grandTotal)+'</span>'+
+    '</div>';
 }
 
 function execRenderDailyContent(){
