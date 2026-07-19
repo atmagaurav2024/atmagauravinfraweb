@@ -16794,6 +16794,7 @@ function annBuildStatement(records, periodLabel){
         '<div style="font-size:9px;color:#1565C0;">'+e.months+' month(s) &bull; '+e.dept+'</div>'+
         (e.pan&&e.pan!=='—'?'<div style="font-size:9px;color:#6A1B9A;font-weight:700;">PAN: '+e.pan+'</div>':'')+
       '</td>'+
+      '<td style="padding:8px;font-size:10px;text-align:center;color:var(--text3);">&mdash;</td>'+
       td(e.basic)+
       compKeys.map(function(k){return td(e.extra[k]||0);}).join('')+
       (hasOT?td(e.ot_pay):'')+
@@ -16816,6 +16817,7 @@ function annBuildStatement(records, periodLabel){
   // ── Footer totals ──────────────────────────────────────────────────────
   var tfoot='<tr style="border-top:3px solid #1B5E20;background:#E8F5E9;font-weight:900;">'+
     '<td colspan="2" style="padding:9px 8px;font-size:11px;font-weight:800;color:#1B5E20;">TOTAL &mdash; '+empList.length+' employees</td>'+
+    '<td style="padding:9px 8px;text-align:center;font-size:11px;color:#1B5E20;">&mdash;</td>'+
     '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.basic)+'</td>'+
     compKeys.map(function(k){return '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.extra[k]||0)+'</td>';}).join('')+
     (hasOT?'<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.ot_pay)+'</td>':'')+
