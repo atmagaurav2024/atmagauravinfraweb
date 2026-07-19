@@ -1511,7 +1511,7 @@ input,select,textarea{font-size:16px !important;}
     </div>
     <div style="margin-top:14px;">
       <select id="dash-proj-filter" onchange="loadDashboardInsights(this.value)" style="width:100%;background:rgba(255,255,255,.1);color:white;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:'Nunito',sans-serif;outline:none;">
-        <option value="">&#128203; All Projects</option>
+        <option value="" style="color:#111827;background:white;">&#128203; All Projects</option>
       </select>
     </div>
     <div class="dt-kpis">
@@ -2328,9 +2328,9 @@ async function loadDashboardInsights(filterProjId){
     // ── Populate / preserve the project filter dropdown ──
     var selectedProject=projects.find(function(p){return p.id===filterProjId;});
     if(filterEl){
-      filterEl.innerHTML='<option value="">&#128203; All Projects</option>'+
+      filterEl.innerHTML='<option value="" style="color:#111827;background:white;">&#128203; All Projects</option>'+
         projects.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');})
-          .map(function(p){return '<option value="'+p.id+'"'+(p.id===filterProjId?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
+          .map(function(p){return '<option value="'+p.id+'" style="color:#111827;background:white;"'+(p.id===filterProjId?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
     }
 
     // ── Apply project filter (if any) to all project-scoped data ──
