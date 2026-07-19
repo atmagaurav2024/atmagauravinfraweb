@@ -2262,7 +2262,9 @@ function execRender(){
     ? '<div style="margin-bottom:10px;"><button onclick="execOpenMultiAllot()" style="width:100%;padding:10px;background:#1B5E20;color:white;border:none;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#10010; Allot Multiple BOQ Items at Once ('+totalUnallotted+' items available)</button></div>'
     : '';
 
-  el.innerHTML=multiBtn+itemsHtml+orphanHtml;
+  var dlBtns='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="execAllotDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="execAllotDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>';
+
+  el.innerHTML=dlBtns+multiBtn+itemsHtml+orphanHtml;
 
   function resRow(res,itemUnit,tCol,tLbl){
     var resUnit=res.unit||itemUnit;
@@ -2308,6 +2310,122 @@ function execRender(){
   }
 }
 
+function execProjName(){var projSel=document.getElementById('proj-mod-sel');return (projSel&&projSel.options&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'');}
+function execAllotFlattenRows(){
+  var rows=[];
+  WA_ITEMS.forEach(function(item){
+    var iRes=WA_PLANNED.filter(function(r){return r.boq_item_id===item.id;});
+    iRes.forEach(function(res){
+      var totalAllotted=WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;}).reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
+      var rrApproved=WA_APPROVED_RRS.filter(function(rr){return rr.plan_res_id===res.id;}).reduce(function(s,rr){return s+(parseFloat(rr.qty)||0);},0);
+      var bal=Math.max(0,(parseFloat(res.qty)||0)-totalAllotted);
+      rows.push({item:item,res:res,planQty:parseFloat(res.qty)||0,rrApproved:rrApproved,allotted:totalAllotted,bal:bal});
+    });
+  });
+  var knownItemIds=WA_ITEMS.map(function(i){return i.id;});
+  WA_PLANNED.filter(function(r){return !knownItemIds.includes(r.boq_item_id);}).forEach(function(res){
+    var totalAllotted=WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===res.id;}).reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
+    var rrApproved=WA_APPROVED_RRS.filter(function(rr){return rr.plan_res_id===res.id;}).reduce(function(s,rr){return s+(parseFloat(rr.qty)||0);},0);
+    var bal=Math.max(0,(parseFloat(res.qty)||0)-totalAllotted);
+    rows.push({item:{item_code:'—',short_name:'Uncategorized'},res:res,planQty:parseFloat(res.qty)||0,rrApproved:rrApproved,allotted:totalAllotted,bal:bal});
+  });
+  return rows;
+}
+function execAllotDownloadExcel(){
+  var rows=execAllotFlattenRows();
+  if(!rows.length){toast('No planned resources to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var header=['Item Code','Description','Party Name','Type','Planned Qty','Unit','RR Approved','Allotted','Balance'];
+  var lines=[[compName],['Work Allotment Statement - '+projName],[''],header];
+  rows.forEach(function(row){
+    lines.push([row.item.item_code,row.item.short_name||row.item.description||'',row.res.party_name,tLbl[row.res.exec_type]||row.res.exec_type||'',row.planQty,row.res.unit||'',row.rrApproved,row.allotted,row.bal]);
+  });
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='WorkAllotment_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('Work Allotment Excel downloaded','success');
+}
+function execAllotDownloadPDF(){
+  var rows=execAllotFlattenRows();
+  if(!rows.length){toast('No planned resources to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#E65100;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">Item Code</th>'+
+    '<th style="'+thStyle+'text-align:left;">Description</th>'+
+    '<th style="'+thStyle+'text-align:left;">Party Name</th>'+
+    '<th style="'+thStyle+'text-align:left;">Type</th>'+
+    '<th style="'+thStyle+'">Planned Qty</th>'+
+    '<th style="'+thStyle+'text-align:center;">Unit</th>'+
+    '<th style="'+thStyle+'">RR Approved</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">Allotted</th>'+
+    '<th style="'+thStyle+'">Balance</th>'+
+  '</tr>';
+  var tbody='';
+  rows.forEach(function(row,i){
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+row.item.item_code+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(row.item.short_name||row.item.description||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+row.res.party_name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(tLbl[row.res.exec_type]||row.res.exec_type||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+row.planQty+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(row.res.unit||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+row.rrApproved+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">'+row.allotted+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:'+(row.bal>0?'#E65100':'#2E7D32')+';">'+row.bal.toFixed(3).replace(/\.?0+$/,'')+'</td>'+
+    '</tr>';
+  });
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Work Allotment - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #E65100;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#E65100;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#E65100;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Work Allotment Statement &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Work Allotment Statement | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // MULTI-ITEM WORK ALLOTMENT
@@ -3995,7 +4113,8 @@ function execRenderAllotted(){
     batches[key].items.push(a);
   });
 
-  el.innerHTML = batchOrder.map(function(batchKey){
+  el.innerHTML = '<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="execAllottedDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="execAllottedDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+    batchOrder.map(function(batchKey){
     var batch = batches[batchKey];
     var items = batch.items;
 
@@ -4108,6 +4227,126 @@ function execRenderAllotted(){
       downloadRow+
     '</div>';
   }).join('');
+}
+function execAllottedDownloadExcel(){
+  if(!WA_ALLOT.length){toast('No allotments to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var header=['Item Code','Description','Resource','Party (Paid To)','Type','Qty','Unit','Rate','Amount','Date','Doc Status','Advance Paid'];
+  var lines=[[compName],['Work Allotment Register - '+projName],[''],header];
+  var total=0,totalAdv=0;
+  WA_ALLOT.forEach(function(a){
+    var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+    var boqItem=WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
+    var itemOrders=WA_ORDERS.filter(function(o){return o.allot_id===a.id;});
+    var advs=WA_ADVANCES.filter(function(x){return x.allot_id===a.id;});
+    var advTotal=advs.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+    var amt=(parseFloat(a.qty)||0)*(parseFloat(a.rate)||0);
+    total+=amt; totalAdv+=advTotal;
+    lines.push([boqItem.item_code||'',boqItem.short_name||boqItem.description||'',planRes.party_name||planRes.resource_category||'',a.party_name,tLbl[a.exec_type]||a.exec_type||'',a.qty,a.unit||'',a.rate||0,amt,(a.date||'').slice(0,10),itemOrders.length?'Doc Issued':'Pending',advTotal]);
+  });
+  lines.push(['','','','','','','','GRAND TOTAL',total,'','',totalAdv]);
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Allotted_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('Allotted Excel downloaded','success');
+}
+function execAllottedDownloadPDF(){
+  if(!WA_ALLOT.length){toast('No allotments to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#1B5E20;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">Item Code</th>'+
+    '<th style="'+thStyle+'text-align:left;">Description</th>'+
+    '<th style="'+thStyle+'text-align:left;">Resource</th>'+
+    '<th style="'+thStyle+'text-align:left;">Party (Paid To)</th>'+
+    '<th style="'+thStyle+'text-align:left;">Type</th>'+
+    '<th style="'+thStyle+'">Qty</th>'+
+    '<th style="'+thStyle+'">Rate</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">Amount</th>'+
+    '<th style="'+thStyle+'text-align:center;">Date</th>'+
+    '<th style="'+thStyle+'text-align:center;">Doc Status</th>'+
+    '<th style="'+thStyle+'">Advance</th>'+
+  '</tr>';
+  var tbody='';
+  var total=0,totalAdv=0;
+  WA_ALLOT.forEach(function(a,i){
+    var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+    var boqItem=WA_ITEMS.find(function(x){return x.id===(a.boq_item_id||planRes.boq_item_id);})||{};
+    var itemOrders=WA_ORDERS.filter(function(o){return o.allot_id===a.id;});
+    var advs=WA_ADVANCES.filter(function(x){return x.allot_id===a.id;});
+    var advTotal=advs.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+    var amt=(parseFloat(a.qty)||0)*(parseFloat(a.rate)||0);
+    total+=amt; totalAdv+=advTotal;
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+(boqItem.item_code||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(boqItem.short_name||boqItem.description||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(planRes.party_name||planRes.resource_category||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+a.party_name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(tLbl[a.exec_type]||a.exec_type||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+a.qty+' '+(a.unit||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+Number(a.rate||0).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+Math.round(amt).toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(a.date||'').slice(0,10)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;font-weight:700;color:'+(itemOrders.length?'#2E7D32':'#E65100')+';">'+(itemOrders.length?'Doc Issued':'Pending')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(advTotal?'\u20b9'+Math.round(advTotal).toLocaleString('en-IN'):'')+'</td>'+
+    '</tr>';
+  });
+  tbody+='<tr style="background:#1B5E20;color:white;">'+
+    '<td colspan="7" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(total).toLocaleString('en-IN')+'</td>'+
+    '<td colspan="2"></td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(totalAdv).toLocaleString('en-IN')+'</td>'+
+  '</tr>';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Work Allotment Register - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #1B5E20;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#1B5E20;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#1B5E20;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Work Allotment Register &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Work Allotment Register | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 async function execGenPartyDoc(partyKey, docType){
