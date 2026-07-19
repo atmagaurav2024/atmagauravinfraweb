@@ -4191,10 +4191,140 @@ function execRenderOrders(){
     '</div>';
   };
 
-  el.innerHTML='<div style="padding:8px;">'+
+  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;padding:0 8px;"><button onclick="execOrdersDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="execOrdersDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+    '<div style="padding:8px;">'+
     renderGroup(byNum.wo,'Work Orders','#E65100','WO')+
     renderGroup(byNum.po,'Purchase Orders','#1565C0','PO')+
   '</div>';
+}
+function execOrdersGrouped(){
+  var byNum={wo:{},po:{}};
+  WA_ORDERS.forEach(function(o){
+    var type=o.doc_type==='wo'?'wo':'po';
+    var num=o.doc_number||'?';
+    if(!byNum[type][num]) byNum[type][num]={num:num,party_name:o.party_name,party_type:o.party_type,doc_date:o.doc_date,items:[],totalAmt:0};
+    byNum[type][num].items.push(o);
+    byNum[type][num].totalAmt+=parseFloat(o.amount)||0;
+  });
+  function toList(numMap){
+    return Object.keys(numMap).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});}).map(function(k){return numMap[k];});
+  }
+  return {wo:toList(byNum.wo),po:toList(byNum.po)};
+}
+function execOrdersDownloadExcel(){
+  var grouped=execOrdersGrouped();
+  if(!grouped.wo.length&&!grouped.po.length){toast('No orders to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  function fmtD4(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var header=['Doc No','Party','Party Type','Date','Items','Total Amount'];
+  var lines=[[compName],['Work Order / Purchase Order Register - '+projName]];
+  function section(list,label,prefix){
+    lines.push(['']);
+    lines.push([label]);
+    lines.push(header);
+    var tot=0;
+    list.forEach(function(g){
+      tot+=g.totalAmt;
+      lines.push([prefix+'-'+g.num,g.party_name,tLbl[g.party_type]||g.party_type||'',fmtD4(g.doc_date),g.items.length,g.totalAmt]);
+    });
+    lines.push(['','','','','GRAND TOTAL',tot]);
+  }
+  section(grouped.wo,'WORK ORDER REGISTER','WO');
+  section(grouped.po,'PURCHASE ORDER REGISTER','PO');
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='WO_PO_Register_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('Order Register Excel downloaded','success');
+}
+function execOrdersDownloadPDF(){
+  var grouped=execOrdersGrouped();
+  if(!grouped.wo.length&&!grouped.po.length){toast('No orders to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  function fmtD4(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+
+  function buildTable(list,prefix,col){
+    var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+    var thead='<tr style="background:'+col+';color:white;">'+
+      '<th style="'+thStyle+'text-align:left;">Doc No</th>'+
+      '<th style="'+thStyle+'text-align:left;">Party</th>'+
+      '<th style="'+thStyle+'text-align:left;">Party Type</th>'+
+      '<th style="'+thStyle+'text-align:center;">Date</th>'+
+      '<th style="'+thStyle+'">Items</th>'+
+      '<th style="'+thStyle+'background:#2E7D32;">Total Amount</th>'+
+    '</tr>';
+    var tbody='';
+    var tot=0;
+    list.forEach(function(g,i){
+      tot+=g.totalAmt;
+      var bg=i%2===0?'white':'#FAFAFA';
+      tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+        '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+prefix+'-'+g.num+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;">'+g.party_name+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;">'+(tLbl[g.party_type]||g.party_type||'')+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD4(g.doc_date)+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+g.items.length+'</td>'+
+        '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+Math.round(g.totalAmt).toLocaleString('en-IN')+'</td>'+
+      '</tr>';
+    });
+    tbody+='<tr style="background:'+col+';color:white;">'+
+      '<td colspan="5" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
+      '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(tot).toLocaleString('en-IN')+'</td>'+
+    '</tr>';
+    return '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>';
+  }
+
+  var woSection=grouped.wo.length?'<div class="sec-title" style="color:#E65100;">Work Order Register</div>'+buildTable(grouped.wo,'WO','#E65100'):'';
+  var poSection=grouped.po.length?'<div class="sec-title" style="color:#1565C0;">Purchase Order Register</div>'+buildTable(grouped.po,'PO','#1565C0'):'';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WO/PO Register - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #333;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#333;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:16px;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '.sec-title{font-size:11px;font-weight:800;margin-bottom:6px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Work Order / Purchase Order Register &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    woSection+poSection+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | WO/PO Register | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 
