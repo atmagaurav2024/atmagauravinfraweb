@@ -4784,10 +4784,22 @@ function execDailyFlattenRows(){
       var allot=WA_ALLOT.find(function(a){return a.id===r.allot_id;})||{};
       var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
       var resParty=planRes.party_name||planRes.resource_category||r.name||'';
-      rows.push({d:d,item:item,res:{type:tLbl[r.type]||r.type||'',party:resParty,name:r.name,qty:r.qty,unit:r.unit}});
+      var rate=parseFloat(allot.rate)||0;
+      var qty=parseFloat(r.qty)||0;
+      rows.push({d:d,item:item,res:{type:tLbl[r.type]||r.type||'',party:resParty,name:r.name,qty:r.qty,unit:r.unit,rate:rate,amount:qty*rate}});
     });
   });
   return rows;
+}
+function execDailyItemTotals(rows){
+  var byItem={},order=[];
+  rows.forEach(function(row){
+    if(!row.res) return;
+    var key=row.item.id||row.item.item_code||'unknown';
+    if(!byItem[key]){byItem[key]={item:row.item,total:0};order.push(key);}
+    byItem[key].total+=row.res.amount;
+  });
+  return order.map(function(k){return byItem[k];});
 }
 function execDailySortedEntries(){
   return WA_DAILY.slice().sort(function(a,b){
@@ -4802,12 +4814,21 @@ function execDailyDownloadExcel(){
   if(!rows.length){toast('No daily progress entries to export','warning');return;}
   var projName=execProjName();
   var compName=typeof coName==='function'?coName():'AIPL';
-  var header=['Date','Item Code','Description','Qty Done','Unit','Resource Type','Resource Party','Resource Qty','Resource Unit','Remarks'];
+  var header=['Date','Item Code','Description','Qty Done','Unit','Resource Type','Resource Party','Resource Qty','Resource Unit','Rate','Amount','Remarks'];
   var lines=[[compName],['Daily Progress Statement - '+projName],[''],header];
+  var grandTotal=0;
   rows.forEach(function(row){
     var d=row.d,item=row.item,res=row.res;
-    lines.push([d.date,item.item_code||'',item.short_name||item.description||'',d.qty_done,d.unit||item.unit||'',res?res.type:'',res?res.party:'',res?res.qty:'',res?res.unit:'',d.remarks||'']);
+    if(res) grandTotal+=res.amount;
+    lines.push([d.date,item.item_code||'',item.short_name||item.description||'',d.qty_done,d.unit||item.unit||'',res?res.type:'',res?res.party:'',res?res.qty:'',res?res.unit:'',res?res.rate:'',res?res.amount:'',d.remarks||'']);
   });
+  lines.push([]);
+  lines.push(['ITEM-WISE TOTAL AMOUNT']);
+  lines.push(['Item Code','Description','Total Amount']);
+  execDailyItemTotals(rows).forEach(function(t){
+    lines.push([t.item.item_code||'',t.item.short_name||t.item.description||'',t.total]);
+  });
+  lines.push(['','GRAND TOTAL',grandTotal]);
   var csv=lines.map(function(row){
     return row.map(function(cell){
       var s=String(cell==null?'':cell);
@@ -4840,9 +4861,12 @@ function execDailyDownloadPDF(){
     '<th style="'+thStyle+'text-align:left;">Resource Type</th>'+
     '<th style="'+thStyle+'text-align:left;">Resource Party</th>'+
     '<th style="'+thStyle+'">Resource Qty</th>'+
+    '<th style="'+thStyle+'">Rate</th>'+
+    '<th style="'+thStyle+'background:#1B5E20;">Amount</th>'+
     '<th style="'+thStyle+'text-align:left;">Remarks</th>'+
   '</tr>';
   var tbody='';
+  var grandTotal=0;
 
   // Group consecutive rows belonging to the same daily entry so the
   // Date/Item/Qty Done/Remarks cells can span all of that entry's resources
@@ -4855,6 +4879,7 @@ function execDailyDownloadPDF(){
     var bg=i%2===0?'white':'#FAFAFA';
     groupRows.forEach(function(row,ri){
       var res=row.res;
+      if(res) grandTotal+=res.amount;
       tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
         (ri===0?
           '<td style="padding:5px 8px;font-size:9px;text-align:center;" rowspan="'+groupRows.length+'">'+(d.date?d.date.split('-').reverse().join('/'):'')+'</td>'+
@@ -4866,13 +4891,29 @@ function execDailyDownloadPDF(){
         (res?
           '<td style="padding:5px 8px;font-size:9px;">'+res.type+'</td>'+
           '<td style="padding:5px 8px;font-size:9px;">'+res.party+'</td>'+
-          '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(res.qty||'')+' '+(res.unit||'')+'</td>'
-          :'<td colspan="3" style="padding:5px 8px;font-size:9px;color:var(--text3);text-align:center;">No resources logged</td>')+
+          '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(res.qty||'')+' '+(res.unit||'')+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(res.rate?'\u20b9'+res.rate.toLocaleString('en-IN'):'')+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">'+(res.amount?'\u20b9'+Math.round(res.amount).toLocaleString('en-IN'):'')+'</td>'
+          :'<td colspan="5" style="padding:5px 8px;font-size:9px;color:var(--text3);text-align:center;">No resources logged</td>')+
         (ri===0?'<td style="padding:5px 8px;font-size:9px;" rowspan="'+groupRows.length+'">'+(d.remarks||'')+'</td>':'')+
       '</tr>';
     });
     i=j;
   }
+
+  var itemTotals=execDailyItemTotals(rows);
+  var totalsRows=itemTotals.map(function(t,i){
+    var bg=i%2===0?'white':'#FAFAFA';
+    return '<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+(t.item.item_code||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(t.item.short_name||t.item.description||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+Math.round(t.total).toLocaleString('en-IN')+'</td>'+
+    '</tr>';
+  }).join('')+
+    '<tr style="background:#E65100;color:white;">'+
+      '<td colspan="2" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
+      '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(grandTotal).toLocaleString('en-IN')+'</td>'+
+    '</tr>';
 
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Daily Progress - '+projName+'</title>'+
     '<style>'+
@@ -4880,8 +4921,9 @@ function execDailyDownloadPDF(){
     'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
     '.hdr{text-align:center;border-bottom:3px double #E65100;padding-bottom:8px;margin-bottom:10px;}'+
     '.logo{font-size:16px;font-weight:900;color:#E65100;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
-    'table{width:100%;border-collapse:collapse;}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:16px;}'+
     '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '.sec-title{font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;}'+
     '@media print{'+
       'button{display:none;}'+
       '@page{size:A4 landscape;margin:8mm;}'+
@@ -4899,6 +4941,12 @@ function execDailyDownloadPDF(){
       '<span>Generated: '+today+'</span>'+
     '</div>'+
     '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<div class="sec-title">Item-wise Total Amount</div>'+
+    '<table><thead><tr style="background:#1B5E20;color:white;">'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:left;">Item Code</th>'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:left;">Description</th>'+
+      '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:right;">Total Amount</th>'+
+    '</tr></thead><tbody>'+totalsRows+'</tbody></table>'+
     '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
       compName+' | Daily Progress Statement | '+projName+' | Generated on '+today+
     '</p>'+
