@@ -16702,7 +16702,7 @@ function annBuildStatement(records, periodLabel){
       var tds=Number(r.tds||0), pt=Number(r.profession_tax||0), adv=Number(r.advance_deduct||0);
       var ded=pf+esic+tds+pt+adv;
       return '<tr style="background:#FFFDE7;border-bottom:1px solid #FFF9C4;">'+
-        '<td style="padding:5px 8px 5px 24px;font-size:10px;color:#F57F17;font-weight:700;">'+
+        '<td colspan="2" style="padding:5px 8px 5px 24px;font-size:10px;color:#F57F17;font-weight:700;">'+
           (MONTHS[r.month]||r.month)+' '+r.year+
         '</td>'+
         '<td style="padding:5px 8px;font-size:10px;text-align:center;">'+
@@ -16781,7 +16781,7 @@ function annBuildStatement(records, periodLabel){
   '</tr>';
 
   // ── Body: each employee row + hidden month detail ─────────────────────
-  var colCount=4+compKeys.length+(hasOT?1:0)+7; // for colspan
+  var colCount=5+compKeys.length+(hasOT?1:0)+7; // for colspan
   var tbody=empList.map(function(e,i){
     var uid='ann-detail-'+i;
     var empRow='<tr style="border-bottom:1px solid #E8F5E9;cursor:pointer;'+(i%2===0?'background:white;':'background:#FAFAFA;')+'"'+
