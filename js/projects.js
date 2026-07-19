@@ -4728,6 +4728,8 @@ function execRenderDaily(){
       '<button onclick="WA_DAILY_DATE=new Date().toISOString().slice(0,10);document.getElementById(\'dp-view-date\').value=WA_DAILY_DATE;execRenderDailyContent();" '+
         'style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">Today</button>'+
       '<div style="flex:1;"></div>'+
+      '<button onclick="execDailyDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
+      '<button onclick="execDailyDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
       '<button onclick="execOpenDailyEntryPicker()" style="background:#E65100;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;">+ New Entry</button>'+
     '</div>'+
     '<div id="dp-daily-content"></div>';
@@ -4765,6 +4767,116 @@ function execOpenDailyEntryPicker(){
   };
   sf.appendChild(cb);sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
+}
+
+function execDailyFlattenResources(d){
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
+  return resources.map(function(r){
+    var allot=WA_ALLOT.find(function(a){return a.id===r.allot_id;})||{};
+    var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+    var resLabel=planRes.party_name||planRes.resource_category||'';
+    return (tLbl[r.type]||r.type||'')+': '+(resLabel?resLabel+' \u2192 ':'')+r.name+(r.qty?' x'+r.qty+(r.unit?' '+r.unit:''):'');
+  }).join(' | ');
+}
+function execDailySortedEntries(){
+  return WA_DAILY.slice().sort(function(a,b){
+    if(a.date!==b.date) return a.date.localeCompare(b.date);
+    var itemA=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
+    var itemB=WA_ITEMS.find(function(i){return i.id===b.boq_item_id;})||{};
+    return (itemA.item_code||'').localeCompare(itemB.item_code||'');
+  });
+}
+function execDailyDownloadExcel(){
+  var entries=execDailySortedEntries();
+  if(!entries.length){toast('No daily progress entries to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var header=['Date','Item Code','Description','Qty Done','Unit','Resources Used','Remarks'];
+  var lines=[[compName],['Daily Progress Statement - '+projName],[''],header];
+  entries.forEach(function(d){
+    var item=WA_ITEMS.find(function(i){return i.id===d.boq_item_id;})||{};
+    lines.push([d.date,item.item_code||'',item.short_name||item.description||'',d.qty_done,d.unit||item.unit||'',execDailyFlattenResources(d),d.remarks||'']);
+  });
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='DailyProgress_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('Daily Progress Excel downloaded','success');
+}
+function execDailyDownloadPDF(){
+  var entries=execDailySortedEntries();
+  if(!entries.length){toast('No daily progress entries to export','warning');return;}
+  var projName=execProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#E65100;color:white;">'+
+    '<th style="'+thStyle+'text-align:center;">Date</th>'+
+    '<th style="'+thStyle+'text-align:left;">Item Code</th>'+
+    '<th style="'+thStyle+'text-align:left;">Description</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">Qty Done</th>'+
+    '<th style="'+thStyle+'text-align:center;">Unit</th>'+
+    '<th style="'+thStyle+'text-align:left;">Resources Used</th>'+
+    '<th style="'+thStyle+'text-align:left;">Remarks</th>'+
+  '</tr>';
+  var tbody='';
+  entries.forEach(function(d,i){
+    var item=WA_ITEMS.find(function(x){return x.id===d.boq_item_id;})||{};
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(d.date?d.date.split('-').reverse().join('/'):'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+(item.item_code||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(item.short_name||item.description||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">'+d.qty_done+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(d.unit||item.unit||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:8.5px;">'+execDailyFlattenResources(d)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(d.remarks||'')+'</td>'+
+    '</tr>';
+  });
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Daily Progress - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #E65100;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#E65100;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#E65100;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Daily Progress Statement &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Daily Progress Statement | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 function execRenderDailyContent(){
