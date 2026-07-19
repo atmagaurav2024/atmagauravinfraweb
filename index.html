@@ -1509,6 +1509,11 @@ input,select,textarea{font-size:16px !important;}
       <div style="flex:1;margin-left:12px;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-name" id="dash-name">—</div><div class="dt-role" id="dash-role">—</div></div>
       <div class="dt-avatar" id="dash-avatar" style="cursor:pointer;font-size:14px;font-weight:900;" onclick="showProfile()">👤</div>
     </div>
+    <div style="margin-top:14px;">
+      <select id="dash-proj-filter" onchange="loadDashboardInsights(this.value)" style="width:100%;background:rgba(255,255,255,.1);color:white;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:'Nunito',sans-serif;outline:none;">
+        <option value="">&#128203; All Projects</option>
+      </select>
+    </div>
     <div class="dt-kpis">
       <div class="dk"><div class="dk-val" id="dk-projects">—</div><div class="dk-lbl">Projects</div></div>
       <div class="dk"><div class="dk-val" id="dk-workers">—</div><div class="dk-lbl">Workers</div></div>
@@ -2292,9 +2297,11 @@ var COMPANY_DATA={};
 async function preloadCompanyData(){try{var r=await sbFetch('company_details',{select:'*',order:'id.asc'});COMPANY_DATA=(Array.isArray(r)&&r.length)?r[0]:{};}catch(e){COMPANY_DATA={};}}
 
 // ── DASHBOARD: KPI + KRA INSIGHTS ─────────────────────────────────────────
-async function loadDashboardInsights(){
+async function loadDashboardInsights(filterProjId){
+  filterProjId = filterProjId || '';
   var gridEl=document.getElementById('dash-kpi-grid');
   var kraEl=document.getElementById('dash-kra-section');
+  var filterEl=document.getElementById('dash-proj-filter');
   if(!gridEl) return;
   var inr=function(n){
     var v=Math.round(Number(n||0));
@@ -2312,11 +2319,28 @@ async function loadDashboardInsights(){
       safe(sbFetch('boq_items',{select:'id,project_id,item_code,short_name,description,unit,boq_qty,rate'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,exec_type,rate',filter:'exec_type=neq.planned'})),
       safe(sbFetch('work_daily_progress',{select:'id,project_id,boq_item_id,qty_done,resources_used'})),
-      safe(sbFetch('resource_requisitions',{select:'id,status',filter:'status=eq.pending'})),
+      safe(sbFetch('resource_requisitions',{select:'id,project_id,status',filter:'status=eq.pending'})),
       safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
         pendingRRs=r[5]||[], storeItems=r[6]||[];
+
+    // ── Populate / preserve the project filter dropdown ──
+    var selectedProject=projects.find(function(p){return p.id===filterProjId;});
+    if(filterEl){
+      filterEl.innerHTML='<option value="">&#128203; All Projects</option>'+
+        projects.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'');})
+          .map(function(p){return '<option value="'+p.id+'"'+(p.id===filterProjId?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
+    }
+
+    // ── Apply project filter (if any) to all project-scoped data ──
+    if(filterProjId){
+      boqItems=boqItems.filter(function(x){return x.project_id===filterProjId;});
+      execResources=execResources.filter(function(x){return x.project_id===filterProjId;});
+      dailyProgress=dailyProgress.filter(function(x){return x.project_id===filterProjId;});
+      pendingRRs=pendingRRs.filter(function(x){return x.project_id===filterProjId;});
+      storeItems=storeItems.filter(function(x){return x.project_id===filterProjId;});
+    }
 
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
     var activeStatuses=['active','in-progress','rr','planning'];
@@ -2390,7 +2414,9 @@ async function loadDashboardInsights(){
       kpiCard(totalProfit>=0?'&#128200;':'&#128201;','NET PROFIT / LOSS',inr(totalProfit),marginPct+'% margin',plColor)+
       kpiCard('&#128176;','REVENUE (EXECUTED)',inr(totalRevenue),'qty done \u00d7 BOQ rate','#1565C0')+
       kpiCard('&#128295;','COST (EXECUTED)',inr(totalCost),'resource cost incurred','#E65100')+
-      kpiCard('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'total projects','#6A1B9A')+
+      (filterProjId
+        ? kpiCard('&#127959;','PROJECT',esc(selectedProject?selectedProject.name:'—'),selectedProject?selectedProject.status:'','#6A1B9A')
+        : kpiCard('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'total projects','#6A1B9A'))+
       kpiCard('&#128119;','WORKFORCE',activeWorkforce,'active employees','#2E7D32')+
       kpiCard('&#9203;','PENDING RRs',pendingRRs.length,'awaiting approval','#F57F17')+
       kpiCard('&#128230;','LOW STOCK',lowStock.length,'items below min qty','#B71C1C');
@@ -2426,7 +2452,7 @@ async function loadDashboardInsights(){
     }).join('');
 
     kraEl.innerHTML=
-      (projPLHtml?kraCard('&#128202; Project-wise Profit / Loss','#1565C0',projPLHtml):'')+
+      (projPLHtml&&!filterProjId?kraCard('&#128202; Project-wise Profit / Loss','#1565C0',projPLHtml):'')+
       (topProfit?kraCard('&#128200; Most Profitable Items','#2E7D32',topProfit):'')+
       (topLoss?kraCard('&#128201; Most Loss-Making Items','#C62828',topLoss):'')+
       (lowStockRows?kraCard('&#128230; Low Stock Alerts','#B71C1C',lowStockRows):'')+
