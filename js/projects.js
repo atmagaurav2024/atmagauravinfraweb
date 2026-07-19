@@ -662,10 +662,113 @@ function boqRender(){
   var el=document.getElementById('boq-content');if(!el)return;
   if(!BOQ_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128203;</div><div style="font-weight:700;margin-top:10px;">No BOQ items yet</div><div style="font-size:12px;margin-top:6px;">Tap + to add</div></div>';return;}
   var total=BOQ_ITEMS.reduce(function(s,i){return s+(parseFloat(i.boq_qty)||0)*(parseFloat(i.rate)||0);},0);
-  el.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(total)+'</div></div></div>'+
+  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="boqDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="boqDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(total)+'</div></div></div>'+
     BOQ_ITEMS.map(function(item){var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0;var subs=BOQ_SUBITEMS.filter(function(s){return s.boq_item_id===item.id;});
       return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:var(--text3);">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR(bq*rate)+'</div><div style="font-size:10px;color:var(--text3);">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--navy);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
     }).join('');
+}
+function boqProjName(){var sel=document.getElementById('boq-proj-sel');var opt=sel&&sel.options[sel.selectedIndex];return opt?opt.textContent:'';}
+function boqDownloadExcel(){
+  if(!BOQ_ITEMS.length){toast('No BOQ items to export','warning');return;}
+  var projName=boqProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var header=['Item Code','Description','Short Name','Unit','BOQ Qty','Rate','Amount','Remarks'];
+  var lines=[[compName],['Bill of Quantities - '+projName],[''],header];
+  var total=0;
+  BOQ_ITEMS.forEach(function(item){
+    var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0,amt=bq*rate;
+    total+=amt;
+    lines.push([item.item_code,item.description,item.short_name||'',item.unit,bq,rate,amt,item.remarks||'']);
+  });
+  lines.push(['','','','','','GRAND TOTAL',total,'']);
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='BOQ_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('BOQ Excel downloaded','success');
+}
+function boqDownloadPDF(){
+  if(!BOQ_ITEMS.length){toast('No BOQ items to export','warning');return;}
+  var projName=boqProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var total=0;
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#4A148C;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">Item Code</th>'+
+    '<th style="'+thStyle+'text-align:left;">Description</th>'+
+    '<th style="'+thStyle+'text-align:left;">Short Name</th>'+
+    '<th style="'+thStyle+'text-align:center;">Unit</th>'+
+    '<th style="'+thStyle+'">BOQ Qty</th>'+
+    '<th style="'+thStyle+'">Rate</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">Amount</th>'+
+    '<th style="'+thStyle+'text-align:left;">Remarks</th>'+
+  '</tr>';
+  var tbody='';
+  BOQ_ITEMS.forEach(function(item,i){
+    var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0,amt=bq*rate;
+    total+=amt;
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+item.item_code+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+item.description+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(item.short_name||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+item.unit+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+bq+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+rate.toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+amt.toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(item.remarks||'')+'</td>'+
+    '</tr>';
+  });
+  tbody+='<tr style="background:#4A148C;color:white;">'+
+    '<td colspan="6" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+total.toLocaleString('en-IN')+'</td>'+
+    '<td></td>'+
+  '</tr>';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>BOQ - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #4A148C;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#4A148C;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#4A148C;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Bill of Quantities &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Bill of Quantities | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 async function boqOpenAddItem(editItem){
   var v=editItem||{};var uomOpts='';
