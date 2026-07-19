@@ -4769,15 +4769,25 @@ function execOpenDailyEntryPicker(){
   openSheet('ov-exec','sh-exec');
 }
 
-function execDailyFlattenResources(d){
+function execDailyFlattenRows(){
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
-  return resources.map(function(r){
-    var allot=WA_ALLOT.find(function(a){return a.id===r.allot_id;})||{};
-    var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
-    var resLabel=planRes.party_name||planRes.resource_category||'';
-    return (tLbl[r.type]||r.type||'')+': '+(resLabel?resLabel+' \u2192 ':'')+r.name+(r.qty?' x'+r.qty+(r.unit?' '+r.unit:''):'');
-  }).join(' | ');
+  var entries=execDailySortedEntries();
+  var rows=[];
+  entries.forEach(function(d){
+    var item=WA_ITEMS.find(function(i){return i.id===d.boq_item_id;})||{};
+    var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
+    if(!resources.length){
+      rows.push({d:d,item:item,res:null});
+      return;
+    }
+    resources.forEach(function(r){
+      var allot=WA_ALLOT.find(function(a){return a.id===r.allot_id;})||{};
+      var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
+      var resParty=planRes.party_name||planRes.resource_category||r.name||'';
+      rows.push({d:d,item:item,res:{type:tLbl[r.type]||r.type||'',party:resParty,name:r.name,qty:r.qty,unit:r.unit}});
+    });
+  });
+  return rows;
 }
 function execDailySortedEntries(){
   return WA_DAILY.slice().sort(function(a,b){
@@ -4788,15 +4798,15 @@ function execDailySortedEntries(){
   });
 }
 function execDailyDownloadExcel(){
-  var entries=execDailySortedEntries();
-  if(!entries.length){toast('No daily progress entries to export','warning');return;}
+  var rows=execDailyFlattenRows();
+  if(!rows.length){toast('No daily progress entries to export','warning');return;}
   var projName=execProjName();
   var compName=typeof coName==='function'?coName():'AIPL';
-  var header=['Date','Item Code','Description','Qty Done','Unit','Resources Used','Remarks'];
+  var header=['Date','Item Code','Description','Qty Done','Unit','Resource Type','Resource Party','Resource Qty','Resource Unit','Remarks'];
   var lines=[[compName],['Daily Progress Statement - '+projName],[''],header];
-  entries.forEach(function(d){
-    var item=WA_ITEMS.find(function(i){return i.id===d.boq_item_id;})||{};
-    lines.push([d.date,item.item_code||'',item.short_name||item.description||'',d.qty_done,d.unit||item.unit||'',execDailyFlattenResources(d),d.remarks||'']);
+  rows.forEach(function(row){
+    var d=row.d,item=row.item,res=row.res;
+    lines.push([d.date,item.item_code||'',item.short_name||item.description||'',d.qty_done,d.unit||item.unit||'',res?res.type:'',res?res.party:'',res?res.qty:'',res?res.unit:'',d.remarks||'']);
   });
   var csv=lines.map(function(row){
     return row.map(function(cell){
@@ -4813,8 +4823,8 @@ function execDailyDownloadExcel(){
   toast('Daily Progress Excel downloaded','success');
 }
 function execDailyDownloadPDF(){
-  var entries=execDailySortedEntries();
-  if(!entries.length){toast('No daily progress entries to export','warning');return;}
+  var rows=execDailyFlattenRows();
+  if(!rows.length){toast('No daily progress entries to export','warning');return;}
   var projName=execProjName();
   var compName=typeof coName==='function'?coName():'AIPL';
   var compAddr=typeof coAddr==='function'?coAddr():'';
@@ -4827,23 +4837,42 @@ function execDailyDownloadPDF(){
     '<th style="'+thStyle+'text-align:left;">Description</th>'+
     '<th style="'+thStyle+'background:#2E7D32;">Qty Done</th>'+
     '<th style="'+thStyle+'text-align:center;">Unit</th>'+
-    '<th style="'+thStyle+'text-align:left;">Resources Used</th>'+
+    '<th style="'+thStyle+'text-align:left;">Resource Type</th>'+
+    '<th style="'+thStyle+'text-align:left;">Resource Party</th>'+
+    '<th style="'+thStyle+'">Resource Qty</th>'+
     '<th style="'+thStyle+'text-align:left;">Remarks</th>'+
   '</tr>';
   var tbody='';
-  entries.forEach(function(d,i){
-    var item=WA_ITEMS.find(function(x){return x.id===d.boq_item_id;})||{};
+
+  // Group consecutive rows belonging to the same daily entry so the
+  // Date/Item/Qty Done/Remarks cells can span all of that entry's resources
+  var i=0;
+  while(i<rows.length){
+    var groupRows=[rows[i]];
+    var j=i+1;
+    while(j<rows.length && rows[j].d===rows[i].d){ groupRows.push(rows[j]); j++; }
+    var d=groupRows[0].d, item=groupRows[0].item;
     var bg=i%2===0?'white':'#FAFAFA';
-    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
-      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(d.date?d.date.split('-').reverse().join('/'):'')+'</td>'+
-      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+(item.item_code||'')+'</td>'+
-      '<td style="padding:5px 8px;font-size:9px;">'+(item.short_name||item.description||'')+'</td>'+
-      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">'+d.qty_done+'</td>'+
-      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(d.unit||item.unit||'')+'</td>'+
-      '<td style="padding:5px 8px;font-size:8.5px;">'+execDailyFlattenResources(d)+'</td>'+
-      '<td style="padding:5px 8px;font-size:9px;">'+(d.remarks||'')+'</td>'+
-    '</tr>';
-  });
+    groupRows.forEach(function(row,ri){
+      var res=row.res;
+      tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+        (ri===0?
+          '<td style="padding:5px 8px;font-size:9px;text-align:center;" rowspan="'+groupRows.length+'">'+(d.date?d.date.split('-').reverse().join('/'):'')+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;font-family:monospace;" rowspan="'+groupRows.length+'">'+(item.item_code||'')+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;" rowspan="'+groupRows.length+'">'+(item.short_name||item.description||'')+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;" rowspan="'+groupRows.length+'">'+d.qty_done+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:center;" rowspan="'+groupRows.length+'">'+(d.unit||item.unit||'')+'</td>'
+          :'')+
+        (res?
+          '<td style="padding:5px 8px;font-size:9px;">'+res.type+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;">'+res.party+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(res.qty||'')+' '+(res.unit||'')+'</td>'
+          :'<td colspan="3" style="padding:5px 8px;font-size:9px;color:var(--text3);text-align:center;">No resources logged</td>')+
+        (ri===0?'<td style="padding:5px 8px;font-size:9px;" rowspan="'+groupRows.length+'">'+(d.remarks||'')+'</td>':'')+
+      '</tr>';
+    });
+    i=j;
+  }
 
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Daily Progress - '+projName+'</title>'+
     '<style>'+
