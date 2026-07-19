@@ -985,7 +985,8 @@ async function planLoadItems(){
 function planRender(){
   var el=document.getElementById('plan-content');if(!el)return;
   if(!PLAN_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items found</div>';return;}
-  el.innerHTML=PLAN_ITEMS.map(function(item){
+  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="planDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="planDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+    PLAN_ITEMS.map(function(item){
     var iSubs=PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
     var iRes=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
     var totalPlan=iRes.reduce(function(s,r){return s+(parseFloat(r.qty)||0)*(parseFloat(r.rate)||0);},0);
@@ -1025,6 +1026,129 @@ function planRender(){
 })();}).join(''):'';
     return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;justify-content:space-between;"><div><span style="font-size:10px;font-family:monospace;background:#BBDEFB;color:#1565C0;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span><div style="font-size:10px;color:var(--text3);margin-top:2px;">BOQ: '+item.boq_qty+' '+item.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+(totalPlan?'<span style="font-size:12px;font-weight:900;color:#1565C0;">'+fmtINR(totalPlan)+'</span>':'')+'<button onclick="planAddSub(\''+item.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Activity</button></div></div><div style="padding:10px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No resources yet</div>')+'</div></div>';
   }).join('');
+}
+function planProjName(){var projId=(document.getElementById('plan-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
+function planFlattenRows(){
+  var rows=[];
+  PLAN_ITEMS.forEach(function(item){
+    var iSubs=PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
+    var iRes=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
+    iSubs.forEach(function(sub){
+      var sRes=iRes.filter(function(r){return r.boq_subitem_id===sub.id;});
+      sRes.forEach(function(r){
+        rows.push({item:item,activity:sub.name,r:r});
+      });
+    });
+    var noSubRes=iRes.filter(function(r){return !r.boq_subitem_id;});
+    noSubRes.forEach(function(r){
+      rows.push({item:item,activity:'General',r:r});
+    });
+  });
+  return rows;
+}
+function planDownloadExcel(){
+  var rows=planFlattenRows();
+  if(!rows.length){toast('No planned resources to export','warning');return;}
+  var projName=planProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var header=['Item Code','Description','Activity','Party Name','Category','Qty','Unit','Rate','Amount'];
+  var lines=[[compName],['Resource Planning Statement - '+projName],[''],header];
+  var total=0;
+  rows.forEach(function(row){
+    var qty=parseFloat(row.r.qty)||0,rate=parseFloat(row.r.rate)||0,amt=qty*rate;
+    total+=amt;
+    lines.push([row.item.item_code,row.item.short_name||row.item.description,row.activity,row.r.party_name||'',row.r.resource_category||'',qty,row.r.unit||row.item.unit,rate,amt]);
+  });
+  lines.push(['','','','','','','','GRAND TOTAL',total]);
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Planning_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('Planning Excel downloaded','success');
+}
+function planDownloadPDF(){
+  var rows=planFlattenRows();
+  if(!rows.length){toast('No planned resources to export','warning');return;}
+  var projName=planProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#1565C0;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">Item Code</th>'+
+    '<th style="'+thStyle+'text-align:left;">Description</th>'+
+    '<th style="'+thStyle+'text-align:left;">Activity</th>'+
+    '<th style="'+thStyle+'text-align:left;">Party Name</th>'+
+    '<th style="'+thStyle+'text-align:left;">Category</th>'+
+    '<th style="'+thStyle+'">Qty</th>'+
+    '<th style="'+thStyle+'text-align:center;">Unit</th>'+
+    '<th style="'+thStyle+'">Rate</th>'+
+    '<th style="'+thStyle+'background:#2E7D32;">Amount</th>'+
+  '</tr>';
+  var tbody='';
+  var total=0;
+  rows.forEach(function(row,i){
+    var qty=parseFloat(row.r.qty)||0,rate=parseFloat(row.r.rate)||0,amt=qty*rate;
+    total+=amt;
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+row.item.item_code+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(row.item.short_name||row.item.description)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+row.activity+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(row.r.party_name||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(row.r.resource_category||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+qty+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+(row.r.unit||row.item.unit)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+rate.toLocaleString('en-IN')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+amt.toLocaleString('en-IN')+'</td>'+
+    '</tr>';
+  });
+  tbody+='<tr style="background:#1565C0;color:white;">'+
+    '<td colspan="8" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+total.toLocaleString('en-IN')+'</td>'+
+  '</tr>';
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Planning - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #1565C0;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#1565C0;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#1565C0;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Resource Planning Statement &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Resource Planning Statement | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 function planAddSub(itemId){document.getElementById('plan-sheet-title').textContent='Add Work Activity';document.getElementById('plan-sheet-body').innerHTML='<label class="flbl">Activity Name *</label><input id="ps-name" class="finp" placeholder="e.g. Bar Bending, Shuttering...">';document.getElementById('plan-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-plan\',\'sh-plan\')">Cancel</button><button class="btn" style="background:#1565C0;color:white;" onclick="planSaveSub(\''+itemId+'\')">+ Add</button>';openSheet('ov-plan','sh-plan');}
 async function planSaveSub(itemId){var name=(document.getElementById('ps-name')||{value:''}).value.trim();if(!name){toast('Name required','warning');return;}var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var sortOrder=PLAN_SUBS.filter(function(s){return s.boq_item_id===itemId;}).length+1;try{var res=await sbInsert('boq_subitems',{project_id:projId,boq_item_id:itemId,name:name,sort_order:sortOrder});if(res&&res[0])PLAN_SUBS.push(res[0]);toast(name+' added','success');closeSheet('ov-plan','sh-plan');planRender();}catch(e){toast('Error: '+e.message,'error');}}
