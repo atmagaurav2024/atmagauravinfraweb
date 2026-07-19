@@ -1816,12 +1816,121 @@ function rrRender(){
   }).filter(Boolean).join('');
 
   el.innerHTML=
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'+
       '<div style="font-size:13px;font-weight:800;color:#00838F;">&#128203; Resource Requisitions</div>'+
-      '<div style="font-size:11px;color:var(--text3);font-weight:700;">'+projName+'</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
+        '<div style="font-size:11px;color:var(--text3);font-weight:700;">'+projName+'</div>'+
+        '<button onclick="rrDownloadAllExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
+        '<button onclick="rrDownloadAllPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
+      '</div>'+
     '</div>'+
     (Object.values(counts).some(function(v){return v>0;})?summaryBar:'')+
     (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">No planned resources found. Add resources in Planning tab first.</div>');
+}
+
+function rrProjName(){var projSel=document.getElementById('proj-mod-sel');return (projSel&&projSel.options&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'');}
+function rrDownloadAllExcel(){
+  if(!RR_ITEMS.length){toast('No requisitions to export','warning');return;}
+  var projName=rrProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var stLbl={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
+  function fmtD(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var header=['RR Number','Date Raised','BOQ Item','Party Name','Party Type','Qty','Unit','Required Date','Status','Requested By','Remarks'];
+  var lines=[[compName],['Resource Requisition Statement - '+projName],[''],header];
+  RR_ITEMS.forEach(function(r){
+    var item=RR_PLAN_ITEMS.find(function(i){return i.id===r.boq_item_id;})||{};
+    lines.push([r.rr_number,fmtD(r.created_at?r.created_at.slice(0,10):''),(item.item_code?'['+item.item_code+'] ':'')+(item.short_name||item.description||''),r.party_name,tLbl[r.party_type]||r.party_type||'',r.qty,r.unit||'',fmtD(r.required_date),stLbl[r.status]||r.status,r.requested_by||'',r.remarks||'']);
+  });
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='RR_'+(projName||'Project').replace(/[^a-z0-9]/gi,'_')+'.csv';
+  a.click();
+  toast('RR Excel downloaded','success');
+}
+function rrDownloadAllPDF(){
+  if(!RR_ITEMS.length){toast('No requisitions to export','warning');return;}
+  var projName=rrProjName();
+  var compName=typeof coName==='function'?coName():'AIPL';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
+  var stLbl={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
+  function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
+  var thead='<tr style="background:#00838F;color:white;">'+
+    '<th style="'+thStyle+'text-align:left;">RR Number</th>'+
+    '<th style="'+thStyle+'text-align:center;">Date Raised</th>'+
+    '<th style="'+thStyle+'text-align:left;">BOQ Item</th>'+
+    '<th style="'+thStyle+'text-align:left;">Party Name</th>'+
+    '<th style="'+thStyle+'text-align:left;">Party Type</th>'+
+    '<th style="'+thStyle+'">Qty</th>'+
+    '<th style="'+thStyle+'text-align:center;">Required Date</th>'+
+    '<th style="'+thStyle+'text-align:center;">Status</th>'+
+    '<th style="'+thStyle+'text-align:left;">Requested By</th>'+
+    '<th style="'+thStyle+'text-align:left;">Remarks</th>'+
+  '</tr>';
+  var tbody='';
+  RR_ITEMS.forEach(function(r,i){
+    var item=RR_PLAN_ITEMS.find(function(x){return x.id===r.boq_item_id;})||{};
+    var sc=stCol[r.status]||'#555';
+    var bg=i%2===0?'white':'#FAFAFA';
+    tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
+      '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+r.rr_number+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD(r.created_at?r.created_at.slice(0,10):'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(item.item_code?'['+item.item_code+'] ':'')+(item.short_name||item.description||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+r.party_name+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(tLbl[r.party_type]||r.party_type||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+r.qty+' '+(r.unit||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD(r.required_date)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:center;font-weight:700;color:'+sc+';">'+(stLbl[r.status]||r.status)+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(r.requested_by||'')+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;">'+(r.remarks||'')+'</td>'+
+    '</tr>';
+  });
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>RR Statement - '+projName+'</title>'+
+    '<style>'+
+    '*{margin:0;padding:0;box-sizing:border-box;}'+
+    'body{font-family:Arial,sans-serif;font-size:10px;color:#222;padding:14px;}'+
+    '.hdr{text-align:center;border-bottom:3px double #00838F;padding-bottom:8px;margin-bottom:10px;}'+
+    '.logo{font-size:16px;font-weight:900;color:#00838F;}.sub{font-size:9px;color:#555;margin-top:2px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    '.meta{display:flex;justify-content:space-between;margin-bottom:8px;font-size:9px;}'+
+    '@media print{'+
+      'button{display:none;}'+
+      '@page{size:A4 landscape;margin:8mm;}'+
+      'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="margin-bottom:10px;padding:6px 16px;background:#00838F;color:white;border:none;border-radius:6px;cursor:pointer;font-family:Arial;font-weight:700;font-size:11px;">Print / Save PDF</button>'+
+    '<div class="hdr">'+
+      '<div class="logo">'+compName+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      (compGST?'<div class="sub">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div class="meta">'+
+      '<b>Resource Requisition Statement &mdash; '+projName+'</b>'+
+      '<span>Generated: '+today+'</span>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    '<p style="font-size:8px;color:#888;text-align:center;margin-top:8px;border-top:1px solid #eee;padding-top:4px;">'+
+      compName+' | Resource Requisition Statement | '+projName+' | Generated on '+today+
+    '</p>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 // Open RR form
