@@ -2,6 +2,21 @@
 // Global date formatter used throughout projects module
 function fmtD(d){if(!d)return '—';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 
+// Natural/numeric sort by item_code (e.g. 1,2,3...10,11 instead of
+// 1,10,11,12,2,3 which is what a plain text sort produces). Supports
+// dotted codes like "1.2","1.10" by comparing each segment numerically.
+function sortByItemCode(arr){
+  return arr.slice().sort(function(a,b){
+    var ca=(a.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});
+    var cb=(b.item_code||'').split('.').map(function(n){return parseInt(n,10)||0;});
+    for(var i=0;i<Math.max(ca.length,cb.length);i++){
+      var diff=(ca[i]||0)-(cb[i]||0);
+      if(diff!==0) return diff;
+    }
+    return (a.item_code||'').localeCompare(b.item_code||'');
+  });
+}
+
 var PROJ_DATA=[], PROJ_EDIT_ID=null;
 var PROJ_MOD_TAB = 'projects';      // current main tab
 var PROJ_MOD_SUB = '';              // current sub-tab (for grouped tabs)
@@ -656,7 +671,7 @@ async function boqLoadItems(){
   var el=document.getElementById('boq-content');
   if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';BOQ_ITEMS=[];return;}
   if(el)el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
-  try{var r=await Promise.all([sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),sbFetch('boq_subitems',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'})]);BOQ_ITEMS=Array.isArray(r[0])?r[0]:[];BOQ_SUBITEMS=Array.isArray(r[1])?r[1]:[];}catch(e){BOQ_ITEMS=[];console.error(e);}
+  try{var r=await Promise.all([sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),sbFetch('boq_subitems',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'})]);BOQ_ITEMS=sortByItemCode(Array.isArray(r[0])?r[0]:[]);BOQ_SUBITEMS=Array.isArray(r[1])?r[1]:[];}catch(e){BOQ_ITEMS=[];console.error(e);}
   boqRender();
 }
 function boqRender(){
@@ -820,7 +835,7 @@ async function jmLoadItems(){
   var projId=(document.getElementById('jm-proj-sel')||{}).value||'';var el=document.getElementById('jm-content');
   if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';return;}
   if(el)el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
-  try{var r=await Promise.all([sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'})]);JM_ITEMS=Array.isArray(r[0])?r[0]:[];JM_JMS=Array.isArray(r[1])?r[1]:[];}catch(e){JM_ITEMS=[];console.error(e);}
+  try{var r=await Promise.all([sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.asc'})]);JM_ITEMS=sortByItemCode(Array.isArray(r[0])?r[0]:[]);JM_JMS=Array.isArray(r[1])?r[1]:[];}catch(e){JM_ITEMS=[];console.error(e);}
   jmRender();
 }
 function jmRender(){
@@ -980,7 +995,7 @@ async function planLoadItems(){
   var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var el=document.getElementById('plan-content');
   if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';return;}
   if(el)el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
-  try{var r=await Promise.all([sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),sbFetch('boq_subitems',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'}),sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&exec_type=eq.planned',order:'created_at.asc'})]);PLAN_ITEMS=Array.isArray(r[0])?r[0]:[];PLAN_SUBS=Array.isArray(r[1])?r[1]:[];PLAN_RES=Array.isArray(r[2])?r[2]:[];}catch(e){PLAN_ITEMS=[];console.error(e);}
+  try{var r=await Promise.all([sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),sbFetch('boq_subitems',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'}),sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&exec_type=eq.planned',order:'created_at.asc'})]);PLAN_ITEMS=sortByItemCode(Array.isArray(r[0])?r[0]:[]);PLAN_SUBS=Array.isArray(r[1])?r[1]:[];PLAN_RES=Array.isArray(r[2])?r[2]:[];}catch(e){PLAN_ITEMS=[];console.error(e);}
   planRender();
 }
 function planRender(){
@@ -1639,7 +1654,7 @@ async function execLoadItems(silent){
       safe(sbFetch('sales_bills',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
       safe(sbFetch('sales_payments',{select:'*',filter:'project_id=eq.'+projId,order:'payment_date.desc'}))
     ]);
-    WA_ITEMS=Array.isArray(r[0])?r[0]:[];
+    WA_ITEMS=sortByItemCode(Array.isArray(r[0])?r[0]:[]);
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
     var allRes=Array.isArray(r[2])?r[2]:[];
     WA_PLANNED=allRes.filter(function(r){return r.exec_type==='planned';});
@@ -1700,7 +1715,7 @@ async function rrLoadItems(){
       sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&exec_type=eq.planned',order:'created_at.asc'}),
       sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})
     ]);
-    RR_PLAN_ITEMS=Array.isArray(r[0])?r[0]:[];
+    RR_PLAN_ITEMS=sortByItemCode(Array.isArray(r[0])?r[0]:[]);
     RR_PLAN_SUBS =Array.isArray(r[1])?r[1]:[];
     RR_PLAN_RES  =Array.isArray(r[2])?r[2]:[];
     RR_ITEMS     =Array.isArray(r[3])?r[3]:[];
