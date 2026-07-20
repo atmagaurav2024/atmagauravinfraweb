@@ -6907,7 +6907,7 @@ function execRenderPaymentsCore(el, projId){
     var totalAdjusted=g.billAdjs.reduce(function(s,x){return s+(parseFloat(x.ded.amount)||0);},0);
     var totalPaid=totalCash+totalAdjusted;
 
-    // Advances section
+    // Advances section (with each advance's bill-adjustment breakdown nested inline)
     var advHtml=g.advances.length?
       '<div style="margin-bottom:10px;">'+
         '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:4px;">&#128181; ADVANCES PAID</div>'+
@@ -6916,6 +6916,16 @@ function execRenderPaymentsCore(el, projId){
           g.advances.map(function(a){
             var adjAmt=parseFloat(a.adjusted_amount)||0;
             var pending=Math.max(0,(parseFloat(a.amount)||0)-adjAmt);
+            // Bills this specific advance was adjusted against
+            var thisAdvBillAdjs=g.billAdjs.filter(function(x){
+              return Array.isArray(x.ded.advance_ids)&&x.ded.advance_ids.indexOf(a.id)>-1;
+            });
+            var breakdown=thisAdvBillAdjs.length?
+              '<tr style="border-bottom:1px solid #FFF3CD;background:#FFFDF5;"><td colspan="8" style="padding:2px 8px 6px 24px;font-size:9px;color:#8D6E00;">'+
+                '&#8618; Adjusted in: '+thisAdvBillAdjs.map(function(x){
+                  return (x.bill.bill_ref||'Bill #'+x.bill.bill_number)+' ('+fmtD(x.bill.bill_date)+') &mdash; '+inr(x.ded.amount);
+                }).join(' &bull; ')+
+              '</td></tr>' : '';
             return '<tr style="border-bottom:1px solid #FFF3CD;">'+
               '<td style="padding:4px 8px;">'+fmtD(a.date)+'</td>'+
               '<td style="padding:4px 8px;">'+( a.purpose||'\u2014')+'</td>'+
@@ -6928,26 +6938,9 @@ function execRenderPaymentsCore(el, projId){
                 '<button onclick="execEditAdvance(\''+a.id+'\');" style="font-size:9px;background:#FFF8E1;color:#1565C0;border:1px solid #BBDEFB;border-radius:3px;padding:1px 5px;cursor:pointer;">&#9998;</button>'+
                 '<button onclick="execDelAdvance(\''+a.id+'\');" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;">&#215;</button>'+
               '</td>'+
-            '</tr>';
+            '</tr>'+breakdown;
           }).join('')+
           '<tr style="background:#FFF3CD;font-weight:800;"><td colspan="4" style="padding:5px 8px;">Total Advances</td><td style="padding:5px 8px;text-align:right;color:#F57F17;">'+inr(totalAdv)+'</td><td style="padding:5px 8px;text-align:right;color:#E65100;">'+inr(totalAdjusted)+'</td><td style="padding:5px 8px;text-align:right;color:'+(totalAdv-totalAdjusted>0?'#C62828':'#2E7D32')+';">'+inr(totalAdv-totalAdjusted)+'</td><td></td></tr>'+
-        '</table>'+
-      '</div>':'';
-
-    // Bill advance adjustments
-    var adjHtml=g.billAdjs.length?
-      '<div style="margin-bottom:10px;">'+
-        '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:4px;">&#9951; ADVANCE ADJUSTED IN BILLS</div>'+
-        '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+
-          '<tr style="background:#FFF8E1;"><th style="padding:4px 8px;text-align:left;">Bill Ref</th><th style="padding:4px 8px;text-align:left;">Bill Date</th><th style="padding:4px 8px;text-align:right;">Advance Adj.</th></tr>'+
-          g.billAdjs.map(function(x){
-            return '<tr style="border-bottom:1px solid #FFF3CD;">'+
-              '<td style="padding:4px 8px;font-weight:700;">'+(x.bill.bill_ref||'Bill #'+x.bill.bill_number)+'</td>'+
-              '<td style="padding:4px 8px;color:var(--text3);">'+fmtD(x.bill.bill_date)+'</td>'+
-              '<td style="padding:4px 8px;text-align:right;font-weight:800;color:#F57F17;">'+inr(x.ded.amount)+'</td>'+
-            '</tr>';
-          }).join('')+
-          '<tr style="background:#FFF3CD;font-weight:800;"><td colspan="2" style="padding:5px 8px;">Total Adjusted</td><td style="padding:5px 8px;text-align:right;color:#F57F17;">'+inr(totalAdjusted)+'</td></tr>'+
         '</table>'+
       '</div>':'';
 
@@ -7019,7 +7012,6 @@ function execRenderPaymentsCore(el, projId){
         '<div style="padding:10px 12px;">'+
           summaryHtml+
           advHtml+
-          adjHtml+
           cashHtml+
         '</div>'+
       '</div>'+
