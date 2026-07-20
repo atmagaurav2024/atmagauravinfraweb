@@ -3620,6 +3620,7 @@ async function sbInsert(table, data){
     headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=representation'},
     body:JSON.stringify(data)
   });
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
   return res.json();
 }
 
@@ -3629,6 +3630,7 @@ async function sbUpdate(table, id, data){
     headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=representation'},
     body:JSON.stringify(data)
   });
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
   return res.json();
 }
 
