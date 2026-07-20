@@ -2321,10 +2321,12 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,exec_type,rate',filter:'exec_type=neq.planned'})),
       safe(sbFetch('work_daily_progress',{select:'id,project_id,boq_item_id,qty_done,resources_used'})),
       safe(sbFetch('resource_requisitions',{select:'id,project_id,status',filter:'status=eq.pending'})),
-      safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'}))
+      safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'})),
+      safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions'})),
+      safe(sbFetch('work_payments',{select:'id,project_id,amount'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
-        pendingRRs=r[5]||[], storeItems=r[6]||[];
+        pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[];
 
     // ── Populate / preserve the project filter dropdown ──
     var selectedProject=projects.find(function(p){return p.id===filterProjId;});
@@ -2341,6 +2343,8 @@ async function loadDashboardInsights(filterProjId){
       dailyProgress=dailyProgress.filter(function(x){return x.project_id===filterProjId;});
       pendingRRs=pendingRRs.filter(function(x){return x.project_id===filterProjId;});
       storeItems=storeItems.filter(function(x){return x.project_id===filterProjId;});
+      workBills=workBills.filter(function(x){return x.project_id===filterProjId;});
+      workPayments=workPayments.filter(function(x){return x.project_id===filterProjId;});
     }
 
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
@@ -2381,6 +2385,20 @@ async function loadDashboardInsights(filterProjId){
     var totalProfit=totalRevenue-totalCost;
     var marginPct=totalRevenue>0?Math.round(totalProfit/totalRevenue*100):0;
 
+    // ── Cost billed / paid / balance (from vendor/contractor bills) ──
+    var costBilled=0, costAdvAdj=0;
+    workBills.forEach(function(b){
+      var ded=[]; try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      var activeDed=ded.filter(function(d){return !d.released;});
+      var dedTotal=activeDed.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var advAdj=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      costBilled+=(parseFloat(b.bill_amount)||0)-dedTotal;
+      costAdvAdj+=advAdj;
+    });
+    var costPaidCash=workPayments.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+    var costPaid=costPaidCash+costAdvAdj;
+    var costBalance=Math.max(0,costBilled-costPaid);
+
     // ── Project-wise profit/loss ──
     var plByProj={};
     itemPL.forEach(function(x){
@@ -2415,6 +2433,9 @@ async function loadDashboardInsights(filterProjId){
       kpiCard(totalProfit>=0?'&#128200;':'&#128201;','NET PROFIT / LOSS',inr(totalProfit),marginPct+'% margin',plColor)+
       kpiCard('&#128176;','REVENUE (EXECUTED)',inr(totalRevenue),'qty done \u00d7 BOQ rate','#1565C0')+
       kpiCard('&#128295;','COST (EXECUTED)',inr(totalCost),'resource cost incurred','#E65100')+
+      kpiCard('&#128203;','COST BILLED',inr(costBilled),'invoiced by vendors/contractors','#6A1B9A')+
+      kpiCard('&#128176;','COST PAID',inr(costPaid),'cash + advance adjusted','#2E7D32')+
+      kpiCard('&#128181;','COST BALANCE',inr(costBalance),'still payable','#C62828')+
       (filterProjId
         ? kpiCard('&#127959;','PROJECT',esc(selectedProject?selectedProject.name:'—'),selectedProject?selectedProject.status:'','#6A1B9A')
         : kpiCard('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'total projects','#6A1B9A'))+
