@@ -1575,7 +1575,7 @@ input,select,textarea{font-size:16px !important;}
   <div class="topbar-right">
     <div class="topbar-date" id="topbar-date">—</div>
     <button class="btn btn-outline" style="color:#FFF;border-color:rgba(255,255,255,0.2);" onclick="openLeaveModal()">+ Apply Leave</button>
-    <button class="btn btn-outline" style="color:#FFF;border-color:rgba(255,255,255,0.2);" onclick="showToast('Attendance exported to Excel','success')">📥 Export</button>
+    <button class="btn btn-outline" style="color:#FFF;border-color:rgba(255,255,255,0.2);" onclick="attExportCSV()">📥 Export</button>
   </div>
 </div>
 
@@ -1930,7 +1930,7 @@ input,select,textarea{font-size:16px !important;}
       <div class="frow">
         <div class="fgrp">
           <label class="flabel">Leave Type</label>
-          <select class="fselect">
+          <select class="fselect" id="leave-type-sel">
             <option>Casual Leave (CL)</option>
             <option>Sick Leave (SL)</option>
             <option>Earned Leave (EL)</option>
@@ -1940,7 +1940,7 @@ input,select,textarea{font-size:16px !important;}
         </div>
         <div class="fgrp">
           <label class="flabel">Duration</label>
-          <select class="fselect">
+          <select class="fselect" id="leave-duration-sel">
             <option>Full Day</option>
             <option>Half Day (Morning)</option>
             <option>Half Day (Afternoon)</option>
@@ -1950,16 +1950,16 @@ input,select,textarea{font-size:16px !important;}
       <div class="frow">
         <div class="fgrp">
           <label class="flabel">From Date</label>
-          <input type="date" class="finput">
+          <input type="date" class="finput" id="leave-from-date">
         </div>
         <div class="fgrp">
           <label class="flabel">To Date</label>
-          <input type="date" class="finput">
+          <input type="date" class="finput" id="leave-to-date">
         </div>
       </div>
       <div class="fgrp">
         <label class="flabel">Reason for Leave</label>
-        <textarea class="ftextarea" rows="3" placeholder="Describe the reason for leave..."></textarea>
+        <textarea class="ftextarea" rows="3" placeholder="Describe the reason for leave..." id="leave-reason"></textarea>
       </div>
       <div class="fgrp">
         <label class="flabel">Handover to (During Absence)</label>
@@ -3138,15 +3138,17 @@ verifyOTP=async function(){
 // ═══════════════════════════════════════════
 // ATTENDANCE JS
 // ═══════════════════════════════════════════
-function initAttendance(){
+async function initAttendance(){
   initPunchLogDate();
   try{
     tick();
     if(!window._clockInt) window._clockInt=setInterval(tick,1000);
     refreshGPS();
-    // Role-based view
     var isManager = (currentUser.role==='admin'||currentUser.role==='pm');
     applyAttendanceRoleView(isManager);
+
+    await attLoadAll();
+
     if(isManager){
       renderAttTable();
       lockStatusBtnsIfNotAdmin();
@@ -3155,8 +3157,97 @@ function initAttendance(){
       renderLeave();
     } else {
       renderEmployeeSelfView();
+      renderCal();
     }
   }catch(e){console.log('att init',e);}
+}
+
+// Fetch everything the Attendance screen needs: active employees, this
+// month's attendance (self, for the calendar + self-view), today's
+// attendance for all employees (admin table), today's own punches
+// (to restore punch state after a refresh), and leave requests.
+async function attLoadAll(){
+  var today = attToday();
+  var monthStart = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH, 1));
+  var monthEnd = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH+1, 0));
+  var safe=function(p){return p.catch(function(){return [];});};
+
+  var r = await Promise.all([
+    safe(sbFetch('employees',{select:'id,first_name,middle_name,last_name,designation,department,status',filter:'status=eq.active'})),
+    safe(sbFetch('attendance',{select:'*',filter:'date=eq.'+today})),
+    safe(sbFetch('attendance',{select:'*',filter:'emp_id=eq.'+(currentUser.id||'')+'&date=gte.'+monthStart+'&date=lte.'+monthEnd})),
+    safe(sbFetch('attendance_punches',{select:'*',filter:'emp_id=eq.'+(currentUser.id||'')+'&date=eq.'+today,order:'punch_time.asc'})),
+    safe(sbFetch('leave_requests',{select:'*',order:'applied_at.desc'}))
+  ]);
+  var activeEmps=r[0]||[], todayRecords=r[1]||[], monthRecords=r[2]||[], todayPunches=r[3]||[], leaves=r[4]||[];
+
+  ATT_TODAY_MAP = {};
+  todayRecords.forEach(function(rec){ ATT_TODAY_MAP[rec.emp_id]=rec; });
+
+  var COLORS=['#1565C0','#2E7D32','#E65100','#6A1B9A','#00838F','#C62828','#F57F17','#37474F'];
+  employees = activeEmps.map(function(e,i){
+    var name=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim()||'Unknown';
+    var initials=(e.first_name?e.first_name[0]:'')+(e.last_name?e.last_name[0]:'');
+    var rec=ATT_TODAY_MAP[e.id];
+    return {
+      id:e.id, name:name, desig:e.designation||e.department||'',
+      color:COLORS[i%COLORS.length], initials:initials.toUpperCase()||'?',
+      status: rec?rec.status:'', in: rec&&rec.in_time?rec.in_time.slice(0,5):'', out: rec&&rec.out_time?rec.out_time.slice(0,5):'',
+      ot: rec&&rec.overtime_hours?rec.overtime_hours+'h':'0h', gps: rec?rec.gps_mode:'', recId: rec?rec.id:null
+    };
+  });
+
+  ATT_MONTH_RECORDS = monthRecords;
+
+  punchLog = todayPunches.map(function(p){
+    return {id:p.id, type:p.punch_type, time:new Date(p.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:p.gps_mode==='remote'?'Remote':'On-Site', lat:p.latitude, lng:p.longitude, duration:null};
+  });
+  // Restore punch-in state across a refresh
+  if(punchLog.length && punchLog[punchLog.length-1].type==='in'){
+    isPunchedIn=true;
+    var lastIn=todayPunches[todayPunches.length-1];
+    punchInTime=new Date(lastIn.punch_time);
+    var ring=document.getElementById('punch-ring'), icon=document.getElementById('punch-icon'), label=document.getElementById('punch-label'), status=document.getElementById('punch-status');
+    if(ring){ring.className='punch-ring punch-ring-out';}
+    if(icon) icon.textContent='⏹';
+    if(label) label.textContent='PUNCH OUT';
+    if(status) status.textContent='Punched In at '+punchInTime.toLocaleTimeString();
+  } else {
+    isPunchedIn=false;
+  }
+  renderPunchLog();
+
+  var tLbl={'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'};
+  leaveData = leaves.map(function(l){
+    return {id:l.id, emp:l.emp_name, type:tLbl[l.leave_type]||l.leave_type, from:attDisplayDate(l.from_date), to:attDisplayDate(l.to_date), days:l.days, reason:l.reason||'', applied:attDisplayDate((l.applied_at||'').slice(0,10)), status:l.status};
+  });
+}
+function attDisplayDate(iso){
+  if(!iso) return '';
+  var p=iso.split('-'); if(p.length!==3) return iso;
+  var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return parseInt(p[2],10)+' '+MONTHS[parseInt(p[1],10)-1];
+}
+function attExportCSV(){
+  if(!employees.length){ showToast('No attendance data to export','warning'); return; }
+  var header=['#','Employee','Designation','Status','In Time','Out Time','OT','GPS Mode','Remarks'];
+  var lines=[['Attendance — '+attToday()],[''],header];
+  employees.forEach(function(e,i){
+    lines.push([i+1,e.name,e.desig,e.status||'Not marked',e.in||'',e.out||'',e.ot||'',e.gps||'',e.remarks||'']);
+  });
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Attendance_'+attToday()+'.csv';
+  a.click();
+  showToast('Attendance exported','success');
 }
 
 function applyAttendanceRoleView(isManager){
@@ -3185,41 +3276,50 @@ function applyAttendanceRoleView(isManager){
 function renderEmployeeSelfView(){
   var sc = document.getElementById('att-self-card');
   if(!sc) return;
+  var present=0, absent=0, leave=0;
+  ATT_MONTH_RECORDS.forEach(function(r){
+    if(r.status==='present'||r.status==='half') present++;
+    else if(r.status==='absent') absent++;
+    else if(r.status==='leave') leave++;
+  });
+  var todayRec = ATT_TODAY_MAP[currentUser.id];
+  var inStr = todayRec&&todayRec.in_time ? attTimeDisplay(todayRec.in_time) : (isPunchedIn&&punchInTime?punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—');
+  var outStr = todayRec&&todayRec.out_time ? attTimeDisplay(todayRec.out_time) : '—';
+  var hoursStr = todayRec&&todayRec.hours_worked ? Math.floor(todayRec.hours_worked)+'h '+Math.round((todayRec.hours_worked%1)*60)+'m' : '—';
+  var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   sc.innerHTML =
     '<div style="background:white;border-radius:16px;border:1px solid var(--border);padding:16px;margin-bottom:12px;">'+
-    '<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">&#128197; My Attendance — March 2026</div>'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">&#128197; My Attendance — '+MONTHS[ATT_VIEW_MONTH]+' '+ATT_VIEW_YEAR+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">'+
-      '<div style="background:#E8F5E9;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#2E7D32;">18</div><div style="font-size:10px;color:#2E7D32;font-weight:700;">Present</div></div>'+
-      '<div style="background:#FFEBEE;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#C62828;">2</div><div style="font-size:10px;color:#C62828;font-weight:700;">Absent</div></div>'+
-      '<div style="background:#FFF8E1;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#F57F17;">1</div><div style="font-size:10px;color:#F57F17;font-weight:700;">Leave</div></div>'+
+      '<div style="background:#E8F5E9;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#2E7D32;">'+present+'</div><div style="font-size:10px;color:#2E7D32;font-weight:700;">Present</div></div>'+
+      '<div style="background:#FFEBEE;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#C62828;">'+absent+'</div><div style="font-size:10px;color:#C62828;font-weight:700;">Absent</div></div>'+
+      '<div style="background:#FFF8E1;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#F57F17;">'+leave+'</div><div style="font-size:10px;color:#F57F17;font-weight:700;">Leave</div></div>'+
     '</div>'+
     '<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">&#9203; Today&#39;s Log</div>'+
     '<div style="display:flex;flex-direction:column;gap:6px;">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9193; Punch In</span><span style="font-family:monospace;font-size:13px;color:#2E7D32;font-weight:700;">'+(isPunchedIn?'08:45 AM':'&#8212;')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9194; Punch Out</span><span style="font-family:monospace;font-size:13px;color:var(--text3);font-weight:700;">&#8212;</span></div>'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9201; Hours Logged</span><span style="font-family:monospace;font-size:13px;font-weight:700;">&#8212;</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9193; Punch In</span><span style="font-family:monospace;font-size:13px;color:#2E7D32;font-weight:700;">'+inStr+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9194; Punch Out</span><span style="font-family:monospace;font-size:13px;color:var(--text3);font-weight:700;">'+outStr+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9201; Hours Logged</span><span style="font-family:monospace;font-size:13px;font-weight:700;">'+hoursStr+'</span></div>'+
     '</div>'+
     '</div>';
 }
+function attTimeDisplay(hhmmss){
+  if(!hhmmss) return '—';
+  var p=hhmmss.split(':'); var h=parseInt(p[0],10); var m=p[1];
+  var ap=h>=12?'PM':'AM'; var h12=h%12||12;
+  return h12+':'+m+' '+ap;
+}
 
-// ── DATA ──
-const employees = []; // Loaded dynamically from Supabase
+// ── DATA (loaded from Supabase) ──
+var employees = [];       // active employees, merged with today's attendance status
+var leaveData = [];       // real leave_requests
+var ATT_MONTH_RECORDS = []; // attendance rows for the viewed month (self, for calendar)
+var ATT_TODAY_MAP = {};   // emp_id -> today's attendance row (admin table)
+var ATT_VIEW_MONTH = new Date().getMonth(); // 0-11
+var ATT_VIEW_YEAR = new Date().getFullYear();
 
-const leaveData = []; // Loaded dynamically from Supabase
-
-// Calendar data for Feb 2026
-const calData = {};
-// Mon 1 = Feb starts on Sunday (day 0)
-const feb2026 = [
-  null, // padding (Feb 1 is Sunday = index 0)
-  'P','P','P','P','H', // Mon–Fri week1 + Sat
-  'WO', // Sun
-  'P','P','P','P','P','WO', // Mon–Sat week2
-  'WO', // Sun
-  'P','P','P','P','P','WO', // week3
-  'WO', // Sun
-  'A','P','P','?','?','WO', // week4: 22–today
-];
+function attToday(){ return new Date().toISOString().slice(0,10); }
+function attFmtDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 
 // ── CLOCK ──
 function tick() {
@@ -3307,10 +3407,14 @@ function takeSelfie() {
   }, 1200);
 }
 
-function confirmPunch() {
+async function confirmPunch() {
   if (!selfieOk) {
     showToast('Please take a selfie first','warning');
     document.getElementById('selfie-box').style.border = '3px solid #E53935';
+    return;
+  }
+  if(!currentUser.id){
+    showToast('Your account has no linked employee profile, cannot punch','error');
     return;
   }
 
@@ -3318,6 +3422,8 @@ function confirmPunch() {
   const icon = document.getElementById('punch-icon');
   const label = document.getElementById('punch-label');
   const status = document.getElementById('punch-status');
+  var today = attToday();
+  var gpsMode = gpsReady ? 'site' : 'manual';
 
   if (!isPunchedIn) {
     isPunchedIn = true;
@@ -3329,7 +3435,19 @@ function confirmPunch() {
     document.getElementById('stat-mytime').textContent = `In: ${punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`;
     punchLog.push({type:'in', time: punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng});
     renderPunchLog();
-    showToast(`✅ Punched In at ${punchInTime.toLocaleTimeString()} · Location verified · Selfie saved`, 'success');
+    closePunchModal();
+    try{
+      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), latitude:currentLat, longitude:currentLng, selfie_confirmed:true, gps_mode:gpsMode});
+      var existing = ATT_TODAY_MAP[currentUser.id];
+      var inTimeStr = punchInTime.toTimeString().slice(0,8);
+      if(existing){
+        await sbUpdate('attendance', existing.id, {status:'present', in_time:inTimeStr, gps_mode:gpsMode});
+      } else {
+        var res = await sbInsert('attendance',{emp_id:currentUser.id, date:today, status:'present', in_time:inTimeStr, gps_mode:gpsMode, marked_by:currentUser.id});
+        if(res && res[0]) ATT_TODAY_MAP[currentUser.id]=res[0];
+      }
+      showToast(`✅ Punched In at ${punchInTime.toLocaleTimeString()} · Location verified`, 'success');
+    }catch(e){ showToast('Punch saved locally but failed to sync: '+e.message,'warning'); }
   } else {
     isPunchedIn = false;
     const outTime = new Date();
@@ -3341,13 +3459,24 @@ function confirmPunch() {
     document.getElementById('stat-mytime').textContent = `${Math.floor(diff/60)}h ${diff%60}m`;
     punchLog.push({type:'out', time: outTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng, duration: diff});
     renderPunchLog();
-    showToast(`✅ Punched Out · ${Math.floor(diff/60)}h ${diff%60}m logged today`, 'success');
+    closePunchModal();
+    try{
+      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), latitude:currentLat, longitude:currentLng, selfie_confirmed:true, gps_mode:gpsMode});
+      var existing2 = ATT_TODAY_MAP[currentUser.id];
+      var outTimeStr = outTime.toTimeString().slice(0,8);
+      var hoursWorked = Math.round((diff/60)*100)/100;
+      if(existing2){
+        await sbUpdate('attendance', existing2.id, {out_time:outTimeStr, hours_worked:hoursWorked});
+      } else {
+        await sbInsert('attendance',{emp_id:currentUser.id, date:today, status:'present', out_time:outTimeStr, hours_worked:hoursWorked, gps_mode:gpsMode, marked_by:currentUser.id});
+      }
+      showToast(`✅ Punched Out · ${Math.floor(diff/60)}h ${diff%60}m logged today`, 'success');
+    }catch(e){ showToast('Punch saved locally but failed to sync: '+e.message,'warning'); }
   }
 
   selfieOk = false;
   document.getElementById('selfie-content').textContent = '📷';
   document.getElementById('selfie-box').style.border = '3px solid var(--border2)';
-  closePunchModal();
 }
 
 // ── ATTENDANCE TABLE ──
@@ -3360,7 +3489,7 @@ function renderAttTable() {
       half:    `<span class="att-badge b-half">⏱ Half Day</span>`,
       leave:   `<span class="att-badge b-leave">🏖 Leave</span>`,
       wo:      `<span class="att-badge b-wo">🔵 Week Off</span>`,
-    }[e.status] || '';
+    }[e.status] || '<span style="color:var(--text3);font-size:11px;">Not marked</span>';
 
     const gpsTag = {
       site:   `<span class="gps-tag gps-site">📍 On-Site</span>`,
@@ -3368,7 +3497,14 @@ function renderAttTable() {
       manual: `<span class="gps-tag gps-manual">✏️ Manual</span>`,
     }[e.gps] || '';
 
-    const wh = e.in && e.status !== 'half' ? '8h 00m' : e.in ? '4h 00m' : '—';
+    var wh = '—';
+    if(e.in && e.out){
+      var inMin=attTimeToMin(e.in), outMin=attTimeToMin(e.out);
+      var diffMin=Math.max(0,outMin-inMin);
+      wh=Math.floor(diffMin/60)+'h '+(diffMin%60)+'m';
+    } else if(e.in){
+      wh='In progress';
+    }
 
     return `
       <tr class="anim" style="animation-delay:${i*0.04}s">
@@ -3391,29 +3527,79 @@ function renderAttTable() {
             `).join('')}
           </div>
         </td>
-        <td><input type="time" class="time-in" value="${e.in}" onchange="showToast('In time updated','success')"></td>
-        <td><input type="time" class="time-in" value="${e.out}" onchange="showToast('Out time updated','success')"></td>
+        <td><input type="time" class="time-in" value="${e.in}" onchange="attUpdateTime(${i},'in',this.value)"></td>
+        <td><input type="time" class="time-in" value="${e.out}" onchange="attUpdateTime(${i},'out',this.value)"></td>
         <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);">${wh}</td>
         <td>${e.ot !== '0h' ? `<span class="ot-badge">${e.ot}</span>` : '<span style="color:var(--text3);">—</span>'}</td>
         <td>${gpsTag}</td>
-        <td><input type="text" class="time-in" style="width:120px;" placeholder="Remarks..." value="${e.status==='absent'?'Not Informed':e.status==='leave'?'Approved Leave':''}"></td>
+        <td><input type="text" class="time-in" style="width:120px;" placeholder="Remarks..." value="${e.remarks||''}" onchange="attUpdateRemarks(${i},this.value)"></td>
       </tr>
     `;
   }).join('');
 }
+function attTimeToMin(hhmm){ var p=(hhmm||'0:0').split(':'); return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0); }
 
-function setStatus(idx, status, btn) {
+async function attUpdateTime(idx, field, value){
+  if(currentUser.role !== 'admin'){ showToast('Only Admin can edit attendance','warning'); renderAttTable(); return; }
+  var e = employees[idx];
+  e[field] = value;
+  renderAttTable();
+  try{
+    var existing = ATT_TODAY_MAP[e.id];
+    var patch = {}; patch[field==='in'?'in_time':'out_time'] = value?value+':00':null;
+    if(existing){
+      await sbUpdate('attendance', existing.id, patch);
+    } else {
+      patch.emp_id=e.id; patch.date=attToday(); patch.status=e.status||'present'; patch.marked_by=currentUser.id;
+      var res = await sbInsert('attendance', patch);
+      if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
+    }
+    showToast((field==='in'?'In':'Out')+' time updated','success');
+  }catch(err){ showToast('Failed to save: '+err.message,'error'); }
+}
+async function attUpdateRemarks(idx, value){
+  if(currentUser.role !== 'admin'){ showToast('Only Admin can edit attendance','warning'); renderAttTable(); return; }
+  var e = employees[idx];
+  e.remarks = value;
+  try{
+    var existing = ATT_TODAY_MAP[e.id];
+    if(existing){
+      await sbUpdate('attendance', existing.id, {remarks:value});
+    } else {
+      var res = await sbInsert('attendance',{emp_id:e.id, date:attToday(), status:e.status||'present', remarks:value, marked_by:currentUser.id});
+      if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
+    }
+    showToast('Remarks saved','success');
+  }catch(err){ showToast('Failed to save: '+err.message,'error'); }
+}
+
+async function setStatus(idx, status, btn) {
   if(currentUser.role !== 'admin'){
     showToast('Only Admin can change attendance status', 'warning');
     return;
   }
-  employees[idx].status = status;
+  var emp = employees[idx];
+  var prevStatus = emp.status;
+  emp.status = status;
   const row = btn.closest('tr');
   const allBtns = row.querySelectorAll('.sts-btn');
   allBtns.forEach(b => b.classList.remove('sel'));
   btn.classList.add('sel');
   updateSummary();
-  showToast(employees[idx].name + ' → ' + status, 'success');
+  try{
+    var existing = ATT_TODAY_MAP[emp.id];
+    if(existing){
+      await sbUpdate('attendance', existing.id, {status:status, marked_by:currentUser.id});
+    } else {
+      var res = await sbInsert('attendance',{emp_id:emp.id, date:attToday(), status:status, marked_by:currentUser.id});
+      if(res && res[0]){ ATT_TODAY_MAP[emp.id]=res[0]; emp.recId=res[0].id; }
+    }
+    showToast(emp.name + ' → ' + status, 'success');
+  }catch(e){
+    emp.status = prevStatus;
+    showToast('Failed to save: '+e.message,'error');
+    renderAttTable();
+  }
 }
 
 function lockStatusBtnsIfNotAdmin(){
@@ -3434,55 +3620,67 @@ function updateSummary() {
   document.getElementById('stat-absent').textContent = a;
 }
 
-function markAllPresent() {
+async function markAllPresent() {
   if(currentUser.role !== 'admin'){
     showToast('Only Admin can change attendance status', 'warning');
     return;
   }
-  employees.forEach(e => { if(e.status === 'absent') e.status = 'present'; });
+  var toMark = employees.filter(function(e){ return e.status !== 'present'; });
+  toMark.forEach(function(e){ e.status = 'present'; });
   renderAttTable();
   lockStatusBtnsIfNotAdmin();
   updateSummary();
-  showToast('All employees marked Present','success');
+  showToast('Marking all employees Present…','info');
+  var today = attToday();
+  try{
+    await Promise.all(toMark.map(function(e){
+      var existing = ATT_TODAY_MAP[e.id];
+      if(existing){
+        return sbUpdate('attendance', existing.id, {status:'present', marked_by:currentUser.id});
+      }
+      return sbInsert('attendance',{emp_id:e.id, date:today, status:'present', marked_by:currentUser.id}).then(function(res){
+        if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
+      });
+    }));
+    showToast('All employees marked Present','success');
+  }catch(e){
+    showToast('Some records failed to save: '+e.message,'error');
+  }
 }
 
-// ── MONTHLY CALENDAR ──
+// ── MONTHLY CALENDAR (self) ──
 function renderCal() {
   const cal = document.getElementById('month-cal');
-  // Feb 2026: starts on Sunday, 28 days
-  const startDay = 0; // Sunday
-  const daysInMonth = 28;
-  const today = 23;
+  if(!cal) return;
+  var year=ATT_VIEW_YEAR, month=ATT_VIEW_MONTH;
+  var firstDay = new Date(year, month, 1).getDay(); // 0=Sunday
+  var daysInMonth = new Date(year, month+1, 0).getDate();
+  var todayStr = attToday();
 
-  let html = '';
-  // Padding for start
-  for (let i = 0; i < startDay; i++) {
-    html += `<div class="day-cell dc-no"><div class="day-num"></div></div>`;
+  var recByDate = {};
+  ATT_MONTH_RECORDS.forEach(function(r){ recByDate[r.date]=r; });
+
+  var STATUS_CODE={present:'P',absent:'A',half:'½',leave:'L',wo:'WO'};
+  var classMap = { P:'dc-present', A:'dc-absent', WO:'dc-wo', H:'dc-holiday', L:'dc-leave', '½':'dc-half', '?':'dc-future' };
+  var dotMap = { P:'✓', A:'✗', WO:'—', H:'🎉', L:'🏖', '½':'½', '?':'·' };
+  var labelMap = {P:'Present',A:'Absent',WO:'Week Off',H:'Holiday',L:'Leave','½':'Half Day','?':'Not marked'};
+
+  var html = '';
+  for (var i = 0; i < firstDay; i++) {
+    html += '<div class="day-cell dc-no"><div class="day-num"></div></div>';
   }
-
-  const dayData = [
-    'wo','P','P','P','P','P','WO',  // 1–7
-    'WO','P','P','H','P','P','WO',  // 8–14
-    'WO','P','P','P','P','P','WO',  // 15–21
-    'WO','A','?','?','?','?','WO',  // 22–28
-  ];
-
-  const classMap = { P:'dc-present', A:'dc-absent', WO:'dc-wo', H:'dc-holiday', L:'dc-leave', '½':'dc-half', '?':'dc-future', 'wo':'dc-wo' };
-  const dotMap = { P:'✓', A:'✗', WO:'—', H:'🎉', L:'🏖', '½':'½', '?':'·', 'wo':'—' };
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const di = d - 1;
-    const ds = dayData[di] || '?';
-    const cls = classMap[ds] || 'dc-future';
-    const todayCls = d === today ? 'today' : '';
-    html += `
-      <div class="day-cell ${cls} ${todayCls}" onclick="showToast('${d} Feb 2026 — ${ds==='P'?'Present':ds==='A'?'Absent':ds==='WO'?'Week Off':ds==='H'?'Holiday':ds}','info')">
-        <div class="day-num">${d}</div>
-        <div class="day-dot">${dotMap[ds] || ''}</div>
-      </div>
-    `;
+  var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateStr = year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var rec = recByDate[dateStr];
+    var ds = rec ? (STATUS_CODE[rec.status]||'?') : (dateStr>todayStr ? '?' : '?');
+    var cls = classMap[ds] || 'dc-future';
+    var todayCls = dateStr===todayStr ? 'today' : '';
+    html += '<div class="day-cell '+cls+' '+todayCls+'" onclick="showToast(\''+d+' '+MONTHS[month]+' '+year+' — '+labelMap[ds]+'\',\'info\')">'+
+      '<div class="day-num">'+d+'</div>'+
+      '<div class="day-dot">'+(dotMap[ds]||'')+'</div>'+
+    '</div>';
   }
-
   cal.innerHTML = html;
 }
 
@@ -3500,23 +3698,40 @@ function renderLeave() {
       <td style="font-size:12px;color:var(--text3);">${l.applied}</td>
       <td>${l.status === 'approved'
         ? `<span class="att-badge b-present">✅ Approved</span>`
+        : l.status === 'rejected'
+        ? `<span class="att-badge b-absent">✗ Rejected</span>`
         : `<span class="att-badge b-half">⏳ Pending</span>`
       }</td>
       <td>
         ${l.status === 'pending'
           ? `<button class="btn btn-green btn-sm" onclick="approveLeave(${i})">✅ Approve</button>
-             <button class="btn btn-outline btn-sm" onclick="showToast('Leave rejected','error')" style="margin-left:4px;">✕</button>`
-          : `<button class="btn btn-outline btn-sm" onclick="showToast('Leave cancelled','warning')">Cancel</button>`
+             <button class="btn btn-outline btn-sm" onclick="rejectLeave(${i})" style="margin-left:4px;">✕</button>`
+          : ''
         }
       </td>
     </tr>
   `).join('');
 }
 
-function approveLeave(i) {
-  leaveData[i].status = 'approved';
+async function approveLeave(i) {
+  if(currentUser.role!=='admin'){ showToast('Only Admin can approve leave','warning'); return; }
+  var l = leaveData[i];
+  l.status = 'approved';
   renderLeave();
-  showToast(`Leave approved for ${leaveData[i].emp} · Email sent`, 'success');
+  try{
+    await sbUpdate('leave_requests', l.id, {status:'approved', reviewed_by:currentUser.id, reviewed_at:new Date().toISOString()});
+    showToast(`Leave approved for ${l.emp}`, 'success');
+  }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+}
+async function rejectLeave(i) {
+  if(currentUser.role!=='admin'){ showToast('Only Admin can reject leave','warning'); return; }
+  var l = leaveData[i];
+  l.status = 'rejected';
+  renderLeave();
+  try{
+    await sbUpdate('leave_requests', l.id, {status:'rejected', reviewed_by:currentUser.id, reviewed_at:new Date().toISOString()});
+    showToast('Leave rejected','error');
+  }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 
 function openLeaveModal() {
@@ -3537,13 +3752,40 @@ function openLeaveModal() {
   document.getElementById('leave-modal').classList.add('open');
 }
 
-function submitLeave() {
+async function submitLeave() {
+  var empName = (document.getElementById('leave-emp-sel')||{}).value;
+  var leaveType = (document.getElementById('leave-type-sel')||{}).value||'Casual Leave';
+  var duration = (document.getElementById('leave-duration-sel')||{}).value||'Full Day';
+  var fromDate = (document.getElementById('leave-from-date')||{}).value;
+  var toDate = (document.getElementById('leave-to-date')||{}).value;
+  var reason = (document.getElementById('leave-reason')||{}).value||'';
+  var handoverTo = (document.getElementById('leave-handover-sel')||{}).value||'';
+
+  if(!empName){ showToast('Please select an employee','warning'); return; }
+  if(!fromDate || !toDate){ showToast('Please select from and to dates','warning'); return; }
+  if(toDate < fromDate){ showToast('To Date cannot be before From Date','warning'); return; }
+
+  var days = duration==='Full Day' ? (Math.round((new Date(toDate)-new Date(fromDate))/86400000)+1) : 0.5;
+  var empMatch = EMP_LIST.find(function(e){
+    var n=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim();
+    return n===empName;
+  });
+
   document.getElementById('leave-modal').classList.remove('open');
-  showToast('Leave application submitted! Manager notified via email & app.', 'success');
-  const empName = (document.getElementById('leave-emp-sel')||{}).value||currentUser&&currentUser.name||'Employee';
-  const newLeave = { emp:empName, type:'Casual Leave', from:'24 Feb', to:'24 Feb', days:1, reason:'Personal work', applied:'23 Feb 2026', status:'pending' };
-  leaveData.push(newLeave);
-  renderLeave();
+  showToast('Submitting leave application…','info');
+  try{
+    var res = await sbInsert('leave_requests',{
+      emp_id: empMatch?empMatch.id:null, emp_name: empName, leave_type: leaveType, duration: duration,
+      from_date: fromDate, to_date: toDate, days: days, reason: reason, handover_to: handoverTo, status:'pending'
+    });
+    var saved = (res && res[0]) || {};
+    var tLbl={'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'};
+    leaveData.unshift({id:saved.id, emp:empName, type:tLbl[leaveType]||leaveType, from:attDisplayDate(fromDate), to:attDisplayDate(toDate), days:days, reason:reason, applied:attDisplayDate(attToday()), status:'pending'});
+    renderLeave();
+    showToast('Leave application submitted for approval!', 'success');
+  }catch(e){
+    showToast('Failed to submit: '+e.message,'error');
+  }
 }
 
 // ── TABS ──
