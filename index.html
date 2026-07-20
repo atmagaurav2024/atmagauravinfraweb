@@ -3602,11 +3602,14 @@ async function sbFetch(table, options={}){
 
 // Fetch company short name early (before login) so splash/login/topbar
 // branding shows it instead of the hardcoded fallback "AIPL".
-// Placed after SUPABASE_URL/SUPABASE_ANON_KEY (const, temporal-dead-zone)
-// and sbFetch are defined, so the fetch can actually succeed.
+// Uses the public_company_branding view (anon-readable) rather than the
+// full company_details table, since that table's RLS requires auth and
+// this runs before login. Placed after SUPABASE_URL/SUPABASE_ANON_KEY
+// (const, temporal-dead-zone) and sbFetch are defined.
 (function primeBranding(){
-  preloadCompanyData().then(function(){
-    var shortName = coShortName();
+  sbFetch('public_company_branding',{select:'name,short_name'}).then(function(rows){
+    var row=(Array.isArray(rows)&&rows.length)?rows[0]:{};
+    var shortName = row.short_name || (row.name?row.name.split(' ')[0]:'') || 'AIPL';
     document.querySelectorAll('#splash-name,#login-brand,#topbar-logo-text').forEach(function(el){
       el.textContent = shortName;
     });
