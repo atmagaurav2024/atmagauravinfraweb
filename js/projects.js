@@ -6470,7 +6470,9 @@ function execRenderBills(){
       var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       var activeDed=ded.filter(function(d){return !d.released;});
       var relDed=ded.filter(function(d){return d.released;});
-      var dedTotal=activeDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      // Advance adjustments are payments, not deductions — exclude them from
+      // dedTotal so Net Payable isn't reduced by money already adjusted
+      var dedTotal=activeDed.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var relTotal=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var bPaid=WA_PAYMENTS.filter(function(py){return py.bill_id===b.id;});
       var bPaidAmt=bPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
@@ -6479,7 +6481,7 @@ function execRenderBills(){
       // Released deductions count as paid (released back to party)
       var bRelDed=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var bNet=(parseFloat(b.bill_amount)||0)-dedTotal;
-      var bBal=bNet-bPaidAmt-bRelDed;
+      var bBal=bNet-bPaidAmt-bRelDed-bAdvAdj;
 
       // Parse additions
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
@@ -6704,7 +6706,8 @@ function purchaseBillsRegRows(){
     var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
     var activeDed=ded.filter(function(d){return !d.released;});
     var relDed=ded.filter(function(d){return d.released;});
-    var dedTotal=activeDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+    // Advance adjustments are payments, not deductions — exclude from dedTotal
+    var dedTotal=activeDed.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
     var relTotal=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
     var advAdjTotal=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
     var bPaid=WA_PAYMENTS.filter(function(py){return py.bill_id===b.id;});
@@ -6714,7 +6717,7 @@ function purchaseBillsRegRows(){
     var gross=parseFloat(b.bill_amount)||0;
     var workAmt=Math.max(0,gross-addTotal);
     var net=gross-dedTotal;
-    var bal=net-bPaidAmt-relTotal;
+    var bal=net-bPaidAmt-relTotal-advAdjTotal;
     return {b:b,workAmt:workAmt,addTotal:addTotal,gross:gross,dedTotal:dedTotal,advAdjTotal:advAdjTotal,net:net,paid:bPaidAmt,bal:bal};
   });
 }
@@ -8361,7 +8364,9 @@ function execDownloadBillPDF(billId){
   var deductions=[];try{deductions=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
   var activeDed=deductions.filter(function(d){return !d.released;});
   var relDed=deductions.filter(function(d){return d.released;});
-  var totalDed=activeDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  // Advance adjustments are payments, not deductions — exclude from totalDed
+  var totalDed=activeDed.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var totalAdvAdj=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var totalRel=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var grossAmt=parseFloat(b.bill_amount)||0;
   var netPayable=grossAmt-totalDed;
@@ -8372,7 +8377,7 @@ function execDownloadBillPDF(billId){
   // Payments for this bill
   var billPays=WA_PAYMENTS.filter(function(p){return p.bill_id===b.id;});
   var totalPaid=billPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
-  var balDue=Math.max(0,netPayable-totalPaid);
+  var balDue=Math.max(0,netPayable-totalPaid-totalAdvAdj);
 
   // Work items table rows
   var workRows=selItems.length
