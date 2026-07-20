@@ -1305,7 +1305,7 @@ input,select,textarea{font-size:16px !important;}
 <!-- SPLASH -->
 <div class="screen on" id="scr-splash">
   <div class="splash-logo">&#127959;</div>
-  <div class="splash-name">AIPL</div>
+  <div class="splash-name" id="splash-name">AIPL</div>
   <div class="splash-tag">Construction Management Platform</div>
   <div id="splash-msg" style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:16px;font-weight:600;">Loading...</div>
   <div class="splash-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
@@ -1315,7 +1315,7 @@ input,select,textarea{font-size:16px !important;}
 <div class="screen" id="scr-login">
   <div class="login-bg">
     <div class="login-logo">&#127959;</div>
-    <div class="login-brand">AIPL</div>
+    <div class="login-brand" id="login-brand">AIPL</div>
     <div class="login-sub">Construction Management</div>
   </div>
   <div class="login-card">
@@ -1567,7 +1567,7 @@ input,select,textarea{font-size:16px !important;}
 
 <!-- TOPBAR -->
 <div class="topbar">
-  <div class="topbar-logo">AIPL<span>.</span></div>
+  <div class="topbar-logo"><span id="topbar-logo-text">AIPL</span><span>.</span></div>
   <div class="topbar-sep">›</div>
   <div class="topbar-title">Attendance Module</div>
   <div class="topbar-project">—</div>
@@ -3062,6 +3062,18 @@ function toast(msg,type){
 
 // ── INIT ───────────────────────────────────────────────────────────────
 setTimeout(function(){showScreen('scr-login');},2200);
+
+// Fetch company short name early (before login) so splash/login/topbar
+// branding shows it instead of the hardcoded fallback "AIPL"
+(function primeBranding(){
+  preloadCompanyData().then(function(){
+    var shortName = coShortName();
+    document.querySelectorAll('#splash-name,#login-brand,#topbar-logo-text').forEach(function(el){
+      el.textContent = shortName;
+    });
+    document.title = shortName+' — Construction Management';
+  }).catch(function(){});
+})();
 
 
 // Override verifyOTP to go to app dashboard
@@ -15170,8 +15182,9 @@ function companyRender(){
   body.innerHTML =
     // Basic Info
     sec('&#127968;','Company Information','#1565C0')+
+    finp('name','Company Name',d.name,'e.g. Atmagaurav Infra Pvt. Ltd.')+
     '<div class="g2">'+
-      finp('name','Company Name',d.name,'e.g. Atmagaurav Infra Pvt. Ltd.')+
+      finp('short_name','Short Name',d.short_name,'e.g. AIPL')+
       finp('type','Company Type',d.type,'e.g. Private Limited')+
     '</div>'+
     '<label class="flbl">Registered Address</label>'+
@@ -15246,6 +15259,7 @@ async function companySave(){
   try{
     var data = {
       name:       (document.getElementById('co-name')||{}).value||null,
+      short_name: (document.getElementById('co-short_name')||{}).value||null,
       type:       (document.getElementById('co-type')||{}).value||null,
       address:    (document.getElementById('co-address')||{}).value||null,
       address2:   (document.getElementById('co-address2')||{}).value||null,
@@ -15301,6 +15315,9 @@ async function companySave(){
     COMPANY_PENDING_DOCS = {};
     toast('Company details saved!','success');
     companyRender();
+    var shortName = coShortName();
+    document.querySelectorAll('#splash-name,#login-brand,#topbar-logo-text').forEach(function(el){ el.textContent = shortName; });
+    document.title = shortName+' — Construction Management';
 
   }catch(e){
     toast('Error: '+e.message,'error');
@@ -15317,6 +15334,7 @@ function coGet(field, fallback){
   return (COMPANY_DATA&&COMPANY_DATA[field])||fallback||'';
 }
 function coName(){  return coGet('name','Atmagaurav Infra Pvt. Ltd.'); }
+function coShortName(){ return coGet('short_name', (coName().split(' ')[0])||'AIPL'); }
 function coAddr(){  return coGet('address',''); }
 function coCIN(){   return coGet('cin',''); }
 function coGST(){   return coGet('gstin',''); }
