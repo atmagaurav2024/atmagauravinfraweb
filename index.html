@@ -3063,18 +3063,6 @@ function toast(msg,type){
 // ── INIT ───────────────────────────────────────────────────────────────
 setTimeout(function(){showScreen('scr-login');},2200);
 
-// Fetch company short name early (before login) so splash/login/topbar
-// branding shows it instead of the hardcoded fallback "AIPL"
-(function primeBranding(){
-  preloadCompanyData().then(function(){
-    var shortName = coShortName();
-    document.querySelectorAll('#splash-name,#login-brand,#topbar-logo-text').forEach(function(el){
-      el.textContent = shortName;
-    });
-    document.title = shortName+' — Construction Management';
-  }).catch(function(){});
-})();
-
 
 // Override verifyOTP to go to app dashboard
 var _origVerify=verifyOTP;
@@ -3611,6 +3599,20 @@ async function sbFetch(table, options={}){
   if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
   return res.json();
 }
+
+// Fetch company short name early (before login) so splash/login/topbar
+// branding shows it instead of the hardcoded fallback "AIPL".
+// Placed after SUPABASE_URL/SUPABASE_ANON_KEY (const, temporal-dead-zone)
+// and sbFetch are defined, so the fetch can actually succeed.
+(function primeBranding(){
+  preloadCompanyData().then(function(){
+    var shortName = coShortName();
+    document.querySelectorAll('#splash-name,#login-brand,#topbar-logo-text').forEach(function(el){
+      el.textContent = shortName;
+    });
+    document.title = shortName+' — Construction Management';
+  }).catch(function(){});
+})();
 
 async function sbInsert(table, data){
   var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
