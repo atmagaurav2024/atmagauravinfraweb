@@ -1548,7 +1548,7 @@ input,select,textarea{font-size:16px !important;}
     </div>
 
     <div class="sec-title">&#128202; Key Metrics</div>
-    <div id="dash-kpi-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">
+    <div id="dash-kpi-grid" style="margin-bottom:16px;">
       <div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--text3);font-size:13px;background:white;border-radius:14px;">&#9203; Loading insights...</div>
     </div>
 
@@ -2443,31 +2443,64 @@ async function loadDashboardInsights(filterProjId){
     });
     var lowStock=Object.keys(stockGroups).map(function(k){return stockGroups[k];}).filter(function(g){return g.min_qty>0&&g.qty<=g.min_qty;});
 
-    // ── KPI cards ──
-    function kpiCard(icon,label,value,sub,color){
-      return '<div style="background:white;border-radius:14px;padding:14px;border-left:3px solid '+color+';">'+
-        '<div style="font-size:18px;">'+icon+'</div>'+
-        '<div style="font-size:19px;font-weight:900;color:'+color+';margin-top:4px;">'+value+'</div>'+
-        '<div style="font-size:10px;color:var(--text3);font-weight:700;margin-top:1px;">'+label+'</div>'+
-        (sub?'<div style="font-size:9px;color:var(--text3);margin-top:2px;">'+sub+'</div>':'')+
+    // ── Ring-style KPIs (2-3 related values per ring) ──
+    function svgRing(segments, size, sw){
+      var total=segments.reduce(function(s,x){return s+Math.max(0,x.value);},0);
+      var r=(size-sw)/2, cx=size/2, cy=size/2, circ=2*Math.PI*r;
+      var offset=0;
+      var arcs = total>0 ? segments.map(function(seg){
+        var frac=Math.max(0,seg.value)/total;
+        var len=frac*circ;
+        var dash=len+' '+(circ-len);
+        var dashoffset=-offset;
+        offset+=len;
+        return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+seg.color+'" stroke-width="'+sw+'" stroke-dasharray="'+dash+'" stroke-dashoffset="'+dashoffset+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+      }).join('') : '';
+      var bg='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#EFEFF2" stroke-width="'+sw+'"/>';
+      return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+bg+arcs+'</svg>';
+    }
+    function ringCard(title, segments, centerBig, centerSmall, centerColor){
+      var size=118, sw=13;
+      return '<div style="background:white;border-radius:16px;padding:14px 10px;text-align:center;">'+
+        '<div style="font-size:10px;font-weight:800;color:var(--text3);letter-spacing:.3px;margin-bottom:8px;">'+title+'</div>'+
+        '<div style="position:relative;width:'+size+'px;height:'+size+'px;margin:0 auto;">'+
+          svgRing(segments,size,sw)+
+          '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;">'+
+            '<div style="font-size:13px;font-weight:900;color:'+(centerColor||'#1E2547')+';line-height:1.1;">'+centerBig+'</div>'+
+            '<div style="font-size:8.5px;color:var(--text3);margin-top:2px;">'+centerSmall+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
+          segments.map(function(s){return '<div style="font-size:8.5px;display:flex;align-items:center;gap:3px;color:var(--text3);"><span style="width:7px;height:7px;border-radius:2px;background:'+s.color+';display:inline-block;"></span>'+s.label+'</div>';}).join('')+
+        '</div>'+
       '</div>';
     }
+    function statChip(icon,label,value,color){
+      return '<div style="background:white;border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:8px;">'+
+        '<div style="font-size:16px;">'+icon+'</div>'+
+        '<div><div style="font-size:14px;font-weight:900;color:'+color+';line-height:1.1;">'+value+'</div><div style="font-size:9px;color:var(--text3);font-weight:700;">'+label+'</div></div>'+
+      '</div>';
+    }
+
     var plColor=totalProfit>=0?'#2E7D32':'#C62828';
-    gridEl.innerHTML=
-      kpiCard(totalProfit>=0?'&#128200;':'&#128201;','NET PROFIT / LOSS',inr(totalProfit),marginPct+'% margin',plColor)+
-      kpiCard('&#128176;','BILLED AMOUNT',inr(revenueBilled),'sales billed (after GST & deductions)','#1565C0')+
-      kpiCard('&#128179;','UNBILLED AMOUNT',inr(revenueUnbilled),'executed, not yet billed (BOQ rate)','#00838F')+
-      kpiCard('&#128202;','TOTAL AMOUNT',inr(revenueTotal),'billed + unbilled','#37474F')+
-      kpiCard('&#128295;','COST (EXECUTED)',inr(totalCost),'resource cost incurred','#E65100')+
-      kpiCard('&#128203;','COST BILLED',inr(costBilled),'invoiced by vendors/contractors','#6A1B9A')+
-      kpiCard('&#128176;','COST PAID',inr(costPaid),'cash + advance adjusted','#2E7D32')+
-      kpiCard('&#128181;','COST BALANCE',inr(costBalance),'still payable','#C62828')+
-      (filterProjId
-        ? kpiCard('&#127959;','PROJECT',esc(selectedProject?selectedProject.name:'—'),selectedProject?selectedProject.status:'','#6A1B9A')
-        : kpiCard('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'total projects','#6A1B9A'))+
-      kpiCard('&#128119;','WORKFORCE',activeWorkforce,'active employees','#2E7D32')+
-      kpiCard('&#9203;','PENDING RRs',pendingRRs.length,'awaiting approval','#F57F17')+
-      kpiCard('&#128230;','LOW STOCK',lowStock.length,'items below min qty','#B71C1C');
+    var profitRingSegs = totalProfit>=0
+      ? [{value:totalProfit,color:'#2E7D32',label:'Profit'},{value:totalCost,color:'#E65100',label:'Cost'}]
+      : [{value:totalRevenue,color:'#1565C0',label:'Revenue'},{value:Math.abs(totalProfit),color:'#C62828',label:'Loss'}];
+
+    gridEl.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
+        ringCard('NET PROFIT / LOSS', profitRingSegs, inr(totalProfit), marginPct+'% margin', plColor)+
+        ringCard('REVENUE', [{value:revenueBilled,color:'#1565C0',label:'Billed'},{value:revenueUnbilled,color:'#00838F',label:'Unbilled'}], inr(revenueTotal), 'Total Revenue', '#1E2547')+
+        ringCard('COST', [{value:costPaid,color:'#2E7D32',label:'Paid'},{value:costBalance,color:'#C62828',label:'Balance'}], inr(costBilled), 'Cost Billed', '#1E2547')+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">'+
+        (filterProjId
+          ? statChip('&#127959;','PROJECT STATUS',esc(selectedProject?selectedProject.status:'—'),'#6A1B9A')
+          : statChip('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'#6A1B9A'))+
+        statChip('&#128119;','WORKFORCE',activeWorkforce,'#2E7D32')+
+        statChip('&#9203;','PENDING RRs',pendingRRs.length,'#F57F17')+
+        statChip('&#128230;','LOW STOCK',lowStock.length,'#B71C1C')+
+      '</div>';
 
     // ── KRA sections ──
     function listRow(label,sub,val,color){
