@@ -2470,8 +2470,13 @@ async function loadDashboardInsights(filterProjId){
             '<div style="font-size:8.5px;color:var(--text3);margin-top:2px;">'+centerSmall+'</div>'+
           '</div>'+
         '</div>'+
-        '<div style="display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
-          segments.map(function(s){return '<div style="font-size:8.5px;display:flex;align-items:center;gap:3px;color:var(--text3);"><span style="width:7px;height:7px;border-radius:2px;background:'+s.color+';display:inline-block;"></span>'+s.label+'</div>';}).join('')+
+        '<div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;text-align:left;">'+
+          segments.map(function(s){
+            return '<div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;gap:6px;">'+
+              '<span style="display:flex;align-items:center;gap:4px;color:var(--text3);white-space:nowrap;"><span style="width:7px;height:7px;border-radius:2px;background:'+s.color+';display:inline-block;flex-shrink:0;"></span>'+s.label+'</span>'+
+              '<span style="font-weight:800;color:#1E2547;white-space:nowrap;">'+inr(s.value)+'</span>'+
+            '</div>';
+          }).join('')+
         '</div>'+
       '</div>';
     }
