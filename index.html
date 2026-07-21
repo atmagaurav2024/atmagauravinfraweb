@@ -2448,35 +2448,44 @@ async function loadDashboardInsights(filterProjId){
       var total=segments.reduce(function(s,x){return s+Math.max(0,x.value);},0);
       var r=(size-sw)/2, cx=size/2, cy=size/2, circ=2*Math.PI*r;
       var offset=0;
-      var arcs = total>0 ? segments.map(function(seg){
-        var frac=Math.max(0,seg.value)/total;
-        var len=frac*circ;
-        var dash=len+' '+(circ-len);
-        var dashoffset=-offset;
-        offset+=len;
-        return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+seg.color+'" stroke-width="'+sw+'" stroke-dasharray="'+dash+'" stroke-dashoffset="'+dashoffset+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
-      }).join('') : '';
+      var arcs='', onArcLabels='';
+      if(total>0){
+        segments.forEach(function(seg){
+          var val=Math.max(0,seg.value);
+          var frac=val/total;
+          var len=frac*circ;
+          var dash=len+' '+(circ-len);
+          var dashoffset=-offset;
+          arcs+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+seg.color+'" stroke-width="'+sw+'" stroke-dasharray="'+dash+'" stroke-dashoffset="'+dashoffset+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+          if(frac>0.05){
+            var midLen=offset+len/2;
+            var midDeg=(midLen/circ)*360-90;
+            var rad=midDeg*Math.PI/180;
+            var lx=cx+r*Math.cos(rad), ly=cy+r*Math.sin(rad);
+            onArcLabels+='<div style="position:absolute;left:'+lx+'px;top:'+ly+'px;transform:translate(-50%,-50%);font-size:8.5px;font-weight:900;color:white;text-shadow:0 1px 2px rgba(0,0,0,.45);white-space:nowrap;line-height:1;pointer-events:none;">'+inr(val)+'</div>';
+          }
+          offset+=len;
+        });
+      }
       var bg='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#EFEFF2" stroke-width="'+sw+'"/>';
-      return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+bg+arcs+'</svg>';
+      var svg='<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+bg+arcs+'</svg>';
+      return {svg:svg, labels:onArcLabels};
     }
     function ringCard(title, segments, centerBig, centerSmall, centerColor){
-      var size=118, sw=13;
+      var size=128, sw=16;
+      var ring=svgRing(segments,size,sw);
       return '<div style="background:white;border-radius:16px;padding:14px 10px;text-align:center;">'+
         '<div style="font-size:10px;font-weight:800;color:var(--text3);letter-spacing:.3px;margin-bottom:8px;">'+title+'</div>'+
         '<div style="position:relative;width:'+size+'px;height:'+size+'px;margin:0 auto;">'+
-          svgRing(segments,size,sw)+
-          '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;">'+
+          ring.svg+
+          ring.labels+
+          '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;">'+
             '<div style="font-size:13px;font-weight:900;color:'+(centerColor||'#1E2547')+';line-height:1.1;">'+centerBig+'</div>'+
             '<div style="font-size:8.5px;color:var(--text3);margin-top:2px;">'+centerSmall+'</div>'+
           '</div>'+
         '</div>'+
-        '<div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;text-align:left;">'+
-          segments.map(function(s){
-            return '<div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;gap:6px;">'+
-              '<span style="display:flex;align-items:center;gap:4px;color:var(--text3);white-space:nowrap;"><span style="width:7px;height:7px;border-radius:2px;background:'+s.color+';display:inline-block;flex-shrink:0;"></span>'+s.label+'</span>'+
-              '<span style="font-weight:800;color:#1E2547;white-space:nowrap;">'+inr(s.value)+'</span>'+
-            '</div>';
-          }).join('')+
+        '<div style="display:flex;justify-content:center;gap:10px;margin-top:10px;flex-wrap:wrap;">'+
+          segments.map(function(s){return '<div style="font-size:8.5px;display:flex;align-items:center;gap:3px;color:var(--text3);"><span style="width:7px;height:7px;border-radius:2px;background:'+s.color+';display:inline-block;"></span>'+s.label+'</div>';}).join('')+
         '</div>'+
       '</div>';
     }
@@ -2493,8 +2502,10 @@ async function loadDashboardInsights(filterProjId){
       : [{value:totalRevenue,color:'#1565C0',label:'Revenue'},{value:Math.abs(totalProfit),color:'#C62828',label:'Loss'}];
 
     gridEl.innerHTML =
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
+      '<div style="margin-bottom:8px;">'+
         ringCard('NET PROFIT / LOSS', profitRingSegs, inr(totalProfit), marginPct+'% margin', plColor)+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;">'+
         ringCard('REVENUE', [{value:revenueBilled,color:'#1565C0',label:'Billed'},{value:revenueUnbilled,color:'#00838F',label:'Unbilled'}], inr(revenueTotal), 'Total Revenue', '#1E2547')+
         ringCard('COST', [{value:costPaid,color:'#2E7D32',label:'Paid'},{value:costBalance,color:'#C62828',label:'Balance'}], inr(costBilled), 'Cost Billed', '#1E2547')+
       '</div>'+
