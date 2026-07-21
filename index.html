@@ -1209,17 +1209,17 @@ input,select,textarea{font-size:16px !important;}
 /* ═══════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════ */
-#app-dashboard{background:#0D1117;overflow-y:auto;padding-bottom:80px;}
+#app-dashboard{background:#150F2E;overflow-y:auto;padding-bottom:80px;}
 #app-dashboard.on{display:block;}
-#app-dashboard .dash-top{background:linear-gradient(180deg,#0D1117,#161B22);border-bottom:1px solid #21262D;}
-#app-dashboard .dt-greeting{color:#8B949E;}
-#app-dashboard .dt-name{color:#E6EDF3;}
-#app-dashboard .dt-role{color:#8B949E;}
-#app-dashboard .dt-avatar{background:#21262D!important;border:1px solid #30363D;}
-#app-dashboard .dk{background:#161B22!important;border:1px solid #21262D;}
-#app-dashboard .dk-val{color:#E6EDF3;}
-#app-dashboard .dk-lbl{color:#8B949E!important;}
-#app-dashboard .sec-title{color:#E6EDF3;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}
+#app-dashboard .dash-top{background:linear-gradient(180deg,#150F2E,#1F1A38);border-bottom:1px solid rgba(255,255,255,.06);}
+#app-dashboard .dt-greeting{color:#9F94C7;}
+#app-dashboard .dt-name{color:#EDE9F7;}
+#app-dashboard .dt-role{color:#9F94C7;}
+#app-dashboard .dt-avatar{background:#2A2050!important;border:1px solid rgba(255,255,255,.1);}
+#app-dashboard .dk{background:#1F1A38!important;border:1px solid rgba(255,255,255,.06);}
+#app-dashboard .dk-val{color:#EDE9F7;}
+#app-dashboard .dk-lbl{color:#9F94C7!important;}
+#app-dashboard .sec-title{color:#EDE9F7;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}
 .dt-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
 .dt-greeting{font-size:14px;color:rgba(255,255,255,.5);}
 .dt-name{font-size:22px;font-weight:900;color:white;font-family:'Nunito',sans-serif;}
@@ -1534,7 +1534,7 @@ input,select,textarea{font-size:16px !important;}
     <!-- PENDING APPROVALS CARD (admin only) -->
     <div id="pending-approvals-card" style="display:none;margin-bottom:14px;">
       <div class="sec-title">&#9203; Pending Approvals</div>
-      <div style="background:#161B22;border-radius:12px;border:1px solid #21262D;overflow:hidden;cursor:pointer;" onclick="openPendingApprovals()">
+      <div style="background:#1F1A38;border-radius:12px;border:1px solid rgba(255,255,255,.06);overflow:hidden;cursor:pointer;" onclick="openPendingApprovals()">
         <div style="background:linear-gradient(135deg,#9A6700,#D29922);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="width:40px;height:40px;background:rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;">&#128101;</div>
@@ -1557,13 +1557,13 @@ input,select,textarea{font-size:16px !important;}
 
     <div class="sec-title">&#128202; Key Metrics</div>
     <div id="dash-kpi-grid" style="margin-bottom:16px;">
-      <div style="grid-column:1/-1;text-align:center;padding:24px;color:#8B949E;font-size:13px;background:#161B22;border-radius:12px;border:1px solid #21262D;">&#9203; Loading insights...</div>
+      <div style="grid-column:1/-1;text-align:center;padding:24px;color:#9F94C7;font-size:13px;background:#1F1A38;border-radius:12px;border:1px solid rgba(255,255,255,.06);">&#9203; Loading insights...</div>
     </div>
 
     <div id="dash-kra-section"></div>
 
     <div class="sec-title">&#128276; Recent Activity</div>
-    <div id="dash-activity-feed"><div style="text-align:center;padding:20px;color:#8B949E;font-size:13px;background:#161B22;border-radius:12px;border:1px solid #21262D;">No recent activity</div></div>
+    <div id="dash-activity-feed"><div style="text-align:center;padding:20px;color:#9F94C7;font-size:13px;background:#1F1A38;border-radius:12px;border:1px solid rgba(255,255,255,.06);">No recent activity</div></div>
 
   </div>
 </div>
@@ -2327,7 +2327,7 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('employees',{select:'id,status'})),
       safe(sbFetch('boq_items',{select:'id,project_id,item_code,short_name,description,unit,boq_qty,rate'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,exec_type,rate',filter:'exec_type=neq.planned'})),
-      safe(sbFetch('work_daily_progress',{select:'id,project_id,boq_item_id,qty_done,resources_used'})),
+      safe(sbFetch('work_daily_progress',{select:'id,project_id,boq_item_id,qty_done,resources_used,date'})),
       safe(sbFetch('resource_requisitions',{select:'id,project_id,status',filter:'status=eq.pending'})),
       safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'})),
       safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions'})),
@@ -2451,58 +2451,190 @@ async function loadDashboardInsights(filterProjId){
     });
     var lowStock=Object.keys(stockGroups).map(function(k){return stockGroups[k];}).filter(function(g){return g.min_qty>0&&g.qty<=g.min_qty;});
 
-    // ── Ring-style KPIs (2-3 related values per ring) ──
-    function progressCard(title, actualLabel, actualVal, planLabel, planVal, pct, barColor){
-      var pctClamped=Math.max(0,Math.min(100,pct));
-      return '<div style="background:#161B22;border-radius:12px;padding:16px;border:1px solid #21262D;">'+
-        '<div style="font-size:11px;font-weight:600;color:#8B949E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px;">'+title+'</div>'+
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'+
-          '<div><span style="font-size:10px;color:#8B949E;">'+actualLabel+':&nbsp;</span><span style="font-size:19px;font-weight:700;color:#E6EDF3;">'+actualVal+'</span></div>'+
-          '<div><span style="font-size:10px;color:#8B949E;">'+planLabel+':&nbsp;</span><span style="font-size:13px;font-weight:600;color:#8B949E;">'+planVal+'</span></div>'+
-        '</div>'+
-        '<div style="display:flex;align-items:center;gap:12px;">'+
-          '<div style="font-size:20px;font-weight:800;color:'+barColor+';min-width:54px;">'+Math.round(pct)+'%</div>'+
-          '<div style="flex:1;height:9px;background:#21262D;border-radius:5px;overflow:hidden;">'+
-            '<div style="height:100%;width:'+pctClamped+'%;background:'+barColor+';border-radius:5px;"></div>'+
-          '</div>'+
-        '</div>'+
-      '</div>';
-    }
-    function statChip(icon,label,value,color){
-      return '<div style="background:#161B22;border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;border:1px solid #21262D;">'+
-        '<div style="font-size:15px;width:30px;height:30px;border-radius:8px;background:'+color+'1A;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+icon+'</div>'+
-        '<div><div style="font-size:15px;font-weight:700;color:#E6EDF3;line-height:1.15;">'+value+'</div><div style="font-size:9.5px;color:#8B949E;font-weight:500;">'+label+'</div></div>'+
-      '</div>';
-    }
-
-    var plColor=totalProfit>=0?'#3FB950':'#F85149';
+    // ── Daily activity (last 14 days) for the trend chart ──
     var revenuePct = revenueTotal>0 ? (revenueBilled/revenueTotal*100) : 0;
     var costPct = costBilled>0 ? (costPaid/costBilled*100) : 0;
+    var dayLabels=[], qtyByDate={};
+    for(var i=13;i>=0;i--){
+      var dd=new Date(); dd.setDate(dd.getDate()-i);
+      var dkey=dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
+      dayLabels.push(String(dd.getDate()).padStart(2,'0'));
+      qtyByDate[dkey]=0;
+    }
+    dailyProgress.forEach(function(d){
+      if(d.date && qtyByDate.hasOwnProperty(d.date)) qtyByDate[d.date]+=(parseFloat(d.qty_done)||0);
+    });
+    var last14Vals=Object.keys(qtyByDate).sort().map(function(k){return qtyByDate[k];});
 
-    gridEl.innerHTML =
-      '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">'+
-        progressCard('NET PROFIT / LOSS', totalProfit>=0?'Profit':'Loss', inr(Math.abs(totalProfit)), 'of Revenue', inr(totalRevenue), marginPct, plColor)+
-        progressCard('REVENUE', 'Billed', inr(revenueBilled), 'Total (Billed+Unbilled)', inr(revenueTotal), revenuePct, '#58A6FF')+
-        progressCard('COST', 'Paid', inr(costPaid), 'Billed', inr(costBilled), costPct, '#3FB950')+
+    // ══ WIDGET LIBRARY (reusable shapes matching the reference layout) ══
+    function gradientStatCard(icon,value,label,grad){
+      return '<div style="background:'+grad+';border-radius:16px;padding:16px;display:flex;align-items:center;justify-content:space-between;">'+
+        '<div><div style="font-size:21px;font-weight:800;color:white;line-height:1.1;">'+value+'</div><div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.4px;margin-top:5px;">'+label+'</div></div>'+
+        '<div style="font-size:20px;color:rgba(255,255,255,.8);">'+icon+'</div>'+
+      '</div>';
+    }
+    function panel(icon,title,inner,minH){
+      return '<div style="background:#1F1A38;border-radius:16px;padding:16px;border:1px solid rgba(255,255,255,.06);'+(minH?'min-height:'+minH+'px;':'')+'">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'+
+          '<span style="font-size:14px;color:#9F94C7;">'+icon+'</span>'+
+          '<span style="font-size:12.5px;font-weight:700;color:#EDE9F7;letter-spacing:.2px;">'+title+'</span>'+
+        '</div>'+
+        inner+
+      '</div>';
+    }
+    function ringArcs(segments,size,sw,trackColor){
+      var total=segments.reduce(function(s,x){return s+Math.max(0,x.value);},0);
+      var r=(size-sw)/2, cx=size/2, cy=size/2, circ=2*Math.PI*r;
+      var offset=0, arcs='';
+      if(total>0){
+        segments.forEach(function(seg){
+          var val=Math.max(0,seg.value), frac=val/total, len=frac*circ;
+          arcs+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+seg.color+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+len+' '+(circ-len)+'" stroke-dashoffset="'+(-offset)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+          offset+=len;
+        });
+      }
+      var bg='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+(trackColor||'#33285A')+'" stroke-width="'+sw+'"/>';
+      return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+bg+arcs+'</svg>';
+    }
+    function donutLegend(segments,centerLabel){
+      var size=132, sw=20;
+      return '<div style="display:flex;align-items:center;gap:16px;">'+
+        '<div style="flex:1;">'+segments.map(function(s){
+          return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
+            '<span style="width:9px;height:9px;border-radius:50%;background:'+s.color+';display:inline-block;flex-shrink:0;"></span>'+
+            '<span style="font-size:12px;font-weight:700;color:#EDE9F7;">'+inr(s.value)+'</span>'+
+          '</div>';
+        }).join('')+'</div>'+
+        '<div style="position:relative;width:'+size+'px;height:'+size+'px;flex-shrink:0;">'+
+          ringArcs(segments,size,sw)+
+          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#EDE9F7;">'+centerLabel+'</div>'+
+        '</div>'+
+      '</div>';
+    }
+    function concentricRings(rings,size,centerLabel){
+      var cx=size/2, cy=size/2, sw=10, gap=5, svgParts='';
+      rings.forEach(function(ring,i){
+        var r=size/2-sw/2-i*(sw+gap), circ=2*Math.PI*r;
+        var len=Math.max(0,Math.min(100,ring.pct))/100*circ;
+        svgParts+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#33285A" stroke-width="'+sw+'"/>';
+        svgParts+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+ring.color+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+len+' '+(circ-len)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+      });
+      return '<div style="position:relative;width:'+size+'px;height:'+size+'px;margin:0 auto;">'+
+        '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+svgParts+'</svg>'+
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#EDE9F7;text-align:center;padding:0 16px;">'+centerLabel+'</div>'+
       '</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">'+
-        (filterProjId
-          ? statChip('&#127959;','PROJECT STATUS',esc(selectedProject?selectedProject.status:'—'),'#A371F7')
-          : statChip('&#127959;','ACTIVE PROJECTS',activeProjects+' / '+projects.length,'#A371F7'))+
-        statChip('&#128119;','WORKFORCE',activeWorkforce,'#3FB950')+
-        statChip('&#9203;','PENDING RRs',pendingRRs.length,'#D29922')+
-        statChip('&#128230;','LOW STOCK',lowStock.length,'#F85149')+
+      '<div style="display:flex;justify-content:center;gap:12px;margin-top:12px;flex-wrap:wrap;">'+
+        rings.map(function(r){return '<div style="font-size:9px;display:flex;align-items:center;gap:4px;color:#9F94C7;"><span style="width:7px;height:7px;border-radius:50%;background:'+r.color+';display:inline-block;"></span>'+r.label+'</div>';}).join('')+
+      '</div>';
+    }
+    function tripleRing(items){
+      var size=82, sw=8;
+      return '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+
+        items.map(function(it){
+          var r=(size-sw)/2, cx=size/2, cy=size/2, circ=2*Math.PI*r;
+          var len=Math.max(0,Math.min(100,it.pct))/100*circ;
+          return '<div style="text-align:center;">'+
+            '<div style="position:relative;width:'+size+'px;height:'+size+'px;margin:0 auto;">'+
+              '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+
+                '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#33285A" stroke-width="'+sw+'"/>'+
+                '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+it.color+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+len+' '+(circ-len)+'" transform="rotate(-90 '+cx+' '+cy+')"/>'+
+              '</svg>'+
+              '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#EDE9F7;">'+it.value+'</div>'+
+            '</div>'+
+            '<div style="font-size:9.5px;font-weight:700;color:#EDE9F7;margin-top:8px;">'+it.label+'</div>'+
+            '<div style="font-size:8.5px;color:'+it.color+';margin-top:1px;">'+it.sub+'</div>'+
+          '</div>';
+        }).join('')+
+      '</div>';
+    }
+    function dualBarCompare(rows,leftColor,rightColor){
+      var maxVal=Math.max.apply(null,rows.map(function(r){return Math.max(r.leftVal,r.rightVal);}).concat([1]));
+      return rows.map(function(r){
+        var lp=Math.min(100,(r.leftVal/maxVal)*100), rp=Math.min(100,(r.rightVal/maxVal)*100);
+        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:11px;">'+
+          '<div style="flex:1;display:flex;justify-content:flex-end;"><div style="height:7px;width:'+lp+'%;background:'+leftColor+';border-radius:4px;min-width:2px;"></div></div>'+
+          '<div style="min-width:64px;text-align:center;font-size:9.5px;font-weight:700;color:#D8D2EC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.label+'</div>'+
+          '<div style="flex:1;"><div style="height:7px;width:'+rp+'%;background:'+rightColor+';border-radius:4px;min-width:2px;"></div></div>'+
+        '</div>';
+      }).join('');
+    }
+    function groupedBarChart(categories,series){
+      var maxVal=Math.max.apply(null,series.reduce(function(a,s){return a.concat(s.values);},[]).concat([1]));
+      var chartH=84;
+      return '<div style="display:flex;align-items:flex-end;gap:10px;height:'+chartH+'px;margin-bottom:10px;">'+
+        categories.map(function(cat,ci){
+          return '<div style="display:flex;flex-direction:column;align-items:center;flex:1;">'+
+            '<div style="display:flex;align-items:flex-end;gap:3px;height:'+(chartH-16)+'px;">'+
+              series.map(function(s){
+                var v=s.values[ci]||0, h=Math.max(2,(v/maxVal)*(chartH-16));
+                return '<div style="width:7px;height:'+h+'px;background:'+s.color+';border-radius:2px 2px 0 0;"></div>';
+              }).join('')+
+            '</div>'+
+            '<div style="font-size:8.5px;color:#9F94C7;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px;">'+cat+'</div>'+
+          '</div>';
+        }).join('')+
+      '</div>'+
+      '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">'+
+        series.map(function(s){return '<div style="font-size:9px;display:flex;align-items:center;gap:4px;color:#D8D2EC;"><span style="width:7px;height:7px;border-radius:2px;background:'+s.color+';display:inline-block;"></span>'+s.name+'</div>';}).join('')+
+      '</div>';
+    }
+    function fullWidthBars(values,labels,gradTop,gradBottom){
+      var maxVal=Math.max.apply(null,values.concat([1]));
+      var h=100;
+      return '<div style="display:flex;align-items:flex-end;gap:2px;height:'+h+'px;">'+
+        values.map(function(v){
+          var hh=Math.max(2,(v/maxVal)*h);
+          return '<div style="flex:1;height:'+hh+'px;background:linear-gradient(180deg,'+gradTop+','+gradBottom+');border-radius:2px 2px 0 0;"></div>';
+        }).join('')+
+      '</div>'+
+      '<div style="display:flex;justify-content:space-between;margin-top:6px;">'+
+        labels.filter(function(l,i){return i%2===0;}).map(function(l){return '<span style="font-size:8px;color:#9F94C7;">'+l+'</span>';}).join('')+
+      '</div>';
+    }
+    function dotMatrix(rows,cols,filledCount,color){
+      var total=rows*cols, html='<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:4px;">';
+      for(var d=0; d<total; d++){
+        html+='<span style="width:100%;padding-top:100%;position:relative;border-radius:50%;background:'+(d<filledCount?color:'#33285A')+';display:block;"></span>';
+      }
+      return html+'</div>';
+    }
+
+    // ══ ASSEMBLE — data mapped as a starting point; tell me what to swap ══
+    gridEl.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:10px;">'+
+        gradientStatCard('&#128200;', marginPct+'%', 'Profit Margin', 'linear-gradient(135deg,#F5A623,#F7CA5C)')+
+        gradientStatCard('&#127959;', (filterProjId?1:activeProjects)+'/'+(filterProjId?1:projects.length), 'Active Projects', 'linear-gradient(135deg,#6C5CE7,#8B7FE8)')+
+        gradientStatCard('&#128119;', activeWorkforce, 'Workforce', 'linear-gradient(135deg,#00ACC1,#4FD1C5)')+
+        gradientStatCard('&#128181;', inr(costBalance), 'Cost Balance', 'linear-gradient(135deg,#DB2777,#F857A6)')+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
+        panel('&#128202;','Revenue vs Cost by Project', dualBarCompare(projPLRows.slice(0,5).map(function(p){return {label:p.name,leftVal:p.revenue,rightVal:p.cost};}),'#F857A6','#4FD1C5'))+
+        panel('&#128176;','Cost Billed Breakdown', donutLegend([{value:costPaid,color:'#4FD1C5'},{value:costBalance,color:'#F857A6'}], inr(costBilled)))+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
+        panel('&#9881;','Revenue / Cost / Margin', concentricRings([{pct:Math.min(100,revenuePct),color:'#F857A6',label:'Revenue'},{pct:Math.min(100,costPct),color:'#4FD1C5',label:'Cost'},{pct:Math.max(0,Math.min(100,marginPct)),color:'#F7CA5C',label:'Margin'}], 128, inr(totalProfit)))+
+        panel('&#128201;','Top Projects: Revenue vs Cost', groupedBarChart(projPLRows.slice(0,4).map(function(p){return p.name.length>10?p.name.slice(0,9)+'…':p.name;}), [{name:'Revenue',color:'#F857A6',values:projPLRows.slice(0,4).map(function(p){return p.revenue;})},{name:'Cost',color:'#4FD1C5',values:projPLRows.slice(0,4).map(function(p){return p.cost;})}]))+
+      '</div>'+
+      '<div style="margin-bottom:10px;">'+
+        panel('&#128197;','Execution Activity — Last 14 Days', fullWidthBars(last14Vals,dayLabels,'#8B7FE8','#4FD1C5'))+
+      '</div>'+
+      '<div style="margin-bottom:10px;">'+
+        panel('&#127942;','Operational Snapshot', tripleRing([
+          {value:pendingRRs.length,label:'Pending RRs',sub:pendingRRs.length?'needs review':'all clear',color:'#F7CA5C',pct:Math.min(100,pendingRRs.length*10)},
+          {value:lowStock.length,label:'Low Stock',sub:lowStock.length?'reorder soon':'stock ok',color:'#F857A6',pct:Math.min(100,lowStock.length*10)},
+          {value:itemPL.length,label:'Items Executed',sub:'this period',color:'#4FD1C5',pct:Math.min(100,itemPL.length*5)}
+        ]))+
       '</div>';
 
-    // ── KRA sections: real data tables instead of sparse list rows ──
+    // ── KRA sections: real data tables ──
     function sectionTitle(title){
-      return '<div style="font-size:11px;font-weight:600;color:#8B949E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">'+title+'</div>';
+      return '<div style="font-size:11px;font-weight:600;color:#9F94C7;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">'+title+'</div>';
     }
     function dataTable(headers, rows){
-      return '<div style="background:#161B22;border-radius:12px;border:1px solid #21262D;overflow:hidden;margin-bottom:14px;">'+
+      return '<div style="background:#1F1A38;border-radius:16px;border:1px solid rgba(255,255,255,.06);overflow:hidden;margin-bottom:14px;">'+
         '<table style="width:100%;border-collapse:collapse;font-size:11.5px;">'+
-          '<thead><tr style="background:#0D1117;">'+
-            headers.map(function(h,i){return '<th style="padding:8px 12px;text-align:'+(i===0?'left':'right')+';color:#8B949E;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;">'+h+'</th>';}).join('')+
+          '<thead><tr style="background:#170F2E;">'+
+            headers.map(function(h,i){return '<th style="padding:8px 12px;text-align:'+(i===0?'left':'right')+';color:#9F94C7;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;">'+h+'</th>';}).join('')+
           '</tr></thead>'+
           '<tbody>'+rows+'</tbody>'+
         '</table>'+
@@ -2514,36 +2646,36 @@ async function loadDashboardInsights(filterProjId){
 
     var itemPLSorted = itemPL.slice().sort(function(a,b){return b.profit-a.profit;});
     var topItemRows = itemPLSorted.slice(0,4).concat(itemPLSorted.slice(-4).reverse())
-      .filter(function(x,i,arr){return arr.indexOf(x)===i;}) // dedupe if <8 items total
+      .filter(function(x,i,arr){return arr.indexOf(x)===i;})
       .map(function(x,i){
-        var bg=i%2===0?'transparent':'#1C2129';
-        return '<tr style="background:'+bg+';border-top:1px solid #21262D;">'+
-          '<td style="padding:8px 12px;"><div style="font-weight:600;color:#E6EDF3;">'+(x.item.short_name||x.item.description||'')+'</div><div style="font-size:9.5px;color:#8B949E;">'+(x.item.item_code?'['+x.item.item_code+'] ':'')+x.projName+'</div></td>'+
-          '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+inr(x.revenue)+'</td>'+
-          '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+inr(x.cost)+'</td>'+
-          '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(x.profit>=0?'#3FB950':'#F85149')+';">'+inr(x.profit)+'</td>'+
-          '<td style="padding:8px 12px;text-align:right;">'+badge(x.profit>=0?'Profit':'Loss',x.profit>=0?'#3FB950':'#F85149')+'</td>'+
+        var bg=i%2===0?'transparent':'#241B42';
+        return '<tr style="background:'+bg+';border-top:1px solid rgba(255,255,255,.06);">'+
+          '<td style="padding:8px 12px;"><div style="font-weight:600;color:#EDE9F7;">'+(x.item.short_name||x.item.description||'')+'</div><div style="font-size:9.5px;color:#9F94C7;">'+(x.item.item_code?'['+x.item.item_code+'] ':'')+x.projName+'</div></td>'+
+          '<td style="padding:8px 12px;text-align:right;color:#9F94C7;">'+inr(x.revenue)+'</td>'+
+          '<td style="padding:8px 12px;text-align:right;color:#9F94C7;">'+inr(x.cost)+'</td>'+
+          '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(x.profit>=0?'#4FD1C5':'#F857A6')+';">'+inr(x.profit)+'</td>'+
+          '<td style="padding:8px 12px;text-align:right;">'+badge(x.profit>=0?'Profit':'Loss',x.profit>=0?'#4FD1C5':'#F857A6')+'</td>'+
         '</tr>';
       }).join('');
 
     var projPLTableRows = projPLRows.slice(0,8).map(function(p,i){
-      var bg=i%2===0?'transparent':'#1C2129';
-      return '<tr style="background:'+bg+';border-top:1px solid #21262D;">'+
-        '<td style="padding:8px 12px;font-weight:600;color:#E6EDF3;">'+p.name+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+inr(p.revenue)+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+inr(p.cost)+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(p.profit>=0?'#3FB950':'#F85149')+';">'+inr(p.profit)+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;">'+badge(p.profit>=0?'Profit':'Loss',p.profit>=0?'#3FB950':'#F85149')+'</td>'+
+      var bg=i%2===0?'transparent':'#241B42';
+      return '<tr style="background:'+bg+';border-top:1px solid rgba(255,255,255,.06);">'+
+        '<td style="padding:8px 12px;font-weight:600;color:#EDE9F7;">'+p.name+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;color:#9F94C7;">'+inr(p.revenue)+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;color:#9F94C7;">'+inr(p.cost)+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(p.profit>=0?'#4FD1C5':'#F857A6')+';">'+inr(p.profit)+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;">'+badge(p.profit>=0?'Profit':'Loss',p.profit>=0?'#4FD1C5':'#F857A6')+'</td>'+
       '</tr>';
     }).join('');
 
     var lowStockTableRows = lowStock.slice(0,6).map(function(g,i){
-      var bg=i%2===0?'transparent':'#1C2129';
-      return '<tr style="background:'+bg+';border-top:1px solid #21262D;">'+
-        '<td style="padding:8px 12px;font-weight:600;color:#E6EDF3;">'+g.item_name+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+(projName[g.project_id]||'')+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+g.min_qty+' '+g.unit+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:#F85149;">'+g.qty+' '+g.unit+'</td>'+
+      var bg=i%2===0?'transparent':'#241B42';
+      return '<tr style="background:'+bg+';border-top:1px solid rgba(255,255,255,.06);">'+
+        '<td style="padding:8px 12px;font-weight:600;color:#EDE9F7;">'+g.item_name+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;color:#9F94C7;">'+(projName[g.project_id]||'')+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;color:#9F94C7;">'+g.min_qty+' '+g.unit+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:#F857A6;">'+g.qty+' '+g.unit+'</td>'+
       '</tr>';
     }).join('');
 
@@ -2551,11 +2683,11 @@ async function loadDashboardInsights(filterProjId){
       (projPLTableRows&&!filterProjId?sectionTitle('&#128202; Project-wise Profit / Loss')+dataTable(['Project','Revenue','Cost','P&amp;L',''],projPLTableRows):'')+
       (topItemRows?sectionTitle('&#128201; Item-wise Profit / Loss (Top &amp; Bottom)')+dataTable(['Item','Revenue','Cost','P&amp;L',''],topItemRows):'')+
       (lowStockTableRows?sectionTitle('&#128230; Low Stock Alerts')+dataTable(['Item','Project','Min Qty','In Hand'],lowStockTableRows):'')+
-      (!itemPL.length?'<div style="text-align:center;padding:20px;color:#8B949E;font-size:12px;background:#161B22;border-radius:12px;border:1px solid #21262D;">No executed work logged yet \u2014 profit/loss appears once Daily Progress entries are recorded.</div>':'');
+      (!itemPL.length?'<div style="text-align:center;padding:20px;color:#9F94C7;font-size:12px;background:#1F1A38;border-radius:12px;border:1px solid rgba(255,255,255,.06);">No executed work logged yet \u2014 profit/loss appears once Daily Progress entries are recorded.</div>':'');
 
   }catch(e){
     console.error('Dashboard insights error:',e);
-    gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F85149;font-size:12px;background:#161B22;border-radius:12px;border:1px solid #21262D;">Could not load insights. Pull to refresh.</div>';
+    gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F857A6;font-size:12px;background:#1F1A38;border-radius:12px;border:1px solid rgba(255,255,255,.06);">Could not load insights. Pull to refresh.</div>';
   }
 }
 
