@@ -2323,10 +2323,11 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('resource_requisitions',{select:'id,project_id,status',filter:'status=eq.pending'})),
       safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'})),
       safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions'})),
-      safe(sbFetch('work_payments',{select:'id,project_id,amount'}))
+      safe(sbFetch('work_payments',{select:'id,project_id,amount'})),
+      safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
-        pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[];
+        pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[];
 
     // ── Populate / preserve the project filter dropdown ──
     var selectedProject=projects.find(function(p){return p.id===filterProjId;});
@@ -2345,6 +2346,7 @@ async function loadDashboardInsights(filterProjId){
       storeItems=storeItems.filter(function(x){return x.project_id===filterProjId;});
       workBills=workBills.filter(function(x){return x.project_id===filterProjId;});
       workPayments=workPayments.filter(function(x){return x.project_id===filterProjId;});
+      salesBills=salesBills.filter(function(x){return x.project_id===filterProjId;});
     }
 
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
@@ -2384,6 +2386,28 @@ async function loadDashboardInsights(filterProjId){
     var totalCost=itemPL.reduce(function(s,x){return s+x.cost;},0);
     var totalProfit=totalRevenue-totalCost;
     var marginPct=totalRevenue>0?Math.round(totalProfit/totalRevenue*100):0;
+
+    // ── Revenue: Billed / Unbilled / Total ──────────────────────────────
+    // Billed = actual sales bill amounts (after GST additions & deductions).
+    // Unbilled = executed-but-not-yet-invoiced value, at raw BOQ rate
+    // (no GST/deductions, since those only apply once actually billed).
+    var revenueBilled = salesBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
+
+    var billedQtyByItem={};
+    salesBills.forEach(function(b){
+      var items=[]; try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+      items.forEach(function(si){
+        var key=b.project_id+'__'+(si.item_code||'');
+        billedQtyByItem[key]=(billedQtyByItem[key]||0)+(parseFloat(si.billed_qty)||0);
+      });
+    });
+    var revenueUnbilled = itemPL.reduce(function(s,x){
+      var key=x.item.project_id+'__'+(x.item.item_code||'');
+      var billedQty=billedQtyByItem[key]||0;
+      var unbilledQty=Math.max(0,x.qtyDone-billedQty);
+      return s+unbilledQty*(parseFloat(x.item.rate)||0);
+    },0);
+    var revenueTotal = revenueBilled+revenueUnbilled;
 
     // ── Cost billed / paid / balance (from vendor/contractor bills) ──
     var costBilled=0, costAdvAdj=0;
@@ -2431,7 +2455,9 @@ async function loadDashboardInsights(filterProjId){
     var plColor=totalProfit>=0?'#2E7D32':'#C62828';
     gridEl.innerHTML=
       kpiCard(totalProfit>=0?'&#128200;':'&#128201;','NET PROFIT / LOSS',inr(totalProfit),marginPct+'% margin',plColor)+
-      kpiCard('&#128176;','REVENUE (EXECUTED)',inr(totalRevenue),'qty done \u00d7 BOQ rate','#1565C0')+
+      kpiCard('&#128176;','BILLED AMOUNT',inr(revenueBilled),'sales billed (after GST & deductions)','#1565C0')+
+      kpiCard('&#128179;','UNBILLED AMOUNT',inr(revenueUnbilled),'executed, not yet billed (BOQ rate)','#00838F')+
+      kpiCard('&#128202;','TOTAL AMOUNT',inr(revenueTotal),'billed + unbilled','#37474F')+
       kpiCard('&#128295;','COST (EXECUTED)',inr(totalCost),'resource cost incurred','#E65100')+
       kpiCard('&#128203;','COST BILLED',inr(costBilled),'invoiced by vendors/contractors','#6A1B9A')+
       kpiCard('&#128176;','COST PAID',inr(costPaid),'cash + advance adjusted','#2E7D32')+
