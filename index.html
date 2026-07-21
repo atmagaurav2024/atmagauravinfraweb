@@ -2452,48 +2452,19 @@ async function loadDashboardInsights(filterProjId){
     var lowStock=Object.keys(stockGroups).map(function(k){return stockGroups[k];}).filter(function(g){return g.min_qty>0&&g.qty<=g.min_qty;});
 
     // ── Ring-style KPIs (2-3 related values per ring) ──
-    function svgRing(segments, size, sw){
-      var total=segments.reduce(function(s,x){return s+Math.max(0,x.value);},0);
-      var r=(size-sw)/2, cx=size/2, cy=size/2, circ=2*Math.PI*r;
-      var offset=0;
-      var arcs='', onArcLabels='';
-      if(total>0){
-        segments.forEach(function(seg){
-          var val=Math.max(0,seg.value);
-          var frac=val/total;
-          var len=frac*circ;
-          var dash=len+' '+(circ-len);
-          var dashoffset=-offset;
-          arcs+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+seg.color+'" stroke-width="'+sw+'" stroke-linecap="butt" stroke-dasharray="'+dash+'" stroke-dashoffset="'+dashoffset+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
-          if(frac>0.08){
-            var midLen=offset+len/2;
-            var midDeg=(midLen/circ)*360-90;
-            var rad=midDeg*Math.PI/180;
-            var lx=cx+r*Math.cos(rad), ly=cy+r*Math.sin(rad);
-            onArcLabels+='<div style="position:absolute;left:'+lx+'px;top:'+ly+'px;transform:translate(-50%,-50%);font-size:9px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);white-space:nowrap;line-height:1;pointer-events:none;">'+inr(val)+'</div>';
-          }
-          offset+=len;
-        });
-      }
-      var bg='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#21262D" stroke-width="'+sw+'"/>';
-      var svg='<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+bg+arcs+'</svg>';
-      return {svg:svg, labels:onArcLabels};
-    }
-    function ringCard(title, segments, centerBig, centerSmall, centerColor){
-      var size=124, sw=15;
-      var ring=svgRing(segments,size,sw);
-      return '<div style="background:#161B22;border-radius:12px;padding:16px 12px;text-align:center;border:1px solid #21262D;">'+
-        '<div style="font-size:11px;font-weight:600;color:#8B949E;letter-spacing:.3px;margin-bottom:12px;">'+title+'</div>'+
-        '<div style="position:relative;width:'+size+'px;height:'+size+'px;margin:0 auto;">'+
-          ring.svg+
-          ring.labels+
-          '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;">'+
-            '<div style="font-size:14px;font-weight:700;color:'+(centerColor||'#E6EDF3')+';line-height:1.15;">'+centerBig+'</div>'+
-            '<div style="font-size:9px;color:#8B949E;margin-top:2px;">'+centerSmall+'</div>'+
-          '</div>'+
+    function progressCard(title, actualLabel, actualVal, planLabel, planVal, pct, barColor){
+      var pctClamped=Math.max(0,Math.min(100,pct));
+      return '<div style="background:#161B22;border-radius:12px;padding:16px;border:1px solid #21262D;">'+
+        '<div style="font-size:11px;font-weight:600;color:#8B949E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px;">'+title+'</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'+
+          '<div><span style="font-size:10px;color:#8B949E;">'+actualLabel+':&nbsp;</span><span style="font-size:19px;font-weight:700;color:#E6EDF3;">'+actualVal+'</span></div>'+
+          '<div><span style="font-size:10px;color:#8B949E;">'+planLabel+':&nbsp;</span><span style="font-size:13px;font-weight:600;color:#8B949E;">'+planVal+'</span></div>'+
         '</div>'+
-        '<div style="display:flex;justify-content:center;gap:14px;margin-top:12px;flex-wrap:wrap;">'+
-          segments.map(function(s){return '<div style="font-size:9px;display:flex;align-items:center;gap:5px;color:#8B949E;font-weight:500;"><span style="width:8px;height:8px;border-radius:2px;background:'+s.color+';display:inline-block;"></span>'+s.label+'</div>';}).join('')+
+        '<div style="display:flex;align-items:center;gap:12px;">'+
+          '<div style="font-size:20px;font-weight:800;color:'+barColor+';min-width:54px;">'+Math.round(pct)+'%</div>'+
+          '<div style="flex:1;height:9px;background:#21262D;border-radius:5px;overflow:hidden;">'+
+            '<div style="height:100%;width:'+pctClamped+'%;background:'+barColor+';border-radius:5px;"></div>'+
+          '</div>'+
         '</div>'+
       '</div>';
     }
@@ -2505,17 +2476,14 @@ async function loadDashboardInsights(filterProjId){
     }
 
     var plColor=totalProfit>=0?'#3FB950':'#F85149';
-    var profitRingSegs = totalProfit>=0
-      ? [{value:totalProfit,color:'#3FB950',label:'Profit'},{value:totalCost,color:'#D29922',label:'Cost'}]
-      : [{value:totalRevenue,color:'#58A6FF',label:'Revenue'},{value:Math.abs(totalProfit),color:'#F85149',label:'Loss'}];
+    var revenuePct = revenueTotal>0 ? (revenueBilled/revenueTotal*100) : 0;
+    var costPct = costBilled>0 ? (costPaid/costBilled*100) : 0;
 
     gridEl.innerHTML =
-      '<div style="margin-bottom:8px;">'+
-        ringCard('NET PROFIT / LOSS', profitRingSegs, inr(totalProfit), marginPct+'% margin', plColor)+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;">'+
-        ringCard('REVENUE', [{value:revenueBilled,color:'#58A6FF',label:'Billed'},{value:revenueUnbilled,color:'#39C5CF',label:'Unbilled'}], inr(revenueTotal), 'Total Revenue', '#E6EDF3')+
-        ringCard('COST', [{value:costPaid,color:'#3FB950',label:'Paid'},{value:costBalance,color:'#F85149',label:'Balance'}], inr(costBilled), 'Cost Billed', '#E6EDF3')+
+      '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;">'+
+        progressCard('NET PROFIT / LOSS', totalProfit>=0?'Profit':'Loss', inr(Math.abs(totalProfit)), 'of Revenue', inr(totalRevenue), marginPct, plColor)+
+        progressCard('REVENUE', 'Billed', inr(revenueBilled), 'Total (Billed+Unbilled)', inr(revenueTotal), revenuePct, '#58A6FF')+
+        progressCard('COST', 'Paid', inr(costPaid), 'Billed', inr(costBilled), costPct, '#3FB950')+
       '</div>'+
       '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">'+
         (filterProjId
@@ -2526,41 +2494,63 @@ async function loadDashboardInsights(filterProjId){
         statChip('&#128230;','LOW STOCK',lowStock.length,'#F85149')+
       '</div>';
 
-    // ── KRA sections ──
-    function listRow(label,sub,val,color){
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #21262D;">'+
-        '<div><div style="font-size:12.5px;font-weight:500;color:#E6EDF3;">'+label+'</div>'+(sub?'<div style="font-size:9.5px;color:#8B949E;margin-top:1px;">'+sub+'</div>':'')+'</div>'+
-        '<div style="font-size:12.5px;font-weight:700;color:'+color+';white-space:nowrap;">'+val+'</div>'+
+    // ── KRA sections: real data tables instead of sparse list rows ──
+    function sectionTitle(title){
+      return '<div style="font-size:11px;font-weight:600;color:#8B949E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">'+title+'</div>';
+    }
+    function dataTable(headers, rows){
+      return '<div style="background:#161B22;border-radius:12px;border:1px solid #21262D;overflow:hidden;margin-bottom:14px;">'+
+        '<table style="width:100%;border-collapse:collapse;font-size:11.5px;">'+
+          '<thead><tr style="background:#0D1117;">'+
+            headers.map(function(h,i){return '<th style="padding:8px 12px;text-align:'+(i===0?'left':'right')+';color:#8B949E;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;">'+h+'</th>';}).join('')+
+          '</tr></thead>'+
+          '<tbody>'+rows+'</tbody>'+
+        '</table>'+
       '</div>';
     }
-    function kraCard(title,color,inner){
-      return '<div style="background:#161B22;border-radius:12px;padding:14px 16px;margin-bottom:10px;border:1px solid #21262D;">'+
-        '<div style="font-size:11px;font-weight:600;color:#8B949E;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;">'+title+'</div>'+
-        inner+
-      '</div>';
+    function badge(text,color){
+      return '<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:'+color+'22;color:'+color+';">'+text+'</span>';
     }
 
-    var topProfit=itemPL.slice().sort(function(a,b){return b.profit-a.profit;}).slice(0,5)
-      .filter(function(x){return x.profit>0;})
-      .map(function(x){return listRow((x.item.item_code?'['+x.item.item_code+'] ':'')+(x.item.short_name||x.item.description||''),x.projName,inr(x.profit),'#3FB950');}).join('');
+    var itemPLSorted = itemPL.slice().sort(function(a,b){return b.profit-a.profit;});
+    var topItemRows = itemPLSorted.slice(0,4).concat(itemPLSorted.slice(-4).reverse())
+      .filter(function(x,i,arr){return arr.indexOf(x)===i;}) // dedupe if <8 items total
+      .map(function(x,i){
+        var bg=i%2===0?'transparent':'#1C2129';
+        return '<tr style="background:'+bg+';border-top:1px solid #21262D;">'+
+          '<td style="padding:8px 12px;"><div style="font-weight:600;color:#E6EDF3;">'+(x.item.short_name||x.item.description||'')+'</div><div style="font-size:9.5px;color:#8B949E;">'+(x.item.item_code?'['+x.item.item_code+'] ':'')+x.projName+'</div></td>'+
+          '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+inr(x.revenue)+'</td>'+
+          '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+inr(x.cost)+'</td>'+
+          '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(x.profit>=0?'#3FB950':'#F85149')+';">'+inr(x.profit)+'</td>'+
+          '<td style="padding:8px 12px;text-align:right;">'+badge(x.profit>=0?'Profit':'Loss',x.profit>=0?'#3FB950':'#F85149')+'</td>'+
+        '</tr>';
+      }).join('');
 
-    var topLoss=itemPL.slice().sort(function(a,b){return a.profit-b.profit;}).slice(0,5)
-      .filter(function(x){return x.profit<0;})
-      .map(function(x){return listRow((x.item.item_code?'['+x.item.item_code+'] ':'')+(x.item.short_name||x.item.description||''),x.projName,inr(x.profit),'#F85149');}).join('');
-
-    var projPLHtml=projPLRows.slice(0,8).map(function(p){
-      return listRow(p.name,inr(p.revenue)+' rev &bull; '+inr(p.cost)+' cost',inr(p.profit),p.profit>=0?'#3FB950':'#F85149');
+    var projPLTableRows = projPLRows.slice(0,8).map(function(p,i){
+      var bg=i%2===0?'transparent':'#1C2129';
+      return '<tr style="background:'+bg+';border-top:1px solid #21262D;">'+
+        '<td style="padding:8px 12px;font-weight:600;color:#E6EDF3;">'+p.name+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+inr(p.revenue)+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+inr(p.cost)+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(p.profit>=0?'#3FB950':'#F85149')+';">'+inr(p.profit)+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;">'+badge(p.profit>=0?'Profit':'Loss',p.profit>=0?'#3FB950':'#F85149')+'</td>'+
+      '</tr>';
     }).join('');
 
-    var lowStockRows=lowStock.slice(0,5).map(function(g){
-      return listRow(g.item_name,(projName[g.project_id]||'')+' &bull; min '+g.min_qty+' '+g.unit,g.qty+' '+g.unit,'#F85149');
+    var lowStockTableRows = lowStock.slice(0,6).map(function(g,i){
+      var bg=i%2===0?'transparent':'#1C2129';
+      return '<tr style="background:'+bg+';border-top:1px solid #21262D;">'+
+        '<td style="padding:8px 12px;font-weight:600;color:#E6EDF3;">'+g.item_name+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+(projName[g.project_id]||'')+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;color:#8B949E;">'+g.min_qty+' '+g.unit+'</td>'+
+        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:#F85149;">'+g.qty+' '+g.unit+'</td>'+
+      '</tr>';
     }).join('');
 
     kraEl.innerHTML=
-      (projPLHtml&&!filterProjId?kraCard('&#128202; Project-wise Profit / Loss','#8B949E',projPLHtml):'')+
-      (topProfit?kraCard('&#128200; Most Profitable Items','#8B949E',topProfit):'')+
-      (topLoss?kraCard('&#128201; Most Loss-Making Items','#8B949E',topLoss):'')+
-      (lowStockRows?kraCard('&#128230; Low Stock Alerts','#8B949E',lowStockRows):'')+
+      (projPLTableRows&&!filterProjId?sectionTitle('&#128202; Project-wise Profit / Loss')+dataTable(['Project','Revenue','Cost','P&amp;L',''],projPLTableRows):'')+
+      (topItemRows?sectionTitle('&#128201; Item-wise Profit / Loss (Top &amp; Bottom)')+dataTable(['Item','Revenue','Cost','P&amp;L',''],topItemRows):'')+
+      (lowStockTableRows?sectionTitle('&#128230; Low Stock Alerts')+dataTable(['Item','Project','Min Qty','In Hand'],lowStockTableRows):'')+
       (!itemPL.length?'<div style="text-align:center;padding:20px;color:#8B949E;font-size:12px;background:#161B22;border-radius:12px;border:1px solid #21262D;">No executed work logged yet \u2014 profit/loss appears once Daily Progress entries are recorded.</div>':'');
 
   }catch(e){
