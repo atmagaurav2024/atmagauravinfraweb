@@ -1889,10 +1889,13 @@ input,select,textarea{font-size:16px !important;}
       <div class="modal-x" onclick="closePunchModal()">✕</div>
     </div>
     <div class="modal-body">
-      <div class="selfie-box" id="selfie-box" onclick="takeSelfie()">
+      <div class="selfie-box" id="selfie-box" onclick="handleSelfieBoxClick()">
+        <video id="selfie-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+        <img id="selfie-preview" style="width:100%;height:100%;object-fit:cover;display:none;">
         <span id="selfie-content">📷</span>
       </div>
-      <div style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:16px;">Tap to take selfie (required)</div>
+      <canvas id="selfie-canvas" width="320" height="320" style="display:none;"></canvas>
+      <div style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:16px;" id="selfie-hint">Tap to open camera</div>
 
       <div class="gps-box">
         <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -3695,6 +3698,7 @@ let selfieOk = false;
 
 function doPunch() {
   document.getElementById('punch-modal').classList.add('open');
+  resetSelfieBox();
   if (isPunchedIn) {
     document.getElementById('punch-modal-title').textContent = '⏹ Punch Out';
     document.getElementById('confirm-punch-btn').textContent = '⏹ Confirm Punch Out';
@@ -3708,20 +3712,97 @@ function doPunch() {
 
 function closePunchModal() {
   document.getElementById('punch-modal').classList.remove('open');
+  if(selfieStream){ selfieStream.getTracks().forEach(function(t){t.stop();}); selfieStream=null; }
 }
 
-let selfieTimer;
-function takeSelfie() {
-  const box = document.getElementById('selfie-box');
-  const content = document.getElementById('selfie-content');
-  content.textContent = '⏳';
-  clearTimeout(selfieTimer);
-  selfieTimer = setTimeout(() => {
-    selfieOk = true;
-    content.textContent = '🤳';
-    box.style.border = '3px solid #43A047';
+let selfieStream = null;
+let selfieStage = 'idle'; // idle -> camera -> captured
+let selfieBlob = null;
+
+async function handleSelfieBoxClick(){
+  if(selfieStage==='idle'){
+    await openSelfieCamera();
+  } else if(selfieStage==='camera'){
+    captureSelfieFrame();
+  } else if(selfieStage==='captured'){
+    // allow retake
+    await openSelfieCamera();
+  }
+}
+
+async function openSelfieCamera(){
+  var video=document.getElementById('selfie-video'), preview=document.getElementById('selfie-preview'),
+      content=document.getElementById('selfie-content'), hint=document.getElementById('selfie-hint'),
+      box=document.getElementById('selfie-box');
+  try{
+    selfieStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}, audio:false});
+    video.srcObject = selfieStream;
+    video.style.display='block';
+    preview.style.display='none';
+    content.style.display='none';
+    hint.textContent='Tap again to capture';
+    box.style.border='3px solid var(--blue2)';
+    selfieStage='camera';
+    selfieOk=false;
+  }catch(err){
+    showToast('Camera access denied/unavailable: '+err.message,'error');
+    selfieStage='idle';
+  }
+}
+
+function captureSelfieFrame(){
+  var video=document.getElementById('selfie-video'), canvas=document.getElementById('selfie-canvas'),
+      preview=document.getElementById('selfie-preview'), hint=document.getElementById('selfie-hint'),
+      box=document.getElementById('selfie-box');
+  var size=Math.min(video.videoWidth||320, video.videoHeight||320);
+  canvas.width=size; canvas.height=size;
+  var ctx=canvas.getContext('2d');
+  var sx=((video.videoWidth||size)-size)/2, sy=((video.videoHeight||size)-size)/2;
+  ctx.translate(size,0); ctx.scale(-1,1); // mirror, front-camera feels natural selfie-flipped
+  ctx.drawImage(video, sx, sy, size, size, 0, 0, size, size);
+  canvas.toBlob(function(blob){
+    selfieBlob = blob;
+    preview.src = URL.createObjectURL(blob);
+    preview.style.display='block';
+    video.style.display='none';
+    if(selfieStream){ selfieStream.getTracks().forEach(function(t){t.stop();}); selfieStream=null; }
+    hint.textContent='Selfie captured ✓ (tap to retake)';
+    box.style.border='3px solid #43A047';
+    selfieStage='captured';
+    selfieOk=true;
     showToast('Selfie captured ✓','success');
-  }, 1200);
+  }, 'image/jpeg', 0.85);
+}
+
+function resetSelfieBox(){
+  var video=document.getElementById('selfie-video'), preview=document.getElementById('selfie-preview'),
+      content=document.getElementById('selfie-content'), hint=document.getElementById('selfie-hint'),
+      box=document.getElementById('selfie-box');
+  if(selfieStream){ selfieStream.getTracks().forEach(function(t){t.stop();}); selfieStream=null; }
+  video.style.display='none'; video.srcObject=null;
+  preview.style.display='none'; preview.src='';
+  content.style.display='block'; content.textContent='📷';
+  hint.textContent='Tap to open camera';
+  box.style.border='3px solid var(--border2)';
+  selfieStage='idle'; selfieBlob=null; selfieOk=false;
+}
+
+async function uploadSelfie(empId){
+  if(!selfieBlob) return null;
+  var path = empId+'/'+Date.now()+'.jpg';
+  try{
+    var res = await fetch(SUPABASE_URL+'/storage/v1/object/selfies/'+path, {
+      method:'POST',
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'image/jpeg'},
+      body: selfieBlob
+    });
+    if(!res.ok){ var e=await res.json().catch(function(){return{};}); throw new Error(e.message||res.statusText); }
+    return SUPABASE_URL+'/storage/v1/object/public/selfies/'+path;
+  }catch(err){
+    console.warn('Selfie upload failed', err);
+    showToast('Selfie photo captured but failed to upload: '+err.message,'warning');
+    return null;
+  }
 }
 
 async function confirmPunch() {
@@ -3750,17 +3831,18 @@ async function confirmPunch() {
     label.textContent = 'PUNCH OUT';
     status.textContent = `Punched In at ${punchInTime.toLocaleTimeString()}`;
     document.getElementById('stat-mytime').textContent = `In: ${punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`;
-    punchLog.push({type:'in', time: punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng});
+    punchLog.push({type:'in', time: punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng, selfie: document.getElementById('selfie-preview').src});
     renderPunchLog();
     closePunchModal();
     try{
-      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), lat:currentLat, lng:currentLng});
+      var selfieUrl = await uploadSelfie(currentUser.id);
+      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrl});
       var existing = ATT_TODAY_MAP[currentUser.id];
       var inTimeStr = punchInTime.toTimeString().slice(0,8);
       if(existing){
-        await sbUpdate('attendance', existing.id, {status:'present', punch_in:inTimeStr, punch_in_lat:currentLat, punch_in_lng:currentLng});
+        await sbUpdate('attendance', existing.id, {status:'present', punch_in:inTimeStr, punch_in_lat:currentLat, punch_in_lng:currentLng, punch_in_selfie:selfieUrl});
       } else {
-        var res = await sbInsert('attendance',{employee_id:currentUser.id, date:today, status:'present', punch_in:inTimeStr, punch_in_lat:currentLat, punch_in_lng:currentLng, marked_by:currentUser.id});
+        var res = await sbInsert('attendance',{employee_id:currentUser.id, date:today, status:'present', punch_in:inTimeStr, punch_in_lat:currentLat, punch_in_lng:currentLng, punch_in_selfie:selfieUrl, marked_by:currentUser.id});
         if(res && res[0]) ATT_TODAY_MAP[currentUser.id]=res[0];
       }
       showToast(`✅ Punched In at ${punchInTime.toLocaleTimeString()} · Location verified`, 'success');
@@ -3774,11 +3856,12 @@ async function confirmPunch() {
     label.textContent = 'PUNCH IN';
     status.textContent = `Last Out: ${outTime.toLocaleTimeString()} · ${diff}m worked`;
     document.getElementById('stat-mytime').textContent = `${Math.floor(diff/60)}h ${diff%60}m`;
-    punchLog.push({type:'out', time: outTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng, duration: diff});
+    punchLog.push({type:'out', time: outTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng, duration: diff, selfie: document.getElementById('selfie-preview').src});
     renderPunchLog();
     closePunchModal();
     try{
-      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), lat:currentLat, lng:currentLng});
+      var selfieUrlOut = await uploadSelfie(currentUser.id);
+      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrlOut});
       var existing2 = ATT_TODAY_MAP[currentUser.id];
       var outTimeStr = outTime.toTimeString().slice(0,8);
       var hoursWorked = Math.round((diff/60)*100)/100;
@@ -3791,9 +3874,7 @@ async function confirmPunch() {
     }catch(e){ showToast('Punch saved locally but failed to sync: '+e.message,'warning'); }
   }
 
-  selfieOk = false;
-  document.getElementById('selfie-content').textContent = '📷';
-  document.getElementById('selfie-box').style.border = '3px solid var(--border2)';
+  resetSelfieBox();
 }
 
 // ── ATTENDANCE TABLE ──
@@ -5254,6 +5335,7 @@ function renderPunchLog() {
     var lngStr = entry.lng ? Math.abs(entry.lng).toFixed(4)+'°'+(entry.lng>=0?'E':'W') : '';
     var coordLabel = latStr && lngStr ? latStr+', '+lngStr : 'Location';
     return '<div class="punch-entry" style="cursor:pointer;" onclick="openPunchMap('+i+')">' +
+      (entry.selfie ? '<img src="'+entry.selfie+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-right:8px;flex-shrink:0;">' : '') +
       '<div class="punch-dot ' + (entry.type === 'in' ? 'punch-dot-in' : 'punch-dot-out') + '"></div>' +
       '<div class="punch-entry-info">' +
         '<div class="punch-entry-type">' + (entry.type === 'in' ? '✅ Punch In' : '⏹ Punch Out') + '</div>' +
