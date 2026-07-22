@@ -2510,8 +2510,10 @@ async function loadDashboardInsights(filterProjId){
     }
     function planActualCard(title,actualVal,planVal,billedVal,unbilledVal,billedColor,unbilledColor,extraRowsHtml){
       var pct = planVal>0 ? Math.round((actualVal/planVal)*100) : 0;
-      var billedPct = planVal>0 ? Math.max(0,Math.min(100,(billedVal/planVal)*100)) : 0;
-      var unbilledPct = planVal>0 ? Math.max(0,Math.min(100-billedPct,(unbilledVal/planVal)*100)) : 0;
+      var billedPctRaw = planVal>0 ? Math.max(0,(billedVal/planVal)*100) : 0;
+      var unbilledPctRaw = planVal>0 ? Math.max(0,(unbilledVal/planVal)*100) : 0;
+      var billedPct = Math.min(100,billedPctRaw);
+      var unbilledPct = Math.min(100-billedPct,unbilledPctRaw);
       return '<div style="background:#1F1A38;border-radius:14px;padding:16px 18px;border:1px solid rgba(255,255,255,.06);">'+
         '<div style="font-size:13px;font-weight:700;color:#B6ADD6;text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
         '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;gap:8px;">'+
@@ -2519,12 +2521,16 @@ async function loadDashboardInsights(filterProjId){
           '<span style="font-size:17px;font-weight:800;color:'+billedColor+';flex-shrink:0;">'+pct+'%</span>'+
         '</div>'+
         '<div style="font-size:13px;font-weight:600;color:#B6ADD6;margin-bottom:10px;">Plan: '+inr(planVal)+'</div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:4px;">'+
+          '<span style="color:'+billedColor+';">Billed '+Math.round(billedPctRaw)+'%</span>'+
+          '<span style="color:'+unbilledColor+';">Unbilled '+Math.round(unbilledPctRaw)+'%</span>'+
+        '</div>'+
         '<div style="height:9px;background:#33285A;border-radius:5px;overflow:hidden;display:flex;margin-bottom:10px;">'+
           '<div style="height:100%;width:'+billedPct+'%;background:'+billedColor+';"></div>'+
           '<div style="height:100%;width:'+unbilledPct+'%;background:'+unbilledColor+';"></div>'+
         '</div>'+
         '<div style="border-top:1px solid rgba(255,255,255,.08);padding-top:8px;">'+
-          planActualRow('Billed',billedVal,billedColor)+planActualRow('Unbilled',unbilledVal,unbilledColor)+planActualRow('Total',actualVal)+
+          planActualRow('Billed ('+Math.round(billedPctRaw)+'%)',billedVal,billedColor)+planActualRow('Unbilled ('+Math.round(unbilledPctRaw)+'%)',unbilledVal,unbilledColor)+planActualRow('Total ('+pct+'%)',actualVal)+
           (extraRowsHtml||'')+
         '</div>'+
       '</div>';
