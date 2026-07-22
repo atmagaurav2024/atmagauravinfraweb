@@ -1853,10 +1853,11 @@ input,select,textarea{font-size:16px !important;}
   <div id="tab-logs" style="display:none;">
     <div class="table-card">
       <div class="table-card-header">
-        <div class="tch-title">📋 Punch Logs — Today</div>
+        <div class="tch-title">📋 Punch Logs</div>
         <div class="tch-actions">
-          <button class="btn btn-outline btn-sm" onclick="showToast('Regularization form opening...','info')">✏️ Regularize</button>
-          <button class="btn btn-outline btn-sm" onclick="showToast('Logs exported','success')">📥 Export</button>
+          <input type="date" id="logs-date-filter" class="finput" style="padding:6px 10px;font-size:12px;width:auto;" onchange="renderLogsTab()">
+          <button class="btn btn-outline btn-sm" onclick="showToast('Regularization form — not built yet','info')">✏️ Regularize</button>
+          <button class="btn btn-outline btn-sm" onclick="exportLogsCSV()">📥 Export</button>
         </div>
       </div>
       <table class="att-table">
@@ -1872,7 +1873,7 @@ input,select,textarea{font-size:16px !important;}
             <th>Selfie</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="logs-tbody">
           <!-- Punch logs rendered dynamically -->
         </tbody>
       </table>
@@ -4228,6 +4229,7 @@ function switchTab(tab, el) {
   });
   if (tab === 'monthly') renderCal();
   if (tab === 'leaves') renderLeave();
+  if (tab === 'logs') renderLogsTab();
 }
 
 // ── OVERLAY CLOSE ──
@@ -5393,6 +5395,96 @@ function openPunchMap(idx) {
   if (!entry || !entry.lat || !entry.lng) { toast('Location not available','warning'); return; }
   var url = 'https://www.google.com/maps?q=' + entry.lat + ',' + entry.lng + '&z=18&t=m';
   window.open(url, '_blank');
+}
+
+// ── LOGS TAB (all-employees punch log) ──
+var LOGS_TAB_ROWS = [];
+
+async function renderLogsTab(){
+  var tbody = document.getElementById('logs-tbody');
+  if(!tbody) return;
+  var dateInp = document.getElementById('logs-date-filter');
+  if(dateInp && !dateInp.value) dateInp.value = attToday();
+  var day = dateInp ? dateInp.value : attToday();
+
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">Loading…</td></tr>';
+
+  var empNameById = {};
+  (employees||[]).forEach(function(e){ empNameById[e.id] = e.name; });
+
+  var rows = [];
+  try{
+    rows = await sbFetch('attendance_punches',{select:'*',filter:'date=eq.'+day,order:'punch_time.asc'});
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red2);padding:18px;">Failed to load punch logs: '+e.message+'</td></tr>';
+    return;
+  }
+  rows = rows || [];
+  LOGS_TAB_ROWS = rows.map(function(p){
+    return {
+      employee: empNameById[p.emp_id] || p.emp_id || 'Unknown',
+      type: p.punch_type === 'in' ? 'Punch In' : 'Punch Out',
+      time: p.punch_time ? new Date(p.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '',
+      lat: p.lat, lng: p.lng,
+      accuracy: p.accuracy,
+      device: p.device || '',
+      selfie: p.selfie_url || ''
+    };
+  });
+
+  if(!LOGS_TAB_ROWS.length){
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">No punches recorded for '+attDisplayDate(day)+'</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = LOGS_TAB_ROWS.map(function(r){
+    var hasLoc = r.lat!=null && r.lng!=null;
+    var locCell = hasLoc
+      ? '<a href="https://www.google.com/maps?q='+r.lat+','+r.lng+'&z=18&t=m" target="_blank" style="color:var(--blue2);">'+r.lat.toFixed(4)+', '+r.lng.toFixed(4)+'</a>'
+      : '<span style="color:var(--text3);">—</span>';
+    var accCell = (r.accuracy!=null) ? ('±'+Math.round(r.accuracy)+'m') : '<span style="color:var(--text3);">—</span>';
+    // No site geofence coordinates are configured anywhere in this app yet,
+    // so there is no real distance to check against — showing this
+    // honestly rather than a fake always-green checkmark.
+    var radiusCell = '<span style="color:var(--text3);" title="No site geofence configured">—</span>';
+    var deviceCell = r.device ? r.device : '<span style="color:var(--text3);">—</span>';
+    var selfieCell = r.selfie
+      ? '<a href="'+r.selfie+'" target="_blank"><img src="'+r.selfie+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;"></a>'
+      : '<span style="color:var(--text3);">—</span>';
+    var typeBadge = r.type==='Punch In'
+      ? '<span class="att-badge b-present">✅ Punch In</span>'
+      : '<span class="att-badge b-absent">⏹ Punch Out</span>';
+    return '<tr>'+
+      '<td style="font-weight:600;">'+r.employee+'</td>'+
+      '<td>'+typeBadge+'</td>'+
+      '<td>'+r.time+'</td>'+
+      '<td>'+locCell+'</td>'+
+      '<td>'+accCell+'</td>'+
+      '<td>'+radiusCell+'</td>'+
+      '<td>'+deviceCell+'</td>'+
+      '<td>'+selfieCell+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+function exportLogsCSV(){
+  if(!LOGS_TAB_ROWS.length){ showToast('Nothing to export for this date','warning'); return; }
+  var header = ['Employee','Punch Type','Time','Latitude','Longitude','Accuracy (m)','Device','Selfie URL'];
+  var lines = [header.join(',')];
+  LOGS_TAB_ROWS.forEach(function(r){
+    var csvRow = [r.employee, r.type, r.time, r.lat!=null?r.lat:'', r.lng!=null?r.lng:'', r.accuracy!=null?r.accuracy:'', r.device||'', r.selfie||'']
+      .map(function(v){ v=String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; });
+    lines.push(csvRow.join(','));
+  });
+  var blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var dateInp = document.getElementById('logs-date-filter');
+  var day = dateInp ? dateInp.value : attToday();
+  a.href = url; a.download = 'punch-logs-'+day+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Punch logs exported','success');
 }
 
 
