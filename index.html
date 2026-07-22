@@ -3492,14 +3492,14 @@ async function attLoadAll(){
   var r = await Promise.all([
     safe(sbFetch('employees',{select:'id,first_name,middle_name,last_name,designation,department,status',filter:'status=eq.active'})),
     safe(sbFetch('attendance',{select:'*',filter:'date=eq.'+today})),
-    safe(sbFetch('attendance',{select:'*',filter:'emp_id=eq.'+(currentUser.id||'')+'&date=gte.'+monthStart+'&date=lte.'+monthEnd})),
+    safe(sbFetch('attendance',{select:'*',filter:'employee_id=eq.'+(currentUser.id||'')+'&date=gte.'+monthStart+'&date=lte.'+monthEnd})),
     safe(sbFetch('attendance_punches',{select:'*',filter:'emp_id=eq.'+(currentUser.id||'')+'&date=eq.'+today,order:'punch_time.asc'})),
     safe(sbFetch('leave_requests',{select:'*',order:'applied_at.desc'}))
   ]);
   var activeEmps=r[0]||[], todayRecords=r[1]||[], monthRecords=r[2]||[], todayPunches=r[3]||[], leaves=r[4]||[];
 
   ATT_TODAY_MAP = {};
-  todayRecords.forEach(function(rec){ ATT_TODAY_MAP[rec.emp_id]=rec; });
+  todayRecords.forEach(function(rec){ ATT_TODAY_MAP[rec.employee_id]=rec; });
 
   var COLORS=['#1565C0','#2E7D32','#E65100','#6A1B9A','#00838F','#C62828','#F57F17','#37474F'];
   employees = activeEmps.map(function(e,i){
@@ -3509,7 +3509,7 @@ async function attLoadAll(){
     return {
       id:e.id, name:name, desig:e.designation||e.department||'',
       color:COLORS[i%COLORS.length], initials:initials.toUpperCase()||'?',
-      status: rec?rec.status:'', in: rec&&rec.in_time?rec.in_time.slice(0,5):'', out: rec&&rec.out_time?rec.out_time.slice(0,5):'',
+      status: rec?rec.status:'', in: rec&&rec.punch_in?rec.punch_in.slice(0,5):'', out: rec&&rec.punch_out?rec.punch_out.slice(0,5):'',
       ot: rec&&rec.overtime_hours?rec.overtime_hours+'h':'0h', gps: rec?rec.gps_mode:'', recId: rec?rec.id:null
     };
   });
@@ -3600,8 +3600,8 @@ function renderEmployeeSelfView(){
     else if(r.status==='leave') leave++;
   });
   var todayRec = ATT_TODAY_MAP[currentUser.id];
-  var inStr = todayRec&&todayRec.in_time ? attTimeDisplay(todayRec.in_time) : (isPunchedIn&&punchInTime?punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—');
-  var outStr = todayRec&&todayRec.out_time ? attTimeDisplay(todayRec.out_time) : '—';
+  var inStr = todayRec&&todayRec.punch_in ? attTimeDisplay(todayRec.punch_in) : (isPunchedIn&&punchInTime?punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—');
+  var outStr = todayRec&&todayRec.punch_out ? attTimeDisplay(todayRec.punch_out) : '—';
   var hoursStr = todayRec&&todayRec.hours_worked ? Math.floor(todayRec.hours_worked)+'h '+Math.round((todayRec.hours_worked%1)*60)+'m' : '—';
   var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   sc.innerHTML =
@@ -3754,13 +3754,13 @@ async function confirmPunch() {
     renderPunchLog();
     closePunchModal();
     try{
-      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), latitude:currentLat, longitude:currentLng, selfie_confirmed:true, gps_mode:gpsMode});
+      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), lat:currentLat, lng:currentLng});
       var existing = ATT_TODAY_MAP[currentUser.id];
       var inTimeStr = punchInTime.toTimeString().slice(0,8);
       if(existing){
-        await sbUpdate('attendance', existing.id, {status:'present', in_time:inTimeStr, gps_mode:gpsMode});
+        await sbUpdate('attendance', existing.id, {status:'present', punch_in:inTimeStr, punch_in_lat:currentLat, punch_in_lng:currentLng});
       } else {
-        var res = await sbInsert('attendance',{emp_id:currentUser.id, date:today, status:'present', in_time:inTimeStr, gps_mode:gpsMode, marked_by:currentUser.id});
+        var res = await sbInsert('attendance',{employee_id:currentUser.id, date:today, status:'present', punch_in:inTimeStr, punch_in_lat:currentLat, punch_in_lng:currentLng, marked_by:currentUser.id});
         if(res && res[0]) ATT_TODAY_MAP[currentUser.id]=res[0];
       }
       showToast(`✅ Punched In at ${punchInTime.toLocaleTimeString()} · Location verified`, 'success');
@@ -3778,14 +3778,14 @@ async function confirmPunch() {
     renderPunchLog();
     closePunchModal();
     try{
-      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), latitude:currentLat, longitude:currentLng, selfie_confirmed:true, gps_mode:gpsMode});
+      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), lat:currentLat, lng:currentLng});
       var existing2 = ATT_TODAY_MAP[currentUser.id];
       var outTimeStr = outTime.toTimeString().slice(0,8);
       var hoursWorked = Math.round((diff/60)*100)/100;
       if(existing2){
-        await sbUpdate('attendance', existing2.id, {out_time:outTimeStr, hours_worked:hoursWorked});
+        await sbUpdate('attendance', existing2.id, {punch_out:outTimeStr, hours_worked:hoursWorked, punch_out_lat:currentLat, punch_out_lng:currentLng});
       } else {
-        await sbInsert('attendance',{emp_id:currentUser.id, date:today, status:'present', out_time:outTimeStr, hours_worked:hoursWorked, gps_mode:gpsMode, marked_by:currentUser.id});
+        await sbInsert('attendance',{employee_id:currentUser.id, date:today, status:'present', punch_out:outTimeStr, hours_worked:hoursWorked, punch_out_lat:currentLat, punch_out_lng:currentLng, marked_by:currentUser.id});
       }
       showToast(`✅ Punched Out · ${Math.floor(diff/60)}h ${diff%60}m logged today`, 'success');
     }catch(e){ showToast('Punch saved locally but failed to sync: '+e.message,'warning'); }
@@ -3863,11 +3863,11 @@ async function attUpdateTime(idx, field, value){
   renderAttTable();
   try{
     var existing = ATT_TODAY_MAP[e.id];
-    var patch = {}; patch[field==='in'?'in_time':'out_time'] = value?value+':00':null;
+    var patch = {}; patch[field==='in'?'punch_in':'punch_out'] = value?value+':00':null;
     if(existing){
       await sbUpdate('attendance', existing.id, patch);
     } else {
-      patch.emp_id=e.id; patch.date=attToday(); patch.status=e.status||'present'; patch.marked_by=currentUser.id;
+      patch.employee_id=e.id; patch.date=attToday(); patch.status=e.status||'present'; patch.marked_by=currentUser.id;
       var res = await sbInsert('attendance', patch);
       if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
     }
@@ -3883,7 +3883,7 @@ async function attUpdateRemarks(idx, value){
     if(existing){
       await sbUpdate('attendance', existing.id, {remarks:value});
     } else {
-      var res = await sbInsert('attendance',{emp_id:e.id, date:attToday(), status:e.status||'present', remarks:value, marked_by:currentUser.id});
+      var res = await sbInsert('attendance',{employee_id:e.id, date:attToday(), status:e.status||'present', remarks:value, marked_by:currentUser.id});
       if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
     }
     showToast('Remarks saved','success');
@@ -3908,7 +3908,7 @@ async function setStatus(idx, status, btn) {
     if(existing){
       await sbUpdate('attendance', existing.id, {status:status, marked_by:currentUser.id});
     } else {
-      var res = await sbInsert('attendance',{emp_id:emp.id, date:attToday(), status:status, marked_by:currentUser.id});
+      var res = await sbInsert('attendance',{employee_id:emp.id, date:attToday(), status:status, marked_by:currentUser.id});
       if(res && res[0]){ ATT_TODAY_MAP[emp.id]=res[0]; emp.recId=res[0].id; }
     }
     showToast(emp.name + ' → ' + status, 'success');
@@ -3955,7 +3955,7 @@ async function markAllPresent() {
       if(existing){
         return sbUpdate('attendance', existing.id, {status:'present', marked_by:currentUser.id});
       }
-      return sbInsert('attendance',{emp_id:e.id, date:today, status:'present', marked_by:currentUser.id}).then(function(res){
+      return sbInsert('attendance',{employee_id:e.id, date:today, status:'present', marked_by:currentUser.id}).then(function(res){
         if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
       });
     }));
