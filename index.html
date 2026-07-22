@@ -2323,7 +2323,7 @@ async function loadDashboardInsights(filterProjId){
   var safe=function(p){return p.catch(function(){return [];});};
   try{
     var r=await Promise.all([
-      safe(sbFetch('projects',{select:'id,name,status'})),
+      safe(sbFetch('projects',{select:'id,name,status,contract_value'})),
       safe(sbFetch('employees',{select:'id,status'})),
       safe(sbFetch('boq_items',{select:'id,project_id,item_code,short_name,description,unit,boq_qty,rate'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,exec_type,rate',filter:'exec_type=neq.planned'})),
@@ -2332,10 +2332,13 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'})),
       safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions'})),
       safe(sbFetch('work_payments',{select:'id,project_id,amount'})),
-      safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items'}))
+      safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items'})),
+      safe(sbFetch('boq_jm',{select:'id,project_id,boq_item_id,jm_qty'})),
+      safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,party_name,qty,rate,unit',filter:'exec_type=eq.planned'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
-        pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[];
+        pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
+        boqJmRows=r[10]||[], plannedResRows=r[11]||[];
 
     // ── Populate / preserve the project filter dropdown ──
     var selectedProject=projects.find(function(p){return p.id===filterProjId;});
@@ -2355,6 +2358,9 @@ async function loadDashboardInsights(filterProjId){
       workBills=workBills.filter(function(x){return x.project_id===filterProjId;});
       workPayments=workPayments.filter(function(x){return x.project_id===filterProjId;});
       salesBills=salesBills.filter(function(x){return x.project_id===filterProjId;});
+      boqJmRows=boqJmRows.filter(function(x){return x.project_id===filterProjId;});
+      plannedResRows=plannedResRows.filter(function(x){return x.project_id===filterProjId;});
+      projects=projects.filter(function(p){return p.id===filterProjId;});
     }
 
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
@@ -2431,6 +2437,34 @@ async function loadDashboardInsights(filterProjId){
     var costPaid=costPaidCash+costAdvAdj;
     var costBalance=Math.max(0,costBilled-costPaid);
 
+    // ── KPI CARD 1: Revenue — Plan = sum of project contract values ────────
+    var plannedRevenueContract = projects.reduce(function(s,p){return s+(parseFloat(p.contract_value)||0);},0);
+    // actual = revenueBilled / revenueUnbilled / revenueTotal (computed above)
+
+    // ── KPI CARD 2: Revenue as per JM — Plan = Σ(jm_qty × BOQ item rate) ───
+    var plannedRevenueJM = boqJmRows.reduce(function(s,j){
+      var item=boqById[j.boq_item_id];
+      var rate=item?(parseFloat(item.rate)||0):0;
+      return s+(parseFloat(j.jm_qty)||0)*rate;
+    },0);
+    // actual = same sales-bill billed/unbilled/total as Card 1
+
+    // ── KPI CARD 3: Expenditure — Plan = Σ(planned qty × rate) per resource ─
+    var expPlanByRes={};
+    plannedResRows.forEach(function(pr){
+      var key=pr.party_name||'Unassigned';
+      expPlanByRes[key]=(expPlanByRes[key]||0)+(parseFloat(pr.qty)||0)*(parseFloat(pr.rate)||0);
+    });
+    var plannedExpenditure=Object.keys(expPlanByRes).reduce(function(s,k){return s+expPlanByRes[k];},0);
+    // actual = purchase(work) bills billed + unbilled(incurred-but-not-billed), + total
+    var expenditureBilled=costBilled;
+    var expenditureUnbilled=Math.max(0,totalCost-costBilled);
+    var expenditureActualTotal=expenditureBilled+expenditureUnbilled;
+
+    // ── KPI CARD 4: Profit / Loss ───────────────────────────────────────────
+    var plannedPL = plannedRevenueJM - plannedExpenditure;
+    var actualPL  = revenueBilled - costBilled; // actual sales bills − actual purchase bills
+
     // ── Project-wise profit/loss ──
     var plByProj={};
     itemPL.forEach(function(x){
@@ -2473,6 +2507,25 @@ async function loadDashboardInsights(filterProjId){
         '<div style="font-size:15px;font-weight:800;color:white;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+value+'</div>'+
         '<div style="font-size:7.5px;font-weight:700;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.2px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+label+'</div>'+
       '</div>';
+    }
+    function planActualCard(title,actualVal,planVal,barColor,breakdownHtml){
+      var pct = planVal>0 ? Math.round((actualVal/planVal)*100) : 0;
+      var barPct = Math.max(0,Math.min(100,pct));
+      return '<div style="background:#1F1A38;border-radius:14px;padding:12px 14px;border:1px solid rgba(255,255,255,.06);">'+
+        '<div style="font-size:10.5px;font-weight:700;color:#9F94C7;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
+        '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px;gap:6px;">'+
+          '<span style="font-size:15px;font-weight:800;color:#EDE9F7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</span>'+
+          '<span style="font-size:13px;font-weight:800;color:'+barColor+';flex-shrink:0;">'+pct+'%</span>'+
+        '</div>'+
+        '<div style="font-size:9.5px;color:#9F94C7;margin-bottom:6px;">Plan: '+inr(planVal)+'</div>'+
+        '<div style="height:6px;background:#33285A;border-radius:3px;overflow:hidden;'+(breakdownHtml?'margin-bottom:8px;':'')+'">'+
+          '<div style="height:100%;width:'+barPct+'%;background:'+barColor+';"></div>'+
+        '</div>'+
+        (breakdownHtml?'<div style="border-top:1px solid rgba(255,255,255,.08);padding-top:6px;">'+breakdownHtml+'</div>':'')+
+      '</div>';
+    }
+    function planActualRow(label,val,color){
+      return '<div style="display:flex;justify-content:space-between;font-size:10px;color:#9F94C7;margin-bottom:2px;"><span>'+label+'</span><span style="font-weight:700;color:'+(color||'#D8D2EC')+';">'+inr(val)+'</span></div>';
     }
     function panel(icon,title,inner,minH){
       return '<div style="background:#1F1A38;border-radius:16px;padding:16px;border:1px solid rgba(255,255,255,.06);'+(minH?'min-height:'+minH+'px;':'')+'">'+
@@ -2602,6 +2655,16 @@ async function loadDashboardInsights(filterProjId){
 
     // ══ ASSEMBLE — data mapped as a starting point; tell me what to swap ══
     gridEl.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">'+
+        planActualCard('Revenue (Contract)', revenueTotal, plannedRevenueContract, '#F857A6',
+          planActualRow('Billed',revenueBilled,'#4FD1C5')+planActualRow('Unbilled',revenueUnbilled,'#F7CA5C')+planActualRow('Total',revenueTotal))+
+        planActualCard('Revenue (as per JM)', revenueTotal, plannedRevenueJM, '#8B7FE8',
+          planActualRow('Billed',revenueBilled,'#4FD1C5')+planActualRow('Unbilled',revenueUnbilled,'#F7CA5C')+planActualRow('Total',revenueTotal))+
+        planActualCard('Expenditure', expenditureActualTotal, plannedExpenditure, '#4FD1C5',
+          planActualRow('Billed',expenditureBilled,'#F857A6')+planActualRow('Unbilled',expenditureUnbilled,'#F7CA5C')+planActualRow('Total',expenditureActualTotal))+
+        planActualCard('Profit / Loss', actualPL, plannedPL, actualPL>=0?'#2ECC71':'#E74C3C',
+          planActualRow('Plan P&amp;L',plannedPL, plannedPL>=0?'#2ECC71':'#E74C3C')+planActualRow('Actual P&amp;L',actualPL, actualPL>=0?'#2ECC71':'#E74C3C'))+
+      '</div>'+
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">'+
         gradientStatCard('&#128200;', marginPct+'%', 'Profit Margin', 'linear-gradient(135deg,#F5A623,#F7CA5C)')+
         gradientStatCard('&#127959;', (filterProjId?1:activeProjects)+'/'+(filterProjId?1:projects.length), 'Active Projects', 'linear-gradient(135deg,#6C5CE7,#8B7FE8)')+
