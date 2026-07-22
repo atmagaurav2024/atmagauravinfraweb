@@ -2508,24 +2508,49 @@ async function loadDashboardInsights(filterProjId){
         '<div style="font-size:7.5px;font-weight:700;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.2px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+label+'</div>'+
       '</div>';
     }
-    function planActualCard(title,actualVal,planVal,barColor,breakdownHtml){
+    function planActualCard(title,actualVal,planVal,billedVal,unbilledVal,billedColor,unbilledColor,extraRowsHtml){
       var pct = planVal>0 ? Math.round((actualVal/planVal)*100) : 0;
-      var barPct = Math.max(0,Math.min(100,pct));
-      return '<div style="background:#1F1A38;border-radius:14px;padding:12px 14px;border:1px solid rgba(255,255,255,.06);">'+
-        '<div style="font-size:10.5px;font-weight:700;color:#9F94C7;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
-        '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px;gap:6px;">'+
-          '<span style="font-size:15px;font-weight:800;color:#EDE9F7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</span>'+
-          '<span style="font-size:13px;font-weight:800;color:'+barColor+';flex-shrink:0;">'+pct+'%</span>'+
+      var billedPct = planVal>0 ? Math.max(0,Math.min(100,(billedVal/planVal)*100)) : 0;
+      var unbilledPct = planVal>0 ? Math.max(0,Math.min(100-billedPct,(unbilledVal/planVal)*100)) : 0;
+      return '<div style="background:#1F1A38;border-radius:14px;padding:16px 18px;border:1px solid rgba(255,255,255,.06);">'+
+        '<div style="font-size:13px;font-weight:700;color:#B6ADD6;text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
+        '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;gap:8px;">'+
+          '<span style="font-size:22px;font-weight:800;color:#EDE9F7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</span>'+
+          '<span style="font-size:17px;font-weight:800;color:'+billedColor+';flex-shrink:0;">'+pct+'%</span>'+
         '</div>'+
-        '<div style="font-size:9.5px;color:#9F94C7;margin-bottom:6px;">Plan: '+inr(planVal)+'</div>'+
-        '<div style="height:6px;background:#33285A;border-radius:3px;overflow:hidden;'+(breakdownHtml?'margin-bottom:8px;':'')+'">'+
-          '<div style="height:100%;width:'+barPct+'%;background:'+barColor+';"></div>'+
+        '<div style="font-size:13px;font-weight:600;color:#B6ADD6;margin-bottom:10px;">Plan: '+inr(planVal)+'</div>'+
+        '<div style="height:9px;background:#33285A;border-radius:5px;overflow:hidden;display:flex;margin-bottom:10px;">'+
+          '<div style="height:100%;width:'+billedPct+'%;background:'+billedColor+';"></div>'+
+          '<div style="height:100%;width:'+unbilledPct+'%;background:'+unbilledColor+';"></div>'+
         '</div>'+
-        (breakdownHtml?'<div style="border-top:1px solid rgba(255,255,255,.08);padding-top:6px;">'+breakdownHtml+'</div>':'')+
+        '<div style="border-top:1px solid rgba(255,255,255,.08);padding-top:8px;">'+
+          planActualRow('Billed',billedVal,billedColor)+planActualRow('Unbilled',unbilledVal,unbilledColor)+planActualRow('Total',actualVal)+
+          (extraRowsHtml||'')+
+        '</div>'+
       '</div>';
     }
     function planActualRow(label,val,color){
-      return '<div style="display:flex;justify-content:space-between;font-size:10px;color:#9F94C7;margin-bottom:2px;"><span>'+label+'</span><span style="font-weight:700;color:'+(color||'#D8D2EC')+';">'+inr(val)+'</span></div>';
+      return '<div style="display:flex;justify-content:space-between;font-size:12.5px;color:#B6ADD6;margin-bottom:3px;"><span>'+label+'</span><span style="font-weight:700;color:'+(color||'#D8D2EC')+';">'+inr(val)+'</span></div>';
+    }
+    function plCard(title,actualVal,planVal){
+      var actColor=actualVal>=0?'#2ECC71':'#E74C3C', planColor=planVal>=0?'#2ECC71':'#E74C3C';
+      var maxAbs=Math.max(Math.abs(actualVal),Math.abs(planVal),1);
+      var actBarPct=Math.max(0,Math.min(100,(Math.abs(actualVal)/maxAbs)*100));
+      var planBarPct=Math.max(0,Math.min(100,(Math.abs(planVal)/maxAbs)*100));
+      return '<div style="background:#1F1A38;border-radius:14px;padding:16px 18px;border:1px solid rgba(255,255,255,.06);">'+
+        '<div style="font-size:13px;font-weight:700;color:#B6ADD6;text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
+        '<div style="font-size:22px;font-weight:800;color:'+actColor+';margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</div>'+
+        '<div style="font-size:13px;font-weight:600;color:#B6ADD6;margin-bottom:10px;">Plan: '+inr(planVal)+'</div>'+
+        '<div style="height:9px;background:#33285A;border-radius:5px;overflow:hidden;margin-bottom:6px;">'+
+          '<div style="height:100%;width:'+actBarPct+'%;background:'+actColor+';"></div>'+
+        '</div>'+
+        '<div style="height:9px;background:#33285A;border-radius:5px;overflow:hidden;margin-bottom:10px;opacity:.55;">'+
+          '<div style="height:100%;width:'+planBarPct+'%;background:'+planColor+';"></div>'+
+        '</div>'+
+        '<div style="border-top:1px solid rgba(255,255,255,.08);padding-top:8px;">'+
+          planActualRow('Plan P&amp;L',planVal,planColor)+planActualRow('Actual P&amp;L',actualVal,actColor)+
+        '</div>'+
+      '</div>';
     }
     function panel(icon,title,inner,minH){
       return '<div style="background:#1F1A38;border-radius:16px;padding:16px;border:1px solid rgba(255,255,255,.06);'+(minH?'min-height:'+minH+'px;':'')+'">'+
@@ -2656,14 +2681,10 @@ async function loadDashboardInsights(filterProjId){
     // ══ ASSEMBLE — data mapped as a starting point; tell me what to swap ══
     gridEl.innerHTML =
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">'+
-        planActualCard('Revenue (Contract)', revenueTotal, plannedRevenueContract, '#F857A6',
-          planActualRow('Billed',revenueBilled,'#4FD1C5')+planActualRow('Unbilled',revenueUnbilled,'#F7CA5C')+planActualRow('Total',revenueTotal))+
-        planActualCard('Revenue (as per JM)', revenueTotal, plannedRevenueJM, '#8B7FE8',
-          planActualRow('Billed',revenueBilled,'#4FD1C5')+planActualRow('Unbilled',revenueUnbilled,'#F7CA5C')+planActualRow('Total',revenueTotal))+
-        planActualCard('Expenditure', expenditureActualTotal, plannedExpenditure, '#4FD1C5',
-          planActualRow('Billed',expenditureBilled,'#F857A6')+planActualRow('Unbilled',expenditureUnbilled,'#F7CA5C')+planActualRow('Total',expenditureActualTotal))+
-        planActualCard('Profit / Loss', actualPL, plannedPL, actualPL>=0?'#2ECC71':'#E74C3C',
-          planActualRow('Plan P&amp;L',plannedPL, plannedPL>=0?'#2ECC71':'#E74C3C')+planActualRow('Actual P&amp;L',actualPL, actualPL>=0?'#2ECC71':'#E74C3C'))+
+        planActualCard('Revenue (Contract)', revenueTotal, plannedRevenueContract, revenueBilled, revenueUnbilled, '#F857A6', '#F7CA5C')+
+        planActualCard('Revenue (as per JM)', revenueTotal, plannedRevenueJM, revenueBilled, revenueUnbilled, '#8B7FE8', '#F7CA5C')+
+        planActualCard('Expenditure', expenditureActualTotal, plannedExpenditure, expenditureBilled, expenditureUnbilled, '#4FD1C5', '#F7CA5C')+
+        plCard('Profit / Loss', actualPL, plannedPL)+
       '</div>'+
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">'+
         gradientStatCard('&#128200;', marginPct+'%', 'Profit Margin', 'linear-gradient(135deg,#F5A623,#F7CA5C)')+
