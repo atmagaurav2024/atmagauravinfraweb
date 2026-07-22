@@ -3510,7 +3510,7 @@ async function attLoadAll(){
     safe(sbFetch('attendance',{select:'*',filter:'date=eq.'+today})),
     safe(sbFetch('attendance',{select:'*',filter:'employee_id=eq.'+(currentUser.id||'')+'&date=gte.'+monthStart+'&date=lte.'+monthEnd})),
     safe(sbFetch('attendance_punches',{select:'*',filter:'emp_id=eq.'+(currentUser.id||'')+'&date=eq.'+today,order:'punch_time.asc'})),
-    safe(sbFetch('leave_requests',{select:'*',order:'applied_at.desc'}))
+    safe(sbFetch('leave_requests',{select:'*',order:'created_at.desc'}))
   ]);
   var activeEmps=r[0]||[], todayRecords=r[1]||[], monthRecords=r[2]||[], todayPunches=r[3]||[], leaves=r[4]||[];
 
@@ -3533,7 +3533,7 @@ async function attLoadAll(){
   ATT_MONTH_RECORDS = monthRecords;
 
   punchLog = todayPunches.map(function(p){
-    return {id:p.id, type:p.punch_type, time:new Date(p.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:p.gps_mode==='remote'?'Remote':'On-Site', lat:p.latitude, lng:p.longitude, duration:null};
+    return {id:p.id, type:p.punch_type, time:new Date(p.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:p.lat, lng:p.lng, duration:null};
   });
   // Restore punch-in state across a refresh
   if(punchLog.length && punchLog[punchLog.length-1].type==='in'){
@@ -3552,7 +3552,7 @@ async function attLoadAll(){
 
   var tLbl={'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'};
   leaveData = leaves.map(function(l){
-    return {id:l.id, emp:l.emp_name, type:tLbl[l.leave_type]||l.leave_type, from:attDisplayDate(l.from_date), to:attDisplayDate(l.to_date), days:l.days, reason:l.reason||'', applied:attDisplayDate((l.applied_at||'').slice(0,10)), status:l.status};
+    return {id:l.id, emp:l.emp_name, type:tLbl[l.leave_type]||l.leave_type, from:attDisplayDate(l.from_date), to:attDisplayDate(l.to_date), days:l.days, reason:l.reason||'', applied:attDisplayDate((l.created_at||'').slice(0,10)), status:l.status};
   });
 }
 function attDisplayDate(iso){
@@ -4130,7 +4130,7 @@ async function approveLeave(i) {
   l.status = 'approved';
   renderLeave();
   try{
-    await sbUpdate('leave_requests', l.id, {status:'approved', reviewed_by:currentUser.id, reviewed_at:new Date().toISOString()});
+    await sbUpdate('leave_requests', l.id, {status:'approved', approved_by:currentUser.id});
     showToast(`Leave approved for ${l.emp}`, 'success');
   }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
@@ -4140,7 +4140,7 @@ async function rejectLeave(i) {
   l.status = 'rejected';
   renderLeave();
   try{
-    await sbUpdate('leave_requests', l.id, {status:'rejected', reviewed_by:currentUser.id, reviewed_at:new Date().toISOString()});
+    await sbUpdate('leave_requests', l.id, {status:'rejected', approved_by:currentUser.id});
     showToast('Leave rejected','error');
   }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
@@ -4204,9 +4204,10 @@ async function submitLeave() {
   document.getElementById('leave-modal').classList.remove('open');
   showToast('Submitting leave application…','info');
   try{
+    var extraNote = (duration && duration!=='Full Day' ? ('[Duration: '+duration+'] ') : '') + (handoverTo ? ('[Handover: '+handoverTo+'] ') : '');
     var res = await sbInsert('leave_requests',{
-      emp_id: empMatch?empMatch.id:null, emp_name: empName, leave_type: leaveType, duration: duration,
-      from_date: fromDate, to_date: toDate, days: days, reason: reason, handover_to: handoverTo, status:'pending'
+      emp_id: empMatch?empMatch.id:null, emp_name: empName, leave_type: leaveType,
+      from_date: fromDate, to_date: toDate, days: days, reason: extraNote+(reason||''), status:'pending'
     });
     var saved = (res && res[0]) || {};
     var tLbl={'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'};
