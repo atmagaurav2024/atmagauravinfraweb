@@ -2236,6 +2236,18 @@ input,select,textarea{font-size:16px !important;}
       <div id="resource-cats"></div>
     </div>
 
+    <!-- Leave Types -->
+    <div style="background:var(--white);border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;">
+      <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:14px;font-weight:800;">&#127958; Leave Types</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Used in the Apply Leave form (Attendance module)</div>
+        </div>
+        <button class="btn btn-navy btn-sm" onclick="addCategory('leave')">+ Add</button>
+      </div>
+      <div id="leave-cats"></div>
+    </div>
+
     <div style="height:10px"></div>
   </div>
 
@@ -4158,6 +4170,15 @@ async function openLeaveModal() {
   var ho  = document.getElementById('leave-handover-sel');
   if(sel) sel.innerHTML = empOpts;
   if(ho)  ho.innerHTML  = '<option value="">-- Select Employee --</option>'+empOpts;
+
+  // Leave Type dropdown — pulled from Master Registry > Leave Types
+  // (Settings > Master Registry) instead of being hardcoded here.
+  var typeSel = document.getElementById('leave-type-sel');
+  if(typeSel){
+    var opts = (typeof catOptions==='function') ? catOptions('leave') : '';
+    typeSel.innerHTML = opts || '<option>Casual Leave (CL)</option><option>Sick Leave (SL)</option><option>Earned Leave (EL)</option><option>Comp Off</option><option>Loss of Pay (LOP)</option>';
+  }
+
   // Set today's date
   var today = new Date().toISOString().slice(0,10);
   document.querySelectorAll('#leave-modal input[type=date]').forEach(function(el){el.value=today;});
@@ -5216,6 +5237,13 @@ var CAT_DATA={
     {id:'d-5',icon:'&#128101;',name:'HR / Admin',desc:'Human resources, payroll, admin',color:'#880E4F',count:1,active:true},
     {id:'d-6',icon:'&#128065;',name:'External — Client',desc:'Client representatives, consultants',color:'#37474F',count:1,active:true},
   ],
+  leave:[
+    {id:'lv-1',icon:'&#127958;',name:'Casual Leave (CL)',desc:'Short personal leave',color:'#1565C0',count:0,active:true},
+    {id:'lv-2',icon:'&#127973;',name:'Sick Leave (SL)',desc:'Medical / health leave',color:'#C62828',count:0,active:true},
+    {id:'lv-3',icon:'&#127796;',name:'Earned Leave (EL)',desc:'Accrued/annual leave',color:'#2E7D32',count:0,active:true},
+    {id:'lv-4',icon:'&#128337;',name:'Comp Off',desc:'Compensatory off for extra work',color:'#F57F17',count:0,active:true},
+    {id:'lv-5',icon:'&#128176;',name:'Loss of Pay (LOP)',desc:'Unpaid leave',color:'#795548',count:0,active:true},
+  ],
   uom:[
     {id:'u-1',icon:'&#9883;',name:'MT',desc:'Metric Tonne — steel, bulk materials',color:'#C62828',count:0,active:true},
     {id:'u-2',icon:'&#128230;',name:'Bags',desc:'50 kg bags — cement, microsilica',color:'#37474F',count:0,active:true},
@@ -5309,6 +5337,7 @@ renderCatSection('sc','sc-cats');
 renderCatSection('uom','uom-cats');
 renderCatSection('role','role-cats');
 renderCatSection('dept','dept-cats');
+renderCatSection('leave','leave-cats');
 renderVendors();
 renderMaterials();
 renderSC();
@@ -5524,7 +5553,7 @@ function startSync(){
       var changed = false;
       // Sync categories
       if(cats&&cats.length){
-        var types=['vendor','material','sc','uom','role','dept'];
+        var types=['vendor','material','sc','uom','role','dept','leave'];
         var catChanged=false;
         types.forEach(function(type){
           var dbCats=cats.filter(function(c){return c.type===type;});
@@ -5591,14 +5620,14 @@ async function getNextAIPLId(){
 
 
 // ── CATEGORY SYNC ──
-var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats'};
+var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats'};
 
 async function loadCategories(){
   try{
     var data = await sbFetch('categories',{select:'*',order:'created_at.asc'});
     if(!data||!data.length) return; // keep defaults if no DB cats yet
     // Merge DB categories into CAT_DATA
-    var types=['vendor','material','sc','uom','role','dept','labour','resource'];
+    var types=['vendor','material','sc','uom','role','dept','labour','resource','leave'];
     types.forEach(function(type){
       var dbCats = data.filter(function(c){return c.type===type;});
       if(dbCats.length){

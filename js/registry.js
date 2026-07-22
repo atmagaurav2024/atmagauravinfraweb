@@ -69,10 +69,17 @@ var CAT_DATA={
     {id:'u-8',icon:'',name:'Litres',desc:'Liquid materials',color:'#F57F17',count:0,active:true},
     {id:'u-9',icon:'',name:'LS',desc:'Lump Sum',color:'#37474F',count:0,active:true},
   ],
-  labour:[], resource:[]
+  labour:[], resource:[],
+  leave:[
+    {id:'lv-1',icon:'&#127958;',name:'Casual Leave (CL)',desc:'Short personal leave',color:'#1565C0',count:0,active:true},
+    {id:'lv-2',icon:'&#127973;',name:'Sick Leave (SL)',desc:'Medical / health leave',color:'#C62828',count:0,active:true},
+    {id:'lv-3',icon:'&#127796;',name:'Earned Leave (EL)',desc:'Accrued/annual leave',color:'#2E7D32',count:0,active:true},
+    {id:'lv-4',icon:'&#128337;',name:'Comp Off',desc:'Compensatory off for extra work',color:'#F57F17',count:0,active:true},
+    {id:'lv-5',icon:'&#128176;',name:'Loss of Pay (LOP)',desc:'Unpaid leave',color:'#795548',count:0,active:true},
+  ]
 };
 
-var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats'};
+var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats'};
 
 function catKey(name){ return (name||'').toLowerCase().trim(); }
 
@@ -88,6 +95,7 @@ async function initRegistry(){
   renderCatSection('uom','uom-cats');
   renderCatSection('role','role-cats');
   renderCatSection('dept','dept-cats');
+  renderCatSection('leave','leave-cats');
   loadAllData();
 }
 
@@ -441,7 +449,7 @@ async function loadCategories(){
   try{
     var data=await sbFetch('categories',{select:'*',order:'created_at.asc'});
     if(!data||!data.length)return;
-    ['vendor','material','sc','uom','role','dept','labour','resource'].forEach(function(type){
+    ['vendor','material','sc','uom','role','dept','labour','resource','leave'].forEach(function(type){
       var dbCats=data.filter(function(c){return c.type===type;});
       if(dbCats.length){
         CAT_DATA[type]=dbCats.map(function(c){
