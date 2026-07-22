@@ -4133,14 +4133,27 @@ async function rejectLeave(i) {
   }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 
-function openLeaveModal() {
-  // Populate employee dropdowns from live EMP_LIST
-  var activeEmps = EMP_LIST.filter(function(e){return e.status==='active';});
+var LEAVE_EMP_CACHE = [];
+async function openLeaveModal() {
+  // Populate employee dropdowns. Prefer the Attendance module's own
+  // `employees` list (already loaded whenever this screen is open) instead
+  // of EMP_LIST, which only gets populated after visiting Employee Management
+  // separately — that was why the dropdown showed empty until that module
+  // had been opened first in the session.
+  var sourceEmps = (employees && employees.length) ? employees : [];
+  if(!sourceEmps.length){
+    try{
+      var fresh = await sbFetch('employees',{select:'id,first_name,middle_name,last_name,status',filter:'status=eq.active'});
+      sourceEmps = (fresh||[]).map(function(e){
+        return {id:e.id, name:((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim()||'Unknown'};
+      });
+    }catch(e){ console.warn('Failed to load employees for leave form', e); }
+  }
   var empOpts = '<option value="">— Select Employee —</option>'+
-    activeEmps.map(function(e){
-      var name=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim();
-      return '<option value="'+name+'">'+name+'</option>';
+    sourceEmps.map(function(e){
+      return '<option value="'+e.name+'">'+e.name+'</option>';
     }).join('');
+  LEAVE_EMP_CACHE = sourceEmps;
   var sel = document.getElementById('leave-emp-sel');
   var ho  = document.getElementById('leave-handover-sel');
   if(sel) sel.innerHTML = empOpts;
@@ -4165,10 +4178,7 @@ async function submitLeave() {
   if(toDate < fromDate){ showToast('To Date cannot be before From Date','warning'); return; }
 
   var days = duration==='Full Day' ? (Math.round((new Date(toDate)-new Date(fromDate))/86400000)+1) : 0.5;
-  var empMatch = EMP_LIST.find(function(e){
-    var n=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim();
-    return n===empName;
-  });
+  var empMatch = LEAVE_EMP_CACHE.find(function(e){ return e.name===empName; });
 
   document.getElementById('leave-modal').classList.remove('open');
   showToast('Submitting leave application…','info');
