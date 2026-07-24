@@ -1313,6 +1313,12 @@ input,select,textarea{font-size:16px !important;}
 @media (max-width:420px){
   .kpi-plan-grid{grid-template-columns:1fr;}
 }
+
+/* Attendance Monthly View — calendar + stats sidebar — responsive */
+.att-monthly-grid{display:grid;grid-template-columns:1fr 340px;gap:20px;}
+@media (max-width:900px){
+  .att-monthly-grid{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
@@ -1752,7 +1758,7 @@ input,select,textarea{font-size:16px !important;}
 
   <!-- ─── MONTHLY TAB ─── -->
   <div id="tab-monthly" style="display:none;">
-    <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;">
+    <div class="att-monthly-grid">
       <div class="table-card">
         <div class="table-card-header">
           <div class="tch-title">📊 Monthly Summary</div>
@@ -3503,11 +3509,13 @@ async function initAttendance(){
       updateSummary();
       populateAttEmpSel();
       renderCal();
+      renderMonthStats();
       renderLeave();
     } else {
       renderEmployeeSelfView();
       populateAttEmpSel();
       renderCal();
+      renderMonthStats();
     }
   }catch(e){console.log('att init',e);}
 }
@@ -4125,7 +4133,6 @@ async function attSaveAll(){
         status: e.status || 'present',
         punch_in: e.in ? e.in+':00' : null,
         punch_out: e.out ? e.out+':00' : null,
-        remarks: e.remarks || null,
         marked_by: currentUser.id
       };
       var existing = ATT_TODAY_MAP[e.id];
@@ -4185,6 +4192,29 @@ async function attReloadMonthlyCal(){
     ATT_MONTH_RECORDS = [];
   }
   renderCal();
+  renderMonthStats();
+}
+
+function renderMonthStats(){
+  var present=0, absent=0, leaveCount=0, otHours=0;
+  (ATT_MONTH_RECORDS||[]).forEach(function(r){
+    if(r.status==='present') present++;
+    else if(r.status==='absent') absent++;
+    else if(r.status==='leave') leaveCount++;
+    var hw = parseFloat(r.hours_worked)||0;
+    if(hw>8) otHours += (hw-8);
+  });
+  var totalMarked = present+absent+leaveCount; // unmarked/future days excluded from %
+  var pct = totalMarked>0 ? Math.round((present/totalMarked)*100) : 0;
+
+  var setTxt=function(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; };
+  setTxt('my-days-present', present);
+  setTxt('my-days-absent', absent);
+  setTxt('my-leave-taken', leaveCount);
+  setTxt('my-ot-hours', otHours.toFixed(1));
+  setTxt('my-att-pct', pct+'%');
+  var bar = document.getElementById('my-att-bar');
+  if(bar) bar.style.width = pct+'%';
 }
 
 function attExportMonthlyCSV(){
