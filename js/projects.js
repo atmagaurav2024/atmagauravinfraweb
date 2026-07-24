@@ -5837,7 +5837,6 @@ async function execSaveDailyEntry(projId,itemId){
     var qtyInp=document.querySelector('.dp-res-qty[data-allot-id="'+allotId+'"]')||
                (row&&row.querySelector('.dp-res-qty'));
     var resQty=parseFloat(qtyInp&&qtyInp.value)||0;
-    console.log('Resource:',chk.getAttribute('data-name'),'allot:',allotId,'qty:',resQty,'input found:',!!qtyInp);
     var resName=chk.getAttribute('data-name');
     var resUnit=chk.getAttribute('data-unit')||null;
 
