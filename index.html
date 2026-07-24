@@ -1304,6 +1304,15 @@ input,select,textarea{font-size:16px !important;}
 .upload-progress-fill{height:100%;background:linear-gradient(90deg,#1565C0,#42A5F5);border-radius:99px;width:0%;transition:width .2s ease;}
 .upload-progress-fill.done{background:linear-gradient(90deg,#2E7D32,#66BB6A);}
 .upload-progress-fill.error{background:linear-gradient(90deg,#C62828,#EF5350);}
+
+/* KPI Plan-vs-Actual card row — responsive */
+.kpi-plan-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+@media (max-width:760px){
+  .kpi-plan-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media (max-width:420px){
+  .kpi-plan-grid{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
@@ -2703,7 +2712,7 @@ async function loadDashboardInsights(filterProjId){
 
     // ══ ASSEMBLE — data mapped as a starting point; tell me what to swap ══
     gridEl.innerHTML =
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">'+
+      '<div class="kpi-plan-grid" style="margin-bottom:10px;">'+
         planActualCard('Revenue (Contract)', revenueTotal, plannedRevenueContract, revenueBilled, revenueUnbilled, '#F857A6', '#F7CA5C')+
         planActualCard('Revenue (as per JM)', revenueTotal, plannedRevenueJM, revenueBilled, revenueUnbilled, '#8B7FE8', '#F7CA5C')+
         planActualCard('Expenditure', expenditureActualTotal, plannedExpenditure, expenditureBilled, expenditureUnbilled, '#4FD1C5', '#F7CA5C')+
