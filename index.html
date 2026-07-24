@@ -1722,11 +1722,11 @@ input,select,textarea{font-size:16px !important;}
   <div id="tab-daily">
     <div class="table-card">
       <div class="table-card-header">
-        <div class="tch-title">📅 Today's Attendance</div>
+        <div class="tch-title" id="att-daily-title">📅 Today's Attendance</div>
         <div class="tch-actions">
-          <input type="date" id="att-date-sel" class="btn btn-outline" style="font-size:12px;padding:6px 10px;cursor:pointer;" onchange="showToast('Date changed','info')">
+          <input type="date" id="att-date-sel" class="btn btn-outline" style="font-size:12px;padding:6px 10px;cursor:pointer;" onchange="attReloadDailyDate()">
           <button class="btn btn-outline btn-sm" onclick="markAllPresent()">✅ Mark All Present</button>
-          <button class="btn btn-green btn-sm" onclick="showToast('Attendance saved successfully!','success')">💾 Save All</button>
+          <button class="btn btn-green btn-sm" onclick="attSaveAll()">💾 Save All</button>
         </div>
       </div>
       <table class="att-table" id="att-table">
@@ -1758,12 +1758,17 @@ input,select,textarea{font-size:16px !important;}
           <div class="tch-title">📊 Monthly Summary</div>
           <div class="tch-actions">
             <select class="btn btn-outline" style="font-size:12px;cursor:pointer;" id="att-emp-sel">
-              <option>All Employees</option>
+              <option>My Attendance</option>
             </select>
-            <button class="btn btn-outline btn-sm" onclick="showToast('Monthly report downloaded','success')">📥 Report</button>
+            <button class="btn btn-outline btn-sm" onclick="attExportMonthlyCSV()">📥 Report</button>
           </div>
         </div>
         <div style="padding:16px;">
+          <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px;">
+            <button class="btn btn-outline btn-sm" onclick="attCalPrevMonth()">‹</button>
+            <div id="att-cal-month-label" style="font-weight:800;font-size:13px;min-width:120px;text-align:center;">—</div>
+            <button class="btn btn-outline btn-sm" onclick="attCalNextMonth()">›</button>
+          </div>
           <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:8px;">
             <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">SUN</div>
             <div style="text-align:center;font-size:11px;color:var(--text3);font-weight:700;padding:5px;">MON</div>
@@ -3496,10 +3501,12 @@ async function initAttendance(){
       renderAttTable();
       lockStatusBtnsIfNotAdmin();
       updateSummary();
+      populateAttEmpSel();
       renderCal();
       renderLeave();
     } else {
       renderEmployeeSelfView();
+      populateAttEmpSel();
       renderCal();
     }
   }catch(e){console.log('att init',e);}
@@ -3511,18 +3518,24 @@ async function initAttendance(){
 // (to restore punch state after a refresh), and leave requests.
 async function attLoadAll(){
   var today = attToday();
+  ATT_SELECTED_DATE = ATT_SELECTED_DATE || today;
+  ATT_CAL_EMP_ID = ATT_CAL_EMP_ID || (currentUser && currentUser.id) || null;
   var monthStart = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH, 1));
   var monthEnd = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH+1, 0));
   var safe=function(p){return p.catch(function(){return [];});};
 
   var r = await Promise.all([
     safe(sbFetch('employees',{select:'id,first_name,middle_name,last_name,designation,department,status',filter:'status=eq.active'})),
-    safe(sbFetch('attendance',{select:'*',filter:'date=eq.'+today})),
-    safe(sbFetch('attendance',{select:'*',filter:'employee_id=eq.'+(currentUser.id||'')+'&date=gte.'+monthStart+'&date=lte.'+monthEnd})),
+    safe(sbFetch('attendance',{select:'*',filter:'date=eq.'+ATT_SELECTED_DATE})),
+    safe(sbFetch('attendance',{select:'*',filter:'employee_id=eq.'+(ATT_CAL_EMP_ID||'')+'&date=gte.'+monthStart+'&date=lte.'+monthEnd})),
     safe(sbFetch('attendance_punches',{select:'*',filter:'emp_id=eq.'+(currentUser.id||'')+'&date=eq.'+today,order:'punch_time.asc'})),
     safe(sbFetch('leave_requests',{select:'*',order:'created_at.desc'}))
   ]);
   var activeEmps=r[0]||[], todayRecords=r[1]||[], monthRecords=r[2]||[], todayPunches=r[3]||[], leaves=r[4]||[];
+  var dateInp = document.getElementById('att-date-sel');
+  if(dateInp && !dateInp.value) dateInp.value = ATT_SELECTED_DATE;
+  var titleEl = document.getElementById('att-daily-title');
+  if(titleEl) titleEl.textContent = '📅 Attendance — '+attDisplayDate(ATT_SELECTED_DATE)+(ATT_SELECTED_DATE===today?' (Today)':'');
 
   ATT_TODAY_MAP = {};
   todayRecords.forEach(function(rec){ ATT_TODAY_MAP[rec.employee_id]=rec; });
@@ -3660,6 +3673,8 @@ var ATT_MONTH_RECORDS = []; // attendance rows for the viewed month (self, for c
 var ATT_TODAY_MAP = {};   // emp_id -> today's attendance row (admin table)
 var ATT_VIEW_MONTH = new Date().getMonth(); // 0-11
 var ATT_VIEW_YEAR = new Date().getFullYear();
+var ATT_SELECTED_DATE = null; // set to today in attLoadAll
+var ATT_CAL_EMP_ID = null;    // whose calendar Monthly View is showing
 
 function attToday(){ return new Date().toISOString().slice(0,10); }
 function attFmtDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -3971,7 +3986,7 @@ async function attUpdateTime(idx, field, value){
     if(existing){
       await sbUpdate('attendance', existing.id, patch);
     } else {
-      patch.employee_id=e.id; patch.date=attToday(); patch.status=e.status||'present'; patch.marked_by=currentUser.id;
+      patch.employee_id=e.id; patch.date=ATT_SELECTED_DATE; patch.status=e.status||'present'; patch.marked_by=currentUser.id;
       var res = await sbInsert('attendance', patch);
       if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
     }
@@ -3987,7 +4002,7 @@ async function attUpdateRemarks(idx, value){
     if(existing){
       await sbUpdate('attendance', existing.id, {remarks:value});
     } else {
-      var res = await sbInsert('attendance',{employee_id:e.id, date:attToday(), status:e.status||'present', remarks:value, marked_by:currentUser.id});
+      var res = await sbInsert('attendance',{employee_id:e.id, date:ATT_SELECTED_DATE, status:e.status||'present', remarks:value, marked_by:currentUser.id});
       if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
     }
     showToast('Remarks saved','success');
@@ -4012,7 +4027,7 @@ async function setStatus(idx, status, btn) {
     if(existing){
       await sbUpdate('attendance', existing.id, {status:status, marked_by:currentUser.id});
     } else {
-      var res = await sbInsert('attendance',{employee_id:emp.id, date:attToday(), status:status, marked_by:currentUser.id});
+      var res = await sbInsert('attendance',{employee_id:emp.id, date:ATT_SELECTED_DATE, status:status, marked_by:currentUser.id});
       if(res && res[0]){ ATT_TODAY_MAP[emp.id]=res[0]; emp.recId=res[0].id; }
     }
     showToast(emp.name + ' → ' + status, 'success');
@@ -4052,7 +4067,7 @@ async function markAllPresent() {
   lockStatusBtnsIfNotAdmin();
   updateSummary();
   showToast('Marking all employees Present…','info');
-  var today = attToday();
+  var today = ATT_SELECTED_DATE;
   try{
     await Promise.all(toMark.map(function(e){
       var existing = ATT_TODAY_MAP[e.id];
@@ -4069,7 +4084,137 @@ async function markAllPresent() {
   }
 }
 
-// ── MONTHLY CALENDAR (self) ──
+async function attReloadDailyDate(){
+  var el = document.getElementById('att-date-sel');
+  ATT_SELECTED_DATE = (el && el.value) ? el.value : attToday();
+  var titleEl = document.getElementById('att-daily-title');
+  if(titleEl) titleEl.textContent = '📅 Loading '+attDisplayDate(ATT_SELECTED_DATE)+'…';
+  try{
+    var recs = await sbFetch('attendance',{select:'*',filter:'date=eq.'+ATT_SELECTED_DATE});
+    ATT_TODAY_MAP = {};
+    (recs||[]).forEach(function(rec){ ATT_TODAY_MAP[rec.employee_id]=rec; });
+    employees.forEach(function(e){
+      var rec = ATT_TODAY_MAP[e.id];
+      e.status  = rec ? rec.status : '';
+      e.in      = rec && rec.punch_in  ? rec.punch_in.slice(0,5)  : '';
+      e.out     = rec && rec.punch_out ? rec.punch_out.slice(0,5) : '';
+      e.ot      = rec && rec.overtime_hours ? rec.overtime_hours+'h' : '0h';
+      e.gps     = rec ? rec.gps_mode : '';
+      e.remarks = rec ? rec.remarks  : '';
+      e.recId   = rec ? rec.id : null;
+    });
+    renderAttTable();
+    updateSummary();
+    lockStatusBtnsIfNotAdmin();
+    var today = attToday();
+    if(titleEl) titleEl.textContent = '📅 Attendance — '+attDisplayDate(ATT_SELECTED_DATE)+(ATT_SELECTED_DATE===today?' (Today)':'');
+    showToast('Showing attendance for '+attDisplayDate(ATT_SELECTED_DATE),'success');
+  }catch(err){
+    if(titleEl) titleEl.textContent = '📅 Attendance';
+    showToast('Failed to load attendance for that date: '+err.message,'error');
+  }
+}
+
+async function attSaveAll(){
+  if(currentUser.role !== 'admin'){ showToast('Only Admin can save attendance','warning'); return; }
+  if(!employees.length){ showToast('No attendance rows to save','warning'); return; }
+  showToast('Saving all entries for '+attDisplayDate(ATT_SELECTED_DATE)+'…','info');
+  try{
+    var results = await Promise.all(employees.map(function(e){
+      var patch = {
+        status: e.status || 'present',
+        punch_in: e.in ? e.in+':00' : null,
+        punch_out: e.out ? e.out+':00' : null,
+        remarks: e.remarks || null,
+        marked_by: currentUser.id
+      };
+      var existing = ATT_TODAY_MAP[e.id];
+      if(existing){
+        return sbUpdate('attendance', existing.id, patch);
+      } else {
+        patch.employee_id = e.id; patch.date = ATT_SELECTED_DATE;
+        return sbInsert('attendance', patch).then(function(res){
+          if(res && res[0]) ATT_TODAY_MAP[e.id]=res[0];
+          return res;
+        });
+      }
+    }));
+    showToast('Saved '+results.length+' attendance record(s) for '+attDisplayDate(ATT_SELECTED_DATE),'success');
+  }catch(err){
+    showToast('Failed to save all: '+err.message,'error');
+  }
+}
+
+// ── MONTHLY CALENDAR (self, or any employee for admin/PM) ──
+function populateAttEmpSel(){
+  var sel = document.getElementById('att-emp-sel');
+  if(!sel) return;
+  var isManager = (currentUser.role==='admin'||currentUser.role==='pm');
+  var opts = '<option value="'+currentUser.id+'">My Attendance</option>';
+  if(isManager){
+    opts += employees
+      .filter(function(e){ return e.id!==currentUser.id; })
+      .map(function(e){ return '<option value="'+e.id+'">'+e.name+'</option>'; })
+      .join('');
+  }
+  sel.innerHTML = opts;
+  sel.value = ATT_CAL_EMP_ID || currentUser.id;
+  sel.onchange = attReloadMonthlyCal;
+}
+
+function attCalPrevMonth(){
+  ATT_VIEW_MONTH--;
+  if(ATT_VIEW_MONTH<0){ ATT_VIEW_MONTH=11; ATT_VIEW_YEAR--; }
+  attReloadMonthlyCal();
+}
+function attCalNextMonth(){
+  ATT_VIEW_MONTH++;
+  if(ATT_VIEW_MONTH>11){ ATT_VIEW_MONTH=0; ATT_VIEW_YEAR++; }
+  attReloadMonthlyCal();
+}
+
+async function attReloadMonthlyCal(){
+  var sel = document.getElementById('att-emp-sel');
+  ATT_CAL_EMP_ID = (sel && sel.value) ? sel.value : currentUser.id;
+  var monthStart = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH, 1));
+  var monthEnd = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH+1, 0));
+  try{
+    ATT_MONTH_RECORDS = await sbFetch('attendance',{select:'*',filter:'employee_id=eq.'+ATT_CAL_EMP_ID+'&date=gte.'+monthStart+'&date=lte.'+monthEnd});
+  }catch(err){
+    showToast('Failed to load month: '+err.message,'error');
+    ATT_MONTH_RECORDS = [];
+  }
+  renderCal();
+}
+
+function attExportMonthlyCSV(){
+  var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var recByDate={};
+  (ATT_MONTH_RECORDS||[]).forEach(function(r){ recByDate[r.date]=r; });
+  var daysInMonth = new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH+1, 0).getDate();
+  var sel = document.getElementById('att-emp-sel');
+  var empLabel = (sel && sel.selectedIndex>=0) ? sel.options[sel.selectedIndex].textContent : 'Employee';
+  var lines = [['Monthly Attendance — '+empLabel+' — '+MONTHS[ATT_VIEW_MONTH]+' '+ATT_VIEW_YEAR], [''], ['Date','Status','In Time','Out Time','Remarks']];
+  for(var d=1; d<=daysInMonth; d++){
+    var dateStr = ATT_VIEW_YEAR+'-'+String(ATT_VIEW_MONTH+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var rec = recByDate[dateStr];
+    lines.push([dateStr, rec?rec.status:'Not marked', rec&&rec.punch_in?rec.punch_in:'', rec&&rec.punch_out?rec.punch_out:'', rec&&rec.remarks?rec.remarks:'']);
+  }
+  var csv = lines.map(function(row){
+    return row.map(function(c){
+      var s=String(c==null?'':c);
+      if(s.indexOf(',')>-1||s.indexOf('"')>-1) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Monthly_Attendance_'+empLabel.replace(/[^a-z0-9]/gi,'_')+'_'+ATT_VIEW_YEAR+'_'+(ATT_VIEW_MONTH+1)+'.csv';
+  a.click();
+  showToast('Monthly report exported','success');
+}
+
 function renderCal() {
   const cal = document.getElementById('month-cal');
   if(!cal) return;
@@ -4077,6 +4222,10 @@ function renderCal() {
   var firstDay = new Date(year, month, 1).getDay(); // 0=Sunday
   var daysInMonth = new Date(year, month+1, 0).getDate();
   var todayStr = attToday();
+
+  var MONTHS_FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var lbl = document.getElementById('att-cal-month-label');
+  if(lbl) lbl.textContent = MONTHS_FULL[month]+' '+year;
 
   var recByDate = {};
   ATT_MONTH_RECORDS.forEach(function(r){ recByDate[r.date]=r; });
