@@ -9961,6 +9961,46 @@ function pfCalcContract(){
   if(el&&tender) el.value=contract;
 }
 
+// ── EOT (Extension of Time) — multiple entries, auto-recalcs Revised Completion Date ──
+var PF_EOT=[]; // [{days, reason}]
+
+function pfAddEOT(){
+  var daysEl=document.getElementById('pf-new-eot-days');
+  var reasonEl=document.getElementById('pf-new-eot-reason');
+  var days=parseFloat(daysEl&&daysEl.value)||0;
+  if(!days){ toast('Enter EOT days','warning'); return; }
+  PF_EOT.push({days:days, reason:(reasonEl&&reasonEl.value||'').trim()});
+  if(daysEl) daysEl.value='';
+  if(reasonEl) reasonEl.value='';
+  pfRenderEOT();
+  pfCalcRevisedDate();
+}
+function pfRemoveEOT(i){ PF_EOT.splice(i,1); pfRenderEOT(); pfCalcRevisedDate(); }
+function pfRenderEOT(){
+  var el=document.getElementById('pf-eot-list'); if(!el) return;
+  if(!PF_EOT.length){ el.innerHTML='<div style="font-size:10px;color:var(--text3);padding:4px 0;">No EOT added yet</div>'; return; }
+  el.innerHTML=PF_EOT.map(function(e,i){
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#F8FAFC;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px;">'+
+      '<b style="color:#E65100;white-space:nowrap;">EOT '+(i+1)+':</b>'+
+      '<span style="white-space:nowrap;">'+e.days+' days</span>'+
+      '<span style="flex:1;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(e.reason?' — '+esc(e.reason):'')+'</span>'+
+      '<button onclick="pfRemoveEOT('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+    '</div>';
+  }).join('');
+}
+function pfEotTotalDays(){ return PF_EOT.reduce(function(s,e){return s+(parseFloat(e.days)||0);},0); }
+function pfCalcRevisedDate(){
+  var scdEl=document.getElementById('pf-completion');
+  var revEl=document.getElementById('pf-revised-completion');
+  if(!scdEl||!revEl) return;
+  if(!scdEl.value){ revEl.value=''; return; }
+  var totalDays=pfEotTotalDays();
+  if(!totalDays){ revEl.value=scdEl.value; return; }
+  var d=new Date(scdEl.value+'T00:00:00');
+  d.setDate(d.getDate()+totalDays);
+  revEl.value=d.toISOString().slice(0,10);
+}
+
 // ── File attachments ─────────────────────────────────────────
 var PF_FILES=[]; // [{name, file, url}] — url only for existing
 
@@ -9997,6 +10037,7 @@ function openProjForm(id){
   var p = id ? (PROJ_DATA.find(function(x){return x.id===id;})||{}) : {};
   PF_COORDS = [];
   PF_FILES  = [];
+  PF_EOT    = [];
 
   // Load existing coordinates
   if(p.coordinates){
@@ -10006,6 +10047,10 @@ function openProjForm(id){
   var existFiles=[];
   if(p.attachments){try{existFiles=JSON.parse(p.attachments);}catch(e){}}
   existFiles.forEach(function(f){PF_FILES.push({name:f.name,file:null,url:f.url,size:0,type:''});});
+  // Load existing EOT entries
+  if(p.eot_entries){
+    try{PF_EOT=JSON.parse(p.eot_entries);}catch(e){}
+  }
 
   // Auto-generate code for new project
   var autoCode = id ? (p.code||'') : genProjCode();
@@ -10071,7 +10116,22 @@ function openProjForm(id){
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
         '<div><label class="flbl">LOA Date</label><input id="pf-loa" class="finp" type="date" value="'+(p.loa_date||'')+'"></div>'+
         '<div><label class="flbl">Work Order Date</label><input id="pf-wo-date" class="finp" type="date" value="'+(p.wo_date||'')+'"></div>'+
-        '<div><label class="flbl">Schedule Completion Date</label><input id="pf-completion" class="finp" type="date" value="'+(p.completion_date||'')+'"></div>'+
+        '<div><label class="flbl">Schedule Completion Date</label><input id="pf-completion" class="finp" type="date" value="'+(p.completion_date||'')+'" oninput="pfCalcRevisedDate()"></div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">'+
+        '<div><label class="flbl">DLP Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(Defects Liability Period)</span></label>'+
+          '<input id="pf-dlp-date" class="finp" type="date" value="'+(p.dlp_date||'')+'"></div>'+
+        '<div><label class="flbl">Revised Completion Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(SCD + total EOT)</span></label>'+
+          '<input id="pf-revised-completion" class="finp" type="date" readonly style="background:#F1F1F1;color:var(--text2);"></div>'+
+      '</div>'+
+      '<div style="margin-top:10px;">'+
+        '<label class="flbl">Extension of Time (EOT) <span style="font-size:9px;font-weight:400;color:var(--text3);">— add multiple as they\'re granted</span></label>'+
+        '<div id="pf-eot-list" style="margin-bottom:6px;"></div>'+
+        '<div style="display:grid;grid-template-columns:100px 1fr auto;gap:6px;align-items:center;">'+
+          '<input id="pf-new-eot-days" class="finp" type="number" step="1" placeholder="Days" style="margin:0;">'+
+          '<input id="pf-new-eot-reason" class="finp" placeholder="Reason (optional, e.g. Monsoon delay)" style="margin:0;">'+
+          '<button onclick="pfAddEOT()" style="background:#E65100;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Add EOT</button>'+
+        '</div>'+
       '</div>'+
     '</div>'+
     // ── Description ──
@@ -10095,6 +10155,8 @@ function openProjForm(id){
   // Render existing coords and files
   pfRenderCoords();
   pfRenderFiles();
+  pfRenderEOT();
+  pfCalcRevisedDate();
   // Auto-calc contract if values exist
   if(p.tender_cost) pfCalcContract();
 

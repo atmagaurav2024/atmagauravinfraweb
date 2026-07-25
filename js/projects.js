@@ -571,6 +571,9 @@ async function saveProjForm(editId){
   addCol('attachments',     attachments.length?JSON.stringify(attachments):null);
   addCol('project_length',  parseFloat((document.getElementById('pf-length')||{value:''}).value)||null);
   addCol('coordinates',     PF_COORDS&&PF_COORDS.length?JSON.stringify(PF_COORDS):null);
+  addCol('dlp_date',        (document.getElementById('pf-dlp-date')||{value:''}).value||null);
+  addCol('eot_entries',     (typeof PF_EOT!=='undefined'&&PF_EOT&&PF_EOT.length)?JSON.stringify(PF_EOT):null);
+  addCol('revised_completion_date', (document.getElementById('pf-revised-completion')||{value:''}).value||null);
 
   try{
     toast('Saving...','info');
@@ -589,7 +592,8 @@ async function saveProjForm(editId){
         // If failed due to unknown columns, retry with safe columns only
         if(res.status===400){
           var optCols=['contract_value','tender_cost','tender_pct','loa_date','wo_date',
-            'completion_date','attachments','project_length','coordinates'];
+            'completion_date','attachments','project_length','coordinates',
+            'dlp_date','eot_entries','revised_completion_date'];
           optCols.forEach(function(k){delete data[k];});
           var res2=await fetch(baseUrl+'/rest/v1/projects?id=eq.'+editId,{
             method:'PATCH',
@@ -623,7 +627,8 @@ async function saveProjForm(editId){
         if(res.status===400){
           // Strip optional columns one by one until insert succeeds
           var optCols=['contract_value','tender_cost','tender_pct','loa_date','wo_date',
-            'completion_date','attachments','project_length','coordinates'];
+            'completion_date','attachments','project_length','coordinates',
+            'dlp_date','eot_entries','revised_completion_date'];
           optCols.forEach(function(k){delete data[k];});
           var res2=await fetch(baseUrl+'/rest/v1/projects',{
             method:'POST',
