@@ -1230,6 +1230,10 @@ input,select,textarea{font-size:16px !important;}
 .dk{background:rgba(255,255,255,.09);border-radius:12px;padding:10px;text-align:center;}
 .dk-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:white;}
 .dk-lbl{font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-top:2px;font-family:'Nunito',sans-serif;}
+.dt-kpis-6{grid-template-columns:repeat(6,1fr);}
+@media (max-width:480px){
+  .dt-kpis-6{grid-template-columns:repeat(3,1fr);}
+}
 .dash-body{padding:14px;flex:1;overflow-y:auto;min-height:0;}
 .sec-title{font-size:14px;font-weight:800;margin-bottom:10px;font-family:'Nunito',sans-serif;}
 .mod-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
@@ -1538,9 +1542,11 @@ input,select,textarea{font-size:16px !important;}
         <option value="" style="color:#111827;background:white;">&#128203; All Projects</option>
       </select>
     </div>
-    <div class="dt-kpis">
-      <div class="dk"><div class="dk-val" id="dk-projects">—</div><div class="dk-lbl">Projects</div></div>
-      <div class="dk"><div class="dk-val" id="dk-workers">—</div><div class="dk-lbl">Workers</div></div>
+    <div class="dt-kpis dt-kpis-6">
+      <div class="dk"><div class="dk-val" id="dk-ongoing">—</div><div class="dk-lbl">Ongoing</div></div>
+      <div class="dk"><div class="dk-val" id="dk-dlp">—</div><div class="dk-lbl">Under DLP</div></div>
+      <div class="dk"><div class="dk-val" id="dk-completed">—</div><div class="dk-lbl">Completed</div></div>
+      <div class="dk"><div class="dk-val" id="dk-workers-present">—</div><div class="dk-lbl">Workers Present</div></div>
       <div class="dk"><div class="dk-val" id="dk-progress">—</div><div class="dk-lbl">Progress</div></div>
       <div class="dk"><div class="dk-val" style="color:#FF6B6B;" id="dk-issues">—</div><div class="dk-lbl">Issues</div></div>
     </div>
@@ -2371,11 +2377,12 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('work_payments',{select:'id,project_id,amount'})),
       safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items'})),
       safe(sbFetch('boq_jm',{select:'id,project_id,boq_item_id,jm_qty'})),
-      safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,party_name,qty,rate,unit',filter:'exec_type=eq.planned'}))
+      safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,party_name,qty,rate,unit',filter:'exec_type=eq.planned'})),
+      safe(sbFetch('attendance',{select:'employee_id',filter:'date=eq.'+(new Date().toISOString().slice(0,10))+'&status=eq.present'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
         pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
-        boqJmRows=r[10]||[], plannedResRows=r[11]||[];
+        boqJmRows=r[10]||[], plannedResRows=r[11]||[], presentTodayRows=r[12]||[];
 
     // ── Populate / preserve the project filter dropdown ──
     var selectedProject=projects.find(function(p){return p.id===filterProjId;});
@@ -2404,6 +2411,20 @@ async function loadDashboardInsights(filterProjId){
     var activeStatuses=['active','in-progress','rr','planning'];
     var activeProjects=projects.filter(function(p){return activeStatuses.indexOf(p.status)>-1;}).length;
     var activeWorkforce=employees.filter(function(e){return e.status==='active';}).length;
+
+    // ── Header KPI strip: project status breakdown + workers present today ──
+    // Note: attendance records aren't linked to a project_id in the schema,
+    // so "Workers Present" is a company-wide count for today, not scoped to
+    // the selected project filter.
+    var ongoingCount = projects.filter(function(p){return p.status==='in-progress';}).length;
+    var dlpCount = projects.filter(function(p){return p.status==='under-dlp';}).length;
+    var completedCount = projects.filter(function(p){return p.status==='fully-completed';}).length;
+    var workersPresentToday = new Set((presentTodayRows||[]).map(function(a){return a.employee_id;})).size;
+    var setDk=function(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; };
+    setDk('dk-ongoing', ongoingCount);
+    setDk('dk-dlp', dlpCount);
+    setDk('dk-completed', completedCount);
+    setDk('dk-workers-present', workersPresentToday);
 
     // ── Profit/Loss per BOQ item ──────────────────────────────────────────
     // Revenue = qty executed (from daily progress) x BOQ contract rate
