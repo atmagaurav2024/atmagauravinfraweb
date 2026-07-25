@@ -406,6 +406,7 @@ function openProjForm(id){
   var p = id ? (PROJ_DATA.find(function(x){return x.id===id;})||{}) : {};
   PF_COORDS = [];
   PF_FILES  = [];
+  PF_EOT    = [];
 
   // Load existing coordinates
   if(p.coordinates){
@@ -415,6 +416,10 @@ function openProjForm(id){
   var existFiles=[];
   if(p.attachments){try{existFiles=JSON.parse(p.attachments);}catch(e){}}
   existFiles.forEach(function(f){PF_FILES.push({name:f.name,file:null,url:f.url,size:0,type:''});});
+  // Load existing EOT entries
+  if(p.eot_entries){
+    try{PF_EOT=JSON.parse(p.eot_entries);}catch(e){}
+  }
 
   // Auto-generate code for new project
   var autoCode = id ? (p.code||'') : genProjCode();
@@ -480,7 +485,22 @@ function openProjForm(id){
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
         '<div><label class="flbl">LOA Date</label><input id="pf-loa" class="finp" type="date" value="'+(p.loa_date||'')+'"></div>'+
         '<div><label class="flbl">Work Order Date</label><input id="pf-wo-date" class="finp" type="date" value="'+(p.wo_date||'')+'"></div>'+
-        '<div><label class="flbl">Schedule Completion Date</label><input id="pf-completion" class="finp" type="date" value="'+(p.completion_date||'')+'"></div>'+
+        '<div><label class="flbl">Schedule Completion Date</label><input id="pf-completion" class="finp" type="date" value="'+(p.completion_date||'')+'" oninput="pfCalcRevisedDate()"></div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">'+
+        '<div><label class="flbl">DLP Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(Defects Liability Period)</span></label>'+
+          '<input id="pf-dlp-date" class="finp" type="date" value="'+(p.dlp_date||'')+'"></div>'+
+        '<div><label class="flbl">Revised Completion Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(SCD + total EOT)</span></label>'+
+          '<input id="pf-revised-completion" class="finp" type="date" readonly style="background:#F1F1F1;color:var(--text2);"></div>'+
+      '</div>'+
+      '<div style="margin-top:10px;">'+
+        '<label class="flbl">Extension of Time (EOT) <span style="font-size:9px;font-weight:400;color:var(--text3);">— add multiple as they\'re granted</span></label>'+
+        '<div id="pf-eot-list" style="margin-bottom:6px;"></div>'+
+        '<div style="display:grid;grid-template-columns:100px 1fr auto;gap:6px;align-items:center;">'+
+          '<input id="pf-new-eot-days" class="finp" type="number" step="1" placeholder="Days" style="margin:0;">'+
+          '<input id="pf-new-eot-reason" class="finp" placeholder="Reason (optional, e.g. Monsoon delay)" style="margin:0;">'+
+          '<button onclick="pfAddEOT()" style="background:#E65100;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Add EOT</button>'+
+        '</div>'+
       '</div>'+
     '</div>'+
     // ── Description ──
@@ -504,6 +524,8 @@ function openProjForm(id){
   // Render existing coords and files
   pfRenderCoords();
   pfRenderFiles();
+  pfRenderEOT();
+  pfCalcRevisedDate();
   // Auto-calc contract if values exist
   if(p.tender_cost) pfCalcContract();
 
