@@ -424,8 +424,8 @@ function openProjForm(id){
   // Auto-generate code for new project
   var autoCode = id ? (p.code||'') : genProjCode();
 
-  var statusOpts = ['in-progress','under-dlp','fully-completed','planning','active'].map(function(s){
-    var labels={'in-progress':'In Progress','under-dlp':'Under DLP','fully-completed':'Completed','planning':'Planning','active':'Active'};
+  var statusOpts = ['planning','in-progress','under-dlp','fully-completed'].map(function(s){
+    var labels={'planning':'Planning','in-progress':'Ongoing','under-dlp':'Under DLP','fully-completed':'Completed'};
     return '<option value="'+s+'"'+(p.status===s?' selected':'')+'>'+labels[s]+'</option>';
   }).join('');
 
@@ -476,7 +476,8 @@ function openProjForm(id){
     '</div>'+
     // ── Status + Client ──
     '<div class="g2" style="margin-bottom:8px;">'+
-      '<div><label class="flbl">Status</label><select id="pf-status" class="fsel">'+statusOpts+'</select></div>'+
+      '<div><label class="flbl">Status <span style="font-size:9px;font-weight:400;color:var(--text3);">(auto — based on dates below)</span></label>'+
+        '<select id="pf-status" class="fsel" disabled style="background:#F1F1F1;color:var(--text2);cursor:not-allowed;">'+statusOpts+'</select></div>'+
       '<div><label class="flbl">Client / Owner</label><input id="pf-client" class="finp" value="'+esc(p.client||'')+'"></div>'+
     '</div>'+
     // ── Dates ──
@@ -484,12 +485,12 @@ function openProjForm(id){
       '<div style="font-size:10px;font-weight:800;color:#E65100;margin-bottom:8px;">KEY DATES</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
         '<div><label class="flbl">LOA Date</label><input id="pf-loa" class="finp" type="date" value="'+(p.loa_date||'')+'"></div>'+
-        '<div><label class="flbl">Work Order Date</label><input id="pf-wo-date" class="finp" type="date" value="'+(p.wo_date||'')+'"></div>'+
+        '<div><label class="flbl">Work Order Date</label><input id="pf-wo-date" class="finp" type="date" value="'+(p.wo_date||'')+'" oninput="pfCalcStatus()"></div>'+
         '<div><label class="flbl">Schedule Completion Date</label><input id="pf-completion" class="finp" type="date" value="'+(p.completion_date||'')+'" oninput="pfCalcRevisedDate()"></div>'+
       '</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">'+
         '<div><label class="flbl">DLP Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(Defects Liability Period)</span></label>'+
-          '<input id="pf-dlp-date" class="finp" type="date" value="'+(p.dlp_date||'')+'"></div>'+
+          '<input id="pf-dlp-date" class="finp" type="date" value="'+(p.dlp_date||'')+'" oninput="pfCalcStatus()"></div>'+
         '<div><label class="flbl">Revised Completion Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(SCD + total EOT)</span></label>'+
           '<input id="pf-revised-completion" class="finp" type="date" readonly style="background:#F1F1F1;color:var(--text2);"></div>'+
       '</div>'+
@@ -526,6 +527,7 @@ function openProjForm(id){
   pfRenderFiles();
   pfRenderEOT();
   pfCalcRevisedDate();
+  pfCalcStatus();
   // Auto-calc contract if values exist
   if(p.tender_cost) pfCalcContract();
 
@@ -577,7 +579,7 @@ async function saveProjForm(editId){
     name:name,
     code:(document.getElementById('pf-code')||{value:''}).value.trim()||null,
     client:(document.getElementById('pf-client')||{value:''}).value.trim()||null,
-    status:(document.getElementById('pf-status')||{value:'active'}).value||'active',
+    status:(document.getElementById('pf-status')||{value:'planning'}).value||'planning',
     location:(document.getElementById('pf-location')||{value:''}).value.trim()||null,
     description:(document.getElementById('pf-desc')||{value:''}).value.trim()||null
   };
