@@ -407,6 +407,7 @@ function openProjForm(id){
   PF_COORDS = [];
   PF_FILES  = [];
   PF_EOT    = [];
+  PF_PROVISIONS = [];
 
   // Load existing coordinates
   if(p.coordinates){
@@ -420,6 +421,11 @@ function openProjForm(id){
   if(p.eot_entries){
     try{PF_EOT=JSON.parse(p.eot_entries);}catch(e){}
   }
+  // Load existing contract provisions, backfilling GST/Escalation/Maintenance if missing
+  if(p.contract_provisions){
+    try{PF_PROVISIONS=JSON.parse(p.contract_provisions);}catch(e){}
+  }
+  pfEnsureDefaultProvisions();
 
   // Auto-generate code for new project
   var autoCode = id ? (p.code||'') : genProjCode();
@@ -471,7 +477,24 @@ function openProjForm(id){
             '<span style="font-size:10px;color:var(--text3);white-space:nowrap;padding-top:2px;">%</span>'+
           '</div></div>'+
         '<div><label class="flbl">Contract Price (₹) <span style="font-size:9px;font-weight:400;">auto / editable</span></label>'+
-          '<input id="pf-contract" class="finp" type="number" step="1" value="'+(p.contract_value||'')+'" placeholder="Auto-calculated"></div>'+
+          '<input id="pf-contract" class="finp" type="number" step="1" value="'+(p.contract_value||'')+'" placeholder="Auto-calculated" oninput="pfRenderProvisions()"></div>'+
+      '</div>'+
+      '<div style="margin-top:10px;">'+
+        '<label class="flbl">Contract Provisions <span style="font-size:9px;font-weight:400;color:var(--text3);">— all values in ₹</span></label>'+
+        '<div id="pf-prov-list" style="margin-bottom:6px;"></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 140px auto;gap:6px;align-items:center;">'+
+          '<input id="pf-new-prov-name" class="finp" placeholder="Provision name (e.g. Insurance Provision)" style="margin:0;">'+
+          '<input id="pf-new-prov-amount" class="finp" type="number" step="1" placeholder="Amount ₹" style="margin:0;">'+
+          '<button onclick="pfAddProvision()" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Add</button>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;">'+
+          '<span style="font-weight:700;color:var(--text2);">Total Provisions</span>'+
+          '<span id="pf-prov-total" style="font-weight:800;color:#1565C0;">₹0</span>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:12px;">'+
+          '<span style="font-weight:700;color:var(--text2);">Contract Price + Provisions</span>'+
+          '<span id="pf-contract-with-prov" style="font-weight:800;color:#2E7D32;">₹0</span>'+
+        '</div>'+
       '</div>'+
     '</div>'+
     // ── Status + Client ──
@@ -528,6 +551,7 @@ function openProjForm(id){
   pfRenderEOT();
   pfCalcRevisedDate();
   pfCalcStatus();
+  pfRenderProvisions();
   // Auto-calc contract if values exist
   if(p.tender_cost) pfCalcContract();
 
@@ -598,6 +622,7 @@ async function saveProjForm(editId){
   addCol('dlp_date',        (document.getElementById('pf-dlp-date')||{value:''}).value||null);
   addCol('eot_entries',     (typeof PF_EOT!=='undefined'&&PF_EOT&&PF_EOT.length)?JSON.stringify(PF_EOT):null);
   addCol('revised_completion_date', (document.getElementById('pf-revised-completion')||{value:''}).value||null);
+  addCol('contract_provisions', (typeof PF_PROVISIONS!=='undefined'&&PF_PROVISIONS&&PF_PROVISIONS.length)?JSON.stringify(PF_PROVISIONS):null);
 
   try{
     toast('Saving...','info');
@@ -617,7 +642,7 @@ async function saveProjForm(editId){
         if(res.status===400){
           var optCols=['contract_value','tender_cost','tender_pct','loa_date','wo_date',
             'completion_date','attachments','project_length','coordinates',
-            'dlp_date','eot_entries','revised_completion_date'];
+            'dlp_date','eot_entries','revised_completion_date','contract_provisions'];
           optCols.forEach(function(k){delete data[k];});
           var res2=await fetch(baseUrl+'/rest/v1/projects?id=eq.'+editId,{
             method:'PATCH',
@@ -652,7 +677,7 @@ async function saveProjForm(editId){
           // Strip optional columns one by one until insert succeeds
           var optCols=['contract_value','tender_cost','tender_pct','loa_date','wo_date',
             'completion_date','attachments','project_length','coordinates',
-            'dlp_date','eot_entries','revised_completion_date'];
+            'dlp_date','eot_entries','revised_completion_date','contract_provisions'];
           optCols.forEach(function(k){delete data[k];});
           var res2=await fetch(baseUrl+'/rest/v1/projects',{
             method:'POST',

@@ -9969,6 +9969,63 @@ function pfCalcContract(){
   var contract=Math.round(tender*(1+pct/100));
   var el=document.getElementById('pf-contract');
   if(el&&tender) el.value=contract;
+  pfRenderProvisions();
+}
+
+// ── Contract Provisions — GST/Escalation/Maintenance are pinned defaults, ──
+// ── plus any number of custom-named provisions can be added. All amounts ──
+// ── are absolute ₹ values entered directly (not %).                       ──
+var PF_PROVISIONS=[]; // [{name, amount, fixed}]
+var PF_PROVISION_DEFAULTS=['GST Provision','Price Escalation Provision','Maintenance Charges Provision'];
+
+function pfEnsureDefaultProvisions(){
+  PF_PROVISION_DEFAULTS.forEach(function(name){
+    if(!PF_PROVISIONS.some(function(pr){return pr.name===name;})){
+      PF_PROVISIONS.push({name:name, amount:0, fixed:true});
+    }
+  });
+}
+
+function pfAddProvision(){
+  var nameEl=document.getElementById('pf-new-prov-name');
+  var amtEl=document.getElementById('pf-new-prov-amount');
+  var name=(nameEl&&nameEl.value||'').trim();
+  var amount=parseFloat(amtEl&&amtEl.value)||0;
+  if(!name){ toast('Enter a provision name','warning'); return; }
+  PF_PROVISIONS.push({name:name, amount:amount, fixed:false});
+  if(nameEl) nameEl.value='';
+  if(amtEl) amtEl.value='';
+  pfRenderProvisions();
+}
+function pfRemoveProvision(i){
+  if(PF_PROVISIONS[i]&&PF_PROVISIONS[i].fixed){ toast('This is a standard provision — set its amount to 0 instead of removing','info'); return; }
+  PF_PROVISIONS.splice(i,1);
+  pfRenderProvisions();
+}
+function pfUpdateProvisionAmount(i,value){
+  if(PF_PROVISIONS[i]) PF_PROVISIONS[i].amount=parseFloat(value)||0;
+  pfRenderProvisions();
+}
+function pfProvisionsTotal(){ return PF_PROVISIONS.reduce(function(s,pr){return s+(parseFloat(pr.amount)||0);},0); }
+function pfRenderProvisions(){
+  var el=document.getElementById('pf-prov-list'); if(!el) return;
+  el.innerHTML=PF_PROVISIONS.map(function(pr,i){
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#F8FAFC;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;">'+
+      '<span style="flex:1;font-size:11px;font-weight:'+(pr.fixed?'700':'600')+';color:'+(pr.fixed?'#1565C0':'var(--text2)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(pr.name)+(pr.fixed?' <span style="font-size:9px;color:var(--text3);font-weight:400;">(standard)</span>':'')+'</span>'+
+      '<input type="number" step="1" value="'+pr.amount+'" oninput="pfUpdateProvisionAmount('+i+',this.value)" style="width:110px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-size:11px;">'+
+      (pr.fixed?'':'<button onclick="pfRemoveProvision('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>')+
+    '</div>';
+  }).join('');
+  var total=pfProvisionsTotal();
+  var fmtInr=function(n){ return '₹'+Math.round(n||0).toLocaleString('en-IN'); };
+  var totalEl=document.getElementById('pf-prov-total');
+  if(totalEl) totalEl.textContent=fmtInr(total);
+  var contractEl=document.getElementById('pf-contract');
+  var withProvEl=document.getElementById('pf-contract-with-prov');
+  if(withProvEl){
+    var contractVal=parseFloat(contractEl&&contractEl.value)||0;
+    withProvEl.textContent=fmtInr(contractVal+total);
+  }
 }
 
 // ── EOT (Extension of Time) — multiple entries, auto-recalcs Revised Completion Date ──
@@ -10075,6 +10132,7 @@ function openProjForm(id){
   PF_COORDS = [];
   PF_FILES  = [];
   PF_EOT    = [];
+  PF_PROVISIONS = [];
 
   // Load existing coordinates
   if(p.coordinates){
@@ -10088,6 +10146,11 @@ function openProjForm(id){
   if(p.eot_entries){
     try{PF_EOT=JSON.parse(p.eot_entries);}catch(e){}
   }
+  // Load existing contract provisions, backfilling GST/Escalation/Maintenance if missing
+  if(p.contract_provisions){
+    try{PF_PROVISIONS=JSON.parse(p.contract_provisions);}catch(e){}
+  }
+  pfEnsureDefaultProvisions();
 
   // Auto-generate code for new project
   var autoCode = id ? (p.code||'') : genProjCode();
@@ -10139,7 +10202,24 @@ function openProjForm(id){
             '<span style="font-size:10px;color:var(--text3);white-space:nowrap;padding-top:2px;">%</span>'+
           '</div></div>'+
         '<div><label class="flbl">Contract Price (₹) <span style="font-size:9px;font-weight:400;">auto / editable</span></label>'+
-          '<input id="pf-contract" class="finp" type="number" step="1" value="'+(p.contract_value||'')+'" placeholder="Auto-calculated"></div>'+
+          '<input id="pf-contract" class="finp" type="number" step="1" value="'+(p.contract_value||'')+'" placeholder="Auto-calculated" oninput="pfRenderProvisions()"></div>'+
+      '</div>'+
+      '<div style="margin-top:10px;">'+
+        '<label class="flbl">Contract Provisions <span style="font-size:9px;font-weight:400;color:var(--text3);">— all values in ₹</span></label>'+
+        '<div id="pf-prov-list" style="margin-bottom:6px;"></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 140px auto;gap:6px;align-items:center;">'+
+          '<input id="pf-new-prov-name" class="finp" placeholder="Provision name (e.g. Insurance Provision)" style="margin:0;">'+
+          '<input id="pf-new-prov-amount" class="finp" type="number" step="1" placeholder="Amount ₹" style="margin:0;">'+
+          '<button onclick="pfAddProvision()" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Add</button>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;">'+
+          '<span style="font-weight:700;color:var(--text2);">Total Provisions</span>'+
+          '<span id="pf-prov-total" style="font-weight:800;color:#1565C0;">₹0</span>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:12px;">'+
+          '<span style="font-weight:700;color:var(--text2);">Contract Price + Provisions</span>'+
+          '<span id="pf-contract-with-prov" style="font-weight:800;color:#2E7D32;">₹0</span>'+
+        '</div>'+
       '</div>'+
     '</div>'+
     // ── Status + Client ──
@@ -10195,6 +10275,8 @@ function openProjForm(id){
   pfRenderFiles();
   pfRenderEOT();
   pfCalcRevisedDate();
+  pfCalcStatus();
+  pfRenderProvisions();
   // Auto-calc contract if values exist
   if(p.tender_cost) pfCalcContract();
 
