@@ -2761,7 +2761,7 @@ async function loadDashboardInsights(filterProjId){
     // ══ ASSEMBLE — data mapped as a starting point; tell me what to swap ══
     gridEl.innerHTML =
       '<div class="kpi-plan-grid" style="margin-bottom:10px;">'+
-        planActualCard('Revenue (Contract) — excl. GST', revenueTotal, plannedRevenueContract, revenueBilled, revenueUnbilled, '#F857A6', '#F7CA5C',
+        planActualCard('Revenue (Contract) — excl. GST [build-check-2607261]', revenueTotal, plannedRevenueContract, revenueBilled, revenueUnbilled, '#F857A6', '#F7CA5C',
           '<div style="border-top:1px dashed rgba(255,255,255,.15);margin-top:6px;padding-top:6px;">'+planActualRow('Notional (work amt, excl. tax/ded.)', notionalBilled, '#B6ADD6')+'</div>')+
         planActualCard('Revenue (as per JM) — excl. GST', revenueTotal, plannedRevenueJM, revenueBilled, revenueUnbilled, '#8B7FE8', '#F7CA5C',
           '<div style="border-top:1px dashed rgba(255,255,255,.15);margin-top:6px;padding-top:6px;">'+planActualRow('Notional (work amt, excl. tax/ded.)', notionalBilled, '#B6ADD6')+'</div>')+
