@@ -2379,7 +2379,7 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('work_daily_progress',{select:'id,project_id,boq_item_id,qty_done,resources_used,date'})),
       safe(sbFetch('resource_requisitions',{select:'id,project_id,status',filter:'status=eq.pending'})),
       safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'})),
-      safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions'})),
+      safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions,additions'})),
       safe(sbFetch('work_payments',{select:'id,project_id,amount'})),
       safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items,additions'})),
       safe(sbFetch('boq_jm',{select:'id,project_id,boq_item_id,jm_qty'})),
@@ -2504,13 +2504,17 @@ async function loadDashboardInsights(filterProjId){
     var revenueTotal = revenueBilled+revenueUnbilled;
 
     // ── Cost billed / paid / balance (from vendor/contractor bills) ──
+    // Billed = bill_amount NET BEFORE GST — same treatment as revenue:
+    // GST additions excluded, other additions/deductions still applied.
     var costBilled=0, costAdvAdj=0;
     workBills.forEach(function(b){
       var ded=[]; try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      var add=[]; try{add=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var gstAmt=add.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var activeDed=ded.filter(function(d){return !d.released;});
       var dedTotal=activeDed.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var advAdj=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-      costBilled+=(parseFloat(b.bill_amount)||0)-dedTotal;
+      costBilled+=(parseFloat(b.bill_amount)||0)-dedTotal-gstAmt;
       costAdvAdj+=advAdj;
     });
     var costPaidCash=workPayments.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
@@ -2771,7 +2775,7 @@ async function loadDashboardInsights(filterProjId){
           '<div style="border-top:1px dashed rgba(255,255,255,.15);margin-top:6px;padding-top:6px;">'+planActualRow('Notional (work amt, excl. tax/ded.)', notionalBilled, '#B6ADD6')+'</div>')+
         planActualCard('Revenue (as per JM) — excl. GST', revenueTotal, plannedRevenueJM, revenueBilled, revenueUnbilled, '#8B7FE8', '#F7CA5C',
           '<div style="border-top:1px dashed rgba(255,255,255,.15);margin-top:6px;padding-top:6px;">'+planActualRow('Notional (work amt, excl. tax/ded.)', notionalBilled, '#B6ADD6')+'</div>')+
-        planActualCard('Expenditure', expenditureActualTotal, plannedExpenditure, expenditureBilled, expenditureUnbilled, '#4FD1C5', '#F7CA5C')+
+        planActualCard('Expenditure — excl. GST', expenditureActualTotal, plannedExpenditure, expenditureBilled, expenditureUnbilled, '#4FD1C5', '#F7CA5C')+
         plCard('Profit / Loss', actualPL, plannedPL)+
       '</div>'+
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">'+
