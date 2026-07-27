@@ -1323,6 +1323,12 @@ input,select,textarea{font-size:16px !important;}
 @media (max-width:900px){
   .att-monthly-grid{grid-template-columns:1fr;}
 }
+
+/* Dashboard 2-column panel rows (e.g. Revenue/Cost Billed Breakdown) — responsive */
+.dash-2col-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media (max-width:640px){
+  .dash-2col-grid{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
@@ -2774,7 +2780,7 @@ async function loadDashboardInsights(filterProjId){
         gradientStatCard('&#128119;', activeWorkforce, 'Workforce', 'linear-gradient(135deg,#00ACC1,#4FD1C5)')+
         gradientStatCard('&#128181;', inr(costBalance), 'Cost Balance', 'linear-gradient(135deg,#DB2777,#F857A6)')+
       '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
+      '<div class="dash-2col-grid" style="margin-bottom:10px;">'+
         panel('&#128181;','Revenue Billed Breakdown', donutLegend([{value:revenueBilled,color:'#F857A6'},{value:revenueUnbilled,color:'#F7CA5C'}], inr(revenueTotal)))+
         panel('&#128176;','Cost Billed Breakdown', donutLegend([{value:costPaid,color:'#4FD1C5'},{value:costBalance,color:'#F857A6'}], inr(costBilled)))+
       '</div>'+
