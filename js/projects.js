@@ -479,7 +479,7 @@ function openProjForm(id){
             '<span style="font-size:10px;color:var(--text3);white-space:nowrap;padding-top:2px;">%</span>'+
           '</div></div>'+
         '<div><label class="flbl">Contract Price (₹) <span style="font-size:9px;font-weight:400;">auto / editable</span></label>'+
-          '<input id="pf-contract" class="finp" type="number" step="1" value="'+(p.contract_value||'')+'" placeholder="Auto-calculated" oninput="pfRenderProvisions()"></div>'+
+          '<input id="pf-contract" class="finp" type="number" step="1" value="'+(p.contract_value||'')+'" placeholder="Auto-calculated" oninput="pfUpdateProvisionTotals()"></div>'+
       '</div>'+
       '<div style="margin-top:10px;">'+
         '<label class="flbl">Contract Provisions <span style="font-size:9px;font-weight:400;color:var(--text3);">— all values in ₹</span></label>'+
