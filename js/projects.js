@@ -87,6 +87,7 @@ function projModRenderNav(){
     {id:'construction',    label:'Construction',     group:true},
     {id:'bills',           label:'Bills & Payments'},
     {id:'sales',           label:'Sales'},
+    {id:'pettyexp',        label:'Petty Expenses'},
     {id:'orders',          label:'Orders'}
   ];
 
@@ -213,6 +214,7 @@ function projModLoadTab(){
     store:     {cont:'store-content', sel:'store-proj-sel', fn: function(){ storeLoadItems(); }},
     bills:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills';    execSwitchTab(); }},
     sales:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='sales';    execSwitchTab(); }},
+    pettyexp:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='pettyexp'; execSwitchTab(); }},
     orders:    {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders';   execSwitchTab(); }}
   };
 
@@ -2260,6 +2262,7 @@ async function execRenderSubTab(){
   else if(WA_SUBTAB==='bills') execRenderBills();
   else if(WA_SUBTAB==='orders') execRenderOrders();
   else if(WA_SUBTAB==='sales') execRenderSales();
+  else if(WA_SUBTAB==='pettyexp') execRenderPettyExpenses();
   else if(WA_SUBTAB==='grn') grnRender();
   else if(WA_SUBTAB==='store') storeRender();
 }
@@ -3821,6 +3824,61 @@ function execGenerateSalesBillInvoice(billId,mode,civilHsn,civilDesc){
 
 
 function salesSubTab(tab){ SALES_SUBTAB=tab; execRenderSales(); }
+
+// ── Petty Expenses tab: cash expenditure from Site Cash Manager, ─────────
+// scoped strictly to the currently selected project (matched by name).
+async function execRenderPettyExpenses(){
+  var el=document.getElementById('exec-content');if(!el)return;
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:0});};
+  var fmtD2=function(d){if(!d)return '—';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
+
+  el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading...</div>';
+
+  try{
+    var r=await Promise.all([
+      sbFetch('petty_cash_expenses',{select:'*',order:'date.desc'}),
+      sbFetch('employees',{select:'id,emp_id,first_name,last_name',order:'first_name.asc'})
+    ]);
+    var list=Array.isArray(r[0])?r[0]:[];
+    var empList=Array.isArray(r[1])?r[1]:[];
+    function empName(empId){
+      var e=empList.find(function(x){return x.emp_id===empId||x.id===empId;});
+      return e?((e.first_name||'')+' '+(e.last_name||'')).trim()||empId:(empId||'—');
+    }
+    // Match strictly against this project's name — only cash expenditure
+    // logged against THIS project shows here, never other projects' entries.
+    var projName=(proj.name||'').trim().toLowerCase();
+    var filtered=projName?list.filter(function(x){return (x.project||'').trim().toLowerCase()===projName;}):[];
+    filtered.sort(function(a,b){return new Date(b.date||0)-new Date(a.date||0);});
+    var total=filtered.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+
+    var rowsHtml=filtered.map(function(x){
+      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
+        '<div style="display:flex;align-items:center;gap:10px;">'+
+          '<div style="width:36px;height:36px;border-radius:10px;background:#FFEBEE;display:flex;align-items:center;justify-content:center;font-size:16px;">🧾</div>'+
+          '<div>'+
+            '<div style="font-size:13px;font-weight:800;">'+(x.category||'Expense')+'</div>'+
+            '<div style="font-size:11px;color:var(--text3);">'+empName(x.emp_id)+(x.description?' · '+x.description:'')+' · '+fmtD2(x.date)+(x.bill_no?' · Bill# '+x.bill_no:'')+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="font-size:15px;font-weight:900;color:#C62828;">-'+inr(x.amount)+'</div>'+
+      '</div>';
+    }).join('')||'<div style="text-align:center;padding:40px;color:var(--text3);">No petty cash expenses recorded for this project</div>';
+
+    el.innerHTML=
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px 4px;">'+
+        '<div style="font-size:13px;font-weight:800;color:var(--navy);">Petty Expenses — '+(proj.name||'')+'</div>'+
+        '<div style="font-size:15px;font-weight:900;color:#C62828;">Total: '+inr(total)+'</div>'+
+      '</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);padding:0 4px 10px;">Cash expenditure recorded in Site Cash Manager against this project only.</div>'+
+      rowsHtml;
+  }catch(e){
+    console.error(e);
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading petty expenses</div>';
+  }
+}
 
 function execRenderSales(){
   var el=document.getElementById('exec-content');if(!el)return;
