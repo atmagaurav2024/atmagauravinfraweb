@@ -14744,11 +14744,14 @@ async function execSaveAdvance(partyType,partyName,projId){
 
 
 async function execDelBill(id){
-  var hasPaid=WA_PAYMENTS.some(function(p){return p.bill_id===id;});
-  var msg=hasPaid?'This bill has payments.\\nDeleting will also delete all related payments. Continue?':'Delete this bill?';
+  var fmtInr=function(n){ return '₹'+Math.round(n||0).toLocaleString('en-IN'); };
+  var relPays=WA_PAYMENTS.filter(function(p){return p.bill_id===id;});
+  var hasPaid=relPays.length>0;
+  var msg=hasPaid
+    ? 'This bill has '+relPays.length+' payment'+(relPays.length>1?'s':'')+' totaling '+fmtInr(relPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0))+'.\nDeleting this bill will also permanently delete '+(relPays.length>1?'these payments':'this payment')+'. This cannot be undone.\n\nContinue?'
+    : 'Delete this bill? This cannot be undone.';
   if(!confirm(msg))return;
   if(hasPaid){
-    var relPays=WA_PAYMENTS.filter(function(p){return p.bill_id===id;});
     for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);}catch(e){}
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
