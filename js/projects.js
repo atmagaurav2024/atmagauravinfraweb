@@ -3847,10 +3847,15 @@ async function execRenderPettyExpenses(){
       var e=empList.find(function(x){return x.emp_id===empId||x.id===empId;});
       return e?((e.first_name||'')+' '+(e.last_name||'')).trim()||empId:(empId||'—');
     }
-    // Match strictly against this project's name — only cash expenditure
-    // logged against THIS project shows here, never other projects' entries.
+    // Match by stable project_id (new records). Fall back to matching the
+    // legacy 'project' name field for older records saved before project_ids
+    // existed, so historical entries don't disappear from the tab.
     var projName=(proj.name||'').trim().toLowerCase();
-    var filtered=projName?list.filter(function(x){return (x.project||'').trim().toLowerCase()===projName;}):[];
+    var filtered=list.filter(function(x){
+      var ids=[];try{ids=x.project_ids?JSON.parse(x.project_ids):[];}catch(e){}
+      if(ids.length) return projId && ids.indexOf(projId)>-1;
+      return projName && (x.project||'').trim().toLowerCase()===projName;
+    });
     filtered.sort(function(a,b){return new Date(b.date||0)-new Date(a.date||0);});
     var total=filtered.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
 

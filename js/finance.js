@@ -208,6 +208,12 @@ async function pcSaveCashIn(){
 
 function pcOpenExpense(){
   openSheet('ov-pc','sh-pc');
+  var projChecks=PC_PROJS.map(function(p){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F0F0F0;font-size:12.5px;font-weight:600;cursor:pointer;">'+
+      '<input type="checkbox" class="pce-proj-chk" value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'" style="width:16px;height:16px;">'+
+      (p.name||'Unnamed')+
+    '</label>';
+  }).join('')||'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No projects found</div>';
   document.getElementById('pc-sheet-body').innerHTML=
     '<div style="font-size:15px;font-weight:800;margin-bottom:14px;">Record Expense</div>'+
     '<label class="flbl">Employee *</label><select class="fsel" id="pce-emp"><option value="">Select employee...</option>'+
@@ -216,7 +222,9 @@ function pcOpenExpense(){
       PC_CATS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0">'+
     '<label class="flbl">Date</label><input class="finp" id="pce-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
-    '<label class="flbl">Project</label><select class="fsel" id="pce-proj"><option value="">All Projects</option>'+PC_PROJS.map(function(p){return '<option value="'+p.name+'">'+p.name+'</option>';}).join('')+'</select>'+
+    '<label class="flbl">Project(s) *</label>'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-bottom:4px;">Select one or more projects this expense should be recorded against.</div>'+
+    '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px;">'+projChecks+'</div>'+
     '<label class="flbl">Description *</label><input class="finp" id="pce-desc" placeholder="What was purchased?">'+
     '<label class="flbl">Bill/Receipt No</label><input class="finp" id="pce-bill" placeholder="Receipt number">'+
     '<label class="flbl">Remarks</label><input class="finp" id="pce-remarks" placeholder="Remarks">';
@@ -231,10 +239,19 @@ async function pcSaveExpense(){
   if(!cat){toast('Select category','warning');return;}
   if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
   if(!desc){toast('Description required','warning');return;}
+  var chosenProjs=Array.prototype.slice.call(document.querySelectorAll('.pce-proj-chk:checked')).map(function(chk){
+    return {id:chk.value,name:chk.getAttribute('data-name')};
+  });
+  if(!chosenProjs.length){toast('Select at least one project','warning');return;}
   var bal=pcEmpBal(emp);
   if(amount>bal){toast('Insufficient balance. Available: '+pcFmt(bal),'warning');}
   try{
-    await sbInsert('petty_cash_expenses',{emp_id:emp,category:cat,amount:amount,date:gv('pce-date'),project:gv('pce-proj')||'All Projects',description:desc,bill_no:gv('pce-bill'),remarks:gv('pce-remarks')});
+    await sbInsert('petty_cash_expenses',{
+      emp_id:emp,category:cat,amount:amount,date:gv('pce-date'),
+      project:chosenProjs.map(function(p){return p.name;}).join(', '),
+      project_ids:JSON.stringify(chosenProjs.map(function(p){return p.id;})),
+      description:desc,bill_no:gv('pce-bill'),remarks:gv('pce-remarks')
+    });
     closeSheet('ov-pc','sh-pc');await initPettyCash();toast('Expense recorded: '+pcFmt(amount),'success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
