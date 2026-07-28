@@ -3665,6 +3665,9 @@ function execGenerateSalesBillInvoice(billId,mode,civilHsn,civilDesc){
   var inr=function(n){return '₹'+Number(Math.round(n)||0).toLocaleString('en-IN');};
   var fmtD=function(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
   var esc2=function(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var bPays=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.sales_bill_id===b.id;}).sort(function(a,x){return (a.payment_date||'').localeCompare(x.payment_date||'');});
+  var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+  var balDue=Math.max(0,(parseFloat(b.bill_amount)||0)-paidAmt);
   var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
   var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
   var deds=[];try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
@@ -3784,6 +3787,23 @@ function execGenerateSalesBillInvoice(billId,mode,civilHsn,civilDesc){
       '<tr class="total-row"><td colspan="5" style="text-align:right;">Grand Total (Round Off)</td><td style="text-align:right;">'+inr(b.bill_amount)+'</td></tr>'+
     '</table>'+
     '<div style="font-size:11px;font-style:italic;color:#444;margin:6px 0 16px;">Amount in Words: '+numToWordsINR(b.bill_amount)+'</div>'+
+    (bPays.length?
+      '<div class="box" style="margin-bottom:14px;">'+
+        '<div class="lbl">Payment Details</div>'+
+        '<table style="margin:4px 0 8px;"><tr style="background:#EDE7F6;"><th style="color:#4A148C;">Date</th><th style="color:#4A148C;">Mode</th><th style="color:#4A148C;">Reference</th><th style="color:#4A148C;text-align:right;">Amount (₹)</th></tr>'+
+        bPays.map(function(p){
+          return '<tr><td>'+fmtD(p.payment_date)+'</td><td>'+esc2(p.payment_mode||'—')+'</td><td>'+esc2(p.reference||'—')+'</td><td style="text-align:right;">'+inr(p.amount)+'</td></tr>';
+        }).join('')+
+        '</table>'+
+        '<div style="display:flex;justify-content:space-between;font-size:11.5px;margin-top:4px;">'+
+          '<span style="font-weight:700;color:#2E7D32;">Total Received: '+inr(paidAmt)+'</span>'+
+          '<span style="font-weight:800;color:'+(balDue>0?'#C62828':'#2E7D32')+';">Balance Due: '+inr(balDue)+'</span>'+
+        '</div>'+
+      '</div>':
+      '<div class="box" style="margin-bottom:14px;">'+
+        '<div class="lbl">Payment Status</div>'+
+        '<div style="font-size:11.5px;font-weight:800;color:#C62828;">No payment received — Balance Due: '+inr(balDue)+'</div>'+
+      '</div>')+
     (co.bank_name?
       '<div class="box" style="margin-bottom:14px;">'+
         '<div class="lbl">Bank Details for Payment</div>'+
