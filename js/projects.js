@@ -503,6 +503,16 @@ function openProjForm(id){
         '<select id="pf-status" class="fsel" disabled style="background:#F1F1F1;color:var(--text2);cursor:not-allowed;">'+statusOpts+'</select></div>'+
       '<div><label class="flbl">Client / Owner</label><input id="pf-client" class="finp" value="'+esc(p.client||'')+'"></div>'+
     '</div>'+
+    // ── Client GST Details (for Sales Bill / Tax Invoice "Bill To") ──
+    '<div style="background:#F3E5F5;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
+      '<div style="font-size:10px;font-weight:800;color:#4A148C;margin-bottom:8px;">CLIENT GST DETAILS <span style="font-size:9px;font-weight:400;color:var(--text3);">— used as "Bill To" on Sales Bills</span></div>'+
+      '<label class="flbl">Client Billing Address</label>'+
+      '<textarea id="pf-client-address" class="ftxt" rows="2" placeholder="Full billing address of client">'+esc(p.client_address||'')+'</textarea>'+
+      '<div class="g2" style="margin-top:8px;">'+
+        '<div><label class="flbl">Client GSTIN</label><input id="pf-client-gstin" class="finp" value="'+esc(p.client_gstin||'')+'" placeholder="e.g. 27AAACC1234D1ZV" style="text-transform:uppercase;"></div>'+
+        '<div><label class="flbl">Client State</label><input id="pf-client-state" class="finp" value="'+esc(p.client_state||'')+'" placeholder="e.g. Maharashtra"></div>'+
+      '</div>'+
+    '</div>'+
     // ── Dates ──
     '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
       '<div style="font-size:10px;font-weight:800;color:#E65100;margin-bottom:8px;">KEY DATES</div>'+
@@ -623,6 +633,9 @@ async function saveProjForm(editId){
   addCol('eot_entries',     (typeof PF_EOT!=='undefined'&&PF_EOT&&PF_EOT.length)?JSON.stringify(PF_EOT):null);
   addCol('revised_completion_date', (document.getElementById('pf-revised-completion')||{value:''}).value||null);
   addCol('contract_provisions', (typeof PF_PROVISIONS!=='undefined'&&PF_PROVISIONS&&PF_PROVISIONS.length)?JSON.stringify(PF_PROVISIONS):null);
+  addCol('client_address', (document.getElementById('pf-client-address')||{value:''}).value.trim()||null);
+  addCol('client_gstin',   (document.getElementById('pf-client-gstin')||{value:''}).value.trim().toUpperCase()||null);
+  addCol('client_state',   (document.getElementById('pf-client-state')||{value:''}).value.trim()||null);
 
   try{
     toast('Saving...','info');
@@ -3580,14 +3593,78 @@ async function execSaveSalesBillEdit(billId,adds,deds){
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
+// ── Number to words (Indian numbering system) — for GST invoice ─────────
+function numToWordsINR(num){
+  num=Math.round(Number(num||0));
+  if(num===0) return 'Zero Rupees Only';
+  var ones=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  var tens=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  function two(n){
+    if(n<20) return ones[n];
+    return tens[Math.floor(n/10)]+(n%10?' '+ones[n%10]:'');
+  }
+  function three(n){
+    var s='';
+    if(n>=100){s+=ones[Math.floor(n/100)]+' Hundred';n=n%100;if(n)s+=' ';}
+    if(n) s+=two(n);
+    return s;
+  }
+  var neg=num<0; num=Math.abs(num);
+  var crore=Math.floor(num/10000000); num=num%10000000;
+  var lakh=Math.floor(num/100000); num=num%100000;
+  var thousand=Math.floor(num/1000); num=num%1000;
+  var rest=num;
+  var parts=[];
+  if(crore) parts.push(three(crore)+' Crore');
+  if(lakh) parts.push(three(lakh)+' Lakh');
+  if(thousand) parts.push(three(thousand)+' Thousand');
+  if(rest) parts.push(three(rest));
+  var words=(neg?'Minus ':'')+parts.join(' ')+' Rupees Only';
+  return words;
+}
+
+// ── Sales Bill: choose description format before generating the GST invoice ──
 function execPrintSalesBill(billId){
   var b=WA_SALES_BILLS.find(function(x){return x.id===billId;});
   if(!b){toast('Bill not found','warning');return;}
+  var proj=PROJ_DATA.find(function(p){return p.id===b.project_id;})||{};
+  var defHsn=typeof coCivilHSN==='function'?coCivilHSN():'9954';
+  var defDesc='Civil Work — '+(proj.name||'Project');
+
+  document.getElementById('exec-sheet-title').textContent='Sales Bill — Choose Format';
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Choose how the work should be described on the printed GST tax invoice.</div>'+
+    '<div onclick="execGenerateSalesBillInvoice(\''+billId+'\',\'boq\')" style="cursor:pointer;background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;padding:12px;margin-bottom:10px;">'+
+      '<div style="font-weight:800;font-size:13px;color:#4A148C;">&#128203; Detailed — BOQ Items</div>'+
+      '<div style="font-size:11px;color:#666;margin-top:3px;">Each BOQ item listed as a separate line with qty, rate &amp; amount.</div>'+
+    '</div>'+
+    '<div style="background:#E3F2FD;border:1.5px solid #90CAF9;border-radius:10px;padding:12px;">'+
+      '<div style="font-weight:800;font-size:13px;color:#1565C0;margin-bottom:8px;">&#127959; Consolidated — Civil Work</div>'+
+      '<div style="font-size:11px;color:#666;margin-bottom:8px;">Single line item for the whole civil work, with its HSN/SAC code.</div>'+
+      '<label class="flbl">Work Description</label>'+
+      '<input id="sb-civil-desc" class="finp" value="'+defDesc.replace(/"/g,'&quot;')+'">'+
+      '<label class="flbl">HSN / SAC Code</label>'+
+      '<input id="sb-civil-hsn" class="finp" value="'+(defHsn||'').replace(/"/g,'&quot;')+'" placeholder="e.g. 9954">'+
+      '<button onclick="execGenerateSalesBillInvoice(\''+billId+'\',\'civil\',document.getElementById(\'sb-civil-hsn\').value,document.getElementById(\'sb-civil-desc\').value)" style="margin-top:10px;width:100%;background:#1565C0;color:white;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:800;cursor:pointer;">Generate Consolidated Bill</button>'+
+    '</div>';
+  var foot=document.getElementById('exec-sheet-foot');foot.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  foot.appendChild(cb);
+  openSheet('ov-exec','sh-exec');
+}
+
+// ── Sales Bill: build & open the actual GST tax invoice ─────────────────
+function execGenerateSalesBillInvoice(billId,mode,civilHsn,civilDesc){
+  var b=WA_SALES_BILLS.find(function(x){return x.id===billId;});
+  if(!b){toast('Bill not found','warning');return;}
+  closeSheet('ov-exec','sh-exec');
   var projId=b.project_id;
   var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
   var co=COMPANY_DATA||{};
-  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+  var inr=function(n){return '₹'+Number(Math.round(n)||0).toLocaleString('en-IN');};
   var fmtD=function(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
+  var esc2=function(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
   var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
   var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
   var deds=[];try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
@@ -3596,67 +3673,127 @@ function execPrintSalesBill(billId){
   var workAmt=items.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
   var addAmt=nonGstAdds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-  var netBeforeGst=workAmt+addAmt-dedAmt;
+  var netBeforeGst=workAmt+addAmt-dedAmt; // taxable value
+  var gstAmt=gstAdds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var gstPct=gstAdds.reduce(function(s,a){return s+(parseFloat(a.pct)||0);},0); // total GST rate %, if additions carry a pct
+
+  var defaultHsn=(typeof coCivilHSN==='function'?coCivilHSN():'9954')||'9954';
+
+  // ── Determine intra-state (CGST+SGST) vs inter-state (IGST) ──
+  var coState=(typeof coGSTState==='function'?coGSTState():'')||'';
+  var clientState=proj.client_state||'';
+  var sameState = coState && clientState && coState.trim().toLowerCase()===clientState.trim().toLowerCase();
+  // If we can't determine either state, default to showing CGST+SGST (most common for local work)
+  var useIGST = coState && clientState ? !sameState : false;
+
+  // ── Line items (per chosen mode) ──
+  var lineRows='', taxableTotal=0;
+  if(mode==='civil'){
+    var descTxt=(civilDesc&&civilDesc.trim())||('Civil Work — '+(proj.name||'Project'));
+    var hsnTxt=(civilHsn&&civilHsn.trim())||defaultHsn;
+    taxableTotal=netBeforeGst;
+    lineRows='<tr><td>1</td><td>'+esc2(descTxt)+'</td><td style="text-align:center;">'+esc2(hsnTxt)+'</td><td style="text-align:right;">1</td><td style="text-align:right;">'+inr(taxableTotal)+'</td><td style="text-align:right;font-weight:700;">'+inr(taxableTotal)+'</td></tr>';
+  } else {
+    taxableTotal=workAmt;
+    lineRows=items.map(function(x,i){
+      return '<tr><td>'+(i+1)+'</td>'+
+        '<td>'+(x.item_code?'<span style="font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:1px 4px;border-radius:3px;margin-right:4px;">'+x.item_code+'</span>':'')+esc2(x.item_name)+'</td>'+
+        '<td style="text-align:center;">'+esc2(x.hsn_code||defaultHsn)+'</td>'+
+        '<td style="text-align:right;">'+x.billed_qty+' '+(x.unit||'')+'</td>'+
+        '<td style="text-align:right;">'+inr(x.rate)+'</td>'+
+        '<td style="text-align:right;font-weight:700;">'+inr(x.amount)+'</td></tr>';
+    }).join('');
+    // additions/deductions (non-GST) still shown as extra rows adjusting the taxable value
+    if(nonGstAdds.length||deds.length){
+      lineRows+=nonGstAdds.map(function(a){
+        return '<tr><td colspan="5" style="text-align:right;color:#2E7D32;">+ '+esc2(a.head)+(a.type==='pct'?' ('+a.pct+'%)':'')+'</td><td style="text-align:right;color:#2E7D32;">'+inr(a.amount)+'</td></tr>';
+      }).join('');
+      lineRows+=deds.map(function(d){
+        return '<tr><td colspan="5" style="text-align:right;color:#E65100;">− '+esc2(d.head)+'</td><td style="text-align:right;color:#E65100;">'+inr(d.amount)+'</td></tr>';
+      }).join('');
+      lineRows+='<tr><td colspan="5" style="text-align:right;font-weight:800;">Taxable Value</td><td style="text-align:right;font-weight:800;">'+inr(netBeforeGst)+'</td></tr>';
+      taxableTotal=netBeforeGst;
+    }
+  }
+
+  // ── Tax rows: split existing GST additions into CGST/SGST or IGST for display ──
+  var taxRows='';
+  if(gstAdds.length){
+    if(useIGST){
+      taxRows+='<tr><td colspan="5" style="text-align:right;color:#1B5E20;">IGST'+(gstPct?' ('+gstPct+'%)':'')+'</td><td style="text-align:right;color:#1B5E20;">'+inr(gstAmt)+'</td></tr>';
+    } else {
+      var half=gstAmt/2, halfPct=gstPct/2;
+      taxRows+='<tr><td colspan="5" style="text-align:right;color:#1B5E20;">CGST'+(halfPct?' ('+halfPct+'%)':'')+'</td><td style="text-align:right;color:#1B5E20;">'+inr(half)+'</td></tr>';
+      taxRows+='<tr><td colspan="5" style="text-align:right;color:#1B5E20;">SGST'+(halfPct?' ('+halfPct+'%)':'')+'</td><td style="text-align:right;color:#1B5E20;">'+inr(half)+'</td></tr>';
+    }
+  } else if(gstAmt===0 && gstPct===0){
+    // no GST additions recorded on the bill — show a placeholder note only, do not invent a rate
+  }
+
   var col='#4A148C';
-  var rows=items.map(function(x,i){
-    return '<tr><td>'+(i+1)+'</td>'+
-      '<td>'+(x.item_code?'<span style="font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:1px 4px;border-radius:3px;margin-right:4px;">'+x.item_code+'</span>':'')+x.item_name+'</td>'+
-      '<td style="text-align:right;">'+x.billed_qty+' '+(x.unit||'')+'</td>'+
-      '<td style="text-align:right;">'+inr(x.rate)+'</td>'+
-      '<td style="text-align:right;font-weight:700;">'+inr(x.amount)+'</td></tr>';
-  }).join('');
-  var addRows=nonGstAdds.map(function(a){
-    return '<tr><td colspan="4" style="text-align:right;color:#2E7D32;">+ '+a.head+(a.type==='pct'?' ('+a.pct+'%)':'')+'</td><td style="text-align:right;color:#2E7D32;">'+inr(a.amount)+'</td></tr>';
-  }).join('');
-  var dedRows=deds.map(function(d){
-    return '<tr><td colspan="4" style="text-align:right;color:#E65100;">− '+d.head+'</td><td style="text-align:right;color:#E65100;">'+inr(d.amount)+'</td></tr>';
-  }).join('');
-  var gstRows=gstAdds.map(function(a){
-    return '<tr><td colspan="4" style="text-align:right;color:#1B5E20;">+ '+a.head+(a.pct?' ('+a.pct+'%)':'')+'</td><td style="text-align:right;color:#1B5E20;">'+inr(a.amount)+'</td></tr>';
-  }).join('');
+  var invoiceNo=b.bill_ref||('SB-'+b.bill_number);
+  var placeOfSupply=clientState||proj.location||'';
+
   var html=
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Bill</title><style>'+
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tax Invoice '+esc2(invoiceNo)+'</title><style>'+
     'body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;color:#222;}'+
     '.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+col+';padding-bottom:12px;margin-bottom:12px;}'+
     '.co-name{font-size:18px;font-weight:900;color:'+col+';}'+
     'table{width:100%;border-collapse:collapse;margin:10px 0;}'+
-    'th{background:'+col+';color:white;padding:7px 10px;text-align:left;font-size:11px;}'+
-    'td{padding:7px 10px;border-bottom:1px solid #EEE;}'+
+    'th{background:'+col+';color:white;padding:7px 8px;text-align:left;font-size:10.5px;}'+
+    'td{padding:6px 8px;border-bottom:1px solid #EEE;font-size:11px;}'+
     '.total-row td{font-weight:900;background:#F3E5F5;font-size:13px;}'+
     '.footer{margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:40px;}'+
     '.sig{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}'+
+    '.box{background:#F8FAFC;border-radius:8px;padding:10px;}'+
+    '.lbl{font-size:10px;color:#666;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px;}'+
     '@media print{button{display:none;}}'+
     '</style></head><body>'+
     '<button onclick="window.print()" style="background:'+col+';color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px;">&#128438; Print / Save PDF</button>'+
     '<div class="header">'+
-      '<div><div class="co-name">'+(co.name||'Company Name')+'</div>'+
-        '<div style="font-size:10px;color:#666;margin-top:4px;">'+(co.address||'')+'</div>'+
-        '<div style="font-size:10px;color:#666;">'+(co.gstin?'GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div><div class="co-name">'+esc2(co.name||'Company Name')+'</div>'+
+        '<div style="font-size:10px;color:#666;margin-top:4px;max-width:320px;">'+esc2(co.address||'')+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(co.gstin?'GSTIN: '+esc2(co.gstin):'')+(coState?' &nbsp;|&nbsp; State: '+esc2(coState)+(typeof coGSTStateCode==='function'&&coGSTStateCode()?' ('+esc2(coGSTStateCode())+')':''):'')+'</div>'+
+        (co.pan?'<div style="font-size:10px;color:#666;">PAN: '+esc2(co.pan)+'</div>':'')+
+      '</div>'+
       '<div style="text-align:right;">'+
-        '<div style="font-size:20px;font-weight:900;">SALES BILL</div>'+
-        '<div style="font-size:12px;color:#666;">'+(b.bill_ref||'Bill #'+b.bill_number)+'</div>'+
+        '<div style="font-size:20px;font-weight:900;">TAX INVOICE</div>'+
+        '<div style="font-size:12px;color:#666;">Invoice No: <b>'+esc2(invoiceNo)+'</b></div>'+
         '<div style="font-size:12px;color:#666;">Date: '+fmtD(b.bill_date)+'</div>'+
+        (placeOfSupply?'<div style="font-size:12px;color:#666;">Place of Supply: '+esc2(placeOfSupply)+'</div>':'')+
       '</div>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">'+
-      '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
-        '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">PROJECT</div>'+
-        '<div style="font-weight:800;font-size:13px;">'+(proj.name||'')+'</div>'+
-        '<div style="font-size:10px;color:#666;">'+(proj.location||proj.code||'')+'</div>'+
+      '<div class="box">'+
+        '<div class="lbl">Bill To (Client)</div>'+
+        '<div style="font-weight:800;font-size:13px;">'+esc2(proj.client||'—')+'</div>'+
+        (proj.client_address?'<div style="font-size:10.5px;color:#666;margin-top:2px;white-space:pre-wrap;">'+esc2(proj.client_address)+'</div>':'')+
+        (proj.client_gstin?'<div style="font-size:10.5px;color:#666;margin-top:2px;">GSTIN: '+esc2(proj.client_gstin)+'</div>':'')+
+        (clientState?'<div style="font-size:10.5px;color:#666;">State: '+esc2(clientState)+'</div>':'')+
+      '</div>'+
+      '<div class="box">'+
+        '<div class="lbl">Project</div>'+
+        '<div style="font-weight:800;font-size:13px;">'+esc2(proj.name||'')+'</div>'+
+        '<div style="font-size:10.5px;color:#666;">'+esc2(proj.location||proj.code||'')+'</div>'+
       '</div>'+
     '</div>'+
     '<table>'+
-      '<tr><th>#</th><th>Description</th><th>Qty</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>'+
-      rows+
-      (addRows||dedRows?'<tr><td colspan="4" style="text-align:right;font-weight:800;">Work Sub-Total</td><td style="text-align:right;font-weight:800;">'+inr(workAmt)+'</td></tr>':'')+
-      addRows+dedRows+
-      (gstAdds.length?'<tr><td colspan="4" style="text-align:right;font-weight:800;">Net before GST</td><td style="text-align:right;font-weight:800;">'+inr(netBeforeGst)+'</td></tr>':'')+
-      gstRows+
-      '<tr class="total-row"><td colspan="4" style="text-align:right;">Gross Total</td><td style="text-align:right;">'+inr(b.bill_amount)+'</td></tr>'+
+      '<tr><th>#</th><th>Description of Goods / Services</th><th style="text-align:center;">HSN/SAC</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Rate (₹)</th><th style="text-align:right;">Amount (₹)</th></tr>'+
+      lineRows+
+      taxRows+
+      '<tr class="total-row"><td colspan="5" style="text-align:right;">Grand Total (Round Off)</td><td style="text-align:right;">'+inr(b.bill_amount)+'</td></tr>'+
     '</table>'+
+    '<div style="font-size:11px;font-style:italic;color:#444;margin:6px 0 16px;">Amount in Words: '+numToWordsINR(b.bill_amount)+'</div>'+
+    (co.bank_name?
+      '<div class="box" style="margin-bottom:14px;">'+
+        '<div class="lbl">Bank Details for Payment</div>'+
+        '<div style="font-size:11px;">A/c Name: '+esc2(co.bank_acc_name||co.name||'')+' &nbsp;|&nbsp; Bank: '+esc2(co.bank_name||'')+(co.bank_branch?' ('+esc2(co.bank_branch)+')':'')+'</div>'+
+        '<div style="font-size:11px;">A/c No: '+esc2(co.bank_acc||'')+' &nbsp;|&nbsp; IFSC: '+esc2(co.bank_ifsc||'')+'</div>'+
+      '</div>':'')+
+    '<div style="font-size:10px;color:#888;">Declaration: We certify that the particulars given above are true and correct, and the amount indicated represents the price actually charged, and there is no additional consideration flowing directly or indirectly from the buyer.</div>'+
     '<div class="footer">'+
-      '<div><div class="sig">Authorized Signatory<br><br>'+(co.name||'')+'</div></div>'+
-      '<div><div class="sig">Received By / Client</div></div>'+
+      '<div><div class="sig">Received By / Client Signature</div></div>'+
+      '<div style="text-align:right;"><div class="sig" style="text-align:right;">For '+esc2(co.name||'')+'<br><br>Authorized Signatory</div></div>'+
     '</div>'+
     '</body></html>';
   openPDF(html);

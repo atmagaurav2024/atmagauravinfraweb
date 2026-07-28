@@ -355,6 +355,8 @@ function companyRender() {
     sec('&#128203;', 'Registration Numbers', '#6A1B9A') +
     '<div class="g2">' + finp('cin','CIN Number',d.cin,'e.g. U45200MH2010PTC123456') + finp('pan','PAN Number',d.pan,'e.g. AAACC1234D') + '</div>' +
     '<div class="g2">' + finp('gstin','GST Number (GSTIN)',d.gstin,'e.g. 27AAACC1234D1ZV') + finp('tan','TAN Number',d.tan,'e.g. MUMX12345A') + '</div>' +
+    '<div class="g2">' + finp('gst_state','GST State (as per GSTIN)',d.gst_state,'e.g. Maharashtra') + finp('gst_state_code','GST State Code',d.gst_state_code,'e.g. 27') + '</div>' +
+    finp('civil_hsn','Default HSN/SAC Code — Civil Works',d.civil_hsn,'e.g. 9954') +
     '<div class="g2">' + finp('udyam','Udyam Registration No.',d.udyam,'e.g. UDYAM-MH-00-0000000') + finp('shop_act','Shop Act Certificate No.',d.shop_act,'e.g. MH/MUM/2023/XXXXX') + '</div>' +
     '<div class="g2">' + finp('esic_code','ESIC Code Number',d.esic_code,'e.g. 11001234560000101') + finp('pf_code','PF / EPF Code',d.pf_code,'e.g. MH/MUM/0123456/000') + '</div>' +
     finp('msme','MSME / Udyog Aadhaar',d.msme,'e.g. MH01E0000000') +
@@ -401,6 +403,9 @@ async function companySave() {
       pan:          (document.getElementById('co-pan')         || {}).value || null,
       gstin:        (document.getElementById('co-gstin')       || {}).value || null,
       tan:          (document.getElementById('co-tan')         || {}).value || null,
+      gst_state:      (document.getElementById('co-gst_state')      || {}).value || null,
+      gst_state_code: (document.getElementById('co-gst_state_code') || {}).value || null,
+      civil_hsn:      (document.getElementById('co-civil_hsn')      || {}).value || null,
       udyam:        (document.getElementById('co-udyam')       || {}).value || null,
       shop_act:     (document.getElementById('co-shop_act')    || {}).value || null,
       esic_code:    (document.getElementById('co-esic_code')   || {}).value || null,
@@ -453,6 +458,9 @@ function coName()  { return coGet('name',   'Atmagaurav Infra Pvt. Ltd.'); }
 function coAddr()  { return coGet('address', ''); }
 function coCIN()   { return coGet('cin',     ''); }
 function coGST()   { return coGet('gstin',   ''); }
+function coGSTState()     { return coGet('gst_state',      ''); }
+function coGSTStateCode() { return coGet('gst_state_code',  ''); }
+function coCivilHSN()     { return coGet('civil_hsn',       '9954'); }
 function coPAN()   { return coGet('pan',     ''); }
 function coPhone() { return coGet('phone',   ''); }
 function coEmail() { return coGet('email',   ''); }
