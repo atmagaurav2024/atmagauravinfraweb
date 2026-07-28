@@ -3856,19 +3856,28 @@ async function execRenderPettyExpenses(){
       if(ids.length) return projId && ids.indexOf(projId)>-1;
       return projName && (x.project||'').trim().toLowerCase()===projName;
     });
+    filtered=filtered.map(function(x){
+      var allocs=[];try{allocs=x.project_allocations?JSON.parse(x.project_allocations):[];}catch(e){}
+      var mine=allocs.find(function(a){return a.id===projId;});
+      var allocAmt=mine?(parseFloat(mine.amount)||0):(parseFloat(x.amount)||0);
+      return Object.assign({},x,{_allocAmt:allocAmt,_isSplit:allocs.length>1});
+    });
     filtered.sort(function(a,b){return new Date(b.date||0)-new Date(a.date||0);});
-    var total=filtered.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+    var total=filtered.reduce(function(s,x){return s+x._allocAmt;},0);
 
     var rowsHtml=filtered.map(function(x){
       return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
         '<div style="display:flex;align-items:center;gap:10px;">'+
           '<div style="width:36px;height:36px;border-radius:10px;background:#FFEBEE;display:flex;align-items:center;justify-content:center;font-size:16px;">🧾</div>'+
           '<div>'+
-            '<div style="font-size:13px;font-weight:800;">'+(x.category||'Expense')+'</div>'+
+            '<div style="font-size:13px;font-weight:800;">'+(x.category||'Expense')+(x._isSplit?' <span style="font-size:9px;font-weight:800;background:#EDE7F6;color:#7B1FA2;padding:1px 6px;border-radius:4px;margin-left:4px;">SPLIT'+(x.distribution_method==='contract'?' · CONTRACT RATIO':' · EQUAL')+'</span>':'')+'</div>'+
             '<div style="font-size:11px;color:var(--text3);">'+empName(x.emp_id)+(x.description?' · '+x.description:'')+' · '+fmtD2(x.date)+(x.bill_no?' · Bill# '+x.bill_no:'')+'</div>'+
           '</div>'+
         '</div>'+
-        '<div style="font-size:15px;font-weight:900;color:#C62828;">-'+inr(x.amount)+'</div>'+
+        '<div style="text-align:right;">'+
+          '<div style="font-size:15px;font-weight:900;color:#C62828;">-'+inr(x._allocAmt)+'</div>'+
+          (x._isSplit?'<div style="font-size:9.5px;color:var(--text3);">of '+inr(x.amount)+' total</div>':'')+
+        '</div>'+
       '</div>';
     }).join('')||'<div style="text-align:center;padding:40px;color:var(--text3);">No petty cash expenses recorded for this project</div>';
 

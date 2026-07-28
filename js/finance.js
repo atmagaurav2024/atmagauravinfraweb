@@ -17,7 +17,7 @@ async function initPettyCash(){
       sbFetch('petty_cash_in',{select:'*',order:'created_at.desc'}),
       sbFetch('petty_cash_expenses',{select:'*',order:'date.desc'}),
       sbFetch('employees',{select:'id,emp_id,first_name,last_name,department',filter:'status=eq.active',order:'first_name.asc'}),
-      sbFetch('projects',{select:'id,name',order:'name.asc'}),
+      sbFetch('projects',{select:'id,name,contract_value',order:'name.asc'}),
     ]);
     PC_IN=Array.isArray(cashIn)?cashIn:[];
     PC_EXP=Array.isArray(expenses)?expenses:[];
@@ -210,7 +210,7 @@ function pcOpenExpense(){
   openSheet('ov-pc','sh-pc');
   var projChecks=PC_PROJS.map(function(p){
     return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F0F0F0;font-size:12.5px;font-weight:600;cursor:pointer;">'+
-      '<input type="checkbox" class="pce-proj-chk" value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'" style="width:16px;height:16px;">'+
+      '<input type="checkbox" class="pce-proj-chk" value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'" data-contract="'+(parseFloat(p.contract_value)||0)+'" style="width:16px;height:16px;" onchange="pcUpdateAllocPreview()">'+
       (p.name||'Unnamed')+
     '</label>';
   }).join('')||'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No projects found</div>';
@@ -220,11 +220,21 @@ function pcOpenExpense(){
       PC_EMPS.map(function(e){return '<option value="'+e.empId+'">'+e.name+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Category *</label><select class="fsel" id="pce-cat"><option value="">Select...</option>'+
       PC_CATS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
-    '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0">'+
+    '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0" oninput="pcUpdateAllocPreview()">'+
     '<label class="flbl">Date</label><input class="finp" id="pce-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Project(s) *</label>'+
     '<div style="font-size:10.5px;color:var(--text3);margin-bottom:4px;">Select one or more projects this expense should be recorded against.</div>'+
     '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px;">'+projChecks+'</div>'+
+    '<div id="pce-dist-wrap" style="display:none;margin-bottom:10px;">'+
+      '<label class="flbl">Distribute Expense Across Projects</label>'+
+      '<div style="display:flex;gap:8px;margin-bottom:8px;">'+
+        '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+          '<input type="radio" name="pce-dist" value="equal" checked onchange="pcUpdateAllocPreview()">Equal Split</label>'+
+        '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+          '<input type="radio" name="pce-dist" value="contract" onchange="pcUpdateAllocPreview()">By Contract Value Ratio</label>'+
+      '</div>'+
+      '<div id="pce-alloc-preview" style="background:#F3E5F5;border-radius:8px;padding:8px 10px;font-size:11px;"></div>'+
+    '</div>'+
     '<label class="flbl">Description *</label><input class="finp" id="pce-desc" placeholder="What was purchased?">'+
     '<label class="flbl">Bill/Receipt No</label><input class="finp" id="pce-bill" placeholder="Receipt number">'+
     '<label class="flbl">Remarks</label><input class="finp" id="pce-remarks" placeholder="Remarks">';
@@ -233,23 +243,59 @@ function pcOpenExpense(){
     '<button class="btn btn-navy" onclick="pcSaveExpense()">🧾 Save</button>';
 }
 
+// Compute the per-project split for the currently checked projects + amount,
+// using the selected distribution method. Returns [{id,name,amount}, ...].
+function pcComputeAllocations(){
+  var amount=parseFloat((document.getElementById('pce-amount')||{value:0}).value)||0;
+  var method=(document.querySelector('input[name="pce-dist"]:checked')||{value:'equal'}).value;
+  var chosen=Array.prototype.slice.call(document.querySelectorAll('.pce-proj-chk:checked')).map(function(chk){
+    return {id:chk.value,name:chk.getAttribute('data-name'),contract:parseFloat(chk.getAttribute('data-contract'))||0};
+  });
+  if(!chosen.length) return [];
+  if(chosen.length===1) return [{id:chosen[0].id,name:chosen[0].name,amount:amount}];
+  if(method==='contract'){
+    var totalContract=chosen.reduce(function(s,p){return s+p.contract;},0);
+    if(totalContract>0){
+      return chosen.map(function(p){return {id:p.id,name:p.name,amount:Math.round(amount*(p.contract/totalContract)*100)/100};});
+    }
+    // No contract values available — fall back to equal split
+  }
+  var share=Math.round((amount/chosen.length)*100)/100;
+  return chosen.map(function(p){return {id:p.id,name:p.name,amount:share};});
+}
+
+function pcUpdateAllocPreview(){
+  var chosenCount=document.querySelectorAll('.pce-proj-chk:checked').length;
+  var wrap=document.getElementById('pce-dist-wrap');
+  if(!wrap) return;
+  wrap.style.display=chosenCount>1?'block':'none';
+  if(chosenCount<=1) return;
+  var pcFmtLocal=function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});};
+  var allocs=pcComputeAllocations();
+  var prev=document.getElementById('pce-alloc-preview');
+  if(prev) prev.innerHTML=allocs.map(function(a){
+    return '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>'+a.name+'</span><span style="font-weight:800;color:#4A148C;">'+pcFmtLocal(a.amount)+'</span></div>';
+  }).join('');
+}
+
 async function pcSaveExpense(){
   var emp=gv('pce-emp'), cat=gv('pce-cat'), amount=parseFloat(gv('pce-amount')), desc=gv('pce-desc');
   if(!emp){toast('Select employee','warning');return;}
   if(!cat){toast('Select category','warning');return;}
   if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
   if(!desc){toast('Description required','warning');return;}
-  var chosenProjs=Array.prototype.slice.call(document.querySelectorAll('.pce-proj-chk:checked')).map(function(chk){
-    return {id:chk.value,name:chk.getAttribute('data-name')};
-  });
-  if(!chosenProjs.length){toast('Select at least one project','warning');return;}
+  var allocations=pcComputeAllocations();
+  if(!allocations.length){toast('Select at least one project','warning');return;}
+  var method=(document.querySelector('input[name="pce-dist"]:checked')||{value:'equal'}).value;
   var bal=pcEmpBal(emp);
   if(amount>bal){toast('Insufficient balance. Available: '+pcFmt(bal),'warning');}
   try{
     await sbInsert('petty_cash_expenses',{
       emp_id:emp,category:cat,amount:amount,date:gv('pce-date'),
-      project:chosenProjs.map(function(p){return p.name;}).join(', '),
-      project_ids:JSON.stringify(chosenProjs.map(function(p){return p.id;})),
+      project:allocations.map(function(p){return p.name;}).join(', '),
+      project_ids:JSON.stringify(allocations.map(function(p){return p.id;})),
+      project_allocations:JSON.stringify(allocations),
+      distribution_method:allocations.length>1?method:null,
       description:desc,bill_no:gv('pce-bill'),remarks:gv('pce-remarks')
     });
     closeSheet('ov-pc','sh-pc');await initPettyCash();toast('Expense recorded: '+pcFmt(amount),'success');
