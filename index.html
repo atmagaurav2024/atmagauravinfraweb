@@ -2384,11 +2384,12 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items,additions'})),
       safe(sbFetch('boq_jm',{select:'id,project_id,boq_item_id,jm_qty'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,party_name,qty,rate,unit',filter:'exec_type=eq.planned'})),
-      safe(sbFetch('attendance',{select:'employee_id',filter:'date=eq.'+(new Date().toISOString().slice(0,10))+'&status=eq.present'}))
+      safe(sbFetch('attendance',{select:'employee_id',filter:'date=eq.'+(new Date().toISOString().slice(0,10))+'&status=eq.present'})),
+      safe(sbFetch('petty_cash_expenses',{select:'amount,project,project_ids,project_allocations'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
         pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
-        boqJmRows=r[10]||[], plannedResRows=r[11]||[], presentTodayRows=r[12]||[];
+        boqJmRows=r[10]||[], plannedResRows=r[11]||[], presentTodayRows=r[12]||[], pettyExpenseRows=r[13]||[];
 
     // ── Populate / preserve the project filter dropdown ──
     var selectedProject=projects.find(function(p){return p.id===filterProjId;});
@@ -2533,6 +2534,27 @@ async function loadDashboardInsights(filterProjId){
     },0);
     // actual = same sales-bill billed/unbilled/total as Card 1
 
+    // ── Petty Cash Expenses — cash spend from Site Cash Manager ────────────
+    // When a project filter is active, use each expense's per-project
+    // allocated share (project_allocations); legacy entries without a split
+    // fall back to project_ids, then to the old 'All Projects' / name-only
+    // text field so historical records still count.
+    var pettyCashTotal = pettyExpenseRows.reduce(function(s,x){
+      var amt=parseFloat(x.amount)||0;
+      if(!filterProjId) return s+amt; // company-wide: full amount actually spent
+      var allocs=[]; try{allocs=x.project_allocations?JSON.parse(x.project_allocations):[];}catch(e){}
+      var mine=allocs.find(function(a){return a.id===filterProjId;});
+      if(mine) return s+(parseFloat(mine.amount)||0);
+      var ids=[]; try{ids=x.project_ids?JSON.parse(x.project_ids):[];}catch(e){}
+      if(ids.length) return s+(ids.indexOf(filterProjId)>-1?amt:0);
+      // legacy pre-multi-select records: text field was either the project
+      // name or literally 'All Projects'
+      var curName=(projName[filterProjId]||'').trim().toLowerCase();
+      var legacyName=(x.project||'').trim().toLowerCase();
+      if(legacyName==='all projects'||legacyName===curName) return s+amt;
+      return s;
+    },0);
+
     // ── KPI CARD 3: Expenditure — Plan = Σ(planned qty × rate) per resource ─
     var expPlanByRes={};
     plannedResRows.forEach(function(pr){
@@ -2540,8 +2562,8 @@ async function loadDashboardInsights(filterProjId){
       expPlanByRes[key]=(expPlanByRes[key]||0)+(parseFloat(pr.qty)||0)*(parseFloat(pr.rate)||0);
     });
     var plannedExpenditure=Object.keys(expPlanByRes).reduce(function(s,k){return s+expPlanByRes[k];},0);
-    // actual = purchase(work) bills billed + unbilled(incurred-but-not-billed), + total
-    var expenditureBilled=costBilled;
+    // actual = purchase(work) bills billed + unbilled(incurred-but-not-billed) + petty cash, + total
+    var expenditureBilled=costBilled+pettyCashTotal;
     var expenditureUnbilled=Math.max(0,totalCost-costBilled);
     var expenditureActualTotal=expenditureBilled+expenditureUnbilled;
 
@@ -2782,7 +2804,8 @@ async function loadDashboardInsights(filterProjId){
           '<div style="border-top:1px dashed rgba(255,255,255,.15);margin-top:6px;padding-top:6px;">'+planActualRow('Notional (work amt, excl. tax/ded.)', notionalBilled, '#B6ADD6')+'</div>')+
         planActualCard('Revenue (as per JM) — excl. GST', revenueTotal, plannedRevenueJM, revenueBilled, revenueUnbilled, '#8B7FE8', '#F7CA5C',
           '<div style="border-top:1px dashed rgba(255,255,255,.15);margin-top:6px;padding-top:6px;">'+planActualRow('Notional (work amt, excl. tax/ded.)', notionalBilled, '#B6ADD6')+'</div>')+
-        planActualCard('Expenditure — excl. GST', expenditureActualTotal, plannedExpenditure, expenditureBilled, expenditureUnbilled, '#4FD1C5', '#F7CA5C')+
+        planActualCard('Expenditure — excl. GST', expenditureActualTotal, plannedExpenditure, expenditureBilled, expenditureUnbilled, '#4FD1C5', '#F7CA5C',
+          '<div style="border-top:1px dashed rgba(255,255,255,.15);margin-top:6px;padding-top:6px;">'+planActualRow('incl. Petty Cash Expenses', pettyCashTotal, '#F857A6')+'</div>')+
         plCard('Profit / Loss', totalPL, plannedPL, billedPL, unbilledPL)+
       '</div>'+
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">'+
