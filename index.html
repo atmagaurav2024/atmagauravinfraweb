@@ -2385,7 +2385,7 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('boq_jm',{select:'id,project_id,boq_item_id,jm_qty'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,party_name,qty,rate,unit',filter:'exec_type=eq.planned'})),
       safe(sbFetch('attendance',{select:'employee_id',filter:'date=eq.'+(new Date().toISOString().slice(0,10))+'&status=eq.present'})),
-      safe(sbFetch('petty_cash_expenses',{select:'amount,project,project_ids,project_allocations'}))
+      safe(sbFetch('petty_cash_expenses',{select:'*'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
         pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
