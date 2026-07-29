@@ -2569,8 +2569,8 @@ async function loadDashboardInsights(filterProjId){
 
     // ── KPI CARD 4: Profit / Loss ───────────────────────────────────────────
     var plannedPL = plannedRevenueJM - plannedExpenditure;
-    var actualPL  = revenueBilled - costBilled; // actual sales bills − actual purchase bills
-    var billedPL   = revenueBilled - costBilled;            // P&L on work that's been billed both sides
+    var billedPL   = revenueBilled - expenditureBilled;      // P&L on work billed both sides (incl. petty cash)
+    var actualPL  = billedPL; // actual sales bills − actual purchase bills − petty cash
     var unbilledPL = revenueUnbilled - expenditureUnbilled;  // P&L on work executed but not yet billed
     var totalPL    = billedPL + unbilledPL;                  // = revenueTotal - expenditureActualTotal
 
