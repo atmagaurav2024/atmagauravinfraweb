@@ -87,7 +87,7 @@ function projModRenderNav(){
     {id:'construction',    label:'Construction',     group:true},
     {id:'bills',           label:'Bills & Payments'},
     {id:'sales',           label:'Sales'},
-    {id:'pettyexp',        label:'Petty Expenses'},
+    {id:'otherexp',        label:'Other Expenses'},
     {id:'orders',          label:'Orders'}
   ];
 
@@ -214,7 +214,7 @@ function projModLoadTab(){
     store:     {cont:'store-content', sel:'store-proj-sel', fn: function(){ storeLoadItems(); }},
     bills:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills';    execSwitchTab(); }},
     sales:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='sales';    execSwitchTab(); }},
-    pettyexp:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='pettyexp'; execSwitchTab(); }},
+    otherexp:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='otherexp'; execSwitchTab(); }},
     orders:    {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders';   execSwitchTab(); }}
   };
 
@@ -2262,7 +2262,7 @@ async function execRenderSubTab(){
   else if(WA_SUBTAB==='bills') execRenderBills();
   else if(WA_SUBTAB==='orders') execRenderOrders();
   else if(WA_SUBTAB==='sales') execRenderSales();
-  else if(WA_SUBTAB==='pettyexp') execRenderPettyExpenses();
+  else if(WA_SUBTAB==='otherexp') execRenderOtherExpenses();
   else if(WA_SUBTAB==='grn') grnRender();
   else if(WA_SUBTAB==='store') storeRender();
 }
@@ -3825,10 +3825,45 @@ function execGenerateSalesBillInvoice(billId,mode,civilHsn,civilDesc){
 
 function salesSubTab(tab){ SALES_SUBTAB=tab; execRenderSales(); }
 
-// ── Petty Expenses tab: cash expenditure from Site Cash Manager, ─────────
-// scoped strictly to the currently selected project (matched by name).
-async function execRenderPettyExpenses(){
+// ── Other Expenses tab: wraps Petty Expenses + new expense categories ────
+var OTHEREXP_SUBTAB='pettyexp'; // pettyexp | interest | tax | depreciation | amortization
+function otherExpSubTab(tab){ OTHEREXP_SUBTAB=tab; execRenderOtherExpenses(); }
+
+var OTHEREXP_CATS=[
+  {id:'pettyexp',      label:'Petty Expenses',     icon:'🧾'},
+  {id:'interest',      label:'Interest Expenses',  icon:'💳'},
+  {id:'tax',           label:'Taxes',              icon:'🧮'},
+  {id:'depreciation',  label:'Depreciation',       icon:'📉'},
+  {id:'amortization',  label:'Amortization',       icon:'📄'}
+];
+
+function execRenderOtherExpenses(){
   var el=document.getElementById('exec-content');if(!el)return;
+  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;overflow-x:auto;">'+
+    OTHEREXP_CATS.map(function(t){
+      var active=OTHEREXP_SUBTAB===t.id;
+      return '<button onclick="otherExpSubTab(\''+t.id+'\')" style="'+
+        'padding:10px 16px;font-size:11px;font-weight:800;border:none;cursor:pointer;white-space:nowrap;'+
+        'background:'+(active?'white':'#F8FAFC')+';'+
+        'color:'+(active?'#4A148C':'var(--text3)')+';'+
+        'border-bottom:'+(active?'2px solid #4A148C':'2px solid transparent')+';'+
+        'margin-bottom:-2px;">'+t.icon+' '+t.label+'</button>';
+    }).join('')+
+  '</div>';
+  el.innerHTML=tabBar+'<div id="otherexp-body"></div>';
+
+  if(OTHEREXP_SUBTAB==='pettyexp'){
+    execRenderPettyExpenses('otherexp-body');
+  } else {
+    var cat=OTHEREXP_CATS.find(function(c){return c.id===OTHEREXP_SUBTAB;});
+    execRenderOtherExpCategory(cat.id,cat.label,cat.icon,'otherexp-body');
+  }
+}
+
+// ── Petty Expenses sub-tab: cash expenditure from Site Cash Manager, ─────
+// scoped strictly to the currently selected project (matched by name/id).
+async function execRenderPettyExpenses(containerId){
+  var el=document.getElementById(containerId||'exec-content');if(!el)return;
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
   var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:0});};
@@ -3892,6 +3927,93 @@ async function execRenderPettyExpenses(){
     console.error(e);
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading petty expenses</div>';
   }
+}
+
+// ── Interest / Taxes / Depreciation / Amortization sub-tabs ──────────────
+// All four share the same simple model: entries in `other_expenses`,
+// scoped to this project via project_id and distinguished by `type`.
+async function execRenderOtherExpCategory(type,label,icon,containerId){
+  var el=document.getElementById(containerId||'exec-content');if(!el)return;
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:0});};
+  var fmtD2=function(d){if(!d)return '—';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
+
+  el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading...</div>';
+
+  try{
+    var rows=await sbFetch('other_expenses',{select:'*',filter:'project_id=eq.'+projId+'&type=eq.'+type,order:'date.desc'});
+    var list=Array.isArray(rows)?rows:[];
+    var total=list.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+
+    var rowsHtml=list.map(function(x){
+      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
+        '<div style="display:flex;align-items:center;gap:10px;">'+
+          '<div style="width:36px;height:36px;border-radius:10px;background:#F3E5F5;display:flex;align-items:center;justify-content:center;font-size:16px;">'+icon+'</div>'+
+          '<div>'+
+            '<div style="font-size:13px;font-weight:800;">'+(x.description||label)+'</div>'+
+            '<div style="font-size:11px;color:var(--text3);">'+fmtD2(x.date)+(x.remarks?' · '+x.remarks:'')+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:10px;">'+
+          '<div style="font-size:15px;font-weight:900;color:#C62828;">-'+inr(x.amount)+'</div>'+
+          '<button onclick="execDeleteOtherExpense(\''+x.id+'\',\''+type+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;">&#128465;</button>'+
+        '</div>'+
+      '</div>';
+    }).join('')||'<div style="text-align:center;padding:40px;color:var(--text3);">No '+label.toLowerCase()+' recorded for this project</div>';
+
+    el.innerHTML=
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px 4px;">'+
+        '<div style="font-size:13px;font-weight:800;color:var(--navy);">'+icon+' '+label+' — '+(proj.name||'')+'</div>'+
+        '<button onclick="execOpenAddOtherExpense(\''+type+'\',\''+label.replace(/'/g,"\\'")+'\')" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Add</button>'+
+      '</div>'+
+      '<div style="font-size:15px;font-weight:900;color:#C62828;padding:0 4px 10px;">Total: '+inr(total)+'</div>'+
+      rowsHtml;
+  }catch(e){
+    console.error(e);
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading '+label.toLowerCase()+'</div>';
+  }
+}
+
+function execOpenAddOtherExpense(type,label){
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  document.getElementById('exec-sheet-title').textContent='Add '+label;
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<label class="flbl">Description *</label><input id="oe-desc" class="finp" placeholder="e.g. '+label+' for the month">'+
+    '<label class="flbl">Amount (₹) *</label><input id="oe-amount" class="finp" type="number" placeholder="0">'+
+    '<label class="flbl">Date</label><input id="oe-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Remarks</label><input id="oe-remarks" class="finp" placeholder="Optional remarks">';
+  var foot=document.getElementById('exec-sheet-foot');foot.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn btn-navy';sb.textContent='Save';
+  sb.onclick=function(){execSaveOtherExpense(type,projId);};
+  foot.appendChild(cb);foot.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execSaveOtherExpense(type,projId){
+  var desc=(document.getElementById('oe-desc')||{value:''}).value.trim();
+  var amount=parseFloat((document.getElementById('oe-amount')||{value:0}).value);
+  var date=(document.getElementById('oe-date')||{value:''}).value;
+  var remarks=(document.getElementById('oe-remarks')||{value:''}).value.trim();
+  if(!desc){toast('Description required','warning');return;}
+  if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
+  try{
+    await sbInsert('other_expenses',{project_id:projId,type:type,description:desc,amount:amount,date:date||null,remarks:remarks||null});
+    closeSheet('ov-exec','sh-exec');
+    toast('Saved','success');
+    execRenderOtherExpenses();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+async function execDeleteOtherExpense(id,type){
+  if(!confirm('Delete this entry?')) return;
+  try{
+    await sbDelete('other_expenses',id);
+    toast('Deleted','success');
+    execRenderOtherExpenses();
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 function execRenderSales(){
