@@ -2037,6 +2037,33 @@ input,select,textarea{font-size:16px !important;}
   </div>
 </div>
 
+<!-- Leave Reject / Alternative Action Modal -->
+<div class="overlay" id="leave-reject-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-hdr">
+      <div class="modal-ttl">⚠️ Handle This Leave Request</div>
+      <div class="modal-x" onclick="closeLeaveRejectModal()">✕</div>
+    </div>
+    <div class="modal-body">
+      <div id="leave-reject-context" style="font-size:12px;color:var(--text3);margin-bottom:14px;"></div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn btn-outline" style="text-align:left;justify-content:flex-start;border-color:#C62828;color:#C62828;" onclick="leaveRejectWithNotice()">
+          📋 Issue Show Cause Notice<br><span style="font-size:10.5px;font-weight:400;opacity:.8;">Reject the leave and flag it for a formal HR show cause notice</span>
+        </button>
+        <button class="btn btn-outline" style="text-align:left;justify-content:flex-start;border-color:#E65100;color:#E65100;" onclick="leaveRejectThenApproveUnpaid()">
+          🚫 Approve without Pay<br><span style="font-size:10.5px;font-weight:400;opacity:.8;">Allow the leave on record, but unpaid — counts as a salary deduction</span>
+        </button>
+        <button class="btn btn-outline" style="text-align:left;justify-content:flex-start;border-color:#2E7D32;color:#2E7D32;" onclick="leaveRejectThenApprovePaid()">
+          ✅ Approve with Pay<br><span style="font-size:10.5px;font-weight:400;opacity:.8;">Reconsider and approve the leave normally</span>
+        </button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeLeaveRejectModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"><span id="t-icon"></span><span id="t-msg"></span></div>
 
@@ -4514,7 +4541,7 @@ function renderLeave() {
         ${l.status === 'pending' && canApprove
           ? `<button class="btn btn-green btn-sm" onclick="approveLeave(${i})">✅ Approve</button>
              <button class="btn btn-outline btn-sm" onclick="approveLeaveUnpaid(${i})" style="margin-left:4px;" title="Approve as unpaid — will count as a salary deduction and won't use up the paid leave quota">🚫 Approve w/o Pay</button>
-             <button class="btn btn-outline btn-sm" onclick="rejectLeave(${i})" style="margin-left:4px;">✕</button>`
+             <button class="btn btn-outline btn-sm" onclick="openLeaveRejectModal(${i})" style="margin-left:4px;">✕ Reject</button>`
           : (l.status === 'pending' ? `<span style="font-size:11px;color:var(--text3);">Awaiting approver</span>` : '')
         }
       </td>
@@ -4562,6 +4589,65 @@ async function rejectLeave(i) {
     await sbUpdate('leave_requests', l.id, {status:'rejected', approved_by:currentUser.id});
     showToast('Leave rejected','error');
   }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+}
+
+// ── Reject-flow chooser: instead of a blunt reject, the approver picks a
+// definitive resolution — a formal Show Cause Notice, or reconsidering the
+// leave as approved (with or without pay). ──
+var LEAVE_REJECT_IDX = null;
+
+function openLeaveRejectModal(i){
+  var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
+  if(!canApprove){ showToast('You do not have permission to act on this leave','warning'); return; }
+  LEAVE_REJECT_IDX = i;
+  var l = leaveData[i];
+  var ctx = document.getElementById('leave-reject-context');
+  if(ctx) ctx.innerHTML = '<b>'+l.emp+'</b> — '+l.type+' &middot; '+l.from+' to '+l.to+' ('+l.days+' day'+(l.days!==1?'s':'')+')<br>Choose how to resolve this request:';
+  document.getElementById('leave-reject-modal').classList.add('open');
+}
+function closeLeaveRejectModal(){
+  document.getElementById('leave-reject-modal').classList.remove('open');
+  LEAVE_REJECT_IDX = null;
+}
+
+async function leaveRejectWithNotice(){
+  if(LEAVE_REJECT_IDX===null) return;
+  var i = LEAVE_REJECT_IDX;
+  var l = leaveData[i];
+  closeLeaveRejectModal();
+  var prevStatus=l.status;
+  l.status = 'rejected';
+  renderLeave();
+  try{
+    await sbUpdate('leave_requests', l.id, {status:'rejected', approved_by:currentUser.id});
+    try{
+      await sbInsert('show_cause_notices',{
+        employee_id: l.empId||null, employee_name: l.emp, leave_request_id: l.id,
+        leave_type: l.rawType||l.type, from_date: l.fromRaw||null, to_date: l.toRaw||null,
+        reason: 'Leave request rejected — '+l.type+' from '+l.from+' to '+l.to,
+        issued_by: currentUser.id, status: 'issued'
+      });
+    }catch(noticeErr){
+      console.error('show_cause_notices insert failed', noticeErr);
+      showToast('Leave rejected, but the show cause notice record could not be saved: '+noticeErr.message,'warning');
+      return;
+    }
+    showToast('Leave rejected and show cause notice issued for '+l.emp,'error');
+  }catch(e){ l.status=prevStatus; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+}
+
+async function leaveRejectThenApprovePaid(){
+  if(LEAVE_REJECT_IDX===null) return;
+  var i = LEAVE_REJECT_IDX;
+  closeLeaveRejectModal();
+  await approveLeave(i);
+}
+
+async function leaveRejectThenApproveUnpaid(){
+  if(LEAVE_REJECT_IDX===null) return;
+  var i = LEAVE_REJECT_IDX;
+  closeLeaveRejectModal();
+  await approveLeaveUnpaid(i);
 }
 
 var LEAVE_EMP_CACHE = [];
