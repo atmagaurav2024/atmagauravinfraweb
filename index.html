@@ -4383,6 +4383,7 @@ function renderCal() {
 // ── LEAVE TABLE ──
 function renderLeave() {
   const tbody = document.getElementById('leave-tbody');
+  var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
   tbody.innerHTML = leaveData.map((l, i) => `
     <tr class="anim" style="animation-delay:${i*0.05}s">
       <td style="font-weight:600;color:var(--text);">${l.emp}</td>
@@ -4399,10 +4400,10 @@ function renderLeave() {
         : `<span class="att-badge b-half">⏳ Pending</span>`
       }</td>
       <td>
-        ${l.status === 'pending'
+        ${l.status === 'pending' && canApprove
           ? `<button class="btn btn-green btn-sm" onclick="approveLeave(${i})">✅ Approve</button>
              <button class="btn btn-outline btn-sm" onclick="rejectLeave(${i})" style="margin-left:4px;">✕</button>`
-          : ''
+          : (l.status === 'pending' ? `<span style="font-size:11px;color:var(--text3);">Awaiting approver</span>` : '')
         }
       </td>
     </tr>
@@ -4410,7 +4411,8 @@ function renderLeave() {
 }
 
 async function approveLeave(i) {
-  if(currentUser.role!=='admin'){ showToast('Only Admin can approve leave','warning'); return; }
+  var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
+  if(!canApprove){ showToast('You do not have permission to approve leave','warning'); return; }
   var l = leaveData[i];
   l.status = 'approved';
   renderLeave();
@@ -4420,7 +4422,8 @@ async function approveLeave(i) {
   }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 async function rejectLeave(i) {
-  if(currentUser.role!=='admin'){ showToast('Only Admin can reject leave','warning'); return; }
+  var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
+  if(!canApprove){ showToast('You do not have permission to reject leave','warning'); return; }
   var l = leaveData[i];
   l.status = 'rejected';
   renderLeave();
@@ -16226,8 +16229,8 @@ var ACC_PARTY_CACHE={};
 
 // ════ ACCESS CONTROL ════════════════════════════════════
 var AC_TAB='emp',AC_TARGET=null,AC_PERMISSIONS={};
-var AC_PCOL={view:'#1565C0',add:'#2E7D32',edit:'#E65100',delete:'#C62828',cash_in:'#2E7D32',expense:'#E07820',mark:'#00838F'};
-var AC_PLBL={view:'View',add:'Add',edit:'Edit',delete:'Delete',cash_in:'Cash In',expense:'Expense',mark:'Mark Att.'};
+var AC_PCOL={view:'#1565C0',add:'#2E7D32',edit:'#E65100',delete:'#C62828',cash_in:'#2E7D32',expense:'#E07820',mark:'#00838F',approve_leave:'#00838F'};
+var AC_PLBL={view:'View',add:'Add',edit:'Edit',delete:'Delete',cash_in:'Cash In',expense:'Expense',mark:'Mark Att.',approve_leave:'Approve Leave'};
 
 var AC_MODS=[
   // Dashboard — view only
@@ -16250,7 +16253,7 @@ var AC_MODS=[
   {key:'emp-annual',       label:'Annual Statement',   icon:'&#128196;',group:'Employee',      params:['view','edit','delete']},
   {key:'emp-downloads',    label:'Downloads',          icon:'&#128229;',group:'Employee',      params:['view']},
   {key:'emp-resigned',     label:'Resigned Employees', icon:'&#128683;',group:'Employee',      params:['view','edit','delete']},
-  {key:'attendance',       label:'Attendance',         icon:'&#9200;',  group:'Employee',      params:['view','edit','delete']},
+  {key:'attendance',       label:'Attendance',         icon:'&#9200;',  group:'Employee',      params:['view','edit','delete','approve_leave']},
 
   // Accounting — view/edit/delete
   {key:'accounts',         label:'Accounts',           icon:'&#128176;',group:'Accounting',    params:['view','edit','delete']},
