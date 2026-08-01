@@ -4658,19 +4658,41 @@ async function leaveRejectWithNotice(){
   renderLeave();
   try{
     await sbUpdate('leave_requests', l.id, {status:'rejected', approved_by:currentUser.id});
-    try{
-      await sbInsert('show_cause_notices',{
-        employee_id: l.empId||null, employee_name: l.emp, leave_request_id: l.id,
-        leave_type: l.rawType||l.type, from_date: l.fromRaw||null, to_date: l.toRaw||null,
-        reason: 'Leave request rejected — '+l.type+' from '+l.from+' to '+l.to,
-        issued_by: currentUser.id, status: 'issued'
-      });
-    }catch(noticeErr){
-      console.error('show_cause_notices insert failed', noticeErr);
-      showToast('Leave rejected, but the show cause notice record could not be saved: '+noticeErr.message,'warning');
+
+    // Resolve the employee id — l.empId may be missing on older records
+    // where the leave form's name-lookup didn't match; fall back to
+    // matching by name against whatever employee list is available.
+    var empId = l.empId;
+    if(!empId){
+      var pool = (typeof LEAVE_EMP_CACHE!=='undefined' && LEAVE_EMP_CACHE.length) ? LEAVE_EMP_CACHE
+               : (typeof EMP_LIST!=='undefined' ? EMP_LIST.map(function(x){return {id:x.id,name:((x.first_name||'')+(x.last_name?' '+x.last_name:'')).trim()};}) : []);
+      var match = pool.find(function(x){return x.name===l.emp;});
+      empId = match?match.id:null;
+    }
+
+    if(!empId){
+      showToast('Leave rejected, but no matching employee record was found — the show cause notice could not be generated. Please issue it manually from Employee Management.','warning');
       return;
     }
-    showToast('Leave rejected and show cause notice issued for '+l.emp,'error');
+
+    try{
+      var saved = await hrSaveOrder(empId, 'show_cause_notice', attToday(), {
+        leave_type: l.rawType||l.type, from_date: l.fromRaw||null, to_date: l.toRaw||null,
+        days: l.days, leave_request_id: l.id,
+        reason: 'Leave request rejected — '+l.type+' from '+l.from+' to '+l.to
+      }, null);
+      if(saved && saved.id){
+        showToast('Leave rejected and show cause notice issued for '+l.emp,'error');
+        // Generate the notice PDF immediately, same document that will also
+        // show up under Employee Management → Downloads → this employee.
+        if(typeof downloadShowCauseNotice==='function') downloadShowCauseNotice(empId, saved.id);
+      } else {
+        showToast('Leave rejected, but the show cause notice record could not be saved.','warning');
+      }
+    }catch(noticeErr){
+      console.error('show_cause_notice order save failed', noticeErr);
+      showToast('Leave rejected, but the show cause notice record could not be saved: '+noticeErr.message,'warning');
+    }
   }catch(e){ l.status=prevStatus; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 
@@ -17567,6 +17589,87 @@ function downloadTransferOrder(empId, type, details){
 }
 
 
+function downloadShowCauseNotice(empId, orderId){
+  var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
+  var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
+  var code  = emp.employee_code||emp.emp_id||'—';
+  var today = fmtDate(new Date());
+  var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
+  var compAddr = typeof coAddr==='function'?coAddr():'';
+  var compGST  = typeof coGST==='function'?coGST():'';
+
+  var order = EMP_ORDERS.find(function(o){return o.id===orderId;});
+  var d = {}; if(order){try{d=JSON.parse(order.details||'{}');}catch(ex){}}
+  var noticeDate = order?order.effective_date:today;
+  var noticeDateFmt = fmtDate(noticeDate);
+  var leaveFrom = d.from_date?fmtDate(d.from_date):'—';
+  var leaveTo   = d.to_date?fmtDate(d.to_date):'—';
+  var leaveType = d.leave_type||'—';
+  var leaveDays = d.days||'—';
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<title>Show Cause Notice - '+name+'</title>'+
+    '<style>'+
+    'body{font-family:Arial,sans-serif;font-size:13px;color:#222;margin:0;padding:0;}'+
+    '.page{max-width:720px;margin:0 auto;padding:40px 50px;}'+
+    '.header{text-align:center;border-bottom:3px double #C62828;padding-bottom:14px;margin-bottom:20px;}'+
+    '.logo{font-size:20px;font-weight:900;color:#C62828;letter-spacing:1px;}'+
+    '.sub{font-size:10px;color:#555;margin-top:3px;}'+
+    '.ref{display:flex;justify-content:space-between;margin-bottom:18px;font-size:12px;}'+
+    '.title{font-size:15px;font-weight:700;text-align:center;text-decoration:underline;margin:0 0 18px;color:#C62828;}'+
+    '.info-table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;}'+
+    '.info-table td{padding:6px 10px;border:1px solid #ddd;}'+
+    '.info-table td:first-child{background:#F8F9FA;font-weight:600;width:40%;}'+
+    '.clause{font-size:12px;line-height:1.8;margin-bottom:10px;text-align:justify;}'+
+    '.sign{margin-top:50px;display:flex;justify-content:space-between;}'+
+    '.sign-box{text-align:center;min-width:180px;}'+
+    '.sign-line{border-top:1px solid #999;padding-top:6px;font-size:11px;color:#555;}'+
+    '@media print{@page{size:A4;margin:12mm;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'+
+    '</style></head><body><div class="page">'+
+
+    '<div class="header">'+
+      '<div class="logo">'+compName.toUpperCase()+'</div>'+
+      (compAddr?'<div class="sub">'+compAddr+'</div>':'')+
+      '<div class="sub">'+(compGST?'GSTIN: '+compGST:'')+'</div>'+
+    '</div>'+
+
+    '<div class="ref">'+
+      '<div><b>Notice No.:</b> AIPL/SCN/'+code+'/'+new Date().getFullYear()+'</div>'+
+      '<div><b>Date:</b> '+noticeDateFmt+'</div>'+
+    '</div>'+
+
+    '<div class="title">SHOW CAUSE NOTICE</div>'+
+
+    '<table class="info-table">'+
+      '<tr><td>Employee Name</td><td><b>'+name+'</b></td></tr>'+
+      '<tr><td>Employee Code</td><td>'+code+'</td></tr>'+
+      '<tr><td>Designation</td><td>'+(emp.designation||emp.role||'—')+'</td></tr>'+
+      '<tr><td>Department</td><td>'+(emp.department||'—')+'</td></tr>'+
+      '<tr><td>Leave Type Applied For</td><td>'+leaveType+'</td></tr>'+
+      '<tr><td>Leave Period</td><td>'+leaveFrom+' to '+leaveTo+' ('+leaveDays+' day'+(leaveDays!==1?'s':'')+')</td></tr>'+
+    '</table>'+
+
+    '<p class="clause">Dear <b>'+name+'</b>,</p>'+
+    '<p class="clause">This is to bring to your notice that your application for <b>'+leaveType+'</b> for the period <b>'+leaveFrom+' to '+leaveTo+'</b> has been examined by the Management and has been <b>rejected</b>.</p>'+
+    '<p class="clause">You are hereby directed to submit a written explanation for the above within <b>3 (three) working days</b> from the date of this notice, failing which the Management shall be constrained to treat your absence during the above period as unauthorized and may initiate appropriate disciplinary action, including but not limited to loss of pay for the period in question, as deemed fit.</p>'+
+    '<p class="clause">You are requested to treat this matter with the seriousness it deserves and respond within the stipulated time.</p>'+
+
+    '<div class="sign">'+
+      '<div class="sign-box"><br><br><br><div class="sign-line">Employee Signature<br>'+name+'</div></div>'+
+      '<div class="sign-box"><br><br><br><div class="sign-line">Authorised Signatory<br>'+compName+'</div></div>'+
+    '</div>'+
+
+    '<p style="font-size:10px;color:#888;text-align:center;margin-top:30px;border-top:1px solid #eee;padding-top:8px;">'+
+      'This is a computer-generated notice. | '+compName+' | Generated on '+today+
+    '</p>'+
+    '</div>'+
+    '<script>window.onload=function(){window.print();}<\/script>'+
+    '</body></html>';
+
+  openPDF(html);
+}
+
+
 // ════════════════════════════════════════════════════════════════════════
 // DOWNLOAD TAB — all letters and orders per employee
 // ════════════════════════════════════════════════════════════════════════
@@ -17758,6 +17861,20 @@ function empDocList(e){
     });
   }
 
+  // ── Show Cause Notices ────────────────────────────────────────────────
+  var scnOrders = orders.filter(function(o){ return o.order_type==='show_cause_notice'; });
+  if(scnOrders.length){
+    html += '<div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;padding:8px 0 4px;letter-spacing:.5px;">Show Cause Notices</div>';
+    scnOrders.forEach(function(o){
+      var d={}; try{d=JSON.parse(o.details||'{}');}catch(ex){}
+      html += docBtn('dl-scn-'+o.id,'&#9888;',
+        'Show Cause Notice — '+o.effective_date,
+        '#C62828',{action:'show_cause_notice', orderId:o.id, empId:empId,
+          sub:(d.leave_type||'Leave')+' rejected · '+(d.from_date?fmtDate(d.from_date):'')+' to '+(d.to_date?fmtDate(d.to_date):'')}
+      );
+    });
+  }
+
   // ── Resignation Letter ────────────────────────────────────────────────
   if(e.status==='resigned'||e.resignation_date||e.last_working_day){
     html += '<div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;padding:8px 0 4px;letter-spacing:.5px;">Resignation</div>';
@@ -17862,6 +17979,8 @@ function hrWireDownloadButtons(containerId){
         downloadTransferOrder(empId,'promotion',Object.assign({date:dt},d));
       } else if(action==='resignation'){
         downloadResignationLetter(empId);
+      } else if(action==='show_cause_notice'){
+        downloadShowCauseNotice(empId, orderId);
       }
     });
   });
