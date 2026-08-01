@@ -4321,12 +4321,27 @@ async function attRenderSalaryImpact(){
     // Leave approved "without pay" also reduces pay, same as an absence —
     // computed from leave_requests directly (paid=false, approved, and
     // overlapping the viewed month) rather than from attendance status.
+    // Matched by BOTH emp_id and employee name and merged (deduped), since
+    // leave_requests.emp_id is resolved by a name lookup at submit time and
+    // can end up null/mismatched for older or oddly-named records — relying
+    // on id alone would silently show zero deduction in that case.
     var monthStart = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH, 1));
     var monthEnd   = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH+1, 0));
     var unpaidLeaveDays = 0;
     try{
-      var unpaidRows = await sbFetch('leave_requests',{select:'days',filter:'emp_id=eq.'+empId+'&status=eq.approved&paid=eq.false&from_date=lte.'+monthEnd+'&to_date=gte.'+monthStart});
-      unpaidLeaveDays = (Array.isArray(unpaidRows)?unpaidRows:[]).reduce(function(s,r){return s+(parseFloat(r.days)||0);},0);
+      var empSel = document.getElementById('att-emp-sel');
+      var empDisplayName = (empSel && empSel.selectedIndex>=0) ? empSel.options[empSel.selectedIndex].textContent : '';
+      var baseFilter = 'status=eq.approved&paid=eq.false&from_date=lte.'+monthEnd+'&to_date=gte.'+monthStart;
+      var fetches = [ sbFetch('leave_requests',{select:'id,days',filter:'emp_id=eq.'+empId+'&'+baseFilter}) ];
+      if(empDisplayName && empDisplayName!=='My Attendance'){
+        fetches.push(sbFetch('leave_requests',{select:'id,days',filter:'emp_name=eq.'+encodeURIComponent(empDisplayName)+'&'+baseFilter}));
+      }
+      var results = await Promise.all(fetches.map(function(p){return p.catch(function(){return [];});}));
+      var seen={}, merged=[];
+      results.forEach(function(rows){
+        (Array.isArray(rows)?rows:[]).forEach(function(r){ if(!seen[r.id]){ seen[r.id]=true; merged.push(r); } });
+      });
+      unpaidLeaveDays = merged.reduce(function(s,r){return s+(parseFloat(r.days)||0);},0);
     }catch(e){ console.warn('Could not load unpaid-leave days for salary impact', e); }
 
     var perDay = daysInMonth>0 ? gross/daysInMonth : 0;
