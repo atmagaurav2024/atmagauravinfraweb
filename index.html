@@ -1893,10 +1893,14 @@ input,select,textarea{font-size:16px !important;}
             <option value="prev-month">Previous Month</option>
             <option value="month">Month-wise</option>
             <option value="year">Year-wise</option>
+            <option value="range">Custom Range</option>
           </select>
           <input type="date" id="logs-date-filter" class="finput" style="padding:6px 10px;font-size:12px;width:auto;" onchange="renderLogsTab()">
           <select id="logs-month-sel" class="finput" style="padding:6px 10px;font-size:12px;width:auto;display:none;" onchange="renderLogsTab()"></select>
           <select id="logs-year-sel" class="finput" style="padding:6px 10px;font-size:12px;width:auto;display:none;" onchange="renderLogsTab()"></select>
+          <input type="date" id="logs-range-from" class="finput" style="padding:6px 10px;font-size:12px;width:auto;display:none;" onchange="renderLogsTab()">
+          <span id="logs-range-sep" style="display:none;font-size:12px;color:var(--text3);align-self:center;">to</span>
+          <input type="date" id="logs-range-to" class="finput" style="padding:6px 10px;font-size:12px;width:auto;display:none;" onchange="renderLogsTab()">
           <button class="btn btn-outline btn-sm" onclick="showToast('Regularization form — not built yet','info')">✏️ Regularize</button>
           <button class="btn btn-outline btn-sm" onclick="exportLogsCSV()">📥 Export</button>
         </div>
@@ -5687,10 +5691,20 @@ function attLogsPeriodChange(){
   var dateInp=document.getElementById('logs-date-filter');
   var monthSel=document.getElementById('logs-month-sel');
   var yearSel=document.getElementById('logs-year-sel');
+  var rangeFrom=document.getElementById('logs-range-from');
+  var rangeTo=document.getElementById('logs-range-to');
+  var rangeSep=document.getElementById('logs-range-sep');
   if(dateInp) dateInp.style.display = type==='date' ? '' : 'none';
   if(monthSel) monthSel.style.display = type==='month' ? '' : 'none';
   if(yearSel) yearSel.style.display = (type==='month'||type==='year') ? '' : 'none';
+  if(rangeFrom) rangeFrom.style.display = type==='range' ? '' : 'none';
+  if(rangeTo) rangeTo.style.display = type==='range' ? '' : 'none';
+  if(rangeSep) rangeSep.style.display = type==='range' ? '' : 'none';
   var today=new Date();
+  if(type==='range'){
+    if(rangeFrom && !rangeFrom.value) rangeFrom.value=attToday();
+    if(rangeTo && !rangeTo.value) rangeTo.value=attToday();
+  }
   if((type==='month'||type==='year') && monthSel && !monthSel.options.length){
     monthSel.innerHTML = ATT_MONTH_NAMES.map(function(m,i){return '<option value="'+i+'">'+m+'</option>';}).join('');
     monthSel.value=today.getMonth();
@@ -5725,6 +5739,13 @@ function attLogsGetRange(){
   if(type==='year'){
     var y=parseInt((document.getElementById('logs-year-sel')||{value:today.getFullYear()}).value,10);
     return {from:y+'-01-01', to:y+'-12-31', label:'Year '+y};
+  }
+  if(type==='range'){
+    var fromInp=document.getElementById('logs-range-from'), toInp=document.getElementById('logs-range-to');
+    var from=(fromInp&&fromInp.value)||attToday();
+    var to=(toInp&&toInp.value)||attToday();
+    if(from>to){ var tmp=from; from=to; to=tmp; }
+    return {from:from, to:to, label:attDisplayDate(from)+' – '+attDisplayDate(to)};
   }
   // default: specific date
   var dateInp=document.getElementById('logs-date-filter');
