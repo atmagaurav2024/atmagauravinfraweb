@@ -3693,7 +3693,7 @@ async function attLoadAll(){
 
   var tLbl={'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'};
   leaveData = leaves.map(function(l){
-    return {id:l.id, emp:l.emp_name, type:tLbl[l.leave_type]||l.leave_type, from:attDisplayDate(l.from_date), to:attDisplayDate(l.to_date), days:l.days, reason:l.reason||'', applied:attDisplayDate((l.created_at||'').slice(0,10)), status:l.status};
+    return {id:l.id, empId:l.emp_id, emp:l.emp_name, type:tLbl[l.leave_type]||l.leave_type, rawType:l.leave_type, from:attDisplayDate(l.from_date), to:attDisplayDate(l.to_date), fromRaw:l.from_date, toRaw:l.to_date, days:l.days, reason:l.reason||'', applied:attDisplayDate((l.created_at||'').slice(0,10)), status:l.status, paid:(l.paid!==false)};
   });
 }
 function attDisplayDate(iso){
@@ -4290,8 +4290,20 @@ async function attRenderSalaryImpact(){
       else if(r.status==='leave') leave++;
       else if(r.status==='wo') wo++;
     });
+
+    // Leave approved "without pay" also reduces pay, same as an absence —
+    // computed from leave_requests directly (paid=false, approved, and
+    // overlapping the viewed month) rather than from attendance status.
+    var monthStart = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH, 1));
+    var monthEnd   = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH+1, 0));
+    var unpaidLeaveDays = 0;
+    try{
+      var unpaidRows = await sbFetch('leave_requests',{select:'days',filter:'emp_id=eq.'+empId+'&status=eq.approved&paid=eq.false&from_date=lte.'+monthEnd+'&to_date=gte.'+monthStart});
+      unpaidLeaveDays = (Array.isArray(unpaidRows)?unpaidRows:[]).reduce(function(s,r){return s+(parseFloat(r.days)||0);},0);
+    }catch(e){ console.warn('Could not load unpaid-leave days for salary impact', e); }
+
     var perDay = daysInMonth>0 ? gross/daysInMonth : 0;
-    var lopDays = absent + half*0.5;
+    var lopDays = absent + half*0.5 + unpaidLeaveDays;
     var deduction = perDay*lopDays;
     var payable = Math.max(0, gross-deduction);
 
@@ -4308,17 +4320,18 @@ async function attRenderSalaryImpact(){
       '</div>'+
       '<div style="font-size:11px;color:var(--text2);margin-bottom:8px;text-align:center;">'+
         present+' present · '+absent+' absent · '+half+' half-day · '+leave+' leave · '+wo+' week-off'+
+        (unpaidLeaveDays>0?' · '+unpaidLeaveDays+' unpaid leave':'')+
       '</div>'+
       (lopDays>0?
         '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#FFEBEE;border-radius:8px;margin-bottom:6px;">'+
-          '<span style="font-size:12px;color:#C62828;font-weight:700;">Estimated Deduction ('+lopDays+' day'+(lopDays!==1?'s':'')+')</span>'+
+          '<span style="font-size:12px;color:#C62828;font-weight:700;">Estimated Deduction ('+lopDays+' day'+(lopDays!==1?'s':'')+(unpaidLeaveDays>0?' incl. '+unpaidLeaveDays+' unpaid leave':'')+')</span>'+
           '<span style="font-size:13px;font-weight:900;color:#C62828;">-'+inr(deduction)+'</span>'+
         '</div>':'')+
       '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#E8F5E9;border-radius:8px;">'+
         '<span style="font-size:12px;color:#2E7D32;font-weight:800;">Estimated Payable (Gross)</span>'+
         '<span style="font-size:15px;font-weight:900;color:#2E7D32;">'+inr(payable)+'</span>'+
       '</div>'+
-      '<div style="font-size:9.5px;color:var(--text3);margin-top:8px;line-height:1.4;">Estimate only — Gross ÷ calendar days in month. Approved leave is treated as paid; only Absent and Half-day reduce pay. Actual payroll may include TDS, PF, ESIC and other statutory adjustments — see Employee → Monthly Salary for the final figure.</div>';
+      '<div style="font-size:9.5px;color:var(--text3);margin-top:8px;line-height:1.4;">Estimate only — Gross ÷ calendar days in month. Approved (paid) leave is treated as paid; Absent, Half-day, and leave Approved Without Pay reduce pay. Actual payroll may include TDS, PF, ESIC and other statutory adjustments — see Employee → Monthly Salary for the final figure.</div>';
   }catch(e){
     console.error(e);
     el.innerHTML = '<div style="color:var(--red2);font-size:12px;">Failed to load salary impact: '+e.message+'</div>';
@@ -4490,7 +4503,9 @@ function renderLeave() {
       <td>${l.reason}</td>
       <td style="font-size:12px;color:var(--text3);">${l.applied}</td>
       <td>${l.status === 'approved'
-        ? `<span class="att-badge b-present">✅ Approved</span>`
+        ? (l.paid===false
+            ? `<span class="att-badge b-half">✅ Approved (Unpaid)</span>`
+            : `<span class="att-badge b-present">✅ Approved</span>`)
         : l.status === 'rejected'
         ? `<span class="att-badge b-absent">✗ Rejected</span>`
         : `<span class="att-badge b-half">⏳ Pending</span>`
@@ -4498,6 +4513,7 @@ function renderLeave() {
       <td>
         ${l.status === 'pending' && canApprove
           ? `<button class="btn btn-green btn-sm" onclick="approveLeave(${i})">✅ Approve</button>
+             <button class="btn btn-outline btn-sm" onclick="approveLeaveUnpaid(${i})" style="margin-left:4px;" title="Approve as unpaid — will count as a salary deduction and won't use up the paid leave quota">🚫 Approve w/o Pay</button>
              <button class="btn btn-outline btn-sm" onclick="rejectLeave(${i})" style="margin-left:4px;">✕</button>`
           : (l.status === 'pending' ? `<span style="font-size:11px;color:var(--text3);">Awaiting approver</span>` : '')
         }
@@ -4510,13 +4526,32 @@ async function approveLeave(i) {
   var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
   if(!canApprove){ showToast('You do not have permission to approve leave','warning'); return; }
   var l = leaveData[i];
-  l.status = 'approved';
+  var prevStatus=l.status, prevPaid=l.paid;
+  l.status = 'approved'; l.paid = true;
   renderLeave();
   try{
-    await sbUpdate('leave_requests', l.id, {status:'approved', approved_by:currentUser.id});
+    await sbUpdate('leave_requests', l.id, {status:'approved', paid:true, approved_by:currentUser.id});
     showToast(`Leave approved for ${l.emp}`, 'success');
-  }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+  }catch(e){ l.status=prevStatus; l.paid=prevPaid; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
+
+// Approves the leave (so it's on record as authorized) but marks it unpaid:
+// it does NOT draw from the employee's paid leave quota (excluded from the
+// "Used" figure in Apply for Leave), and DOES count as a deduction day in
+// the Monthly View Salary Impact panel, the same way an absence would.
+async function approveLeaveUnpaid(i) {
+  var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
+  if(!canApprove){ showToast('You do not have permission to approve leave','warning'); return; }
+  var l = leaveData[i];
+  var prevStatus=l.status, prevPaid=l.paid;
+  l.status = 'approved'; l.paid = false;
+  renderLeave();
+  try{
+    await sbUpdate('leave_requests', l.id, {status:'approved', paid:false, approved_by:currentUser.id});
+    showToast(`Leave approved without pay for ${l.emp}`, 'success');
+  }catch(e){ l.status=prevStatus; l.paid=prevPaid; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+}
+
 async function rejectLeave(i) {
   var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
   if(!canApprove){ showToast('You do not have permission to reject leave','warning'); return; }
@@ -4615,7 +4650,7 @@ async function updateLeaveBalanceInfo(){
       periodLabel = 'this year';
     }
 
-    var approved = await sbFetch('leave_requests',{select:'days',filter:'emp_id=eq.'+empMatch.id+'&leave_type=eq.'+encodeURIComponent(leaveType)+'&status=eq.approved&from_date=gte.'+periodStart+'&from_date=lte.'+periodEnd});
+    var approved = await sbFetch('leave_requests',{select:'days',filter:'emp_id=eq.'+empMatch.id+'&leave_type=eq.'+encodeURIComponent(leaveType)+'&status=eq.approved&paid=eq.true&from_date=gte.'+periodStart+'&from_date=lte.'+periodEnd});
     var used = (Array.isArray(approved)?approved:[]).reduce(function(s,r){return s+(parseFloat(r.days)||0);},0);
     var balance = quota-used;
 
