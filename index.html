@@ -3589,13 +3589,24 @@ verifyOTP=async function(){
 // ═══════════════════════════════════════════
 // ATTENDANCE JS
 // ═══════════════════════════════════════════
+function attIsManager(){
+  if(!currentUser) return false;
+  if(currentUser.role==='admin'||currentUser.role==='pm') return true;
+  // Fall back to the granular Access Control permission — an employee
+  // granted 'Edit' on the Attendance module should also get manager-level
+  // views (employee table, employee selector, etc.), even if their
+  // employees.role column isn't literally 'admin'/'pm'.
+  if(typeof canAccess==='function' && canAccess('attendance','edit')) return true;
+  return false;
+}
+
 async function initAttendance(){
   initPunchLogDate();
   try{
     tick();
     if(!window._clockInt) window._clockInt=setInterval(tick,1000);
     refreshGPS();
-    var isManager = (currentUser.role==='admin'||currentUser.role==='pm');
+    var isManager = attIsManager();
     applyAttendanceRoleView(isManager);
 
     await attLoadAll();
@@ -4253,7 +4264,7 @@ async function attSaveAll(){
 function populateAttEmpSel(){
   var sel = document.getElementById('att-emp-sel');
   if(!sel) return;
-  var isManager = (currentUser.role==='admin'||currentUser.role==='pm');
+  var isManager = attIsManager();
   var opts = '<option value="'+currentUser.id+'">My Attendance</option>';
   if(isManager){
     opts += employees
