@@ -112,7 +112,7 @@ function empRender(){
   else if(EMP_TAB==='pay')       el.innerHTML=empPayHTML();
   else if(EMP_TAB==='leavefix')  el.innerHTML=empLeaveFixHTML();
   else if(EMP_TAB==='resigned')  el.innerHTML=empListHTML('resigned');
-  else if(EMP_TAB==='salary'){el.innerHTML=empSalaryHTML();salWireLogButtons();setTimeout(salWireInputs,100);}
+  else if(EMP_TAB==='salary'){el.innerHTML=empSalaryHTML();salWireLogButtons();setTimeout(function(){salWireInputs();salLoadLOPDays();},100);}
   else if(EMP_TAB==='increment') el.innerHTML=empIncrementHTML();
   else if(EMP_TAB==='transfer'){el.innerHTML=empTransferHTML();hrWireOrderButtons();}
   // Wire pay fixation delete buttons
@@ -344,6 +344,66 @@ async function salFinalise(){
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
+// Auto-fills each visible employee's "LWP Days" field for the currently
+// selected sal-month/sal-year from real data instead of a manual guess:
+//   - Attendance: Absent counts as 1 day, Half-day counts as 0.5
+//   - Leave approved "without pay" (Leave Management > Approve w/o Pay)
+//     for dates overlapping the selected month
+// Matches leave_requests by BOTH emp_id and employee name (merged/deduped),
+// same defensive approach as attRenderSalaryImpact, since emp_id there is
+// resolved by a name lookup at submission time and can be null/mismatched.
+async function salLoadLOPDays(){
+  var monthSel=document.getElementById('sal-month'), yearSel=document.getElementById('sal-year');
+  var month=parseInt(monthSel?monthSel.value:0)||0, year=parseInt(yearSel?yearSel.value:0)||0;
+  if(!month||!year) return;
+  var active=EMP_LIST.filter(function(e){return e.status==='active' && document.getElementById('sal-days-'+e.id);});
+  if(!active.length) return;
+
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var monthStart=year+'-'+pad(month)+'-01';
+  var monthEnd=year+'-'+pad(month)+'-'+pad(new Date(year,month,0).getDate());
+
+  active.forEach(function(e){
+    var tag=document.getElementById('sal-lop-tag-'+e.id);
+    if(tag) tag.textContent='(checking…)';
+  });
+
+  try{
+    var r = await Promise.all([
+      sbFetch('attendance',{select:'employee_id,status',filter:'date=gte.'+monthStart+'&date=lte.'+monthEnd}).catch(function(){return [];}),
+      sbFetch('leave_requests',{select:'emp_id,emp_name,days',filter:'status=eq.approved&paid=eq.false&from_date=lte.'+monthEnd+'&to_date=gte.'+monthStart}).catch(function(){return [];})
+    ]);
+    var attRows = Array.isArray(r[0])?r[0]:[];
+    var leaveRows = Array.isArray(r[1])?r[1]:[];
+
+    active.forEach(function(e){
+      var name=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim();
+      var absent=0, half=0;
+      attRows.forEach(function(a){
+        if(a.employee_id!==e.id) return;
+        if(a.status==='absent') absent++;
+        else if(a.status==='half') half++;
+      });
+      var unpaidLeave=0;
+      leaveRows.forEach(function(l){
+        if(l.emp_id===e.id || (l.emp_name && l.emp_name===name)) unpaidLeave+=(parseFloat(l.days)||0);
+      });
+      var lop = absent + half*0.5 + unpaidLeave;
+
+      var inp=document.getElementById('sal-days-'+e.id);
+      if(inp){ inp.value=lop; salRecalc(e.id); }
+      var tag=document.getElementById('sal-lop-tag-'+e.id);
+      if(tag) tag.textContent = lop>0 ? ('(auto: '+absent+' absent, '+half+' half, '+unpaidLeave+' unpaid leave)') : '(auto: none)';
+    });
+  }catch(e){
+    console.error('salLoadLOPDays failed',e);
+    active.forEach(function(emp){
+      var tag=document.getElementById('sal-lop-tag-'+emp.id);
+      if(tag) tag.textContent='(auto-fill failed — enter manually)';
+    });
+  }
+}
+
 function salRecalc(empId){
   var lwp   = parseFloat((document.getElementById('sal-days-'+empId)||{value:0}).value)||0;
   var days  = Math.max(0, 26-lwp);
@@ -440,14 +500,15 @@ function empSalaryHTML(){
   var header =
     '<div style="background:white;border-radius:14px;padding:14px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#1B5E20;margin-bottom:4px;">&#128200; Monthly Salary Finalisation</div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Select employees, edit earnings/deductions, then click <b>Finalise Selected</b>.</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Select employees, edit earnings/deductions, then click <b>Finalise Selected</b>. <b>LWP Days</b> are auto-filled from Attendance (Absent + ½×Half-day) and any leave <b>Approved without Pay</b> for the selected month — you can still edit them manually.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
-        '<div><label class="flbl">Month</label><select id="sal-month" class="fsel">'+monthOpts+'</select></div>'+
-        '<div><label class="flbl">Year</label><select id="sal-year" class="fsel">'+yearOpts+'</select></div>'+
+        '<div><label class="flbl">Month</label><select id="sal-month" class="fsel" onchange="salLoadLOPDays()">'+monthOpts+'</select></div>'+
+        '<div><label class="flbl">Year</label><select id="sal-year" class="fsel" onchange="salLoadLOPDays()">'+yearOpts+'</select></div>'+
       '</div>'+
       '<div style="display:flex;gap:8px;">'+
         '<button onclick="salSelectAll(true)" style="flex:1;padding:8px;background:#E8F5E9;color:#1B5E20;border:1px solid #A5D6A7;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;">&#9989; Select All</button>'+
         '<button onclick="salSelectAll(false)" style="flex:1;padding:8px;background:#F5F5F5;color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;">&#9645; Deselect All</button>'+
+        '<button onclick="salLoadLOPDays()" title="Re-check Attendance + Approved-without-Pay leave for the selected month" style="flex:1;padding:8px;background:#E3F2FD;color:#1565C0;border:1px solid #90CAF9;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;">&#8635; Refresh LWP</button>'+
         '<button onclick="salFinalise()" style="flex:2;padding:8px 14px;background:#1B5E20;color:white;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#10003; Finalise Selected</button>'+
       '</div>'+
     '</div>';
@@ -496,7 +557,7 @@ function empSalaryHTML(){
 
           // attendance + earnings/deductions - payslip style
           '<div style="padding:8px 12px;display:grid;grid-template-columns:1fr 1fr;gap:6px;border-bottom:1px solid #EEE;background:#FAFAFA;">'+
-            '<div><label style="font-size:9px;font-weight:700;color:#555;display:block;margin-bottom:2px;">LWP Days</label>'+
+            '<div><label style="font-size:9px;font-weight:700;color:#555;display:block;margin-bottom:2px;">LWP Days <span id="sal-lop-tag-'+e.id+'" style="font-weight:400;color:#1565C0;"></span></label>'+
               '<input data-sal="days" data-eid="'+e.id+'" id="sal-days-'+e.id+'" class="finp" type="number" min="0" max="26" value="0" style="margin-bottom:0;"></div>'+
             '<div><label style="font-size:9px;font-weight:700;color:#555;display:block;margin-bottom:2px;">OT Hours</label>'+
               '<input data-sal="ot" data-eid="'+e.id+'" id="sal-ot-'+e.id+'" class="finp" type="number" min="0" value="0" style="margin-bottom:0;"></div>'+
