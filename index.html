@@ -1861,7 +1861,7 @@ input,select,textarea{font-size:16px !important;}
         <div class="tch-title">🏖️ Leave Applications</div>
         <div class="tch-actions">
           <button class="btn btn-navy" onclick="openLeaveModal()">+ Apply Leave</button>
-          <button class="btn btn-outline btn-sm" onclick="showToast('Leave report downloaded','success')">📥 Export</button>
+          <button class="btn btn-outline btn-sm" onclick="exportLeaveCSV()">📥 Export</button>
         </div>
       </div>
       <table class="leave-table">
@@ -4603,6 +4603,31 @@ async function deleteLeaveRecord(i){
     renderLeave();
     showToast('Leave record deleted','success');
   }catch(e){ showToast('Failed to delete: '+e.message,'error'); }
+}
+
+function exportLeaveCSV(){
+  if(!leaveData.length){ showToast('No leave records to export','warning'); return; }
+  var header = ['Employee','Leave Type','From','To','Days','Status','Paid/Unpaid','Reason','Applied On','Decided By','Decided On'];
+  var lines = [header.join(',')];
+  leaveData.forEach(function(l){
+    var statusLabel = l.status==='approved' ? 'Approved' : l.status==='rejected' ? 'Rejected' : 'Pending';
+    var paidLabel = l.status!=='approved' ? '' : (l.paid===false ? 'Unpaid' : 'Paid');
+    var decidedOn = '';
+    if(l.approvedAt){
+      var dt = new Date(l.approvedAt);
+      if(!isNaN(dt)) decidedOn = dt.toLocaleDateString('en-IN')+' '+dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    }
+    var row = [l.emp, l.type, l.from, l.to, l.days, statusLabel, paidLabel, l.reason||'', l.applied, l.approvedByName||'', decidedOn]
+      .map(function(v){ v=String(v==null?'':v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; });
+    lines.push(row.join(','));
+  });
+  var blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'leave-applications-'+attToday()+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Leave report downloaded','success');
 }
 
 
