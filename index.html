@@ -1886,8 +1886,17 @@ input,select,textarea{font-size:16px !important;}
     <div class="table-card">
       <div class="table-card-header">
         <div class="tch-title">📋 Punch Logs</div>
-        <div class="tch-actions">
+        <div class="tch-actions" style="flex-wrap:wrap;gap:8px;">
+          <select id="logs-period-type" class="finput" style="padding:6px 10px;font-size:12px;width:auto;" onchange="attLogsPeriodChange()">
+            <option value="date">Specific Date</option>
+            <option value="this-month">This Month</option>
+            <option value="prev-month">Previous Month</option>
+            <option value="month">Month-wise</option>
+            <option value="year">Year-wise</option>
+          </select>
           <input type="date" id="logs-date-filter" class="finput" style="padding:6px 10px;font-size:12px;width:auto;" onchange="renderLogsTab()">
+          <select id="logs-month-sel" class="finput" style="padding:6px 10px;font-size:12px;width:auto;display:none;" onchange="renderLogsTab()"></select>
+          <select id="logs-year-sel" class="finput" style="padding:6px 10px;font-size:12px;width:auto;display:none;" onchange="renderLogsTab()"></select>
           <button class="btn btn-outline btn-sm" onclick="showToast('Regularization form — not built yet','info')">✏️ Regularize</button>
           <button class="btn btn-outline btn-sm" onclick="exportLogsCSV()">📥 Export</button>
         </div>
@@ -5671,12 +5680,63 @@ function openPunchMap(idx) {
 // ── LOGS TAB (all-employees punch log) ──
 var LOGS_TAB_ROWS = [];
 
+var ATT_MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function attLogsPeriodChange(){
+  var type=(document.getElementById('logs-period-type')||{value:'date'}).value;
+  var dateInp=document.getElementById('logs-date-filter');
+  var monthSel=document.getElementById('logs-month-sel');
+  var yearSel=document.getElementById('logs-year-sel');
+  if(dateInp) dateInp.style.display = type==='date' ? '' : 'none';
+  if(monthSel) monthSel.style.display = type==='month' ? '' : 'none';
+  if(yearSel) yearSel.style.display = (type==='month'||type==='year') ? '' : 'none';
+  var today=new Date();
+  if((type==='month'||type==='year') && monthSel && !monthSel.options.length){
+    monthSel.innerHTML = ATT_MONTH_NAMES.map(function(m,i){return '<option value="'+i+'">'+m+'</option>';}).join('');
+    monthSel.value=today.getMonth();
+  }
+  if((type==='month'||type==='year') && yearSel && !yearSel.options.length){
+    var curY=today.getFullYear(), opts=[];
+    for(var y=curY;y>=curY-6;y--) opts.push('<option value="'+y+'">'+y+'</option>');
+    yearSel.innerHTML=opts.join('');
+    yearSel.value=curY;
+  }
+  renderLogsTab();
+}
+
+function attLogsGetRange(){
+  var type=(document.getElementById('logs-period-type')||{value:'date'}).value;
+  var pad=function(n){return String(n).padStart(2,'0');};
+  var today=new Date();
+  if(type==='this-month'){
+    var y=today.getFullYear(), m=today.getMonth();
+    return {from:y+'-'+pad(m+1)+'-01', to:y+'-'+pad(m+1)+'-'+pad(new Date(y,m+1,0).getDate()), label:'This Month ('+ATT_MONTH_NAMES[m]+' '+y+')'};
+  }
+  if(type==='prev-month'){
+    var pm=today.getMonth()-1, py=today.getFullYear();
+    if(pm<0){pm=11;py--;}
+    return {from:py+'-'+pad(pm+1)+'-01', to:py+'-'+pad(pm+1)+'-'+pad(new Date(py,pm+1,0).getDate()), label:'Previous Month ('+ATT_MONTH_NAMES[pm]+' '+py+')'};
+  }
+  if(type==='month'){
+    var m=parseInt((document.getElementById('logs-month-sel')||{value:today.getMonth()}).value,10);
+    var y=parseInt((document.getElementById('logs-year-sel')||{value:today.getFullYear()}).value,10);
+    return {from:y+'-'+pad(m+1)+'-01', to:y+'-'+pad(m+1)+'-'+pad(new Date(y,m+1,0).getDate()), label:ATT_MONTH_NAMES[m]+' '+y};
+  }
+  if(type==='year'){
+    var y=parseInt((document.getElementById('logs-year-sel')||{value:today.getFullYear()}).value,10);
+    return {from:y+'-01-01', to:y+'-12-31', label:'Year '+y};
+  }
+  // default: specific date
+  var dateInp=document.getElementById('logs-date-filter');
+  if(dateInp && !dateInp.value) dateInp.value=attToday();
+  var day=dateInp?dateInp.value:attToday();
+  return {from:day, to:day, label:attDisplayDate(day)};
+}
+
 async function renderLogsTab(){
   var tbody = document.getElementById('logs-tbody');
   if(!tbody) return;
-  var dateInp = document.getElementById('logs-date-filter');
-  if(dateInp && !dateInp.value) dateInp.value = attToday();
-  var day = dateInp ? dateInp.value : attToday();
+  var range = attLogsGetRange();
 
   tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">Loading…</td></tr>';
 
@@ -5685,7 +5745,7 @@ async function renderLogsTab(){
 
   var rows = [];
   try{
-    rows = await sbFetch('attendance_punches',{select:'*',filter:'date=eq.'+day,order:'punch_time.asc'});
+    rows = await sbFetch('attendance_punches',{select:'*',filter:'date=gte.'+range.from+'&date=lte.'+range.to,order:'date.asc,punch_time.asc'});
   }catch(e){
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red2);padding:18px;">Failed to load punch logs: '+e.message+'</td></tr>';
     return;
@@ -5695,6 +5755,7 @@ async function renderLogsTab(){
     return {
       employee: empNameById[p.emp_id] || p.emp_id || 'Unknown',
       type: p.punch_type === 'in' ? 'Punch In' : 'Punch Out',
+      date: p.date || '',
       time: p.punch_time ? new Date(p.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '',
       lat: p.lat, lng: p.lng,
       accuracy: p.accuracy,
@@ -5704,7 +5765,7 @@ async function renderLogsTab(){
   });
 
   if(!LOGS_TAB_ROWS.length){
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">No punches recorded for '+attDisplayDate(day)+'</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">No punches recorded for '+range.label+'</td></tr>';
     return;
   }
 
@@ -5728,7 +5789,7 @@ async function renderLogsTab(){
     return '<tr>'+
       '<td style="font-weight:600;">'+r.employee+'</td>'+
       '<td>'+typeBadge+'</td>'+
-      '<td>'+r.time+'</td>'+
+      '<td>'+(r.date?attDisplayDate(r.date)+' · ':'')+r.time+'</td>'+
       '<td>'+locCell+'</td>'+
       '<td>'+accCell+'</td>'+
       '<td>'+radiusCell+'</td>'+
@@ -5739,20 +5800,19 @@ async function renderLogsTab(){
 }
 
 function exportLogsCSV(){
-  if(!LOGS_TAB_ROWS.length){ showToast('Nothing to export for this date','warning'); return; }
-  var header = ['Employee','Punch Type','Time','Latitude','Longitude','Accuracy (m)','Device','Selfie URL'];
+  if(!LOGS_TAB_ROWS.length){ showToast('Nothing to export for this period','warning'); return; }
+  var range = attLogsGetRange();
+  var header = ['Employee','Punch Type','Date','Time','Latitude','Longitude','Accuracy (m)','Device','Selfie URL'];
   var lines = [header.join(',')];
   LOGS_TAB_ROWS.forEach(function(r){
-    var csvRow = [r.employee, r.type, r.time, r.lat!=null?r.lat:'', r.lng!=null?r.lng:'', r.accuracy!=null?r.accuracy:'', r.device||'', r.selfie||'']
+    var csvRow = [r.employee, r.type, r.date||'', r.time, r.lat!=null?r.lat:'', r.lng!=null?r.lng:'', r.accuracy!=null?r.accuracy:'', r.device||'', r.selfie||'']
       .map(function(v){ v=String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; });
     lines.push(csvRow.join(','));
   });
   var blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
-  var dateInp = document.getElementById('logs-date-filter');
-  var day = dateInp ? dateInp.value : attToday();
-  a.href = url; a.download = 'punch-logs-'+day+'.csv';
+  a.href = url; a.download = 'punch-logs-'+range.from+'_to_'+range.to+'.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast('Punch logs exported','success');
