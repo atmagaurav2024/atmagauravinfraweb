@@ -1773,7 +1773,7 @@ input,select,textarea{font-size:16px !important;}
     <div class="att-monthly-grid">
       <div class="table-card">
         <div class="table-card-header">
-          <div class="tch-title">📊 Monthly Summary</div>
+          <div class="tch-title" id="att-monthly-title">📊 Monthly Summary — My Attendance</div>
           <div class="tch-actions">
             <select class="btn btn-outline" style="font-size:12px;cursor:pointer;" id="att-emp-sel">
               <option>My Attendance</option>
@@ -1809,7 +1809,8 @@ input,select,textarea{font-size:16px !important;}
       </div>
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div class="table-card" style="padding:20px;">
-          <div class="tch-title" style="margin-bottom:14px;">📈 My Month Stats</div>
+          <div class="tch-title" id="my-month-stats-title" style="margin-bottom:14px;">📈 Monthly Stats</div>
+          <div id="my-month-stats-emp" style="font-size:11px;color:var(--text3);margin-top:-10px;margin-bottom:12px;">Select an employee above</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div style="padding:12px;background:var(--bg3);border-radius:8px;text-align:center;">
               <div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:700;color:var(--green);" id="my-days-present">—</div>
@@ -1839,7 +1840,7 @@ input,select,textarea{font-size:16px !important;}
           </div>
         </div>
         <div class="table-card" style="padding:20px;">
-          <div class="tch-title" style="margin-bottom:12px;">💰 Salary Impact</div>
+          <div class="tch-title" id="my-salary-impact-title" style="margin-bottom:12px;">💰 Salary Impact</div>
           <div id="my-salary-impact" style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">Select an employee to view salary impact</div>
         </div>
       </div>
@@ -4263,6 +4264,23 @@ function populateAttEmpSel(){
   sel.innerHTML = opts;
   sel.value = ATT_CAL_EMP_ID || currentUser.id;
   sel.onchange = attReloadMonthlyCal;
+  attUpdateMonthlyLabels();
+}
+
+// Keeps every label in the Monthly View tab (card header, month-stats
+// panel, salary-impact panel) explicit about which employee's data is
+// currently on screen, since the employee dropdown alone gets missed —
+// especially after scrolling or on a screenshot/export.
+function attUpdateMonthlyLabels(){
+  var sel = document.getElementById('att-emp-sel');
+  var empName = (sel && sel.selectedIndex>=0) ? sel.options[sel.selectedIndex].textContent : 'My Attendance';
+  var isSelf = sel && currentUser && sel.value===currentUser.id;
+  var displayName = isSelf ? 'My Attendance' : empName;
+  var setTxt=function(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; };
+  setTxt('att-monthly-title', '📊 Monthly Summary — '+displayName);
+  setTxt('my-month-stats-title', isSelf ? '📈 My Month Stats' : '📈 Month Stats — '+displayName);
+  setTxt('my-month-stats-emp', 'Showing attendance for: '+displayName);
+  setTxt('my-salary-impact-title', isSelf ? '💰 My Salary Impact' : '💰 Salary Impact — '+displayName);
 }
 
 function attCalPrevMonth(){
@@ -4279,6 +4297,7 @@ function attCalNextMonth(){
 async function attReloadMonthlyCal(){
   var sel = document.getElementById('att-emp-sel');
   ATT_CAL_EMP_ID = (sel && sel.value) ? sel.value : currentUser.id;
+  attUpdateMonthlyLabels();
   var monthStart = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH, 1));
   var monthEnd = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH+1, 0));
   try{
