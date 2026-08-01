@@ -1982,14 +1982,14 @@ input,select,textarea{font-size:16px !important;}
     <div class="modal-body">
       <div class="fgrp">
         <label class="flabel">Employee</label>
-        <select class="fselect" id="leave-emp-sel">
+        <select class="fselect" id="leave-emp-sel" onchange="updateLeaveBalanceInfo()">
           <option value="">— Select Employee —</option>
         </select>
       </div>
       <div class="frow">
         <div class="fgrp">
           <label class="flabel">Leave Type</label>
-          <select class="fselect" id="leave-type-sel">
+          <select class="fselect" id="leave-type-sel" onchange="updateLeaveBalanceInfo()">
             <option>Casual Leave (CL)</option>
             <option>Sick Leave (SL)</option>
             <option>Earned Leave (EL)</option>
@@ -4567,6 +4567,73 @@ async function openLeaveModal() {
   var today = new Date().toISOString().slice(0,10);
   document.querySelectorAll('#leave-modal input[type=date]').forEach(function(el){el.value=today;});
   document.getElementById('leave-modal').classList.add('open');
+  updateLeaveBalanceInfo();
+}
+
+// Shows Allotted / Used / Balance for the selected employee + leave type
+// in the Apply for Leave modal. Allotted comes from Employee Management >
+// Leave Fixation; Used is the sum of that employee's APPROVED leave_requests
+// of this type within the current period (year/month/quarter, per how the
+// quota was fixed) — so once a leave gets approved, it's automatically
+// counted against the allotment the next time this is shown, with nothing
+// extra to track separately.
+async function updateLeaveBalanceInfo(){
+  var box = document.getElementById('leave-balance-info');
+  if(!box) return;
+  var empName = (document.getElementById('leave-emp-sel')||{}).value;
+  var leaveType = (document.getElementById('leave-type-sel')||{}).value;
+  if(!empName){ box.style.background='#E3F2FD'; box.style.borderColor='#BBDEFB'; box.style.color='var(--blue)'; box.innerHTML='ℹ️ Select employee to see leave balance'; return; }
+  var empMatch = (LEAVE_EMP_CACHE||[]).find(function(e){ return e.name===empName; });
+  if(!empMatch || !empMatch.id){ box.innerHTML='ℹ️ Select employee to see leave balance'; return; }
+
+  box.style.background='#E3F2FD'; box.style.borderColor='#BBDEFB'; box.style.color='var(--blue)';
+  box.innerHTML='⏳ Checking leave balance…';
+
+  try{
+    var fixRows = await sbFetch('employee_leave_fixation',{select:'*',filter:'employee_id=eq.'+empMatch.id+'&leave_type=eq.'+encodeURIComponent(leaveType)});
+    var fix = (Array.isArray(fixRows) && fixRows.length) ? fixRows[0] : null;
+    if(!fix){
+      box.style.background='#FFF3E0'; box.style.borderColor='#FFE0B2'; box.style.color='#E65100';
+      box.innerHTML='⚠️ No quota fixed for '+leaveType+'. Set one under Employee Management → Leave Fixation, or this will be treated as unrestricted.';
+      return;
+    }
+    var quota = parseFloat(fix.quota)||0;
+    var today = new Date();
+    var periodStart, periodEnd, periodLabel;
+    if(fix.period==='month'){
+      periodStart = attFmtDate(new Date(today.getFullYear(), today.getMonth(), 1));
+      periodEnd   = attFmtDate(new Date(today.getFullYear(), today.getMonth()+1, 0));
+      periodLabel = 'this month';
+    } else if(fix.period==='quarter'){
+      var qStartMonth = Math.floor(today.getMonth()/3)*3;
+      periodStart = attFmtDate(new Date(today.getFullYear(), qStartMonth, 1));
+      periodEnd   = attFmtDate(new Date(today.getFullYear(), qStartMonth+3, 0));
+      periodLabel = 'this quarter';
+    } else {
+      periodStart = today.getFullYear()+'-01-01';
+      periodEnd   = today.getFullYear()+'-12-31';
+      periodLabel = 'this year';
+    }
+
+    var approved = await sbFetch('leave_requests',{select:'days',filter:'emp_id=eq.'+empMatch.id+'&leave_type=eq.'+encodeURIComponent(leaveType)+'&status=eq.approved&from_date=gte.'+periodStart+'&from_date=lte.'+periodEnd});
+    var used = (Array.isArray(approved)?approved:[]).reduce(function(s,r){return s+(parseFloat(r.days)||0);},0);
+    var balance = quota-used;
+
+    var col = balance<=0 ? '#C62828' : (balance<=quota*0.2 ? '#E65100' : '#2E7D32');
+    var bg  = balance<=0 ? '#FFEBEE' : (balance<=quota*0.2 ? '#FFF3E0' : '#E8F5E9');
+    box.style.background=bg; box.style.borderColor=col+'40'; box.style.color=col;
+    box.innerHTML =
+      '<div style="display:flex;justify-content:space-between;gap:6px;font-weight:700;">'+
+        '<span>Allotted: '+quota+' '+(LEAVEFIX_PERIOD_LABEL[fix.period]||fix.period)+'</span>'+
+        '<span>Used ('+periodLabel+'): '+used+'</span>'+
+        '<span>Balance: '+balance+'</span>'+
+      '</div>'+
+      (balance<=0 ? '<div style="margin-top:4px;font-weight:600;">⚠️ No balance left — this application will exceed the allotted quota.</div>' : '');
+  }catch(e){
+    console.error(e);
+    box.style.background='#E3F2FD'; box.style.borderColor='#BBDEFB'; box.style.color='var(--blue)';
+    box.innerHTML='ℹ️ Could not check leave balance right now.';
+  }
 }
 
 async function submitLeave() {
