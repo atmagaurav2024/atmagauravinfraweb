@@ -3696,7 +3696,7 @@ async function attLoadAll(){
 
   var tLbl={'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'};
   leaveData = leaves.map(function(l){
-    return {id:l.id, empId:l.emp_id, emp:l.emp_name, type:tLbl[l.leave_type]||l.leave_type, rawType:l.leave_type, from:attDisplayDate(l.from_date), to:attDisplayDate(l.to_date), fromRaw:l.from_date, toRaw:l.to_date, days:l.days, reason:l.reason||'', applied:attDisplayDate((l.created_at||'').slice(0,10)), status:l.status, paid:(l.paid!==false)};
+    return {id:l.id, empId:l.emp_id, emp:l.emp_name, type:tLbl[l.leave_type]||l.leave_type, rawType:l.leave_type, from:attDisplayDate(l.from_date), to:attDisplayDate(l.to_date), fromRaw:l.from_date, toRaw:l.to_date, days:l.days, reason:l.reason||'', applied:attDisplayDate((l.created_at||'').slice(0,10)), status:l.status, paid:(l.paid!==false), approvedByName:l.approved_by_name||null, approvedAt:l.approved_at||null};
   });
 }
 function attDisplayDate(iso){
@@ -4523,10 +4523,10 @@ function renderLeave() {
       <td style="font-size:12px;color:var(--text3);">${l.applied}</td>
       <td>${l.status === 'approved'
         ? (l.paid===false
-            ? `<span class="att-badge b-half">✅ Approved (Unpaid)</span>`
-            : `<span class="att-badge b-present">✅ Approved</span>`)
+            ? `<span class="att-badge b-half" style="cursor:pointer;" onclick="showLeaveApprovalInfo(${i})" title="Click for approval details">✅ Approved (Unpaid)</span>`
+            : `<span class="att-badge b-present" style="cursor:pointer;" onclick="showLeaveApprovalInfo(${i})" title="Click for approval details">✅ Approved</span>`)
         : l.status === 'rejected'
-        ? `<span class="att-badge b-absent">✗ Rejected</span>`
+        ? `<span class="att-badge b-absent" style="cursor:pointer;" onclick="showLeaveApprovalInfo(${i})" title="Click for rejection details">✗ Rejected</span>`
         : `<span class="att-badge b-half">⏳ Pending</span>`
       }</td>
       <td style="white-space:nowrap;">
@@ -4610,13 +4610,15 @@ async function approveLeave(i) {
   var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
   if(!canApprove){ showToast('You do not have permission to approve leave','warning'); return; }
   var l = leaveData[i];
-  var prevStatus=l.status, prevPaid=l.paid;
-  l.status = 'approved'; l.paid = true;
+  var prevStatus=l.status, prevPaid=l.paid, prevBy=l.approvedByName, prevAt=l.approvedAt;
+  var now = new Date().toISOString();
+  var byName = (currentUser&&(currentUser.name||currentUser.email))||'Admin';
+  l.status = 'approved'; l.paid = true; l.approvedByName = byName; l.approvedAt = now;
   renderLeave();
   try{
-    await sbUpdate('leave_requests', l.id, {status:'approved', paid:true, approved_by:currentUser.id});
+    await sbUpdate('leave_requests', l.id, {status:'approved', paid:true, approved_by:currentUser.id, approved_by_name:byName, approved_at:now});
     showToast(`Leave approved for ${l.emp}`, 'success');
-  }catch(e){ l.status=prevStatus; l.paid=prevPaid; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+  }catch(e){ l.status=prevStatus; l.paid=prevPaid; l.approvedByName=prevBy; l.approvedAt=prevAt; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 
 // Approves the leave (so it's on record as authorized) but marks it unpaid:
@@ -4627,25 +4629,49 @@ async function approveLeaveUnpaid(i) {
   var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
   if(!canApprove){ showToast('You do not have permission to approve leave','warning'); return; }
   var l = leaveData[i];
-  var prevStatus=l.status, prevPaid=l.paid;
-  l.status = 'approved'; l.paid = false;
+  var prevStatus=l.status, prevPaid=l.paid, prevBy=l.approvedByName, prevAt=l.approvedAt;
+  var now = new Date().toISOString();
+  var byName = (currentUser&&(currentUser.name||currentUser.email))||'Admin';
+  l.status = 'approved'; l.paid = false; l.approvedByName = byName; l.approvedAt = now;
   renderLeave();
   try{
-    await sbUpdate('leave_requests', l.id, {status:'approved', paid:false, approved_by:currentUser.id});
+    await sbUpdate('leave_requests', l.id, {status:'approved', paid:false, approved_by:currentUser.id, approved_by_name:byName, approved_at:now});
     showToast(`Leave approved without pay for ${l.emp}`, 'success');
-  }catch(e){ l.status=prevStatus; l.paid=prevPaid; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+  }catch(e){ l.status=prevStatus; l.paid=prevPaid; l.approvedByName=prevBy; l.approvedAt=prevAt; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 
 async function rejectLeave(i) {
   var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
   if(!canApprove){ showToast('You do not have permission to reject leave','warning'); return; }
   var l = leaveData[i];
-  l.status = 'rejected';
+  var prevStatus=l.status, prevBy=l.approvedByName, prevAt=l.approvedAt;
+  var now = new Date().toISOString();
+  var byName = (currentUser&&(currentUser.name||currentUser.email))||'Admin';
+  l.status = 'rejected'; l.approvedByName = byName; l.approvedAt = now;
   renderLeave();
   try{
-    await sbUpdate('leave_requests', l.id, {status:'rejected', approved_by:currentUser.id});
+    await sbUpdate('leave_requests', l.id, {status:'rejected', approved_by:currentUser.id, approved_by_name:byName, approved_at:now});
     showToast('Leave rejected','error');
-  }catch(e){ l.status='pending'; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+  }catch(e){ l.status=prevStatus; l.approvedByName=prevBy; l.approvedAt=prevAt; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
+}
+
+// Small info popup on clicking the status badge — who approved/rejected
+// this leave and when. No-op for still-pending requests.
+function showLeaveApprovalInfo(i){
+  var l = leaveData[i];
+  if(!l) return;
+  if(l.status==='pending'){ showToast('Still pending — no decision recorded yet','info'); return; }
+  if(!l.approvedByName && !l.approvedAt){ showToast('No approver/timestamp recorded for this request (older record)','info'); return; }
+  var whenStr = '';
+  if(l.approvedAt){
+    var dt = new Date(l.approvedAt);
+    if(!isNaN(dt)){
+      whenStr = dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+', '+dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    }
+  }
+  var verb = l.status==='rejected' ? 'Rejected' : (l.paid===false ? 'Approved (Unpaid)' : 'Approved');
+  var msg = verb+' by '+(l.approvedByName||'—')+(whenStr?' on '+whenStr:'');
+  showToast(msg, l.status==='rejected'?'error':'success');
 }
 
 var LEAVE_EMP_CACHE = [];
