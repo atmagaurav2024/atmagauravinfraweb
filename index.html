@@ -6578,7 +6578,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
   <div style="background:#1B5E20;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128101; Employee Management</div>
-    <button class="tb-btn" id="emp-refresh-btn" title="Refresh" onclick="EMP_LIST=[];EMP_PAY=[];EMP_ORDERS=[];SALARY_RECORDS=[];initEmpMgmt();" style="font-size:16px;">&#8635;</button>
+    <button class="tb-btn" id="emp-refresh-btn" title="Refresh" onclick="EMP_LIST=[];EMP_PAY=[];EMP_LEAVEFIX=[];EMP_ORDERS=[];SALARY_RECORDS=[];initEmpMgmt();" style="font-size:16px;">&#8635;</button>
     <button class="tb-btn" id="emp-add-btn" onclick="empOpenForm(null)" style="font-size:20px;">&#43;</button>
   </div>
   <!-- Tab Bar -->
@@ -6586,6 +6586,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
     <button onclick="empTab('active',this)"   id="emp-t-active"   style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:rgba(255,255,255,.2);color:white;">&#9989; Active</button>
     <button onclick="empTab('pending',this)"  id="emp-t-pending"  style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#9203; Pending</button>
     <button onclick="empTab('pay',this)"      id="emp-t-pay"      style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128178; Pay Fixation</button>
+    <button onclick="empTab('leavefix',this)" id="emp-t-leavefix" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#127796; Leave Fixation</button>
     <button onclick="empTab('salary',this)" id="emp-t-salary" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128200; Monthly Salary</button>
     <button onclick="empTab('increment',this)" id="emp-t-increment" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128640; Increment</button>
     <button onclick="empTab('transfer',this)" id="emp-t-transfer" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128260; Transfer</button>
@@ -6616,6 +6617,15 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
   <div class="sh-foot" id="pay-sheet-foot"></div>
 </div>
 
+<!-- Leave Fixation Sheet -->
+<div class="sh-overlay" id="ov-leavefix" onclick="closeSheet('ov-leavefix','sh-leavefix')"></div>
+<div class="sheet" id="sh-leavefix">
+  <div class="sh-handle"></div>
+  <div class="sh-head"><div class="sh-title" id="leavefix-sheet-title">Leave Fixation</div><span class="sh-close" onclick="closeSheet('ov-leavefix','sh-leavefix')">&#10005;</span></div>
+  <div class="sh-body" id="leavefix-sheet-body"></div>
+  <div class="sh-foot" id="leavefix-sheet-foot"></div>
+</div>
+
 <!-- ═══════════ EMPLOYEE MANAGEMENT JS ═══════════ -->
 <script>
 // ════════════════════════════════════════════════════════════════
@@ -6623,7 +6633,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
 // Do NOT modify any code in this section without explicit user approval.
 // Any changes require user confirmation before implementation.
 // ════════════════════════════════════════════════════════════════
-var EMP_LIST=[], EMP_PAY=[], EMP_TAB='active', EMP_EDIT_ID=null;
+var EMP_LIST=[], EMP_PAY=[], EMP_LEAVEFIX=[], EMP_TAB='active', EMP_EDIT_ID=null;
 
 var EMP_DEPTS=['Site','Finance','HR/Admin','QC/Safety','Procurement','Planning','Management','Other'];
 var EMP_GRADES=['Grade-1','Grade-2','Grade-3','Grade-4','Grade-5','Manager','Sr. Manager','DGM','GM','Other'];
@@ -6657,19 +6667,24 @@ async function initEmpMgmt(){
     // Smart caching — skip DB fetch if already loaded
     var needEmps = !EMP_LIST.length;
     var needPay  = !EMP_PAY.length;
+    var needLeaveFix = !EMP_LEAVEFIX.length;
 
-    if(needEmps || needPay){
+    if(needEmps || needPay || needLeaveFix){
       var fetches = [
         needEmps
           ? sbFetch('employees',{select:'*', order:'created_at.desc'})
           : Promise.resolve(null),
         needPay
           ? sbFetch('employee_pay',{select:'*',order:'effective_date.desc'})
+          : Promise.resolve(null),
+        needLeaveFix
+          ? sbFetch('employee_leave_fixation',{select:'*'})
           : Promise.resolve(null)
       ];
       var r = await Promise.all(fetches);
       if(r[0]!==null) EMP_LIST = Array.isArray(r[0]) ? r[0] : [];
       if(r[1]!==null) EMP_PAY  = Array.isArray(r[1]) ? r[1] : [];
+      if(r[2]!==null) EMP_LEAVEFIX = Array.isArray(r[2]) ? r[2] : [];
     }
 
     // Load orders + salary records in background (non-blocking)
@@ -6688,7 +6703,7 @@ async function initEmpMgmt(){
 
 // Tab → AC_MODS key mapping
 var EMP_TAB_KEYS = {
-  active:'emp-active', pending:'emp-pending', pay:'emp-pay',
+  active:'emp-active', pending:'emp-pending', pay:'emp-pay', leavefix:'emp-leavefix',
   salary:'emp-salary', increment:'emp-increment', transfer:'emp-transfer',
   annual:'emp-annual', downloads:'emp-downloads', resigned:'emp-resigned'
 };
@@ -6726,6 +6741,7 @@ function empRender(){
   if(EMP_TAB==='active')   el.innerHTML=empListHTML('active');
   else if(EMP_TAB==='pending') el.innerHTML=empListHTML('pending');
   else if(EMP_TAB==='pay')       el.innerHTML=empPayHTML();
+  else if(EMP_TAB==='leavefix')  el.innerHTML=empLeaveFixHTML();
   else if(EMP_TAB==='resigned')  el.innerHTML=empListHTML('resigned');
   else if(EMP_TAB==='salary'){el.innerHTML=empSalaryHTML();salWireLogButtons();setTimeout(salWireInputs,100);}
   else if(EMP_TAB==='increment') el.innerHTML=empIncrementHTML();
@@ -8705,6 +8721,107 @@ function payMini(lbl,val,col){
     '<div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;">'+lbl+'</div>'+
     '<div style="font-size:12px;font-weight:900;color:'+col+';">&#8377;'+Number(val||0).toLocaleString('en-IN')+'</div>'+
   '</div>';
+}
+
+// ── LEAVE FIXATION ────────────────────────────────────
+// Fixes, per employee, how many leaves of each leave type (leave types
+// come from Master Registry / CAT_DATA.leave, not re-entered here) they
+// are entitled to and over what period (per Year / per Month / per
+// Quarter). Stored in employee_leave_fixation, one row per employee per
+// leave type.
+var LEAVEFIX_PERIOD_LABEL={year:'per Year',month:'per Month',quarter:'per Quarter'};
+
+function empLeaveFixHTML(){
+  var active=EMP_LIST.filter(function(e){return e.status==='active';});
+  if(!active.length)return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees. Approve employees first.</div>';
+
+  return active.map(function(e){
+    var name=(e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'');
+    var rows=EMP_LEAVEFIX.filter(function(f){return f.employee_id===e.id;});
+
+    var chipsHTML = rows.length
+      ? '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 12px;">'+
+          rows.map(function(f){
+            return '<span style="background:#E8F5E9;color:#2E7D32;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;">'+
+              (f.leave_type||'Leave')+': '+(f.quota||0)+' '+(LEAVEFIX_PERIOD_LABEL[f.period]||f.period||'')+
+            '</span>';
+          }).join('')+
+        '</div>'
+      : '<div style="padding:0 14px 12px;font-size:11px;color:var(--text3);">No leave quotas fixed yet.</div>';
+
+    return '<div style="background:white;border-radius:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;">'+
+        '<div>'+
+          '<div style="font-weight:800;font-size:13px;">'+name+'</div>'+
+          '<div style="font-size:10.5px;color:var(--text3);">'+(e.designation||e.role||'')+'</div>'+
+        '</div>'+
+        '<button onclick="empOpenLeaveFix(\''+e.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11.5px;font-weight:800;cursor:pointer;">&#127796; Fix Leaves</button>'+
+      '</div>'+
+      chipsHTML+
+    '</div>';
+  }).join('');
+}
+
+function empOpenLeaveFix(empId){
+  var e=EMP_LIST.find(function(x){return x.id===empId;});
+  if(!e){toast('Employee not found','warning');return;}
+  var name=(e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'');
+  var leaveTypes=(CAT_DATA.leave||[]).filter(function(c){return c.active;});
+  var existing={};
+  EMP_LEAVEFIX.filter(function(f){return f.employee_id===empId;}).forEach(function(f){existing[f.leave_type]=f;});
+
+  document.getElementById('leavefix-sheet-title').textContent='\u{1F334} Leave Fixation \u2014 '+name;
+  document.getElementById('leavefix-sheet-body').innerHTML=
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:14px;">Set the leave quota and period for each leave type. Leave a quota blank/0 to skip that type. Leave types themselves are managed under Settings &rarr; Master Registry.</div>'+
+    (leaveTypes.length ? leaveTypes.map(function(lt){
+      var ex=existing[lt.name];
+      return '<div style="display:grid;grid-template-columns:1.4fr 0.9fr 1fr;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #F0F0F0;">'+
+        '<div style="font-size:12.5px;font-weight:700;">'+lt.icon+' '+lt.name+'</div>'+
+        '<input type="number" min="0" step="0.5" id="lf-qty-'+lt.id+'" class="finp" placeholder="Qty" value="'+(ex?ex.quota:'')+'" style="margin:0;padding:7px 8px;">'+
+        '<select id="lf-period-'+lt.id+'" class="fsel" style="margin:0;padding:7px 8px;">'+
+          '<option value="year"'+(!ex||ex.period==='year'?' selected':'')+'>Per Year</option>'+
+          '<option value="month"'+(ex&&ex.period==='month'?' selected':'')+'>Per Month</option>'+
+          '<option value="quarter"'+(ex&&ex.period==='quarter'?' selected':'')+'>Per Quarter</option>'+
+        '</select>'+
+      '</div>';
+    }).join('') : '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">No leave types found in Master Registry. Add leave types there first.</div>');
+
+  var foot=document.getElementById('leavefix-sheet-foot');
+  foot.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-leavefix','sh-leavefix');};
+  var sb=document.createElement('button');sb.className='btn btn-navy';sb.textContent='Save';
+  sb.onclick=function(){empSaveLeaveFix(empId,leaveTypes);};
+  foot.appendChild(cb);foot.appendChild(sb);
+  openSheet('ov-leavefix','sh-leavefix');
+}
+
+async function empSaveLeaveFix(empId,leaveTypes){
+  var rows=[];
+  leaveTypes.forEach(function(lt){
+    var qtyInp=document.getElementById('lf-qty-'+lt.id);
+    var periodInp=document.getElementById('lf-period-'+lt.id);
+    var qty=qtyInp?parseFloat(qtyInp.value):0;
+    if(qty>0){
+      rows.push({leave_type:lt.name, quota:qty, period:periodInp?periodInp.value:'year'});
+    }
+  });
+  try{
+    // Replace this employee's leave fixation rows wholesale — simplest way
+    // to keep it consistent with whatever is currently on the form
+    // (including types that were cleared back to 0/blank).
+    var toDelete=EMP_LEAVEFIX.filter(function(f){return f.employee_id===empId;});
+    for(var i=0;i<toDelete.length;i++){ await sbDelete('employee_leave_fixation',toDelete[i].id); }
+    EMP_LEAVEFIX=EMP_LEAVEFIX.filter(function(f){return f.employee_id!==empId;});
+
+    for(var j=0;j<rows.length;j++){
+      var res=await sbInsert('employee_leave_fixation',{employee_id:empId,leave_type:rows[j].leave_type,quota:rows[j].quota,period:rows[j].period,effective_date:new Date().toISOString().slice(0,10)});
+      if(res&&res[0]) EMP_LEAVEFIX.push(res[0]);
+    }
+    closeSheet('ov-leavefix','sh-leavefix');
+    toast('Leave quotas saved','success');
+    empRender();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 // ── EMPLOYEE FORM ─────────────────────────────────────
@@ -16343,6 +16460,7 @@ var AC_MODS=[
   {key:'emp-active',       label:'Active Employees',   icon:'&#128101;',group:'Employee',      params:['view','add','edit','delete']},
   {key:'emp-pending',      label:'Pending Approvals',  icon:'&#9203;',  group:'Employee',      params:['view','edit','delete']},
   {key:'emp-pay',          label:'Pay Fixation',       icon:'&#128178;',group:'Employee',      params:['view','add','edit','delete']},
+  {key:'emp-leavefix',     label:'Leave Fixation',     icon:'&#127796;',group:'Employee',      params:['view','add','edit','delete']},
   {key:'emp-salary',       label:'Monthly Salary',     icon:'&#128200;',group:'Employee',      params:['view','add','edit','delete']},
   {key:'emp-increment',    label:'Increment',          icon:'&#128308;',group:'Employee',      params:['view','add','edit','delete']},
   {key:'emp-transfer',     label:'Transfer',           icon:'&#128260;',group:'Employee',      params:['view','add','edit','delete']},
