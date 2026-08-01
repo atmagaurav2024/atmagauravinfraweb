@@ -17527,8 +17527,18 @@ function downloadTransferOrder(empId, type, details){
 }
 
 
-function downloadShowCauseNotice(empId, orderId){
-  var emp = EMP_LIST.find(function(e){return e.id===empId;})||{};
+async function downloadShowCauseNotice(empId, orderId){
+  // Don't rely solely on EMP_LIST/EMP_ORDERS — this is often triggered
+  // straight from Attendance > Leave Management, before Employee
+  // Management has ever loaded those caches in this session. Fall back to
+  // fetching directly so the notice is never generated blank.
+  var emp = EMP_LIST.find(function(e){return e.id===empId;});
+  if(!emp){
+    try{
+      var freshEmp = await sbFetch('employees',{select:'*',filter:'id=eq.'+empId});
+      emp = (Array.isArray(freshEmp)&&freshEmp.length) ? freshEmp[0] : {};
+    }catch(ex){ console.warn('Could not fetch employee for show cause notice', ex); emp = {}; }
+  }
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
   var code  = emp.employee_code||emp.emp_id||'—';
   var today = fmtDate(new Date());
@@ -17537,6 +17547,13 @@ function downloadShowCauseNotice(empId, orderId){
   var compGST  = typeof coGST==='function'?coGST():'';
 
   var order = EMP_ORDERS.find(function(o){return o.id===orderId;});
+  if(!order){
+    try{
+      var freshOrder = await sbFetch('employee_orders',{select:'*',filter:'id=eq.'+orderId});
+      order = (Array.isArray(freshOrder)&&freshOrder.length) ? freshOrder[0] : null;
+      if(order) EMP_ORDERS.unshift(order);
+    }catch(ex){ console.warn('Could not fetch order for show cause notice', ex); }
+  }
   var d = {}; if(order){try{d=JSON.parse(order.details||'{}');}catch(ex){}}
   var noticeDate = order?order.effective_date:today;
   var noticeDateFmt = fmtDate(noticeDate);
