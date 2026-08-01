@@ -4520,6 +4520,7 @@ function renderCal() {
 function renderLeave() {
   const tbody = document.getElementById('leave-tbody');
   var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
+  var canDelete = typeof canAccess==='function' ? canAccess('attendance','delete') : (currentUser&&currentUser.role==='admin');
   tbody.innerHTML = leaveData.map((l, i) => `
     <tr class="anim" style="animation-delay:${i*0.05}s">
       <td style="font-weight:600;color:var(--text);">${l.emp}</td>
@@ -4537,17 +4538,36 @@ function renderLeave() {
         ? `<span class="att-badge b-absent">✗ Rejected</span>`
         : `<span class="att-badge b-half">⏳ Pending</span>`
       }</td>
-      <td>
+      <td style="white-space:nowrap;">
         ${l.status === 'pending' && canApprove
           ? `<button class="btn btn-green btn-sm" onclick="approveLeave(${i})">✅ Approve</button>
              <button class="btn btn-outline btn-sm" onclick="approveLeaveUnpaid(${i})" style="margin-left:4px;" title="Approve as unpaid — will count as a salary deduction and won't use up the paid leave quota">🚫 Approve w/o Pay</button>
              <button class="btn btn-outline btn-sm" onclick="openLeaveRejectModal(${i})" style="margin-left:4px;">✕ Reject</button>`
           : (l.status === 'pending' ? `<span style="font-size:11px;color:var(--text3);">Awaiting approver</span>` : '')
         }
+        ${canDelete
+          ? `<button class="btn btn-outline btn-sm" onclick="deleteLeaveRecord(${i})" style="margin-left:4px;color:#C62828;border-color:#C62828;" title="Delete this leave record permanently">🗑</button>`
+          : ''
+        }
       </td>
     </tr>
   `).join('');
 }
+
+async function deleteLeaveRecord(i){
+  var canDelete = typeof canAccess==='function' ? canAccess('attendance','delete') : (currentUser&&currentUser.role==='admin');
+  if(!canDelete){ showToast('You do not have permission to delete leave records','warning'); return; }
+  var l = leaveData[i];
+  if(!l) return;
+  if(!confirm('Delete this leave record for '+l.emp+' ('+l.type+', '+l.from+' to '+l.to+')? This cannot be undone.')) return;
+  try{
+    await sbDelete('leave_requests', l.id);
+    leaveData.splice(i,1);
+    renderLeave();
+    showToast('Leave record deleted','success');
+  }catch(e){ showToast('Failed to delete: '+e.message,'error'); }
+}
+
 
 async function approveLeave(i) {
   var canApprove = typeof canAccess==='function' ? canAccess('attendance','approve_leave') : (currentUser&&currentUser.role==='admin');
