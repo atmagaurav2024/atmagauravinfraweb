@@ -4591,6 +4591,19 @@ async function issueShowCauseNotice(i){
   }
 }
 
+// Approving/rejecting/deleting a leave can change what Salary Impact
+// (Attendance > Monthly View) and the Monthly Salary Finalisation's
+// auto-filled LWP Days should show — but those live in different tabs/
+// modules that don't otherwise get notified. Both functions already
+// no-op safely if their DOM isn't currently on screen, so it's safe to
+// call this unconditionally after any leave decision, giving an
+// immediate refresh if the affected view happens to be open, instead of
+// requiring the user to re-select the employee/month manually.
+function refreshLeaveDependentViews(){
+  try{ if(typeof attRenderSalaryImpact==='function') attRenderSalaryImpact(); }catch(e){}
+  try{ if(typeof salLoadLOPDays==='function') salLoadLOPDays(); }catch(e){}
+}
+
 async function deleteLeaveRecord(i){
   var canDelete = typeof canAccess==='function' ? canAccess('attendance','delete') : (currentUser&&currentUser.role==='admin');
   if(!canDelete){ showToast('You do not have permission to delete leave records','warning'); return; }
@@ -4602,6 +4615,7 @@ async function deleteLeaveRecord(i){
     leaveData.splice(i,1);
     renderLeave();
     showToast('Leave record deleted','success');
+    refreshLeaveDependentViews();
   }catch(e){ showToast('Failed to delete: '+e.message,'error'); }
 }
 
@@ -4643,6 +4657,7 @@ async function approveLeave(i) {
   try{
     await sbUpdate('leave_requests', l.id, {status:'approved', paid:true, approved_by:currentUser.id, approved_by_name:byName, approved_at:now});
     showToast(`Leave approved for ${l.emp}`, 'success');
+    refreshLeaveDependentViews();
   }catch(e){ l.status=prevStatus; l.paid=prevPaid; l.approvedByName=prevBy; l.approvedAt=prevAt; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 
@@ -4662,6 +4677,7 @@ async function approveLeaveUnpaid(i) {
   try{
     await sbUpdate('leave_requests', l.id, {status:'approved', paid:false, approved_by:currentUser.id, approved_by_name:byName, approved_at:now});
     showToast(`Leave approved without pay for ${l.emp}`, 'success');
+    refreshLeaveDependentViews();
   }catch(e){ l.status=prevStatus; l.paid=prevPaid; l.approvedByName=prevBy; l.approvedAt=prevAt; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 
@@ -4677,6 +4693,7 @@ async function rejectLeave(i) {
   try{
     await sbUpdate('leave_requests', l.id, {status:'rejected', approved_by:currentUser.id, approved_by_name:byName, approved_at:now});
     showToast('Leave rejected','error');
+    refreshLeaveDependentViews();
   }catch(e){ l.status=prevStatus; l.approvedByName=prevBy; l.approvedAt=prevAt; renderLeave(); showToast('Failed to save: '+e.message,'error'); }
 }
 
