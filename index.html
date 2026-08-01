@@ -6745,7 +6745,7 @@ async function initEmpMgmt(){
           ? sbFetch('employee_pay',{select:'*',order:'effective_date.desc'})
           : Promise.resolve(null),
         needLeaveFix
-          ? sbFetch('employee_leave_fixation',{select:'*'})
+          ? sbFetch('employee_leave_fixation',{select:'*'}).catch(function(e){ console.error('employee_leave_fixation fetch failed — table may not exist yet:',e); return []; })
           : Promise.resolve(null)
       ];
       var r = await Promise.all(fetches);
@@ -6763,7 +6763,7 @@ async function initEmpMgmt(){
   // Hide tabs user cannot access
   empHideForbiddenTabs();
   // Open first accessible tab
-  var allTabs = ['active','pending','pay','salary','increment','transfer','annual','downloads','resigned'];
+  var allTabs = ['active','pending','pay','leavefix','salary','increment','transfer','annual','downloads','resigned'];
   var firstTab = allTabs.find(function(t){ return empTabAllowed(t); }) || 'active';
   empTab(firstTab, document.getElementById('emp-t-'+firstTab));
 }
