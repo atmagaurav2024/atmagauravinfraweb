@@ -16787,16 +16787,167 @@ function accLedger(){
     '<div id="ledger-body"><div style="text-align:center;padding:30px;color:var(--text3);">Select account to view ledger</div></div>';
 }
 
+// ── Account balance math ─────────────────────────────────────────────────
+// Debit increases Assets & Expenses; Credit increases Liabilities, Income
+// & Equity. Opening balances count toward the account's normal side.
+function accIsDebitNormal(a){ return a.type==='Asset'||a.type==='Expense'; }
+function accMovements(accountId){
+  var dr=0, cr=0;
+  ACC_VOUCHERS.forEach(function(v){
+    if(v.debit_account===accountId) dr+=(parseFloat(v.amount)||0);
+    if(v.credit_account===accountId) cr+=(parseFloat(v.amount)||0);
+  });
+  return {dr:dr, cr:cr};
+}
+function accNetBalance(a){ // +ve = balance on the account's normal side
+  var m=accMovements(a.id);
+  var open=parseFloat(a.opening_balance)||0;
+  return accIsDebitNormal(a) ? open+m.dr-m.cr : open+m.cr-m.dr;
+}
+
+function accLoadLedger(accountId){
+  var body=document.getElementById('ledger-body');
+  if(!body) return;
+  if(!accountId){ body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Select account to view ledger</div>'; return; }
+  var a=ACC_ACCOUNTS.find(function(x){return x.id===accountId;});
+  if(!a){ body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Account not found</div>'; return; }
+  var entries=ACC_VOUCHERS
+    .filter(function(v){ return v.debit_account===accountId || v.credit_account===accountId; })
+    .sort(function(x,y){ return String(x.date||'').localeCompare(String(y.date||'')); });
+  var open=parseFloat(a.opening_balance)||0;
+  var run=open; // running balance on the account's normal side
+  var rows=entries.map(function(v){
+    var isDr=v.debit_account===accountId;
+    var amt=parseFloat(v.amount)||0;
+    run += (accIsDebitNormal(a) ? (isDr?amt:-amt) : (isDr?-amt:amt));
+    return '<tr><td>'+fmtDate(v.date)+'</td><td>'+(v.vou_no||v.voucher_no||'—')+'</td>'+
+      '<td>'+(v.narration||v.party_name||'—')+'</td>'+
+      '<td style="text-align:right;">'+(isDr?fmtINR(amt):'—')+'</td>'+
+      '<td style="text-align:right;">'+(!isDr?fmtINR(amt):'—')+'</td>'+
+      '<td style="text-align:right;font-weight:700;">'+fmtINR(Math.abs(run))+' '+(run>=0?(accIsDebitNormal(a)?'Dr':'Cr'):(accIsDebitNormal(a)?'Cr':'Dr'))+'</td></tr>';
+  }).join('');
+  body.innerHTML=
+    '<div style="font-size:13px;font-weight:800;margin-bottom:8px;">'+a.code+' — '+a.name+' <span style="font-weight:400;color:var(--text3);">('+a.type+')</span></div>'+
+    '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Voucher</th><th>Narration</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Balance</th></tr></thead><tbody>'+
+    '<tr><td colspan="5" style="font-weight:700;color:var(--text3);">Opening Balance</td><td style="text-align:right;font-weight:700;">'+fmtINR(Math.abs(open))+' '+(accIsDebitNormal(a)?'Dr':'Cr')+'</td></tr>'+
+    (rows||'<tr><td colspan="6" style="text-align:center;color:var(--text3);">No transactions for this account</td></tr>')+
+    '</tbody></table></div>';
+}
+
 function accReports(){
   var cont=document.getElementById('acc-content');if(!cont)return;
   cont.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:14px;">Reports</div>'+
-    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">'+
-      ['Trial Balance','P&L Statement','Balance Sheet','Cash Flow'].map(function(r){
-        return '<div class="card" style="cursor:pointer;text-align:center;padding:20px;">'+
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">'+
+      [['trial','Trial Balance'],['pl','P&L Statement'],['bs','Balance Sheet'],['cash','Cash Flow']].map(function(r){
+        return '<div class="card" style="cursor:pointer;text-align:center;padding:20px;" onclick="accShowReport(\''+r[0]+'\')">'+
           '<div style="font-size:24px;margin-bottom:8px;">📊</div>'+
-          '<div style="font-size:13px;font-weight:800;">'+r+'</div>'+
+          '<div style="font-size:13px;font-weight:800;">'+r[1]+'</div>'+
         '</div>';
-      }).join('')+'</div>';
+      }).join('')+'</div>'+
+    '<div id="acc-report-body"><div style="text-align:center;padding:20px;color:var(--text3);">Select a report above</div></div>';
+}
+
+function accShowReport(which){
+  var body=document.getElementById('acc-report-body');
+  if(!body) return;
+  if(!ACC_ACCOUNTS.length){ body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No accounts set up yet — see Chart of Accounts.</div>'; return; }
+
+  if(which==='trial'){
+    var totDr=0, totCr=0;
+    var rows=ACC_ACCOUNTS.map(function(a){
+      var bal=accNetBalance(a);
+      if(Math.abs(bal)<0.005) return '';
+      var drBal = accIsDebitNormal(a) ? (bal>0?bal:0) : (bal<0?-bal:0);
+      var crBal = accIsDebitNormal(a) ? (bal<0?-bal:0) : (bal>0?bal:0);
+      totDr+=drBal; totCr+=crBal;
+      return '<tr><td><code>'+a.code+'</code></td><td>'+a.name+'</td><td>'+a.type+'</td>'+
+        '<td style="text-align:right;">'+(drBal?fmtINR(drBal):'—')+'</td>'+
+        '<td style="text-align:right;">'+(crBal?fmtINR(crBal):'—')+'</td></tr>';
+    }).join('');
+    var balanced=Math.abs(totDr-totCr)<0.01;
+    body.innerHTML='<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Trial Balance</div>'+
+      '<div class="table-card"><table class="att-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th></tr></thead><tbody>'+
+      (rows||'<tr><td colspan="5" style="text-align:center;color:var(--text3);">No balances yet</td></tr>')+
+      '<tr style="background:#F3E5F5;font-weight:900;"><td colspan="3">TOTAL</td><td style="text-align:right;">'+fmtINR(totDr)+'</td><td style="text-align:right;">'+fmtINR(totCr)+'</td></tr>'+
+      '</tbody></table></div>'+
+      (balanced?'<div style="font-size:11px;color:#2E7D32;font-weight:700;margin-top:6px;">✓ Debits equal Credits — books are balanced</div>'
+               :'<div style="font-size:11px;color:#C62828;font-weight:700;margin-top:6px;">⚠ Difference of '+fmtINR(Math.abs(totDr-totCr))+' — usually caused by one-sided opening balances or vouchers missing a debit/credit account</div>');
+    return;
+  }
+
+  if(which==='pl'){
+    var income=0, expense=0, incRows='', expRows='';
+    ACC_ACCOUNTS.forEach(function(a){
+      var bal=accNetBalance(a);
+      if(Math.abs(bal)<0.005) return;
+      if(a.type==='Income'){ income+=bal; incRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
+      if(a.type==='Expense'){ expense+=bal; expRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
+    });
+    var net=income-expense;
+    body.innerHTML='<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Profit &amp; Loss Statement</div>'+
+      '<div class="table-card"><table class="att-table"><tbody>'+
+      '<tr style="background:#E8F5E9;font-weight:800;"><td>INCOME</td><td style="text-align:right;">'+fmtINR(income)+'</td></tr>'+(incRows||'<tr><td colspan="2" style="color:var(--text3);">No income recorded</td></tr>')+
+      '<tr style="background:#FFEBEE;font-weight:800;"><td>EXPENSES</td><td style="text-align:right;">'+fmtINR(expense)+'</td></tr>'+(expRows||'<tr><td colspan="2" style="color:var(--text3);">No expenses recorded</td></tr>')+
+      '<tr style="background:'+(net>=0?'#E8F5E9':'#FFEBEE')+';font-weight:900;font-size:13px;"><td>NET '+(net>=0?'PROFIT':'LOSS')+'</td><td style="text-align:right;color:'+(net>=0?'#2E7D32':'#C62828')+';">'+fmtINR(Math.abs(net))+'</td></tr>'+
+      '</tbody></table></div>';
+    return;
+  }
+
+  if(which==='bs'){
+    var assets=0, liab=0, equity=0, aRows='', lRows='', eRows='', income=0, expense=0;
+    ACC_ACCOUNTS.forEach(function(a){
+      var bal=accNetBalance(a);
+      if(a.type==='Income') income+=bal;
+      if(a.type==='Expense') expense+=bal;
+      if(Math.abs(bal)<0.005) return;
+      if(a.type==='Asset'){ assets+=bal; aRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
+      if(a.type==='Liability'){ liab+=bal; lRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
+      if(a.type==='Equity'){ equity+=bal; eRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
+    });
+    var netProfit=income-expense;
+    var totalLE=liab+equity+netProfit;
+    body.innerHTML='<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Balance Sheet</div>'+
+      '<div class="table-card"><table class="att-table"><tbody>'+
+      '<tr style="background:#E3F2FD;font-weight:800;"><td>ASSETS</td><td style="text-align:right;">'+fmtINR(assets)+'</td></tr>'+(aRows||'<tr><td colspan="2" style="color:var(--text3);">None</td></tr>')+
+      '<tr style="background:#FFF3E0;font-weight:800;"><td>LIABILITIES</td><td style="text-align:right;">'+fmtINR(liab)+'</td></tr>'+(lRows||'<tr><td colspan="2" style="color:var(--text3);">None</td></tr>')+
+      '<tr style="background:#F3E5F5;font-weight:800;"><td>EQUITY</td><td style="text-align:right;">'+fmtINR(equity)+'</td></tr>'+(eRows||'<tr><td colspan="2" style="color:var(--text3);">None</td></tr>')+
+      '<tr><td>Net Profit (current)</td><td style="text-align:right;">'+fmtINR(netProfit)+'</td></tr>'+
+      '<tr style="font-weight:900;"><td>TOTAL LIABILITIES + EQUITY</td><td style="text-align:right;">'+fmtINR(totalLE)+'</td></tr>'+
+      '</tbody></table></div>'+
+      (Math.abs(assets-totalLE)<0.01?'<div style="font-size:11px;color:#2E7D32;font-weight:700;margin-top:6px;">✓ Assets = Liabilities + Equity</div>'
+        :'<div style="font-size:11px;color:#C62828;font-weight:700;margin-top:6px;">⚠ Off by '+fmtINR(Math.abs(assets-totalLE))+' — check opening balances</div>');
+    return;
+  }
+
+  if(which==='cash'){
+    var cashAccts=ACC_ACCOUNTS.filter(function(a){ return ['1001','1002','1101'].indexOf(String(a.code))>-1 || /cash|bank/i.test(a.name||''); });
+    if(!cashAccts.length){ body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No cash/bank accounts found</div>'; return; }
+    var cashIds={}; cashAccts.forEach(function(a){ cashIds[a.id]=a; });
+    var inflow=0, outflow=0;
+    var rows=ACC_VOUCHERS
+      .filter(function(v){ return cashIds[v.debit_account]||cashIds[v.credit_account]; })
+      .sort(function(x,y){ return String(y.date||'').localeCompare(String(x.date||'')); })
+      .map(function(v){
+        var amt=parseFloat(v.amount)||0;
+        // Money INTO a cash/bank account = that account debited; OUT = credited.
+        // A Contra (both sides cash-like, e.g. Bank -> Petty Cash) nets to zero movement overall.
+        var isIn=!!cashIds[v.debit_account], isOut=!!cashIds[v.credit_account];
+        if(isIn&&!isOut) inflow+=amt; else if(isOut&&!isIn) outflow+=amt;
+        var tag = isIn&&isOut ? '<span style="color:var(--text3);font-weight:700;">↔ Internal</span>' : (isIn?'<span style="color:#2E7D32;font-weight:700;">↓ In</span>':'<span style="color:#C62828;font-weight:700;">↑ Out</span>');
+        return '<tr><td>'+fmtDate(v.date)+'</td><td>'+(v.vou_no||v.voucher_no||'—')+'</td><td>'+(v.narration||v.party_name||'—')+'</td><td>'+tag+'</td><td style="text-align:right;">'+fmtINR(amt)+'</td></tr>';
+      }).join('');
+    var opening=cashAccts.reduce(function(s,a){return s+(parseFloat(a.opening_balance)||0);},0);
+    body.innerHTML='<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Cash Flow (Cash, Bank &amp; Petty Cash)</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INFLOW</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(inflow)+'</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTFLOW</div><div style="font-size:16px;font-weight:900;color:#C62828;">'+fmtINR(outflow)+'</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">NET (incl. opening)</div><div style="font-size:16px;font-weight:900;color:var(--navy);">'+fmtINR(opening+inflow-outflow)+'</div></div>'+
+      '</div>'+
+      '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Voucher</th><th>Narration</th><th>Flow</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+
+      (rows||'<tr><td colspan="5" style="text-align:center;color:var(--text3);">No cash/bank movements yet</td></tr>')+
+      '</tbody></table></div>';
+    return;
+  }
 }
 
 function accGstTab(){
