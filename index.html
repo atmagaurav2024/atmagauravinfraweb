@@ -17494,6 +17494,80 @@ function accOpenGstVoucher(kind, amount){
   },80);
 }
 
+var GST_DRILL=null;
+
+// Drill-down popup for the GST KPI cards — shows exactly which bills or
+// entries make up each figure, so the number is always traceable.
+function gstShowDetail(which){
+  if(!GST_DRILL){ toast('Open the GST tab first','info'); return; }
+  var d=GST_DRILL;
+  var title='', body='';
+  var tbl=function(head, rows, note){
+    return (note?'<div style="font-size:10.5px;color:var(--text3);margin-bottom:8px;">'+note+'</div>':'')+
+      (rows?'<div class="table-card" style="margin:0;"><table class="att-table"><thead><tr>'+
+        head.map(function(h,i){return '<th style="text-align:'+(i===0?'left':'right')+';">'+h+'</th>';}).join('')+
+        '</tr></thead><tbody>'+rows+'</tbody></table></div>'
+       :'<div style="text-align:center;padding:20px;color:var(--text3);">Nothing to show yet</div>');
+  };
+
+  if(which==='out'){
+    title='Output GST — Bill-wise';
+    var rows=d.outRows.filter(function(x){return x.gst>0;})
+      .map(function(x){
+        return '<tr><td>'+(x.bill.bill_ref||('#'+x.bill.bill_number))+
+          '<div style="font-size:10px;color:var(--text3);">'+fmtDate(x.bill.bill_date)+(x.proj&&x.proj.name?' · '+x.proj.name:'')+'</div></td>'+
+          '<td style="text-align:right;">'+fmtINR(x.taxable)+'</td>'+
+          '<td style="text-align:right;font-weight:700;color:#E65100;">'+fmtINR(x.gst)+'</td></tr>';
+      }).join('');
+    rows+='<tr style="background:#FFF3E0;font-weight:900;"><td>TOTAL</td><td style="text-align:right;">'+fmtINR(d.outTaxable)+'</td><td style="text-align:right;">'+fmtINR(d.outGst)+'</td></tr>';
+    body=tbl(['Bill','Taxable','GST'],rows,'GST charged to clients on sales bills. This is collected on the government\u2019s behalf \u2014 it is not income.');
+  }
+  else if(which==='itc'){
+    title='ITC Available — Working';
+    var rows=d.inRows.filter(function(x){return x.gst>0;})
+      .map(function(x){
+        return '<tr><td>'+(x.bill.bill_ref||x.bill.bill_number||'—')+(x.isOverhead?' <span style="font-size:9px;color:#4A148C;font-weight:700;">OVERHEAD</span>':'')+
+          '<div style="font-size:10px;color:var(--text3);">'+fmtDate(x.bill.bill_date)+(x.bill.party_name?' · '+x.bill.party_name:'')+'</div></td>'+
+          '<td style="text-align:right;">'+fmtINR(x.taxable)+'</td>'+
+          '<td style="text-align:right;font-weight:700;color:#2E7D32;">'+fmtINR(x.gst)+'</td></tr>';
+      }).join('');
+    rows+='<tr style="background:#E8F5E9;font-weight:900;"><td>TOTAL ITC EARNED</td><td style="text-align:right;">'+fmtINR(d.inTaxable)+'</td><td style="text-align:right;">'+fmtINR(d.inGst)+'</td></tr>';
+    rows+='<tr><td>Less: already set off</td><td></td><td style="text-align:right;color:#C62828;">− '+fmtINR(d.setoffTotal)+'</td></tr>';
+    rows+='<tr style="background:#E8F5E9;font-weight:900;"><td>ITC AVAILABLE</td><td></td><td style="text-align:right;">'+fmtINR(d.itcAvailable)+'</td></tr>';
+    body=tbl(['Purchase / Overhead','Taxable','GST'],rows,'GST paid on purchases and overheads where credit is claimable. Blocked-credit items are excluded.');
+  }
+  else if(which==='setoff'){
+    title='ITC Set Off — Entries';
+    var rows=d.setoffs.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));})
+      .map(function(v){
+        return '<tr><td>'+(v.vou_no||v.voucher_no||'—')+
+          '<div style="font-size:10px;color:var(--text3);">'+fmtDate(v.date)+(v.narration?' · '+v.narration:'')+'</div></td>'+
+          '<td style="text-align:right;font-weight:700;color:#1565C0;">'+fmtINR(parseFloat(v.amount)||0)+'</td></tr>';
+      }).join('');
+    if(rows) rows+='<tr style="background:#E3F2FD;font-weight:900;"><td>TOTAL SET OFF</td><td style="text-align:right;">'+fmtINR(d.setoffTotal)+'</td></tr>';
+    body=tbl(['Voucher','Amount'],rows,'Journal entries where input credit was utilised against GST payable (Dr GST Payable / Cr GST Input Credit).');
+  }
+  else if(which==='net'){
+    title='Net GST Payable — Working';
+    var paid=d.gstPayments.reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);
+    var rows=
+      '<tr><td>Output GST on sales</td><td style="text-align:right;font-weight:700;">'+fmtINR(d.outGst)+'</td></tr>'+
+      '<tr><td>Less: ITC actually set off</td><td style="text-align:right;color:#2E7D32;">− '+fmtINR(d.setoffTotal)+'</td></tr>'+
+      '<tr style="background:#FFEBEE;font-weight:900;"><td>NET GST '+(d.netPayable>=0?'PAYABLE':'CREDIT')+'</td><td style="text-align:right;">'+fmtINR(Math.abs(d.netPayable))+'</td></tr>'+
+      '<tr><td style="padding-top:10px;color:var(--text3);">Already paid to Government</td><td style="text-align:right;padding-top:10px;color:var(--text3);">'+fmtINR(paid)+'</td></tr>'+
+      (d.itcAvailable>0.5?'<tr><td style="color:#E65100;">Unused ITC still available</td><td style="text-align:right;color:#E65100;font-weight:700;">'+fmtINR(d.itcAvailable)+'</td></tr>':'');
+    body=tbl(['Particulars','Amount'],rows,
+      d.itcAvailable>0.5
+        ? 'Net payable counts only credit you have actually set off. Setting off the remaining '+fmtINR(d.itcAvailable)+' would reduce this further.'
+        : 'Net payable = output GST less the input credit you have set off.');
+  }
+
+  document.getElementById('acc-sheet-title').textContent=title;
+  document.getElementById('acc-sheet-body').innerHTML=body;
+  document.getElementById('acc-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeAccSheet()">Close</button>';
+  openSheet('ov-acc','sh-acc');
+}
+
 async function accGstTab(){
   var cont=document.getElementById('acc-content');if(!cont)return;
   cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading GST summary…</div>';
@@ -17582,6 +17656,11 @@ async function accGstTab(){
     var itcAvailable=inGst-setoffTotal;
     var netPayable=outGst-setoffTotal;
 
+    // Cache for the KPI drill-down popups
+    GST_DRILL={outRows:outRows, inRows:inRows, setoffs:setoffs, gstPayments:gstPayments,
+      outGst:outGst, inGst:inGst, setoffTotal:setoffTotal, itcAvailable:itcAvailable,
+      netPayable:netPayable, outTaxable:outTaxable, inTaxable:inTaxable};
+
     var gstSettlementHtml=
       '<div style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:10px;padding:10px 12px;margin-bottom:14px;">'+
         '<div style="font-size:12px;font-weight:900;color:#4A148C;margin-bottom:8px;">&#9878;&#65039; GST Settlement</div>'+
@@ -17601,10 +17680,10 @@ async function accGstTab(){
       '<div style="font-size:16px;font-weight:800;margin-bottom:4px;">GST Summary</div>'+
       '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">Output GST from Sales Bills; ITC from Purchase/Work Bills and Company Overheads. Net payable counts only ITC you have actually set off. For information only — verify before filing GSTR-1 / GSTR-3B.</div>'+
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTPUT GST (SALES)</div><div style="font-size:16px;font-weight:900;color:#E65100;">'+fmtINR(outGst)+'</div><div style="font-size:9px;color:var(--text3);">on '+fmtINR(outTaxable)+' taxable</div></div>'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ITC AVAILABLE</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(itcAvailable)+'</div><div style="font-size:9px;color:var(--text3);">'+fmtINR(inGst)+' earned − '+fmtINR(setoffTotal)+' used</div></div>'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ITC SET OFF</div><div style="font-size:16px;font-weight:900;color:#1565C0;">'+fmtINR(setoffTotal)+'</div><div style="font-size:9px;color:var(--text3);">'+(setoffTotal>0?'utilised against output':'none utilised yet')+'</div></div>'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">NET GST '+(netPayable>=0?'PAYABLE':'CREDIT')+'</div><div style="font-size:16px;font-weight:900;color:'+(netPayable>0?'#C62828':'#2E7D32')+';">'+fmtINR(Math.abs(netPayable))+'</div><div style="font-size:9px;color:var(--text3);">Output − ITC set off</div></div>'+
+        '<div class="card" style="text-align:center;cursor:pointer;" onclick="gstShowDetail(\'out\')" title="Tap for bill-wise detail"><div style="font-size:10px;color:var(--text3);">OUTPUT GST (SALES)</div><div style="font-size:16px;font-weight:900;color:#E65100;">'+fmtINR(outGst)+'</div><div style="font-size:9px;color:var(--text3);">on '+fmtINR(outTaxable)+' taxable</div></div>'+
+        '<div class="card" style="text-align:center;cursor:pointer;" onclick="gstShowDetail(\'itc\')" title="Tap for detail"><div style="font-size:10px;color:var(--text3);">ITC AVAILABLE</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(itcAvailable)+'</div><div style="font-size:9px;color:var(--text3);">'+fmtINR(inGst)+' earned − '+fmtINR(setoffTotal)+' used</div></div>'+
+        '<div class="card" style="text-align:center;cursor:pointer;" onclick="gstShowDetail(\'setoff\')" title="Tap for detail"><div style="font-size:10px;color:var(--text3);">ITC SET OFF</div><div style="font-size:16px;font-weight:900;color:#1565C0;">'+fmtINR(setoffTotal)+'</div><div style="font-size:9px;color:var(--text3);">'+(setoffTotal>0?'utilised against output':'none utilised yet')+'</div></div>'+
+        '<div class="card" style="text-align:center;cursor:pointer;" onclick="gstShowDetail(\'net\')" title="Tap for working"><div style="font-size:10px;color:var(--text3);">NET GST '+(netPayable>=0?'PAYABLE':'CREDIT')+'</div><div style="font-size:16px;font-weight:900;color:'+(netPayable>0?'#C62828':'#2E7D32')+';">'+fmtINR(Math.abs(netPayable))+'</div><div style="font-size:9px;color:var(--text3);">Output − ITC set off</div></div>'+
       '</div>'+
       (itcAvailable>0.5&&netPayable>0.5?'<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:10.5px;color:#6D4C41;">&#128161; You have '+fmtINR(itcAvailable)+' of unused ITC. Net payable above excludes it \u2014 set it off below to reduce what you actually pay.</div>':'')+
       gstSettlementHtml+
