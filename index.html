@@ -17201,6 +17201,31 @@ function accShowReport(which){
   }
 }
 
+// Opens the voucher sheet pre-filled for a GST action. kind:
+//  'setoff'  — Journal, Dr 2101 GST Payable / Cr 1301 Input Credit (use ITC)
+//  'payment' — Payment, Dr 2101 GST Payable / Cr 1002 Bank (pay net in cash)
+function accOpenGstVoucher(kind, amount){
+  accOpenVoucher();
+  setTimeout(function(){
+    var byCode=function(code){ var a=ACC_ACCOUNTS.find(function(x){return String(x.code)===code;}); return a?a.id:''; };
+    var sv=function(id,val){ var el=document.getElementById(id); if(el) el.value=val; };
+    if(kind==='setoff'){
+      sv('vou-type','Journal');
+      sv('vou-debit',byCode('2101'));
+      sv('vou-credit',byCode('1301'));
+      sv('vou-party','GST — ITC Set-off');
+      sv('vou-narration','Set-off of Input Tax Credit against GST Payable');
+    } else {
+      sv('vou-type','Payment');
+      sv('vou-debit',byCode('2101'));
+      sv('vou-credit',byCode('1002'));
+      sv('vou-party','GST Payment — Government');
+      sv('vou-narration','GST paid to Government (GSTR-3B)');
+    }
+    if(amount&&amount>0) sv('vou-amount',Math.round(amount));
+  },80);
+}
+
 async function accGstTab(){
   var cont=document.getElementById('acc-content');if(!cont)return;
   cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading GST summary…</div>';
@@ -17246,12 +17271,19 @@ async function accGstTab(){
     var fmtMonth=function(ym){ var p=ym.split('-'); return (monthNames[parseInt(p[1],10)-1]||p[1])+' '+p[0]; };
 
     cont.innerHTML=
-      '<div style="font-size:16px;font-weight:800;margin-bottom:4px;">GST Summary</div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px;">'+
+        '<div style="font-size:16px;font-weight:800;">GST Summary</div>'+
+        '<button onclick="accOpenGstPayment()" style="background:#6A1B9A;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128184; Record GST Payment</button>'+
+      '</div>'+
       '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">Output GST from Sales Bills, Input GST (ITC) from Purchase/Work Bills — both from each bill\'s GST additions. For information only — verify before filing GSTR-1 / GSTR-3B.</div>'+
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTPUT GST (SALES)</div><div style="font-size:16px;font-weight:900;color:#E65100;">'+fmtINR(outGst)+'</div><div style="font-size:9px;color:var(--text3);">on '+fmtINR(outTaxable)+' taxable</div></div>'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INPUT GST / ITC (PURCHASES)</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(inGst)+'</div><div style="font-size:9px;color:var(--text3);">on '+fmtINR(inTaxable)+' taxable</div></div>'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">NET GST '+(netGst>=0?'PAYABLE':'CREDIT')+'</div><div style="font-size:16px;font-weight:900;color:'+(netGst>=0?'#C62828':'#2E7D32')+';">'+fmtINR(Math.abs(netGst))+'</div><div style="font-size:9px;color:var(--text3);">Output − Input</div></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:0;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;">'+
+        (inGst>0?'<button onclick="accOpenGstVoucher(\'setoff\','+Math.min(outGst,inGst)+')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;" title="Journal: Dr GST Payable / Cr GST Input Credit — uses your ITC against the output GST">&#128260; Set-off ITC (Journal)</button>':'')+
+        '<button onclick="accOpenGstVoucher(\'payment\','+Math.max(0,netGst)+')" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;" title="Payment: Dr GST Payable / Cr Bank — the net GST paid to Government">&#128184; Record GST Payment</button>'+
       '</div>'+
       (monthKeys.length?
         '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Month-wise</div>'+
