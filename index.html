@@ -1761,6 +1761,7 @@ input,select,textarea{font-size:16px !important;}
             <th>Working Hrs</th>
             <th>Overtime</th>
             <th>GPS</th>
+            <th>This Month</th>
             <th>Remarks</th>
           </tr>
         </thead>
@@ -3645,14 +3646,32 @@ async function attLoadAll(){
   var monthEnd = attFmtDate(new Date(ATT_VIEW_YEAR, ATT_VIEW_MONTH+1, 0));
   var safe=function(p){return p.catch(function(){return [];});};
 
+  var curMonthStart = attFmtDate(new Date(today.slice(0,4)*1, today.slice(5,7)*1-1, 1));
+  var curMonthEnd   = attFmtDate(new Date(today.slice(0,4)*1, today.slice(5,7)*1, 0));
+
   var r = await Promise.all([
     safe(sbFetch('employees',{select:'id,first_name,middle_name,last_name,designation,department,status',filter:'status=eq.active'})),
     safe(sbFetch('attendance',{select:'*',filter:'date=eq.'+ATT_SELECTED_DATE})),
     safe(sbFetch('attendance',{select:'*',filter:'employee_id=eq.'+(ATT_CAL_EMP_ID||'')+'&date=gte.'+monthStart+'&date=lte.'+monthEnd})),
     safe(sbFetch('attendance_punches',{select:'*',filter:'emp_id=eq.'+(currentUser.id||'')+'&date=eq.'+today,order:'punch_time.asc'})),
-    safe(sbFetch('leave_requests',{select:'*',order:'created_at.desc'}))
+    safe(sbFetch('leave_requests',{select:'*',order:'created_at.desc'})),
+    safe(sbFetch('attendance',{select:'employee_id,status',filter:'date=gte.'+curMonthStart+'&date=lte.'+curMonthEnd}))
   ]);
-  var activeEmps=r[0]||[], todayRecords=r[1]||[], monthRecords=r[2]||[], todayPunches=r[3]||[], leaves=r[4]||[];
+  var activeEmps=r[0]||[], todayRecords=r[1]||[], monthRecords=r[2]||[], todayPunches=r[3]||[], leaves=r[4]||[], allEmpsMonthRecords=r[5]||[];
+
+  // Build "This Month" attendance totals per employee for the Daily Entry
+  // table — Present = 1 day, Half-day = 0.5 day. Uses the real current
+  // calendar month, independent of whatever month Monthly View might be
+  // browsing elsewhere.
+  ATT_MONTH_TOTALS = {};
+  allEmpsMonthRecords.forEach(function(rec){
+    if(!ATT_MONTH_TOTALS[rec.employee_id]) ATT_MONTH_TOTALS[rec.employee_id] = {present:0, half:0, absent:0, leave:0};
+    if(rec.status==='present') ATT_MONTH_TOTALS[rec.employee_id].present++;
+    else if(rec.status==='half') ATT_MONTH_TOTALS[rec.employee_id].half++;
+    else if(rec.status==='absent') ATT_MONTH_TOTALS[rec.employee_id].absent++;
+    else if(rec.status==='leave') ATT_MONTH_TOTALS[rec.employee_id].leave++;
+  });
+
   var dateInp = document.getElementById('att-date-sel');
   if(dateInp && !dateInp.value) dateInp.value = ATT_SELECTED_DATE;
   var titleEl = document.getElementById('att-daily-title');
@@ -3795,6 +3814,7 @@ var ATT_TODAY_MAP = {};   // emp_id -> today's attendance row (admin table)
 var ATT_VIEW_MONTH = new Date().getMonth(); // 0-11
 var ATT_VIEW_YEAR = new Date().getFullYear();
 var ATT_SELECTED_DATE = null; // set to today in attLoadAll
+var ATT_MONTH_TOTALS = {}; // employee_id -> {present,half,absent,leave} for the current calendar month, for Daily Entry's "This Month" column
 var ATT_CAL_EMP_ID = null;    // whose calendar Monthly View is showing
 
 function attToday(){ return new Date().toISOString().slice(0,10); }
@@ -4037,6 +4057,14 @@ async function confirmPunch() {
 }
 
 // ── ATTENDANCE TABLE ──
+function attMonthTagHTML(empId){
+  var m = ATT_MONTH_TOTALS[empId] || {present:0,half:0,absent:0,leave:0};
+  var monthDaysAttended = m.present + m.half*0.5;
+  return '<span style="font-weight:800;color:#1B5E20;">'+monthDaysAttended+'</span>'+
+    '<span style="font-size:9.5px;color:var(--text3);"> day'+(monthDaysAttended!==1?'s':'')+'</span>'+
+    (m.absent>0?'<div style="font-size:9.5px;color:#C62828;">'+m.absent+' absent</div>':'');
+}
+
 function renderAttTable() {
   const tbody = document.getElementById('att-tbody');
   tbody.innerHTML = employees.map((e, i) => {
@@ -4089,6 +4117,7 @@ function renderAttTable() {
         <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);">${wh}</td>
         <td>${e.ot !== '0h' ? `<span class="ot-badge">${e.ot}</span>` : '<span style="color:var(--text3);">—</span>'}</td>
         <td>${gpsTag}</td>
+        <td class="att-month-cell" data-eid="${e.id}" style="text-align:center;white-space:nowrap;">${attMonthTagHTML(e.id)}</td>
         <td><input type="text" class="time-in" style="width:120px;" placeholder="Remarks..." value="${e.remarks||''}" onchange="attUpdateRemarks(${i},this.value)"></td>
       </tr>
     `;
@@ -4143,6 +4172,26 @@ async function setStatus(idx, status, btn) {
   allBtns.forEach(b => b.classList.remove('sel'));
   btn.classList.add('sel');
   updateSummary();
+
+  // Keep the "This Month" column in sync live, but only when the date
+  // being marked actually falls in the real current calendar month —
+  // marking a past/future date via the date picker shouldn't skew it.
+  var todayYM = attToday().slice(0,7);
+  if((ATT_SELECTED_DATE||'').slice(0,7) === todayYM){
+    if(!ATT_MONTH_TOTALS[emp.id]) ATT_MONTH_TOTALS[emp.id] = {present:0,half:0,absent:0,leave:0};
+    var m = ATT_MONTH_TOTALS[emp.id];
+    if(prevStatus==='present') m.present=Math.max(0,m.present-1);
+    else if(prevStatus==='half') m.half=Math.max(0,m.half-1);
+    else if(prevStatus==='absent') m.absent=Math.max(0,m.absent-1);
+    else if(prevStatus==='leave') m.leave=Math.max(0,m.leave-1);
+    if(status==='present') m.present++;
+    else if(status==='half') m.half++;
+    else if(status==='absent') m.absent++;
+    else if(status==='leave') m.leave++;
+    var monthCell = row.querySelector('.att-month-cell');
+    if(monthCell) monthCell.innerHTML = attMonthTagHTML(emp.id);
+  }
+
   try{
     var existing = ATT_TODAY_MAP[emp.id];
     if(existing){
