@@ -17207,49 +17207,61 @@ async function accGstTab(){
   try{
     var r=await Promise.all([
       sbFetch('sales_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];}),
-      sbFetch('projects',{select:'id,name,client,client_gstin'}).catch(function(){return [];})
+      sbFetch('projects',{select:'id,name,client,client_gstin'}).catch(function(){return [];}),
+      sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];})
     ]);
-    var bills=Array.isArray(r[0])?r[0]:[], projects=Array.isArray(r[1])?r[1]:[];
+    var bills=Array.isArray(r[0])?r[0]:[], projects=Array.isArray(r[1])?r[1]:[], workBills=Array.isArray(r[2])?r[2]:[];
     var projById={}; projects.forEach(function(p){projById[p.id]=p;});
 
-    // Per-bill GST breakdown (from the bill's GST additions) + monthly totals
-    var rowsData=bills.map(function(b){
+    var gstOf=function(b){
       var adds=[]; try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
-      var gst=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-      var total=parseFloat(b.bill_amount)||0;
-      return {bill:b, proj:projById[b.project_id]||{}, taxable:total-gst, gst:gst, total:total,
-        month:(b.bill_date||'').slice(0,7)};
-    });
-    var totTaxable=rowsData.reduce(function(s,x){return s+x.taxable;},0);
-    var totGst=rowsData.reduce(function(s,x){return s+x.gst;},0);
+      return adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+    };
 
-    // GST Payable ledger balance (output GST posted − any payments/adjustments)
-    var gstAcct=ACC_ACCOUNTS.find(function(a){return String(a.code)==='2101';});
-    var gstBal=gstAcct?accNetBalance(gstAcct):null;
+    // Outward (sales) per-bill breakdown
+    var outRows=bills.map(function(b){
+      var gst=gstOf(b);
+      var total=parseFloat(b.bill_amount)||0;
+      return {bill:b, proj:projById[b.project_id]||{}, taxable:total-gst, gst:gst, total:total, month:(b.bill_date||'').slice(0,7)};
+    });
+    var outTaxable=outRows.reduce(function(s,x){return s+x.taxable;},0);
+    var outGst=outRows.reduce(function(s,x){return s+x.gst;},0);
+
+    // Inward (purchases) per-bill breakdown — input GST / ITC
+    var inRows=workBills.map(function(b){
+      var gst=gstOf(b);
+      var total=parseFloat(b.bill_amount)||0;
+      return {bill:b, taxable:total-gst, gst:gst, total:total, month:(b.bill_date||'').slice(0,7)};
+    });
+    var inTaxable=inRows.reduce(function(s,x){return s+x.taxable;},0);
+    var inGst=inRows.reduce(function(s,x){return s+x.gst;},0);
+    var netGst=outGst-inGst;
 
     var byMonth={};
-    rowsData.forEach(function(x){ if(!x.month)return; if(!byMonth[x.month])byMonth[x.month]={taxable:0,gst:0,count:0}; byMonth[x.month].taxable+=x.taxable; byMonth[x.month].gst+=x.gst; byMonth[x.month].count++; });
+    var bump=function(month,key,amt){ if(!month)return; if(!byMonth[month])byMonth[month]={outTax:0,outGst:0,inTax:0,inGst:0}; byMonth[month][key]+=amt; };
+    outRows.forEach(function(x){ bump(x.month,'outTax',x.taxable); bump(x.month,'outGst',x.gst); });
+    inRows.forEach(function(x){ bump(x.month,'inTax',x.taxable); bump(x.month,'inGst',x.gst); });
     var monthKeys=Object.keys(byMonth).sort().reverse();
     var monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     var fmtMonth=function(ym){ var p=ym.split('-'); return (monthNames[parseInt(p[1],10)-1]||p[1])+' '+p[0]; };
 
     cont.innerHTML=
-      '<div style="font-size:16px;font-weight:800;margin-bottom:4px;">GST Summary — Outward Supplies (Sales)</div>'+
-      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">Computed from your Sales Bills (GST additions on each bill). For information only — verify against your books before filing GSTR-1 / GSTR-3B.</div>'+
+      '<div style="font-size:16px;font-weight:800;margin-bottom:4px;">GST Summary</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">Output GST from Sales Bills, Input GST (ITC) from Purchase/Work Bills — both from each bill\'s GST additions. For information only — verify before filing GSTR-1 / GSTR-3B.</div>'+
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TAXABLE VALUE</div><div style="font-size:16px;font-weight:900;color:var(--navy);">'+fmtINR(totTaxable)+'</div></div>'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTPUT GST</div><div style="font-size:16px;font-weight:900;color:#E65100;">'+fmtINR(totGst)+'</div></div>'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">GST PAYABLE (LEDGER)</div><div style="font-size:16px;font-weight:900;color:'+(gstBal===null?'var(--text3)':'#C62828')+';">'+(gstBal===null?'—':fmtINR(gstBal))+'</div>'+(gstBal===null?'<div style="font-size:9px;color:var(--text3);">Add account 2101 + backfill</div>':'')+'</div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTPUT GST (SALES)</div><div style="font-size:16px;font-weight:900;color:#E65100;">'+fmtINR(outGst)+'</div><div style="font-size:9px;color:var(--text3);">on '+fmtINR(outTaxable)+' taxable</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INPUT GST / ITC (PURCHASES)</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(inGst)+'</div><div style="font-size:9px;color:var(--text3);">on '+fmtINR(inTaxable)+' taxable</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">NET GST '+(netGst>=0?'PAYABLE':'CREDIT')+'</div><div style="font-size:16px;font-weight:900;color:'+(netGst>=0?'#C62828':'#2E7D32')+';">'+fmtINR(Math.abs(netGst))+'</div><div style="font-size:9px;color:var(--text3);">Output − Input</div></div>'+
       '</div>'+
       (monthKeys.length?
         '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Month-wise</div>'+
-        '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Month</th><th style="text-align:right;">Bills</th><th style="text-align:right;">Taxable Value</th><th style="text-align:right;">GST</th></tr></thead><tbody>'+
-        monthKeys.map(function(m){var d=byMonth[m];return '<tr><td>'+fmtMonth(m)+'</td><td style="text-align:right;">'+d.count+'</td><td style="text-align:right;">'+fmtINR(d.taxable)+'</td><td style="text-align:right;font-weight:700;">'+fmtINR(d.gst)+'</td></tr>';}).join('')+
+        '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Month</th><th style="text-align:right;">Output Taxable</th><th style="text-align:right;">Output GST</th><th style="text-align:right;">Input Taxable</th><th style="text-align:right;">Input GST</th><th style="text-align:right;">Net GST</th></tr></thead><tbody>'+
+        monthKeys.map(function(m){var d=byMonth[m];var net=d.outGst-d.inGst;return '<tr><td>'+fmtMonth(m)+'</td><td style="text-align:right;">'+fmtINR(d.outTax)+'</td><td style="text-align:right;color:#E65100;font-weight:700;">'+fmtINR(d.outGst)+'</td><td style="text-align:right;">'+fmtINR(d.inTax)+'</td><td style="text-align:right;color:#2E7D32;font-weight:700;">'+fmtINR(d.inGst)+'</td><td style="text-align:right;font-weight:800;color:'+(net>=0?'#C62828':'#2E7D32')+';">'+fmtINR(net)+'</td></tr>';}).join('')+
         '</tbody></table></div>':'')+
-      '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Bill-wise</div>'+
-      (rowsData.length?
-        '<div class="table-card"><table class="att-table"><thead><tr><th>Bill</th><th>Date</th><th>Client / Project</th><th>Client GSTIN</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">GST</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
-        rowsData.map(function(x){
+      '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Outward Supplies (Sales) — Bill-wise</div>'+
+      (outRows.length?
+        '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Bill</th><th>Date</th><th>Client / Project</th><th>Client GSTIN</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">GST</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
+        outRows.map(function(x){
           return '<tr><td><strong>'+(x.bill.bill_ref||('#'+x.bill.bill_number))+'</strong></td><td>'+fmtDate(x.bill.bill_date)+'</td>'+
             '<td>'+(x.proj.client||'—')+(x.proj.name?'<div style="font-size:10px;color:var(--text3);">'+x.proj.name+'</div>':'')+'</td>'+
             '<td style="font-family:monospace;font-size:10.5px;">'+(x.proj.client_gstin||'—')+'</td>'+
@@ -17257,7 +17269,18 @@ async function accGstTab(){
             '<td style="text-align:right;font-weight:700;color:#E65100;">'+(x.gst?fmtINR(x.gst):'—')+'</td>'+
             '<td style="text-align:right;font-weight:700;">'+fmtINR(x.total)+'</td></tr>';
         }).join('')+'</tbody></table></div>'
-        :'<div style="text-align:center;padding:30px;color:var(--text3);">No sales bills yet</div>');
+        :'<div style="text-align:center;padding:20px;color:var(--text3);margin-bottom:14px;">No sales bills yet</div>')+
+      '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Inward Supplies (Purchases) — Bill-wise</div>'+
+      (inRows.length?
+        '<div class="table-card"><table class="att-table"><thead><tr><th>Bill</th><th>Date</th><th>Vendor / Party</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">GST (ITC)</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
+        inRows.map(function(x){
+          return '<tr><td><strong>'+(x.bill.bill_ref||x.bill.bill_number||'—')+'</strong></td><td>'+fmtDate(x.bill.bill_date)+'</td>'+
+            '<td>'+(x.bill.party_name||'—')+'</td>'+
+            '<td style="text-align:right;">'+fmtINR(x.taxable)+'</td>'+
+            '<td style="text-align:right;font-weight:700;color:#2E7D32;">'+(x.gst?fmtINR(x.gst):'—')+'</td>'+
+            '<td style="text-align:right;font-weight:700;">'+fmtINR(x.total)+'</td></tr>';
+        }).join('')+'</tbody></table></div>'
+        :'<div style="text-align:center;padding:20px;color:var(--text3);">No purchase bills yet</div>');
   }catch(e){
     console.error('accGstTab failed',e);
     cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading GST summary: '+e.message+'</div>';
