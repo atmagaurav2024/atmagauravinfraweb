@@ -16755,6 +16755,8 @@ function accDash(){
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'+
       '<div style="font-size:14px;font-weight:800;">Recent Vouchers</div>'+
       '<div style="display:flex;gap:8px;">'+
+        '<button class="btn btn-outline btn-sm" onclick="accVouchersExcel()">&#128229; Excel</button>'+
+        '<button class="btn btn-outline btn-sm" onclick="accVouchersPDF()">&#128438; PDF</button>'+
         '<button class="btn btn-outline btn-sm" onclick="accBackfillHistorical()" title="Post GL vouchers for existing Sales Bills, Purchase Bills, Petty Cash and Other Expenses that haven\'t been posted yet">&#8635; Backfill from History</button>'+
         '<button class="btn btn-navy btn-sm" onclick="accOpenVoucher()">+ Voucher</button>'+
       '</div></div>'+
@@ -16847,10 +16849,152 @@ function accReports(){
     '<div id="acc-report-body"><div style="text-align:center;padding:20px;color:var(--text3);">Select a report above</div></div>';
 }
 
+// ── Accounts exports: shared helpers ─────────────────────────────────────
+// Excel = CSV with BOM (same convention as the Sales Register export);
+// PDF = print-ready HTML via the existing openPDF() flow.
+function accExportCSV(filename, lines){
+  var csv=lines.map(function(row){
+    return row.map(function(cell){
+      var s=String(cell==null?'':cell);
+      if(/[",\n]/.test(s)) s='"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+  toast('Excel downloaded','success');
+}
+
+function accExportPDF(title, tableHeaders, tableRows, extraNoteHtml){
+  var compName=typeof coName==='function'?coName():'Company';
+  var compAddr=typeof coAddr==='function'?coAddr():'';
+  var compGST=typeof coGST==='function'?coGST():'';
+  var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
+  var thead='<tr style="background:#1A237E;color:white;">'+tableHeaders.map(function(h,i){
+    return '<th style="padding:6px 8px;font-size:9.5px;font-weight:800;text-align:'+(i===0?'left':'right')+';white-space:nowrap;">'+h+'</th>';
+  }).join('')+'</tr>';
+  var tbody=tableRows.map(function(row){
+    var isTotal=String(row[0]||'').toUpperCase().indexOf('TOTAL')>-1||String(row[0]||'').toUpperCase().indexOf('NET ')===0;
+    return '<tr>'+row.map(function(cell,i){
+      return '<td style="padding:5px 8px;font-size:10px;border-bottom:1px solid #EEE;text-align:'+(i===0?'left':'right')+';'+(isTotal?'font-weight:900;background:#F3E5F5;':'')+'">'+(cell==null?'':cell)+'</td>';
+    }).join('')+'</tr>';
+  }).join('');
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>'+
+    'body{font-family:Arial,sans-serif;margin:0;padding:20px;color:#222;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
+    '@media print{button{display:none;}@page{size:A4;margin:12mm;}}'+
+    '</style></head><body>'+
+    '<button onclick="window.print()" style="background:#1A237E;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:14px;font-size:13px;">&#128438; Print / Save PDF</button>'+
+    '<div style="border-bottom:3px solid #1A237E;padding-bottom:10px;">'+
+      '<div style="font-size:17px;font-weight:900;color:#1A237E;">'+compName+'</div>'+
+      (compAddr?'<div style="font-size:10px;color:#666;">'+compAddr+'</div>':'')+
+      (compGST?'<div style="font-size:10px;color:#666;">GSTIN: '+compGST+'</div>':'')+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">'+
+      '<div style="font-size:14px;font-weight:900;">'+title+'</div>'+
+      '<div style="font-size:11px;color:#666;">As on: '+today+'</div>'+
+    '</div>'+
+    '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
+    (extraNoteHtml||'')+
+    '</body></html>';
+  openPDF(html);
+}
+
+// ── Per-view export data builders ────────────────────────────────────────
+function accAcctName(id){ var a=ACC_ACCOUNTS.find(function(x){return x.id===id;}); return a?(a.code+' - '+a.name):'—'; }
+
+function accVouchersExportData(){
+  var header=['Vou No','Date','Type','Party','Debit Account','Credit Account','Amount','Narration'];
+  var rows=ACC_VOUCHERS.map(function(v){
+    return [v.vou_no||v.voucher_no||'', fmtDate(v.date), v.type||'', v.party_name||'',
+      accAcctName(v.debit_account), accAcctName(v.credit_account),
+      Math.round((parseFloat(v.amount)||0)), v.narration||''];
+  });
+  var total=ACC_VOUCHERS.reduce(function(s,v){return s+(parseFloat(v.amount)||0);},0);
+  rows.push(['TOTAL','','','','','',Math.round(total),'']);
+  return {header:header, rows:rows};
+}
+function accVouchersExcel(){
+  if(!ACC_VOUCHERS.length){toast('No vouchers to export','warning');return;}
+  var d=accVouchersExportData();
+  accExportCSV('Vouchers_'+new Date().toISOString().slice(0,10)+'.csv',[['Voucher Register'],[''],d.header].concat(d.rows));
+}
+function accVouchersPDF(){
+  if(!ACC_VOUCHERS.length){toast('No vouchers to export','warning');return;}
+  var d=accVouchersExportData();
+  d.rows=d.rows.map(function(r){ r[6]=fmtINR(r[6]); return r; });
+  accExportPDF('Voucher Register', d.header, d.rows);
+}
+
+// Builds header/rows for a report id ('trial'|'pl'|'bs') for both formats.
+function accReportExportData(which){
+  if(which==='trial'){
+    var rows=[], totDr=0, totCr=0;
+    ACC_ACCOUNTS.forEach(function(a){
+      var bal=accNetBalance(a);
+      if(Math.abs(bal)<0.005) return;
+      var drBal=accIsDebitNormal(a)?(bal>0?bal:0):(bal<0?-bal:0);
+      var crBal=accIsDebitNormal(a)?(bal<0?-bal:0):(bal>0?bal:0);
+      totDr+=drBal; totCr+=crBal;
+      rows.push([a.code+' - '+a.name, a.type, Math.round(drBal)||'', Math.round(crBal)||'']);
+    });
+    rows.push(['TOTAL','',Math.round(totDr),Math.round(totCr)]);
+    return {title:'Trial Balance', header:['Account','Type','Debit','Credit'], rows:rows, moneyCols:[2,3]};
+  }
+  if(which==='pl'){
+    var rows=[], income=0, expense=0;
+    ACC_ACCOUNTS.forEach(function(a){ if(a.type==='Income'){ var b=accNetBalance(a); if(Math.abs(b)>=0.005){income+=b; rows.push(['[Income] '+a.name,Math.round(b)]);} } });
+    ACC_ACCOUNTS.forEach(function(a){ if(a.type==='Expense'){ var b=accNetBalance(a); if(Math.abs(b)>=0.005){expense+=b; rows.push(['[Expense] '+a.name,Math.round(b)]);} } });
+    rows.push(['TOTAL INCOME',Math.round(income)]);
+    rows.push(['TOTAL EXPENSES',Math.round(expense)]);
+    rows.push(['NET '+(income-expense>=0?'PROFIT':'LOSS'),Math.round(Math.abs(income-expense))]);
+    return {title:'Profit & Loss Statement', header:['Particulars','Amount'], rows:rows, moneyCols:[1]};
+  }
+  if(which==='bs'){
+    var rows=[], assets=0, liab=0, equity=0, income=0, expense=0;
+    ACC_ACCOUNTS.forEach(function(a){
+      var b=accNetBalance(a);
+      if(a.type==='Income') income+=b;
+      if(a.type==='Expense') expense+=b;
+      if(Math.abs(b)<0.005) return;
+      if(a.type==='Asset'){assets+=b; rows.push(['[Asset] '+a.name,Math.round(b)]);}
+      if(a.type==='Liability'){liab+=b; rows.push(['[Liability] '+a.name,Math.round(b)]);}
+      if(a.type==='Equity'){equity+=b; rows.push(['[Equity] '+a.name,Math.round(b)]);}
+    });
+    var netProfit=income-expense;
+    rows.push(['TOTAL ASSETS',Math.round(assets)]);
+    rows.push(['Net Profit (current)',Math.round(netProfit)]);
+    rows.push(['TOTAL LIABILITIES + EQUITY',Math.round(liab+equity+netProfit)]);
+    return {title:'Balance Sheet', header:['Particulars','Amount'], rows:rows, moneyCols:[1]};
+  }
+  return null;
+}
+function accReportExcel(which){
+  var d=accReportExportData(which);
+  if(!d){toast('Nothing to export','warning');return;}
+  accExportCSV(d.title.replace(/[^a-z0-9]/gi,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv',[[d.title],[''],d.header].concat(d.rows));
+}
+function accReportPDF(which){
+  var d=accReportExportData(which);
+  if(!d){toast('Nothing to export','warning');return;}
+  d.rows=d.rows.map(function(r){ d.moneyCols.forEach(function(c){ if(r[c]!==''&&r[c]!=null) r[c]=fmtINR(r[c]); }); return r; });
+  accExportPDF(d.title, d.header, d.rows);
+}
+
 function accShowReport(which){
   var body=document.getElementById('acc-report-body');
   if(!body) return;
   if(!ACC_ACCOUNTS.length){ body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No accounts set up yet — see Chart of Accounts.</div>'; return; }
+
+  var exportBtns = (which==='trial'||which==='pl'||which==='bs')
+    ? '<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;">'+
+        '<button class="btn btn-outline btn-sm" onclick="accReportExcel(\''+which+'\')">&#128229; Excel</button>'+
+        '<button class="btn btn-outline btn-sm" onclick="accReportPDF(\''+which+'\')">&#128438; PDF</button>'+
+      '</div>'
+    : '';
 
   if(which==='trial'){
     var totDr=0, totCr=0;
@@ -16865,7 +17009,7 @@ function accShowReport(which){
         '<td style="text-align:right;">'+(crBal?fmtINR(crBal):'—')+'</td></tr>';
     }).join('');
     var balanced=Math.abs(totDr-totCr)<0.01;
-    body.innerHTML='<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Trial Balance</div>'+
+    body.innerHTML=exportBtns+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Trial Balance</div>'+
       '<div class="table-card"><table class="att-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th></tr></thead><tbody>'+
       (rows||'<tr><td colspan="5" style="text-align:center;color:var(--text3);">No balances yet</td></tr>')+
       '<tr style="background:#F3E5F5;font-weight:900;"><td colspan="3">TOTAL</td><td style="text-align:right;">'+fmtINR(totDr)+'</td><td style="text-align:right;">'+fmtINR(totCr)+'</td></tr>'+
@@ -16884,7 +17028,7 @@ function accShowReport(which){
       if(a.type==='Expense'){ expense+=bal; expRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
     });
     var net=income-expense;
-    body.innerHTML='<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Profit &amp; Loss Statement</div>'+
+    body.innerHTML=exportBtns+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Profit &amp; Loss Statement</div>'+
       '<div class="table-card"><table class="att-table"><tbody>'+
       '<tr style="background:#E8F5E9;font-weight:800;"><td>INCOME</td><td style="text-align:right;">'+fmtINR(income)+'</td></tr>'+(incRows||'<tr><td colspan="2" style="color:var(--text3);">No income recorded</td></tr>')+
       '<tr style="background:#FFEBEE;font-weight:800;"><td>EXPENSES</td><td style="text-align:right;">'+fmtINR(expense)+'</td></tr>'+(expRows||'<tr><td colspan="2" style="color:var(--text3);">No expenses recorded</td></tr>')+
@@ -16906,7 +17050,7 @@ function accShowReport(which){
     });
     var netProfit=income-expense;
     var totalLE=liab+equity+netProfit;
-    body.innerHTML='<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Balance Sheet</div>'+
+    body.innerHTML=exportBtns+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Balance Sheet</div>'+
       '<div class="table-card"><table class="att-table"><tbody>'+
       '<tr style="background:#E3F2FD;font-weight:800;"><td>ASSETS</td><td style="text-align:right;">'+fmtINR(assets)+'</td></tr>'+(aRows||'<tr><td colspan="2" style="color:var(--text3);">None</td></tr>')+
       '<tr style="background:#FFF3E0;font-weight:800;"><td>LIABILITIES</td><td style="text-align:right;">'+fmtINR(liab)+'</td></tr>'+(lRows||'<tr><td colspan="2" style="color:var(--text3);">None</td></tr>')+
