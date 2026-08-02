@@ -16479,7 +16479,7 @@ async function accAutoPost(opts){
     var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL'}[opts.type]||'VOU';
     var vou_no=prefix+'-AUTO-'+String(Date.now()).slice(-7);
     var res = await sbInsert('vouchers',{
-      vou_no:vou_no, type:opts.type, date:opts.date||new Date().toISOString().slice(0,10),
+      vou_no:vou_no, voucher_no:vou_no, type:opts.type, date:opts.date||new Date().toISOString().slice(0,10),
       party_name:opts.partyName||null, debit_account:debitId, credit_account:creditId,
       amount:opts.amount, narration:opts.narration||null,
       source_type:opts.sourceType||null, source_id:opts.sourceId||null, auto_posted:true
@@ -16885,7 +16885,7 @@ async function accSaveVoucher(){
   var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL'}[type]||'VOU';
   var vou_no=prefix+'-'+String(Date.now()).slice(-6);
   try{
-    await sbInsert('vouchers',{vou_no:vou_no,type:type,date:gv('vou-date'),party_name:gv('vou-party'),debit_account:gv('vou-debit')||null,credit_account:gv('vou-credit')||null,amount:amount,narration:gv('vou-narration')});
+    await sbInsert('vouchers',{vou_no:vou_no,voucher_no:vou_no,type:type,date:gv('vou-date'),party_name:gv('vou-party'),debit_account:gv('vou-debit')||null,credit_account:gv('vou-credit')||null,amount:amount,narration:gv('vou-narration')});
     closeSheet('ov-acc','sh-acc');await initAccounts();toast('Voucher saved: '+vou_no,'success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
