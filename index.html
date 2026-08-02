@@ -17562,6 +17562,7 @@ async function accGstTab(){
         if(itcAcct && v.credit_account===itcAcct.id) setoffs.push(v); else gstPayments.push(v);
       });
     }
+    var gstCanDel = typeof canAccess==='function' ? canAccess('accounts','delete') : (currentUser&&currentUser.role==='admin');
     var sumOf=function(arr){return arr.reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);};
     var setoffTotal=sumOf(setoffs), paidTotal=sumOf(gstPayments);
     var itcBal=itcAcct?accNetBalance(itcAcct):0;
@@ -17573,7 +17574,8 @@ async function accGstTab(){
         return '<tr><td style="white-space:nowrap;">'+fmtDate(v.date)+'</td><td>'+(v.vou_no||v.voucher_no||'—')+'</td>'+
           '<td style="white-space:nowrap;">'+(isSet?'<span style="color:#2E7D32;font-weight:700;">&#128260; ITC Set-off</span>':'<span style="color:#C62828;font-weight:700;">&#128184; Paid to Govt</span>')+'</td>'+
           '<td>'+(v.narration||v.party_name||'—')+'</td>'+
-          '<td style="text-align:right;font-weight:700;">'+fmtINR(parseFloat(v.amount)||0)+'</td></tr>';
+          '<td style="text-align:right;font-weight:700;">'+fmtINR(parseFloat(v.amount)||0)+'</td>'+
+          '<td style="text-align:center;">'+(gstCanDel?'<button class="btn btn-sm btn-red" onclick="accDelGstSettlement(\''+v.id+'\')" title="Delete this settlement entry">&#128465;</button>':'')+'</td></tr>';
       }).join('');
     var gstSettlementHtml=
       '<div style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:10px;padding:10px 12px;margin-bottom:14px;">'+
@@ -17585,7 +17587,7 @@ async function accGstTab(){
           '<div><div style="font-size:9.5px;color:var(--text3);">GST PAYABLE OUTSTANDING</div><div style="font-size:13px;font-weight:900;color:'+(payableBal>0?'#C62828':'var(--text3)')+';">'+fmtINR(payableBal)+'</div></div>'+
         '</div>'+
         (settleRows?
-          '<div class="table-card" style="margin:0;"><table class="att-table"><thead><tr><th>Date</th><th>Voucher</th><th>Action</th><th>Narration</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+settleRows+'</tbody></table></div>'
+          '<div class="table-card" style="margin:0;"><table class="att-table"><thead><tr><th>Date</th><th>Voucher</th><th>Action</th><th>Narration</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>'+settleRows+'</tbody></table></div>'
           :'<div style="font-size:10.5px;color:var(--text3);">No set-offs or GST payments recorded yet — use the buttons below after filing.</div>')+
         '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;">Balances are live from the ledger (GST Payable 2101 &amp; Input Credit 1301). Full entry detail: Accounts &rarr; Ledger.</div>'+
       '</div>';
@@ -17733,6 +17735,23 @@ function accViewVoucher(id){
     (v.narration?ir('Narration',v.narration):'')+
     '</div>';
   var foot=document.getElementById('acc-sheet-foot');if(foot)foot.innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-acc\',\'sh-acc\')">Close</button><button class="btn btn-red" onclick="accDelVoucher(\''+id+'\')">🗑 Delete</button>';
+}
+
+// Delete a GST settlement voucher (ITC set-off or payment to Govt) and stay
+// on the GST tab. Kept separate from accDelVoucher(), which returns to the
+// Accounts dashboard after deleting.
+async function accDelGstSettlement(id){
+  var canDel = typeof canAccess==='function' ? canAccess('accounts','delete') : (currentUser&&currentUser.role==='admin');
+  if(!canDel){ toast('You do not have permission to delete accounting entries','warning'); return; }
+  var v=ACC_VOUCHERS.find(function(x){return x.id===id;});
+  var label=v?((v.vou_no||v.voucher_no||'')+' — '+fmtINR(parseFloat(v.amount)||0)):'this entry';
+  if(!confirm('Delete '+label+'?\n\nThis reverses the settlement: the GST Payable and Input Credit balances will go back up accordingly.')) return;
+  try{
+    await sbDelete('vouchers',id);
+    ACC_VOUCHERS=ACC_VOUCHERS.filter(function(x){return x.id!==id;});
+    toast('Settlement entry deleted','success');
+    accGstTab();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 async function accDelVoucher(id){
