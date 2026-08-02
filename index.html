@@ -16529,6 +16529,7 @@ var ACC_DEFAULT_COA=[
   {code:'1002', name:'Bank Account',             type:'Asset',     group:'Current Assets'},
   {code:'1101', name:'Petty Cash in Hand',       type:'Asset',     group:'Current Assets'},
   {code:'1201', name:'Sundry Debtors (Clients)', type:'Asset',     group:'Current Assets'},
+  {code:'1301', name:'GST Input Credit (ITC)',   type:'Asset',     group:'Current Assets'},
   {code:'2001', name:'Sundry Creditors (Vendors)',type:'Liability',group:'Current Liabilities'},
   {code:'2101', name:'GST Payable',              type:'Liability', group:'Duties & Taxes'},
   {code:'3001', name:'Sales Revenue (Contract Work)', type:'Income', group:'Direct Income'},
@@ -16704,9 +16705,18 @@ async function accBackfillHistorical(){
 
     for(var i=0;i<workBills.length;i++){
       var b=workBills[i]; if(isDone('work_bill',b.id)) continue;
+      var wAdds=[]; try{wAdds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var wGst=wAdds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var wNet=(parseFloat(b.bill_amount)||0)-wGst;
       if(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
-        debitCode:'4001', creditCode:'2001', amount:parseFloat(b.bill_amount)||0,
+        debitCode:'4001', creditCode:'2001', amount:wNet,
         narration:'Purchase/Work Bill '+(b.bill_ref||b.id), sourceType:'work_bill', sourceId:b.id})) count++; else fail++;
+      if(wGst>0){
+        // GST paid on purchases is an input credit (asset), not an expense
+        if(!(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
+          debitCode:'1301', creditCode:'2001', amount:wGst,
+          narration:'GST (ITC) on Purchase/Work Bill '+(b.bill_ref||b.id), sourceType:'work_bill_gst', sourceId:b.id}))) fail++;
+      }
     }
 
     for(var i=0;i<workPayments.length;i++){
