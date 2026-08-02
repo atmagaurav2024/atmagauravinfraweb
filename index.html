@@ -16468,13 +16468,13 @@ async function accGetAccountId(code){
 // haven't been set up in Chart of Accounts yet — a missing ledger mapping
 // should never block the actual business transaction from saving.
 async function accAutoPost(opts){
-  if(!opts || !opts.amount || opts.amount<=0) return;
+  if(!opts || !opts.amount || opts.amount<=0) return false;
   try{
     var debitId = await accGetAccountId(opts.debitCode);
     var creditId = await accGetAccountId(opts.creditCode);
     if(!debitId || !creditId){
       console.warn('Auto-post skipped — missing Chart of Accounts entry for code '+(!debitId?opts.debitCode:opts.creditCode)+' ('+opts.sourceType+')');
-      return;
+      return false;
     }
     var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL'}[opts.type]||'VOU';
     var vou_no=prefix+'-AUTO-'+String(Date.now()).slice(-7);
@@ -16484,9 +16484,15 @@ async function accAutoPost(opts){
       amount:opts.amount, narration:opts.narration||null,
       source_type:opts.sourceType||null, source_id:opts.sourceId||null, auto_posted:true
     });
-    if(res && res[0]) ACC_VOUCHERS.unshift(res[0]);
-  }catch(e){ console.error('accAutoPost failed for '+(opts&&opts.sourceType), e); }
+    if(res && res[0]){ ACC_VOUCHERS.unshift(res[0]); return true; }
+    return false;
+  }catch(e){
+    console.error('accAutoPost failed for '+(opts&&opts.sourceType), e);
+    ACC_AUTOPOST_LAST_ERROR = e.message||String(e);
+    return false;
+  }
 }
+var ACC_AUTOPOST_LAST_ERROR = null;
 // Petty cash expense category -> GL account code
 var ACC_PETTY_CAT_CODES={
   'Fuel & Transport':'4101','Site Materials':'4102','Labour Wages':'4103',
@@ -16625,6 +16631,9 @@ async function accBackfillHistorical(){
   }
   if(!confirm('This will scan Sales Bills, Purchase Bills, Petty Cash and Other Expenses, and create the matching GL vouchers for anything not already posted. Continue?')) return;
   toast('Scanning history…','info');
+  ACC_COA_CACHE = null; // re-read Chart of Accounts fresh — it may have been seeded after the cache was built
+  ACC_AUTOPOST_LAST_ERROR = null;
+  var fail=0;
   try{
     var posted = await sbFetch('vouchers',{select:'source_type,source_id',filter:'source_id=not.is.null'});
     var doneSet = {};
@@ -16655,72 +16664,69 @@ async function accBackfillHistorical(){
       var adds=[]; try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
       var gstAmt=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var nonGstTotal=(parseFloat(b.bill_amount)||0)-gstAmt;
-      await accAutoPost({type:'Sales', date:b.bill_date, partyName:proj.client||proj.name||'Client',
+      if(await accAutoPost({type:'Sales', date:b.bill_date, partyName:proj.client||proj.name||'Client',
         debitCode:'1201', creditCode:'3001', amount:nonGstTotal,
         narration:'Sales Bill '+(b.bill_ref||b.id)+(proj.name?' — '+proj.name:''),
-        sourceType:'sales_bill', sourceId:b.id});
+        sourceType:'sales_bill', sourceId:b.id})) count++; else fail++;
       if(gstAmt>0){
-        await accAutoPost({type:'Sales', date:b.bill_date, partyName:proj.client||proj.name||'Client',
+        if(!(await accAutoPost({type:'Sales', date:b.bill_date, partyName:proj.client||proj.name||'Client',
           debitCode:'1201', creditCode:'2101', amount:gstAmt,
-          narration:'GST on Sales Bill '+(b.bill_ref||b.id), sourceType:'sales_bill_gst', sourceId:b.id});
+          narration:'GST on Sales Bill '+(b.bill_ref||b.id), sourceType:'sales_bill_gst', sourceId:b.id}))) fail++;
       }
-      count++;
     }
 
     for(var i=0;i<salesPayments.length;i++){
       var p=salesPayments[i]; if(isDone('sales_payment',p.id)) continue;
       var proj=projById[p.project_id]||{};
-      await accAutoPost({type:'Receipt', date:p.payment_date, partyName:proj.client||proj.name||'Client',
+      if(await accAutoPost({type:'Receipt', date:p.payment_date, partyName:proj.client||proj.name||'Client',
         debitCode:(p.payment_mode==='Cash'?'1001':'1002'), creditCode:'1201', amount:parseFloat(p.amount)||0,
         narration:'Payment received'+(p.reference?' (Ref: '+p.reference+')':'')+(proj.name?' — '+proj.name:''),
-        sourceType:'sales_payment', sourceId:p.id});
-      count++;
+        sourceType:'sales_payment', sourceId:p.id})) count++; else fail++;
     }
 
     for(var i=0;i<workBills.length;i++){
       var b=workBills[i]; if(isDone('work_bill',b.id)) continue;
-      await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
+      if(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
         debitCode:'4001', creditCode:'2001', amount:parseFloat(b.bill_amount)||0,
-        narration:'Purchase/Work Bill '+(b.bill_ref||b.id), sourceType:'work_bill', sourceId:b.id});
-      count++;
+        narration:'Purchase/Work Bill '+(b.bill_ref||b.id), sourceType:'work_bill', sourceId:b.id})) count++; else fail++;
     }
 
     for(var i=0;i<workPayments.length;i++){
       var p=workPayments[i]; if(isDone('work_payment',p.id)) continue;
-      await accAutoPost({type:'Payment', date:p.payment_date, partyName:p.party_name,
+      if(await accAutoPost({type:'Payment', date:p.payment_date, partyName:p.party_name,
         debitCode:'2001', creditCode:(p.payment_mode==='Cash'?'1001':'1002'), amount:parseFloat(p.amount)||0,
         narration:'Payment against Work Bill'+(p.reference?' (Ref: '+p.reference+')':''),
-        sourceType:'work_payment', sourceId:p.id});
-      count++;
+        sourceType:'work_payment', sourceId:p.id})) count++; else fail++;
     }
 
     for(var i=0;i<pettyIn.length;i++){
       var p=pettyIn[i]; if(isDone('petty_cash_in',p.id)) continue;
       var nm=empName[p.emp_id]||p.emp_id;
-      await accAutoPost({type:'Contra', date:p.date, partyName:nm,
+      if(await accAutoPost({type:'Contra', date:p.date, partyName:nm,
         debitCode:'1101', creditCode:'1002', amount:parseFloat(p.amount)||0,
         narration:'Petty cash funded to '+nm+(p.purpose?' — '+p.purpose:''),
-        sourceType:'petty_cash_in', sourceId:p.id});
-      count++;
+        sourceType:'petty_cash_in', sourceId:p.id})) count++; else fail++;
     }
 
     for(var i=0;i<pettyExp.length;i++){
       var p=pettyExp[i]; if(isDone('petty_cash_expense',p.id)) continue;
-      await accAutoPost({type:'Journal', date:p.date, partyName:p.description,
+      if(await accAutoPost({type:'Journal', date:p.date, partyName:p.description,
         debitCode:(typeof ACC_PETTY_CAT_CODES!=='undefined'&&ACC_PETTY_CAT_CODES[p.category])||'4110', creditCode:'1101', amount:parseFloat(p.amount)||0,
-        narration:'Petty cash — '+p.category+' — '+p.description, sourceType:'petty_cash_expense', sourceId:p.id});
-      count++;
+        narration:'Petty cash — '+p.category+' — '+p.description, sourceType:'petty_cash_expense', sourceId:p.id})) count++; else fail++;
     }
 
     for(var i=0;i<otherExp.length;i++){
       var p=otherExp[i]; if(isDone('other_expense',p.id)) continue;
-      await accAutoPost({type:'Payment', date:p.date, partyName:p.description,
+      if(await accAutoPost({type:'Payment', date:p.date, partyName:p.description,
         debitCode:(typeof ACC_OTHEREXP_CODES!=='undefined'&&ACC_OTHEREXP_CODES[p.type])||'4201', creditCode:'1002', amount:parseFloat(p.amount)||0,
-        narration:p.type+' — '+p.description, sourceType:'other_expense', sourceId:p.id});
-      count++;
+        narration:p.type+' — '+p.description, sourceType:'other_expense', sourceId:p.id})) count++; else fail++;
     }
 
-    toast(count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted','success');
+    if(fail>0){
+      toast('Backfill: '+count+' posted, '+fail+' FAILED'+(ACC_AUTOPOST_LAST_ERROR?' — '+ACC_AUTOPOST_LAST_ERROR:'')+'. See browser console for details.','error');
+    } else {
+      toast(count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted','success');
+    }
     initAccounts();
   }catch(e){
     console.error('accBackfillHistorical failed', e);
