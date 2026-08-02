@@ -16970,6 +16970,27 @@ function accReportExportData(which){
     rows.push(['TOTAL LIABILITIES + EQUITY',Math.round(liab+equity+netProfit)]);
     return {title:'Balance Sheet', header:['Particulars','Amount'], rows:rows, moneyCols:[1]};
   }
+  if(which==='cash'){
+    var cashAccts=ACC_ACCOUNTS.filter(function(a){ return ['1001','1002','1101'].indexOf(String(a.code))>-1 || /cash|bank/i.test(a.name||''); });
+    if(!cashAccts.length) return null;
+    var cashIds={}; cashAccts.forEach(function(a){ cashIds[a.id]=a; });
+    var rows=[], inflow=0, outflow=0;
+    ACC_VOUCHERS
+      .filter(function(v){ return cashIds[v.debit_account]||cashIds[v.credit_account]; })
+      .sort(function(x,y){ return String(y.date||'').localeCompare(String(x.date||'')); })
+      .forEach(function(v){
+        var amt=parseFloat(v.amount)||0;
+        var isIn=!!cashIds[v.debit_account], isOut=!!cashIds[v.credit_account];
+        var flow = isIn&&isOut ? 'Internal' : (isIn?'In':'Out');
+        if(isIn&&!isOut) inflow+=amt; else if(isOut&&!isIn) outflow+=amt;
+        rows.push([v.vou_no||v.voucher_no||'', fmtDate(v.date), v.narration||v.party_name||'', flow, Math.round(amt)]);
+      });
+    var opening=cashAccts.reduce(function(s,a){return s+(parseFloat(a.opening_balance)||0);},0);
+    rows.push(['TOTAL INFLOW','','','',Math.round(inflow)]);
+    rows.push(['TOTAL OUTFLOW','','','',Math.round(outflow)]);
+    rows.push(['NET (incl. opening '+Math.round(opening)+')','','','',Math.round(opening+inflow-outflow)]);
+    return {title:'Cash Flow (Cash, Bank & Petty Cash)', header:['Voucher','Date','Narration','Flow','Amount'], rows:rows, moneyCols:[4]};
+  }
   return null;
 }
 function accReportExcel(which){
@@ -16989,7 +17010,7 @@ function accShowReport(which){
   if(!body) return;
   if(!ACC_ACCOUNTS.length){ body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No accounts set up yet — see Chart of Accounts.</div>'; return; }
 
-  var exportBtns = (which==='trial'||which==='pl'||which==='bs')
+  var exportBtns = (which==='trial'||which==='pl'||which==='bs'||which==='cash')
     ? '<div style="display:flex;justify-content:flex-start;gap:0;margin-bottom:8px;">'+
         '<button onclick="accReportExcel(\''+which+'\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
         '<button onclick="accReportPDF(\''+which+'\')" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128196; PDF</button>'+
@@ -17081,7 +17102,7 @@ function accShowReport(which){
         return '<tr><td>'+fmtDate(v.date)+'</td><td>'+(v.vou_no||v.voucher_no||'—')+'</td><td>'+(v.narration||v.party_name||'—')+'</td><td>'+tag+'</td><td style="text-align:right;">'+fmtINR(amt)+'</td></tr>';
       }).join('');
     var opening=cashAccts.reduce(function(s,a){return s+(parseFloat(a.opening_balance)||0);},0);
-    body.innerHTML='<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Cash Flow (Cash, Bank &amp; Petty Cash)</div>'+
+    body.innerHTML=exportBtns+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Cash Flow (Cash, Bank &amp; Petty Cash)</div>'+
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INFLOW</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(inflow)+'</div></div>'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTFLOW</div><div style="font-size:16px;font-weight:900;color:#C62828;">'+fmtINR(outflow)+'</div></div>'+
