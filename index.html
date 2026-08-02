@@ -17494,6 +17494,11 @@ function accOpenGstVoucher(kind, amount){
   },80);
 }
 
+// The Accounts bottom sheet's ✕ button and overlay have always called
+// closeAccSheet(), but it was never defined — so tapping either did
+// nothing (only the save paths, which call closeSheet directly, worked).
+function closeAccSheet(){ closeSheet('ov-acc','sh-acc'); }
+
 var GST_DRILL=null;
 
 // Drill-down popup for the GST KPI cards — shows exactly which bills or
