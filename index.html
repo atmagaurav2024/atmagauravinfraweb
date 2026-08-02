@@ -16508,16 +16508,17 @@ async function initOverheads(){
 
 function ohRender(){
   var cont=document.getElementById('oh-content'); if(!cont) return;
-  var total=OH_LIST.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var gross=function(x){return (parseFloat(x.amount)||0)+(parseFloat(x.gst_amount)||0);};
+  var total=OH_LIST.reduce(function(s,x){return s+gross(x);},0);
   var thisYear=new Date().getFullYear();
   var ytd=OH_LIST.filter(function(x){return (x.date||'').slice(0,4)==String(thisYear);})
-    .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+    .reduce(function(s,x){return s+gross(x);},0);
   var thisMonth=new Date().toISOString().slice(0,7);
   var mtd=OH_LIST.filter(function(x){return (x.date||'').slice(0,7)===thisMonth;})
-    .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+    .reduce(function(s,x){return s+gross(x);},0);
 
   var byCat={};
-  OH_LIST.forEach(function(x){ var c=x.category||'Miscellaneous'; byCat[c]=(byCat[c]||0)+(parseFloat(x.amount)||0); });
+  OH_LIST.forEach(function(x){ var c=x.category||'Miscellaneous'; byCat[c]=(byCat[c]||0)+gross(x); });
   var catKeys=Object.keys(byCat).sort(function(a,b){return byCat[b]-byCat[a];});
 
   cont.innerHTML=
@@ -16539,14 +16540,16 @@ function ohRender(){
       catKeys.map(function(c){return '<tr><td>'+c+'</td><td style="text-align:right;font-weight:700;">'+fmtINR(byCat[c])+'</td></tr>';}).join('')+
       '</tbody></table></div>':'')+
     (OH_LIST.length?
-      '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid To</th><th>Mode</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>'+
+      '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid To</th><th>Mode</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">GST</th><th style="text-align:right;">Total</th><th></th></tr></thead><tbody>'+
       OH_LIST.map(function(x){
         return '<tr><td style="white-space:nowrap;">'+fmtDate(x.date)+'</td>'+
           '<td>'+(x.category||'—')+'</td>'+
           '<td>'+(x.description||'—')+(x.bill_no?'<div style="font-size:10px;color:var(--text3);">Bill: '+x.bill_no+'</div>':'')+'</td>'+
           '<td>'+(x.party_name||'—')+'</td>'+
           '<td>'+(x.payment_mode||'—')+'</td>'+
-          '<td style="text-align:right;font-weight:800;">'+fmtINR(parseFloat(x.amount)||0)+'</td>'+
+          '<td style="text-align:right;">'+fmtINR(parseFloat(x.amount)||0)+'</td>'+
+          '<td style="text-align:right;color:'+((x.itc_claimable===false)?'var(--text3)':'#2E7D32')+';">'+((parseFloat(x.gst_amount)||0)?fmtINR(parseFloat(x.gst_amount)||0)+((x.itc_claimable===false)?'<div style="font-size:9px;">no ITC</div>':''):'—')+'</td>'+
+          '<td style="text-align:right;font-weight:800;">'+fmtINR((parseFloat(x.amount)||0)+(parseFloat(x.gst_amount)||0))+'</td>'+
           '<td>'+(ohCanDelete()?'<button class="btn btn-sm btn-red" onclick="ohDelete(\''+x.id+'\')">&#128465;</button>':'')+'</td></tr>';
       }).join('')+'</tbody></table></div>'
       :'<div style="text-align:center;padding:30px;color:var(--text3);">No overhead expenses recorded yet.<br><span style="font-size:11px;">Use <b>+ Expense</b> for CA fees, office rent, bank charges and other costs that don\'t belong to a specific project.</span></div>');
@@ -16562,7 +16565,15 @@ function ohOpenEntry(){
       OH_CATS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select></div>'+
     '<div class="fgrp"><label class="flbl">Description</label><input id="oh-desc" class="finp" placeholder="e.g. Annual audit fees FY 2025-26"></div>'+
     '<div class="fgrp"><label class="flbl">Paid To (Party)</label><input id="oh-party" class="finp" placeholder="e.g. Sharma & Associates"></div>'+
-    '<div class="fgrp"><label class="flbl">Amount (&#8377;)</label><input id="oh-amt" class="finp" type="number" step="0.01" placeholder="0.00"></div>'+
+    '<div class="fgrp"><label class="flbl">Taxable Amount (&#8377;)</label><input id="oh-amt" class="finp" type="number" step="0.01" placeholder="0.00" oninput="ohRecalc()"></div>'+
+    '<div class="fgrp"><label class="flbl">GST Rate</label><select id="oh-gstrate" class="fsel" onchange="ohRecalc()">'+
+      '<option value="0">No GST</option><option value="5">5%</option><option value="12">12%</option>'+
+      '<option value="18" selected>18%</option><option value="28">28%</option></select></div>'+
+    '<div class="fgrp"><label class="flbl">GST Amount (&#8377;)</label><input id="oh-gstamt" class="finp" type="number" step="0.01" placeholder="0.00" oninput="ohRecalcFromGst()"></div>'+
+    '<div class="fgrp"><label class="flbl" style="display:flex;align-items:center;gap:6px;">'+
+      '<input id="oh-itc" type="checkbox" checked style="width:auto;margin:0;" onchange="ohRecalc()"> ITC claimable</label>'+
+      '<div style="font-size:10px;color:var(--text3);">Untick for blocked credits (e.g. staff welfare, some insurance) \u2014 the GST then becomes part of the expense instead of an input credit.</div></div>'+
+    '<div style="background:#F3E5F5;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;font-weight:800;color:#4A148C;">Total Payable: <span id="oh-total">&#8377;0</span></div>'+
     '<div class="fgrp"><label class="flbl">Payment Mode</label><select id="oh-mode" class="fsel"><option>Bank</option><option>Cash</option></select></div>'+
     '<div class="fgrp"><label class="flbl">Bill / Invoice No. (optional)</label><input id="oh-bill" class="finp"></div>'+
     '<div class="fgrp"><label class="flbl">Remarks (optional)</label><input id="oh-rem" class="finp"></div>'+
@@ -16573,15 +16584,38 @@ function ohOpenEntry(){
   openSheet('ov-oh','sh-oh');
 }
 
+// Rate -> GST amount (when taxable or rate changes)
+function ohRecalc(){
+  var gv=function(id){var el=document.getElementById(id);return el?el.value:'';};
+  var taxable=parseFloat(gv('oh-amt'))||0;
+  var rate=parseFloat(gv('oh-gstrate'))||0;
+  var gstEl=document.getElementById('oh-gstamt');
+  if(gstEl) gstEl.value=(taxable*rate/100).toFixed(2);
+  ohUpdateTotal();
+}
+// Manual GST amount override (leaves the rate picker as a hint only)
+function ohRecalcFromGst(){ ohUpdateTotal(); }
+function ohUpdateTotal(){
+  var gv=function(id){var el=document.getElementById(id);return el?el.value:'';};
+  var taxable=parseFloat(gv('oh-amt'))||0;
+  var gst=parseFloat(gv('oh-gstamt'))||0;
+  var el=document.getElementById('oh-total');
+  if(el) el.innerHTML=fmtINR(taxable+gst);
+}
+
 async function ohSave(){
   if(!ohCanEdit()){ toast('You do not have permission to add overhead expenses','warning'); return; }
   var gv=function(id){var el=document.getElementById(id);return el?el.value:'';};
   var amt=parseFloat(gv('oh-amt'))||0;
-  if(amt<=0){ toast('Enter a valid amount','warning'); return; }
+  if(amt<=0){ toast('Enter a valid taxable amount','warning'); return; }
+  var gstAmt=parseFloat(gv('oh-gstamt'))||0;
+  var itcEl=document.getElementById('oh-itc');
+  var itcOk=itcEl?itcEl.checked:true;
   var rec={
     date:gv('oh-date')||new Date().toISOString().slice(0,10),
     category:gv('oh-cat'), description:gv('oh-desc')||null,
     party_name:gv('oh-party')||null, amount:amt,
+    gst_amount:gstAmt, gst_rate:parseFloat(gv('oh-gstrate'))||0, itc_claimable:itcOk,
     payment_mode:gv('oh-mode')||'Bank', bill_no:gv('oh-bill')||null,
     remarks:gv('oh-rem')||null, created_by:(currentUser&&currentUser.id)||null
   };
@@ -16591,19 +16625,36 @@ async function ohSave(){
     if(saved){
       OH_LIST.unshift(saved);
       // Auto-post to Accounts, same as every other transaction source
-      if(typeof accAutoPost==='function'){
-        accAutoPost({type:'Payment', date:saved.date, partyName:saved.party_name||saved.category,
-          debitCode:(OH_CAT_CODES[saved.category]||'4313'),
-          creditCode:(saved.payment_mode==='Cash'?'1001':'1002'),
-          amount:parseFloat(saved.amount)||0,
-          narration:(saved.category||'Overhead')+(saved.description?' — '+saved.description:''),
-          sourceType:'company_expense', sourceId:saved.id});
-      }
+      if(typeof accAutoPost==='function') ohPostToAccounts(saved);
     }
     closeSheet('ov-oh','sh-oh');
     ohRender();
     toast('Overhead expense saved','success');
   }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// Posts an overhead expense to the GL. Claimable GST goes to Input Credit
+// (1301) as an asset; blocked credit is folded into the expense instead,
+// which is the correct treatment when ITC can't be availed.
+async function ohPostToAccounts(x){
+  var expCode=(typeof OH_CAT_CODES!=='undefined'&&OH_CAT_CODES[x.category])||'4313';
+  var credCode=(x.payment_mode==='Cash'?'1001':'1002');
+  var taxable=parseFloat(x.amount)||0;
+  var gst=parseFloat(x.gst_amount)||0;
+  var itcOk=(x.itc_claimable!==false);
+  var narr=(x.category||'Overhead')+(x.description?' — '+x.description:'');
+  var ok=false;
+  // Expense leg — includes GST when the credit is blocked
+  ok = await accAutoPost({type:'Payment', date:x.date, partyName:x.party_name||x.category,
+    debitCode:expCode, creditCode:credCode, amount:(itcOk?taxable:taxable+gst),
+    narration:narr+(!itcOk&&gst>0?' (incl. non-claimable GST)':''),
+    sourceType:'company_expense', sourceId:x.id});
+  if(gst>0 && itcOk){
+    await accAutoPost({type:'Payment', date:x.date, partyName:x.party_name||x.category,
+      debitCode:'1301', creditCode:credCode, amount:gst,
+      narration:'GST (ITC) on '+narr, sourceType:'company_expense_gst', sourceId:x.id});
+  }
+  return ok;
 }
 
 async function ohDelete(id){
@@ -16619,13 +16670,16 @@ async function ohDelete(id){
 }
 
 function ohExportData(){
-  var header=['Date','Category','Description','Paid To','Mode','Bill No','Amount','Remarks'];
+  var header=['Date','Category','Description','Paid To','Mode','Bill No','Taxable','GST','ITC','Total','Remarks'];
   var rows=OH_LIST.map(function(x){
+    var tx=parseFloat(x.amount)||0, g=parseFloat(x.gst_amount)||0;
     return [fmtDate(x.date), x.category||'', x.description||'', x.party_name||'',
-      x.payment_mode||'', x.bill_no||'', Math.round(parseFloat(x.amount)||0), x.remarks||''];
+      x.payment_mode||'', x.bill_no||'', Math.round(tx), Math.round(g),
+      (g>0?((x.itc_claimable===false)?'Blocked':'Claimable'):''), Math.round(tx+g), x.remarks||''];
   });
-  var total=OH_LIST.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
-  rows.push(['TOTAL','','','','','',Math.round(total),'']);
+  var totTx=OH_LIST.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var totG=OH_LIST.reduce(function(s,x){return s+(parseFloat(x.gst_amount)||0);},0);
+  rows.push(['TOTAL','','','','','',Math.round(totTx),Math.round(totG),'',Math.round(totTx+totG),'']);
   return {header:header, rows:rows};
 }
 function ohExportExcel(){
@@ -16636,7 +16690,7 @@ function ohExportExcel(){
 function ohExportPDF(){
   if(!OH_LIST.length){toast('Nothing to export','warning');return;}
   var d=ohExportData();
-  d.rows=d.rows.map(function(r){ r[6]=fmtINR(r[6]); return r; });
+  d.rows=d.rows.map(function(r){ r[6]=fmtINR(r[6]); r[7]=r[7]?fmtINR(r[7]):''; r[9]=fmtINR(r[9]); return r; });
   accExportPDF('Company Overheads', d.header, d.rows);
 }
 
@@ -16995,11 +17049,7 @@ async function accBackfillHistorical(){
 
     for(var i=0;i<companyExp.length;i++){
       var ce=companyExp[i]; if(isDone('company_expense',ce.id)) continue;
-      if(await accAutoPost({type:'Payment', date:ce.date, partyName:ce.party_name||ce.category,
-        debitCode:((typeof OH_CAT_CODES!=='undefined'&&OH_CAT_CODES[ce.category])||'4313'),
-        creditCode:(ce.payment_mode==='Cash'?'1001':'1002'), amount:parseFloat(ce.amount)||0,
-        narration:(ce.category||'Overhead')+(ce.description?' — '+ce.description:''),
-        sourceType:'company_expense', sourceId:ce.id})) count++; else fail++;
+      if(await ohPostToAccounts(ce)) count++; else fail++;
     }
 
     // Clean up orphaned auto-posted vouchers whose source record has since
@@ -17451,9 +17501,11 @@ async function accGstTab(){
     var r=await Promise.all([
       sbFetch('sales_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];}),
       sbFetch('projects',{select:'id,name,client,client_gstin'}).catch(function(){return [];}),
-      sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];})
+      sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];}),
+      sbFetch('company_expenses',{select:'*',order:'date.desc'}).catch(function(){return [];})
     ]);
     var bills=Array.isArray(r[0])?r[0]:[], projects=Array.isArray(r[1])?r[1]:[], workBills=Array.isArray(r[2])?r[2]:[];
+    var ohExp=Array.isArray(r[3])?r[3]:[];
     var projById={}; projects.forEach(function(p){projById[p.id]=p;});
 
     var gstOf=function(b){
@@ -17476,6 +17528,14 @@ async function accGstTab(){
       var total=parseFloat(b.bill_amount)||0;
       return {bill:b, taxable:total-gst, gst:gst, total:total, month:(b.bill_date||'').slice(0,7)};
     });
+    // Overheads with claimable ITC also count as inward supplies
+    var ohRows=ohExp.filter(function(x){return (parseFloat(x.gst_amount)||0)>0 && x.itc_claimable!==false;})
+      .map(function(x){
+        var tx=parseFloat(x.amount)||0, g=parseFloat(x.gst_amount)||0;
+        return {bill:{bill_ref:(x.category||'Overhead'), bill_date:x.date, party_name:x.party_name||x.category},
+          taxable:tx, gst:g, total:tx+g, month:(x.date||'').slice(0,7), isOverhead:true};
+      });
+    inRows=inRows.concat(ohRows);
     var inTaxable=inRows.reduce(function(s,x){return s+x.taxable;},0);
     var inGst=inRows.reduce(function(s,x){return s+x.gst;},0);
     var netGst=outGst-inGst;
@@ -17520,11 +17580,11 @@ async function accGstTab(){
             '<td style="text-align:right;font-weight:700;">'+fmtINR(x.total)+'</td></tr>';
         }).join('')+'</tbody></table></div>'
         :'<div style="text-align:center;padding:20px;color:var(--text3);margin-bottom:14px;">No sales bills yet</div>')+
-      '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Inward Supplies (Purchases) — Bill-wise</div>'+
+      '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Inward Supplies (Purchases &amp; Overheads) — Bill-wise</div>'+
       (inRows.length?
         '<div class="table-card"><table class="att-table"><thead><tr><th>Bill</th><th>Date</th><th>Vendor / Party</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">GST (ITC)</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
         inRows.map(function(x){
-          return '<tr><td><strong>'+(x.bill.bill_ref||x.bill.bill_number||'—')+'</strong></td><td>'+fmtDate(x.bill.bill_date)+'</td>'+
+          return '<tr><td><strong>'+(x.bill.bill_ref||x.bill.bill_number||'—')+'</strong>'+(x.isOverhead?'<div style="font-size:9px;color:#4A148C;font-weight:700;">OVERHEAD</div>':'')+'</td><td>'+fmtDate(x.bill.bill_date)+'</td>'+
             '<td>'+(x.bill.party_name||'—')+'</td>'+
             '<td style="text-align:right;">'+fmtINR(x.taxable)+'</td>'+
             '<td style="text-align:right;font-weight:700;color:#2E7D32;">'+(x.gst?fmtINR(x.gst):'—')+'</td>'+
@@ -20297,8 +20357,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260802c"></script>
-<script src="js/employee.js?v=20260802c"></script>
-<script src="js/projects.js?v=20260802c"></script>
-<script src="js/finance.js?v=20260802c"></script>
+<script src="js/registry.js?v=20260802d"></script>
+<script src="js/employee.js?v=20260802d"></script>
+<script src="js/projects.js?v=20260802d"></script>
+<script src="js/finance.js?v=20260802d"></script>
 </html>
