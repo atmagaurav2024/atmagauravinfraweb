@@ -16533,7 +16533,11 @@ var ACC_DEFAULT_COA=[
   {code:'2001', name:'Sundry Creditors (Vendors)',type:'Liability',group:'Current Liabilities'},
   {code:'2101', name:'GST Payable',              type:'Liability', group:'Duties & Taxes'},
   {code:'3001', name:'Sales Revenue (Contract Work)', type:'Income', group:'Direct Income'},
+  {code:'3002', name:'Sales Bill Additions',     type:'Income',    group:'Direct Income'},
+  {code:'3003', name:'Sales Bill Deductions',    type:'Income',    group:'Direct Income'},
   {code:'4001', name:'Purchases / Direct Work Expenses', type:'Expense', group:'Direct Expenses'},
+  {code:'4002', name:'Purchase Bill Additions',  type:'Expense',   group:'Direct Expenses'},
+  {code:'4003', name:'Purchase Bill Deductions', type:'Expense',   group:'Direct Expenses'},
   {code:'4101', name:'Fuel & Transport',         type:'Expense',   group:'Site Expenses'},
   {code:'4102', name:'Site Materials',           type:'Expense',   group:'Site Expenses'},
   {code:'4103', name:'Labour Wages',             type:'Expense',   group:'Site Expenses'},
@@ -16681,16 +16685,32 @@ async function accBackfillHistorical(){
       var b=salesBills[i]; if(isDone('sales_bill',b.id)) continue;
       var proj=projById[b.project_id]||{};
       var adds=[]; try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       var gstAmt=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-      var nonGstTotal=(parseFloat(b.bill_amount)||0)-gstAmt;
-      if(await accAutoPost({type:'Sales', date:b.bill_date, partyName:proj.client||proj.name||'Client',
-        debitCode:'1201', creditCode:'3001', amount:nonGstTotal,
-        narration:'Sales Bill '+(b.bill_ref||b.id)+(proj.name?' — '+proj.name:''),
-        sourceType:'sales_bill', sourceId:b.id})) count++; else fail++;
+      var addAmt=adds.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      // bill_amount = work + additions − deductions + GST  →  work = bill − GST − additions + deductions
+      var workAmt=(parseFloat(b.bill_amount)||0)-gstAmt-addAmt+dedAmt;
+      var party=proj.client||proj.name||'Client';
+      var ref='Sales Bill '+(b.bill_ref||b.id)+(proj.name?' — '+proj.name:'');
+      if(await accAutoPost({type:'Sales', date:b.bill_date, partyName:party,
+        debitCode:'1201', creditCode:'3001', amount:workAmt,
+        narration:ref, sourceType:'sales_bill', sourceId:b.id})) count++; else fail++;
+      if(addAmt>0){
+        if(!(await accAutoPost({type:'Sales', date:b.bill_date, partyName:party,
+          debitCode:'1201', creditCode:'3002', amount:addAmt,
+          narration:'Additions on '+ref, sourceType:'sales_bill_add', sourceId:b.id}))) fail++;
+      }
+      if(dedAmt>0){
+        // Deductions reduce both the receivable and effective income
+        if(!(await accAutoPost({type:'Sales', date:b.bill_date, partyName:party,
+          debitCode:'3003', creditCode:'1201', amount:dedAmt,
+          narration:'Deductions on '+ref, sourceType:'sales_bill_ded', sourceId:b.id}))) fail++;
+      }
       if(gstAmt>0){
-        if(!(await accAutoPost({type:'Sales', date:b.bill_date, partyName:proj.client||proj.name||'Client',
+        if(!(await accAutoPost({type:'Sales', date:b.bill_date, partyName:party,
           debitCode:'1201', creditCode:'2101', amount:gstAmt,
-          narration:'GST on Sales Bill '+(b.bill_ref||b.id), sourceType:'sales_bill_gst', sourceId:b.id}))) fail++;
+          narration:'GST on '+ref, sourceType:'sales_bill_gst', sourceId:b.id}))) fail++;
       }
     }
 
@@ -16706,16 +16726,31 @@ async function accBackfillHistorical(){
     for(var i=0;i<workBills.length;i++){
       var b=workBills[i]; if(isDone('work_bill',b.id)) continue;
       var wAdds=[]; try{wAdds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var wDeds=[]; try{wDeds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       var wGst=wAdds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-      var wNet=(parseFloat(b.bill_amount)||0)-wGst;
+      var wAdd=wAdds.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var wDed=wDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var wWork=(parseFloat(b.bill_amount)||0)-wGst-wAdd+wDed;
+      var wRef='Purchase/Work Bill '+(b.bill_ref||b.id);
       if(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
-        debitCode:'4001', creditCode:'2001', amount:wNet,
-        narration:'Purchase/Work Bill '+(b.bill_ref||b.id), sourceType:'work_bill', sourceId:b.id})) count++; else fail++;
+        debitCode:'4001', creditCode:'2001', amount:wWork,
+        narration:wRef, sourceType:'work_bill', sourceId:b.id})) count++; else fail++;
+      if(wAdd>0){
+        if(!(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
+          debitCode:'4002', creditCode:'2001', amount:wAdd,
+          narration:'Additions on '+wRef, sourceType:'work_bill_add', sourceId:b.id}))) fail++;
+      }
+      if(wDed>0){
+        // Deductions reduce both what's owed to the vendor and effective expense
+        if(!(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
+          debitCode:'2001', creditCode:'4003', amount:wDed,
+          narration:'Deductions on '+wRef, sourceType:'work_bill_ded', sourceId:b.id}))) fail++;
+      }
       if(wGst>0){
         // GST paid on purchases is an input credit (asset), not an expense
         if(!(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
           debitCode:'1301', creditCode:'2001', amount:wGst,
-          narration:'GST (ITC) on Purchase/Work Bill '+(b.bill_ref||b.id), sourceType:'work_bill_gst', sourceId:b.id}))) fail++;
+          narration:'GST (ITC) on '+wRef, sourceType:'work_bill_gst', sourceId:b.id}))) fail++;
       }
     }
 
