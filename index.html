@@ -2976,6 +2976,7 @@ function showApp(name){
   else if(name==='employees'){initEmpMgmt();}
   else if(isProjectTab){ initProjects(); }
   else if(name==='petty-cash'){initPettyCash();}
+  else if(name==='overheads'){initOverheads();}
   else if(name==='accounts'){initAccounts();}
   else if(name==='access'){acInitModule();}
   else if(name==='company'){initCompany();}
@@ -6812,6 +6813,10 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
       <div class="drawer-item-ic" style="background:#FFF8E1;">&#128181;</div>
       <div class="drawer-item-info"><div class="drawer-item-title">Petty Cash</div><div class="drawer-item-sub">Cash in hand & site expenses</div></div>
     </div>
+    <div class="drawer-item" onclick="showApp('overheads');closeDrawer();">
+      <div class="drawer-item-ic" style="background:#F3E5F5;">&#127970;</div>
+      <div class="drawer-item-info"><div class="drawer-item-title">Company Overheads</div><div class="drawer-item-sub">CA fees, rent, admin & non-project costs</div></div>
+    </div>
 
     <!-- SETTINGS -->
     <div class="drawer-section" style="color:#4A148C;">&#9881;&#65039; Settings</div>
@@ -10211,6 +10216,17 @@ async function empSavePay(){
 </div>
 <div class="sh-overlay" id="ov-acc" onclick="closeAccSheet()"></div>
 <div class="sheet" id="sh-acc"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="acc-sheet-title">New Voucher</div><span class="sh-close" onclick="closeAccSheet()">&#10005;</span></div><div class="sh-body" id="acc-sheet-body"></div><div class="sh-foot" id="acc-sheet-foot"></div></div>
+
+<div class="app-screen" id="app-overheads">
+  <div style="background:#4A148C;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127970; Company Overheads</div>
+    <button class="tb-btn" onclick="ohOpenEntry()" style="font-size:20px;">&#43;</button>
+  </div>
+  <div id="oh-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
+</div>
+<div class="sh-overlay" id="ov-oh" onclick="closeSheet('ov-oh','sh-oh')"></div>
+<div class="sheet" id="sh-oh"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="oh-sheet-title">New Overhead Expense</div><span class="sh-close" onclick="closeSheet('ov-oh','sh-oh')">&#10005;</span></div><div class="sh-body" id="oh-sheet-body"></div><div class="sh-foot" id="oh-sheet-foot"></div></div>
 
 <!-- ACCESS CONTROL -->
 <div class="app-screen" id="app-access">
@@ -16447,6 +16463,175 @@ async function pcDeleteEntry(id,type){
 }
 
 // ── ACCOUNTS ──────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+// COMPANY OVERHEADS — expenses not tied to any project
+// (CA/professional fees, audit, ROC, office rent, bank charges, insurance,
+// admin salaries, legal, software, non-site travel, misc)
+// These hit the P&L below Gross Profit, so project profitability stays clean.
+// ════════════════════════════════════════════════════════════════════════
+var OH_LIST=[];
+var OH_CATS=[
+  'Professional / CA Fees','Audit Fees','ROC / Compliance','Legal Fees',
+  'Office Rent','Office Utilities','Bank Charges','Insurance',
+  'Admin Salaries','Software / Subscriptions','Travel (Non-Site)',
+  'Marketing & Advertising','Miscellaneous'
+];
+// Overhead category -> GL account code (4301+ keeps them apart from the
+// 4101-4110 site-expense heads used by Petty Cash)
+var OH_CAT_CODES={
+  'Professional / CA Fees':'4301','Audit Fees':'4302','ROC / Compliance':'4303',
+  'Legal Fees':'4304','Office Rent':'4305','Office Utilities':'4306',
+  'Bank Charges':'4307','Insurance':'4308','Admin Salaries':'4309',
+  'Software / Subscriptions':'4310','Travel (Non-Site)':'4311',
+  'Marketing & Advertising':'4312','Miscellaneous':'4313'
+};
+
+async function initOverheads(){
+  var cont=document.getElementById('oh-content'); if(!cont) return;
+  cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
+  try{
+    var rows=await sbFetch('company_expenses',{select:'*',order:'date.desc'});
+    OH_LIST=Array.isArray(rows)?rows:[];
+    ohRender();
+  }catch(e){
+    console.error('initOverheads:',e);
+    cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading overheads: '+e.message+
+      '<div style="font-size:11px;color:var(--text3);margin-top:8px;">If this says the table is missing, run the latest SQL migration in Supabase.</div></div>';
+  }
+}
+
+function ohRender(){
+  var cont=document.getElementById('oh-content'); if(!cont) return;
+  var total=OH_LIST.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var thisYear=new Date().getFullYear();
+  var ytd=OH_LIST.filter(function(x){return (x.date||'').slice(0,4)==String(thisYear);})
+    .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var thisMonth=new Date().toISOString().slice(0,7);
+  var mtd=OH_LIST.filter(function(x){return (x.date||'').slice(0,7)===thisMonth;})
+    .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+
+  var byCat={};
+  OH_LIST.forEach(function(x){ var c=x.category||'Miscellaneous'; byCat[c]=(byCat[c]||0)+(parseFloat(x.amount)||0); });
+  var catKeys=Object.keys(byCat).sort(function(a,b){return byCat[b]-byCat[a];});
+
+  cont.innerHTML=
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">THIS MONTH</div><div style="font-size:15px;font-weight:900;color:#4A148C;">'+fmtINR(mtd)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">'+thisYear+'</div><div style="font-size:15px;font-weight:900;color:#4A148C;">'+fmtINR(ytd)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ALL TIME</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(total)+'</div></div>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">'+
+      '<div style="font-size:14px;font-weight:800;white-space:nowrap;">Overhead Expenses</div>'+
+      '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;">'+
+        '<button onclick="ohExportExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
+        '<button onclick="ohExportPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
+        '<button onclick="ohOpenEntry()" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Expense</button>'+
+      '</div>'+
+    '</div>'+
+    (catKeys.length?
+      '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Category</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
+      catKeys.map(function(c){return '<tr><td>'+c+'</td><td style="text-align:right;font-weight:700;">'+fmtINR(byCat[c])+'</td></tr>';}).join('')+
+      '</tbody></table></div>':'')+
+    (OH_LIST.length?
+      '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid To</th><th>Mode</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>'+
+      OH_LIST.map(function(x){
+        return '<tr><td style="white-space:nowrap;">'+fmtDate(x.date)+'</td>'+
+          '<td>'+(x.category||'—')+'</td>'+
+          '<td>'+(x.description||'—')+(x.bill_no?'<div style="font-size:10px;color:var(--text3);">Bill: '+x.bill_no+'</div>':'')+'</td>'+
+          '<td>'+(x.party_name||'—')+'</td>'+
+          '<td>'+(x.payment_mode||'—')+'</td>'+
+          '<td style="text-align:right;font-weight:800;">'+fmtINR(parseFloat(x.amount)||0)+'</td>'+
+          '<td><button class="btn btn-sm btn-red" onclick="ohDelete(\''+x.id+'\')">&#128465;</button></td></tr>';
+      }).join('')+'</tbody></table></div>'
+      :'<div style="text-align:center;padding:30px;color:var(--text3);">No overhead expenses recorded yet.<br><span style="font-size:11px;">Use <b>+ Expense</b> for CA fees, office rent, bank charges and other costs that don\'t belong to a specific project.</span></div>');
+}
+
+function ohOpenEntry(){
+  var body=document.getElementById('oh-sheet-body');
+  var foot=document.getElementById('oh-sheet-foot');
+  document.getElementById('oh-sheet-title').textContent='New Overhead Expense';
+  body.innerHTML=
+    '<div class="fgrp"><label class="flbl">Date</label><input id="oh-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Category</label><select id="oh-cat" class="fsel">'+
+      OH_CATS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select></div>'+
+    '<div class="fgrp"><label class="flbl">Description</label><input id="oh-desc" class="finp" placeholder="e.g. Annual audit fees FY 2025-26"></div>'+
+    '<div class="fgrp"><label class="flbl">Paid To (Party)</label><input id="oh-party" class="finp" placeholder="e.g. Sharma & Associates"></div>'+
+    '<div class="fgrp"><label class="flbl">Amount (&#8377;)</label><input id="oh-amt" class="finp" type="number" step="0.01" placeholder="0.00"></div>'+
+    '<div class="fgrp"><label class="flbl">Payment Mode</label><select id="oh-mode" class="fsel"><option>Bank</option><option>Cash</option></select></div>'+
+    '<div class="fgrp"><label class="flbl">Bill / Invoice No. (optional)</label><input id="oh-bill" class="finp"></div>'+
+    '<div class="fgrp"><label class="flbl">Remarks (optional)</label><input id="oh-rem" class="finp"></div>'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">This posts to Accounts automatically as Dr '+
+      '<b>[category expense account]</b> / Cr <b>Bank or Cash</b>. It is a company-level cost and is not allocated to any project.</div>';
+  foot.innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-oh\',\'sh-oh\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="ohSave()">Save Expense</button>';
+  openSheet('ov-oh','sh-oh');
+}
+
+async function ohSave(){
+  var gv=function(id){var el=document.getElementById(id);return el?el.value:'';};
+  var amt=parseFloat(gv('oh-amt'))||0;
+  if(amt<=0){ toast('Enter a valid amount','warning'); return; }
+  var rec={
+    date:gv('oh-date')||new Date().toISOString().slice(0,10),
+    category:gv('oh-cat'), description:gv('oh-desc')||null,
+    party_name:gv('oh-party')||null, amount:amt,
+    payment_mode:gv('oh-mode')||'Bank', bill_no:gv('oh-bill')||null,
+    remarks:gv('oh-rem')||null, created_by:(currentUser&&currentUser.id)||null
+  };
+  try{
+    var res=await sbInsert('company_expenses',rec);
+    var saved=(res&&res[0])?res[0]:null;
+    if(saved){
+      OH_LIST.unshift(saved);
+      // Auto-post to Accounts, same as every other transaction source
+      if(typeof accAutoPost==='function'){
+        accAutoPost({type:'Payment', date:saved.date, partyName:saved.party_name||saved.category,
+          debitCode:(OH_CAT_CODES[saved.category]||'4313'),
+          creditCode:(saved.payment_mode==='Cash'?'1001':'1002'),
+          amount:parseFloat(saved.amount)||0,
+          narration:(saved.category||'Overhead')+(saved.description?' — '+saved.description:''),
+          sourceType:'company_expense', sourceId:saved.id});
+      }
+    }
+    closeSheet('ov-oh','sh-oh');
+    ohRender();
+    toast('Overhead expense saved','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function ohDelete(id){
+  if(!confirm('Delete this overhead expense? This also removes its accounting entry.')) return;
+  try{
+    await sbDelete('company_expenses',id);
+    if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(id);
+    OH_LIST=OH_LIST.filter(function(x){return x.id!==id;});
+    ohRender();
+    toast('Deleted','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function ohExportData(){
+  var header=['Date','Category','Description','Paid To','Mode','Bill No','Amount','Remarks'];
+  var rows=OH_LIST.map(function(x){
+    return [fmtDate(x.date), x.category||'', x.description||'', x.party_name||'',
+      x.payment_mode||'', x.bill_no||'', Math.round(parseFloat(x.amount)||0), x.remarks||''];
+  });
+  var total=OH_LIST.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  rows.push(['TOTAL','','','','','',Math.round(total),'']);
+  return {header:header, rows:rows};
+}
+function ohExportExcel(){
+  if(!OH_LIST.length){toast('Nothing to export','warning');return;}
+  var d=ohExportData();
+  accExportCSV('Company_Overheads_'+new Date().toISOString().slice(0,10)+'.csv',[['Company Overheads'],[''],d.header].concat(d.rows));
+}
+function ohExportPDF(){
+  if(!OH_LIST.length){toast('Nothing to export','warning');return;}
+  var d=ohExportData();
+  d.rows=d.rows.map(function(r){ r[6]=fmtINR(r[6]); return r; });
+  accExportPDF('Company Overheads', d.header, d.rows);
+}
+
 var ACC_ACCOUNTS=[], ACC_VOUCHERS=[], ACC_VOU_ITEMS=[], ACC_GST=[];
 
 // ── Auto-posting bridge: lets other modules (Sales Bill, Purchase/Work
@@ -16552,6 +16737,19 @@ var ACC_DEFAULT_COA=[
   {code:'4202', name:'Taxes',                    type:'Expense',   group:'Indirect Expenses'},
   {code:'4203', name:'Depreciation',             type:'Expense',   group:'Indirect Expenses'},
   {code:'4204', name:'Amortization',             type:'Expense',   group:'Indirect Expenses'},
+  {code:'4301', name:'Professional / CA Fees',   type:'Expense',   group:'Company Overheads'},
+  {code:'4302', name:'Audit Fees',               type:'Expense',   group:'Company Overheads'},
+  {code:'4303', name:'ROC / Compliance',         type:'Expense',   group:'Company Overheads'},
+  {code:'4304', name:'Legal Fees',               type:'Expense',   group:'Company Overheads'},
+  {code:'4305', name:'Office Rent',              type:'Expense',   group:'Company Overheads'},
+  {code:'4306', name:'Office Utilities',         type:'Expense',   group:'Company Overheads'},
+  {code:'4307', name:'Bank Charges',             type:'Expense',   group:'Company Overheads'},
+  {code:'4308', name:'Insurance',                type:'Expense',   group:'Company Overheads'},
+  {code:'4309', name:'Admin Salaries',           type:'Expense',   group:'Company Overheads'},
+  {code:'4310', name:'Software / Subscriptions', type:'Expense',   group:'Company Overheads'},
+  {code:'4311', name:'Travel (Non-Site)',        type:'Expense',   group:'Company Overheads'},
+  {code:'4312', name:'Marketing & Advertising',  type:'Expense',   group:'Company Overheads'},
+  {code:'4313', name:'Miscellaneous Overheads',  type:'Expense',   group:'Company Overheads'},
   {code:'5001', name:'Capital Account',          type:'Equity',    group:'Capital'}
 ];
 
@@ -16672,10 +16870,12 @@ async function accBackfillHistorical(){
       sbFetch('work_payments',{select:'*'}).catch(function(){return [];}),
       sbFetch('petty_cash_in',{select:'*'}).catch(function(){return [];}),
       sbFetch('petty_cash_expenses',{select:'*'}).catch(function(){return [];}),
-      sbFetch('other_expenses',{select:'*'}).catch(function(){return [];})
+      sbFetch('other_expenses',{select:'*'}).catch(function(){return [];}),
+      sbFetch('company_expenses',{select:'*'}).catch(function(){return [];})
     ]);
     var projects=r[0]||[], emps=r[1]||[], salesBills=r[2]||[], salesPayments=r[3]||[],
-        workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[], otherExp=r[8]||[];
+        workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[], otherExp=r[8]||[],
+        companyExp=r[9]||[];
     var projById={}; projects.forEach(function(p){ projById[p.id]=p; });
     var empName={}; emps.forEach(function(e){ empName[e.id]=((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim(); });
 
@@ -16785,6 +16985,15 @@ async function accBackfillHistorical(){
         narration:p.type+' — '+p.description, sourceType:'other_expense', sourceId:p.id})) count++; else fail++;
     }
 
+    for(var i=0;i<companyExp.length;i++){
+      var ce=companyExp[i]; if(isDone('company_expense',ce.id)) continue;
+      if(await accAutoPost({type:'Payment', date:ce.date, partyName:ce.party_name||ce.category,
+        debitCode:((typeof OH_CAT_CODES!=='undefined'&&OH_CAT_CODES[ce.category])||'4313'),
+        creditCode:(ce.payment_mode==='Cash'?'1001':'1002'), amount:parseFloat(ce.amount)||0,
+        narration:(ce.category||'Overhead')+(ce.description?' — '+ce.description:''),
+        sourceType:'company_expense', sourceId:ce.id})) count++; else fail++;
+    }
+
     // Clean up orphaned auto-posted vouchers whose source record has since
     // been deleted in its module (covers deletions made before delete-hooks
     // existed, or on another device).
@@ -16796,6 +17005,7 @@ async function accBackfillHistorical(){
     pettyIn.forEach(function(x){liveIds[x.id]=1;});
     pettyExp.forEach(function(x){liveIds[x.id]=1;});
     otherExp.forEach(function(x){liveIds[x.id]=1;});
+    companyExp.forEach(function(x){liveIds[x.id]=1;});
     var orphans = await sbFetch('vouchers',{select:'id,source_id',filter:'source_id=not.is.null'});
     var removed=0;
     for(var i=0;i<(orphans||[]).length;i++){
@@ -20078,8 +20288,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260802b"></script>
-<script src="js/employee.js?v=20260802b"></script>
-<script src="js/projects.js?v=20260802b"></script>
-<script src="js/finance.js?v=20260802b"></script>
+<script src="js/registry.js?v=20260802c"></script>
+<script src="js/employee.js?v=20260802c"></script>
+<script src="js/projects.js?v=20260802c"></script>
+<script src="js/finance.js?v=20260802c"></script>
 </html>

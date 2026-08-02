@@ -4065,6 +4065,29 @@ function execRenderSales(){
       el.innerHTML=tabBar+'<div style="text-align:center;padding:40px;color:var(--text3);">No sales bills generated yet</div>';
       return;
     }
+
+    // ── Per-project GST reconciliation ──────────────────────────────────
+    // Output GST billed to the client on this project, and input GST paid
+    // on this project's purchase/work bills. Shown for reconciliation only:
+    // GST is collected on behalf of the government and is settled company-
+    // wide (netted across all projects), so it is NOT part of project profit.
+    var gstOfBill=function(b){
+      var a=[];try{a=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      return a.filter(function(x){return x.is_gst;}).reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+    };
+    var projOutGst=sBills.reduce(function(s,b){return s+gstOfBill(b);},0);
+    var projInGst=(typeof WA_BILLS!=='undefined'?WA_BILLS:[])
+      .filter(function(b){return b.project_id===projId;})
+      .reduce(function(s,b){return s+gstOfBill(b);},0);
+    var gstStrip='<div style="background:#F3E5F5;border:1px solid #E1BEE7;border-radius:10px;padding:10px 12px;margin:10px 0;">'+
+      '<div style="font-size:11px;font-weight:900;color:#4A148C;margin-bottom:6px;">&#127974; GST on this Project <span style="font-weight:600;color:var(--text3);">(reconciliation only \u2014 not part of project profit)</span></div>'+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+
+        '<div><div style="font-size:9.5px;color:var(--text3);">OUTPUT GST BILLED</div><div style="font-size:14px;font-weight:900;color:#E65100;">'+inr(projOutGst)+'</div></div>'+
+        '<div><div style="font-size:9.5px;color:var(--text3);">INPUT GST PAID</div><div style="font-size:14px;font-weight:900;color:#2E7D32;">'+inr(projInGst)+'</div></div>'+
+        '<div><div style="font-size:9.5px;color:var(--text3);">NET</div><div style="font-size:14px;font-weight:900;color:var(--navy);">'+inr(projOutGst-projInGst)+'</div></div>'+
+      '</div>'+
+      '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;">GST is settled company-wide in Accounts &rarr; GST tab, not per project.</div>'+
+    '</div>';
     var billsHtml=sBills.map(function(b){
       var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
@@ -4161,7 +4184,7 @@ function execRenderSales(){
         '</div>'+
       '</div>';
     }).join('');
-    el.innerHTML=tabBar+'<div style="padding:10px;">'+billsHtml+'</div>';
+    el.innerHTML=tabBar+'<div style="padding:10px;">'+gstStrip+billsHtml+'</div>';
     return;
   }
 
