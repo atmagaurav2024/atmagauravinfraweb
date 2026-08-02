@@ -17538,7 +17538,6 @@ async function accGstTab(){
     inRows=inRows.concat(ohRows);
     var inTaxable=inRows.reduce(function(s,x){return s+x.taxable;},0);
     var inGst=inRows.reduce(function(s,x){return s+x.gst;},0);
-    var netGst=outGst-inGst;
 
     var byMonth={};
     var bump=function(month,key,amt){ if(!month)return; if(!byMonth[month])byMonth[month]={outTax:0,outGst:0,inTax:0,inGst:0}; byMonth[month][key]+=amt; };
@@ -17577,6 +17576,12 @@ async function accGstTab(){
           '<td style="text-align:right;font-weight:700;">'+fmtINR(parseFloat(v.amount)||0)+'</td>'+
           '<td style="text-align:center;">'+(gstCanDel?'<button class="btn btn-sm btn-red" onclick="accDelGstSettlement(\''+v.id+'\')" title="Delete this settlement entry">&#128465;</button>':'')+'</td></tr>';
       }).join('');
+    // ITC only reduces the liability once it is actually set off — so the
+    // net payable is Output GST minus what has been utilised, and the
+    // available credit shrinks as it gets used.
+    var itcAvailable=inGst-setoffTotal;
+    var netPayable=outGst-setoffTotal;
+
     var gstSettlementHtml=
       '<div style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:10px;padding:10px 12px;margin-bottom:14px;">'+
         '<div style="font-size:12px;font-weight:900;color:#4A148C;margin-bottom:8px;">&#9878;&#65039; GST Settlement</div>'+
@@ -17594,16 +17599,18 @@ async function accGstTab(){
 
     cont.innerHTML=
       '<div style="font-size:16px;font-weight:800;margin-bottom:4px;">GST Summary</div>'+
-      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">Output GST from Sales Bills, Input GST (ITC) from Purchase/Work Bills — both from each bill\'s GST additions. For information only — verify before filing GSTR-1 / GSTR-3B.</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">Output GST from Sales Bills; ITC from Purchase/Work Bills and Company Overheads. Net payable counts only ITC you have actually set off. For information only — verify before filing GSTR-1 / GSTR-3B.</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTPUT GST (SALES)</div><div style="font-size:16px;font-weight:900;color:#E65100;">'+fmtINR(outGst)+'</div><div style="font-size:9px;color:var(--text3);">on '+fmtINR(outTaxable)+' taxable</div></div>'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INPUT GST / ITC (PURCHASES)</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(inGst)+'</div><div style="font-size:9px;color:var(--text3);">on '+fmtINR(inTaxable)+' taxable</div></div>'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">NET GST '+(netGst>=0?'PAYABLE':'CREDIT')+'</div><div style="font-size:16px;font-weight:900;color:'+(netGst>=0?'#C62828':'#2E7D32')+';">'+fmtINR(Math.abs(netGst))+'</div><div style="font-size:9px;color:var(--text3);">Output − Input</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ITC AVAILABLE</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(itcAvailable)+'</div><div style="font-size:9px;color:var(--text3);">'+fmtINR(inGst)+' earned − '+fmtINR(setoffTotal)+' used</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ITC SET OFF</div><div style="font-size:16px;font-weight:900;color:#1565C0;">'+fmtINR(setoffTotal)+'</div><div style="font-size:9px;color:var(--text3);">'+(setoffTotal>0?'utilised against output':'none utilised yet')+'</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">NET GST '+(netPayable>=0?'PAYABLE':'CREDIT')+'</div><div style="font-size:16px;font-weight:900;color:'+(netPayable>0?'#C62828':'#2E7D32')+';">'+fmtINR(Math.abs(netPayable))+'</div><div style="font-size:9px;color:var(--text3);">Output − ITC set off</div></div>'+
       '</div>'+
+      (itcAvailable>0.5&&netPayable>0.5?'<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:10.5px;color:#6D4C41;">&#128161; You have '+fmtINR(itcAvailable)+' of unused ITC. Net payable above excludes it \u2014 set it off below to reduce what you actually pay.</div>':'')+
       gstSettlementHtml+
       '<div style="display:flex;gap:0;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;">'+
-        (inGst>0?'<button onclick="accOpenGstVoucher(\'setoff\','+Math.min(outGst,inGst)+')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;" title="Journal: Dr GST Payable / Cr GST Input Credit — uses your ITC against the output GST">&#128260; Set-off ITC (Journal)</button>':'')+
-        '<button onclick="accOpenGstVoucher(\'payment\','+Math.max(0,netGst)+')" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;" title="Payment: Dr GST Payable / Cr Bank — the net GST paid to Government">&#128184; Record GST Payment</button>'+
+        (itcAvailable>0.5?'<button onclick="accOpenGstVoucher(\'setoff\','+Math.max(0,Math.min(netPayable,itcAvailable))+')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;" title="Journal: Dr GST Payable / Cr GST Input Credit — uses your ITC against the output GST">&#128260; Set-off ITC (Journal)</button>':'')+
+        '<button onclick="accOpenGstVoucher(\'payment\','+Math.max(0,netPayable)+')" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;" title="Payment: Dr GST Payable / Cr Bank — the net GST paid to Government">&#128184; Record GST Payment</button>'+
       '</div>'+
       (monthKeys.length?
         '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Month-wise</div>'+
