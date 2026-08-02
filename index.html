@@ -16496,6 +16496,54 @@ var ACC_PETTY_CAT_CODES={
 // Other Expenses type -> GL account code
 var ACC_OTHEREXP_CODES={interest:'4201', tax:'4202', depreciation:'4203', amortization:'4204'};
 
+// ── Default Chart of Accounts ────────────────────────────────────────────
+// Covers every GL code the auto-poster/backfill maps to, so a fresh setup
+// works end-to-end with one click. Codes follow a simple convention:
+// 1xxx Assets, 2xxx Liabilities, 3xxx Income, 4xxx Expenses, 5xxx Equity.
+var ACC_DEFAULT_COA=[
+  {code:'1001', name:'Cash in Hand',             type:'Asset',     group:'Current Assets'},
+  {code:'1002', name:'Bank Account',             type:'Asset',     group:'Current Assets'},
+  {code:'1101', name:'Petty Cash in Hand',       type:'Asset',     group:'Current Assets'},
+  {code:'1201', name:'Sundry Debtors (Clients)', type:'Asset',     group:'Current Assets'},
+  {code:'2001', name:'Sundry Creditors (Vendors)',type:'Liability',group:'Current Liabilities'},
+  {code:'2101', name:'GST Payable',              type:'Liability', group:'Duties & Taxes'},
+  {code:'3001', name:'Sales Revenue (Contract Work)', type:'Income', group:'Direct Income'},
+  {code:'4001', name:'Purchases / Direct Work Expenses', type:'Expense', group:'Direct Expenses'},
+  {code:'4101', name:'Fuel & Transport',         type:'Expense',   group:'Site Expenses'},
+  {code:'4102', name:'Site Materials',           type:'Expense',   group:'Site Expenses'},
+  {code:'4103', name:'Labour Wages',             type:'Expense',   group:'Site Expenses'},
+  {code:'4104', name:'Food & Refreshment',       type:'Expense',   group:'Site Expenses'},
+  {code:'4105', name:'Office Expenses',          type:'Expense',   group:'Site Expenses'},
+  {code:'4106', name:'Equipment Repair',         type:'Expense',   group:'Site Expenses'},
+  {code:'4107', name:'Safety Items',             type:'Expense',   group:'Site Expenses'},
+  {code:'4108', name:'Utilities',                type:'Expense',   group:'Site Expenses'},
+  {code:'4109', name:'Medical',                  type:'Expense',   group:'Site Expenses'},
+  {code:'4110', name:'Miscellaneous Site Expenses', type:'Expense', group:'Site Expenses'},
+  {code:'4201', name:'Interest Expenses',        type:'Expense',   group:'Indirect Expenses'},
+  {code:'4202', name:'Taxes',                    type:'Expense',   group:'Indirect Expenses'},
+  {code:'4203', name:'Depreciation',             type:'Expense',   group:'Indirect Expenses'},
+  {code:'4204', name:'Amortization',             type:'Expense',   group:'Indirect Expenses'},
+  {code:'5001', name:'Capital Account',          type:'Equity',    group:'Capital'}
+];
+
+// Inserts any of the default accounts that don't already exist (matched by
+// code) — safe to run repeatedly, never overwrites accounts you've edited.
+async function accSeedDefaultCoa(){
+  var existing={}; ACC_ACCOUNTS.forEach(function(a){ existing[String(a.code)]=true; });
+  var toAdd=ACC_DEFAULT_COA.filter(function(a){ return !existing[a.code]; });
+  if(!toAdd.length){ toast('All default accounts already exist','info'); return; }
+  toast('Creating '+toAdd.length+' account'+(toAdd.length!==1?'s':'')+'…','info');
+  try{
+    for(var i=0;i<toAdd.length;i++){
+      var res=await sbInsert('chart_of_accounts',{code:toAdd[i].code,name:toAdd[i].name,type:toAdd[i].type,group:toAdd[i].group,opening_balance:0});
+      if(res&&res[0]) ACC_ACCOUNTS.push(res[0]);
+    }
+    ACC_ACCOUNTS.sort(function(a,b){return String(a.code).localeCompare(String(b.code));});
+    toast(toAdd.length+' default account'+(toAdd.length!==1?'s':'')+' created','success');
+    accCoa();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
 var ACC_PARTY_CACHE={};
 var ACC_TAB='dashboard';
 var VOU_TYPES=['Payment','Receipt','Journal','Contra','Purchase','Sales'];
@@ -16543,6 +16591,18 @@ function accSwitchTab(tab){
 // anything that already has a matching source_type+source_id voucher, so
 // it's safe to click more than once.
 async function accBackfillHistorical(){
+  // The mappings below rely on the default GL codes — if they're missing
+  // (fresh setup), every post would silently skip. Offer to create them.
+  var haveCodes={}; ACC_ACCOUNTS.forEach(function(a){ haveCodes[String(a.code)]=true; });
+  var missing=ACC_DEFAULT_COA.filter(function(a){ return !haveCodes[a.code]; });
+  if(missing.length){
+    if(confirm(missing.length+' of the standard accounts used for auto-posting are missing from your Chart of Accounts. Create them now? (Required for the backfill to post correctly.)')){
+      await accSeedDefaultCoa();
+    } else {
+      toast('Backfill cancelled — entries would be skipped without those accounts','warning');
+      return;
+    }
+  }
   if(!confirm('This will scan Sales Bills, Purchase Bills, Petty Cash and Other Expenses, and create the matching GL vouchers for anything not already posted. Continue?')) return;
   toast('Scanning history…','info');
   try{
@@ -16723,8 +16783,14 @@ function accCoa(){
   var cont=document.getElementById('acc-content');if(!cont)return;
   cont.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
     '<div style="font-size:16px;font-weight:800;">Chart of Accounts</div>'+
-    '<button class="btn btn-navy" onclick="accNewAccount()">+ Account</button></div>'+
-  (!ACC_ACCOUNTS.length?'<div style="text-align:center;padding:30px;color:var(--text3);">No accounts defined yet</div>':
+    '<div style="display:flex;gap:8px;">'+
+      '<button class="btn btn-outline" onclick="accSeedDefaultCoa()" title="Create the standard set of accounts (Cash, Bank, Petty Cash, Debtors, Creditors, GST, Sales, site expense heads, etc.) used by auto-posting. Skips any codes you already have.">&#10024; Setup Default Accounts</button>'+
+      '<button class="btn btn-navy" onclick="accNewAccount()">+ Account</button>'+
+    '</div></div>'+
+  (!ACC_ACCOUNTS.length?
+    '<div style="text-align:center;padding:30px;color:var(--text3);">No accounts defined yet.<br><br>'+
+      '<span style="font-size:12px;">Click <b>&#10024; Setup Default Accounts</b> above to create a ready-made chart (Cash, Bank, Petty Cash, Debtors, Creditors, GST Payable, Sales Revenue, and all site-expense heads).<br>'+
+      'These are also required for <b>Backfill from History</b> and auto-posting of Sales/Purchase/Petty Cash to work.</span></div>':
   '<div class="table-card"><table class="att-table"><thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Group</th><th>Actions</th></tr></thead><tbody>'+
     ACC_ACCOUNTS.map(function(a){
       return '<tr><td><code>'+a.code+'</code></td><td><strong>'+a.name+'</strong></td><td>'+a.type+'</td><td>'+(a.group||'—')+'</td>'+
