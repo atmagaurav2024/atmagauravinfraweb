@@ -16548,8 +16548,31 @@ var ACC_PARTY_CACHE={};
 var ACC_TAB='dashboard';
 var VOU_TYPES=['Payment','Receipt','Journal','Contra','Purchase','Sales'];
 
+var ACC_TAB_DEFS=[
+  {id:'dashboard', label:'📊 Dashboard'},
+  {id:'entry',     label:'🧾 Voucher Entry'},
+  {id:'ledger',    label:'📒 Ledger'},
+  {id:'coa',       label:'📚 Chart of Accounts'},
+  {id:'reports',   label:'📈 Reports'},
+  {id:'gst',       label:'🏛 GST'}
+];
+
+function accRenderTabBar(){
+  var bar=document.getElementById('acc-tab-bar');
+  if(!bar) return;
+  bar.innerHTML=ACC_TAB_DEFS.map(function(t){
+    var active=ACC_TAB===t.id;
+    return '<button class="tab" data-tab="'+t.id+'" onclick="accSwitchTab(\''+t.id+'\')" style="'+
+      'padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;'+
+      'font-family:Nunito,sans-serif;border-radius:8px;'+
+      'background:'+(active?'white':'transparent')+';'+
+      'color:'+(active?'#1A237E':'rgba(255,255,255,.65)')+';">'+t.label+'</button>';
+  }).join('');
+}
+
 async function initAccounts(){
   var cont=document.getElementById('acc-content');if(!cont)return;
+  accRenderTabBar();
   cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading accounts...</div>';
   try{
     var[accounts,vouchers]=await Promise.all([
@@ -16559,7 +16582,7 @@ async function initAccounts(){
     ACC_ACCOUNTS=Array.isArray(accounts)?accounts:[];
     ACC_VOUCHERS=Array.isArray(vouchers)?vouchers:[];
     avLoadPartyNames();
-    accSwitchTab('dashboard');
+    accSwitchTab(ACC_TAB||'dashboard');
   }catch(e){console.error('initAccounts:',e);if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading accounts</div>';}
 }
 
@@ -16572,10 +16595,7 @@ function avLoadPartyNames(){
 
 function accSwitchTab(tab){
   ACC_TAB=tab;
-  var tabs=document.getElementById('acc-tab-bar');
-  if(tabs){
-    tabs.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active',t.dataset.tab===tab);});
-  }
+  accRenderTabBar();
   if(tab==='dashboard')accDash();
   if(tab==='entry')accEntry();
   if(tab==='ledger')accLedger();
