@@ -6700,6 +6700,7 @@ function applyDrawerPermissions(){
     'attendance':   function(){ return canAccess('attendance','view'); },
     'accounts':     function(){ return canAccess('accounts','view'); },
     'petty-cash':   function(){ return canAccess('petty-cash','view'); },
+    'overheads':    function(){ return canAccess('overheads','view'); },
     'access':       function(){ return canAccess('access','view'); },
     'company':      function(){ return canAccess('company','view'); },
     'registry':     function(){ return canAccess('registry','view'); }
@@ -10221,7 +10222,7 @@ async function empSavePay(){
   <div style="background:#4A148C;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127970; Company Overheads</div>
-    <button class="tb-btn" onclick="ohOpenEntry()" style="font-size:20px;">&#43;</button>
+    <button class="tb-btn" id="oh-add-btn" onclick="ohOpenEntry()" style="font-size:20px;">&#43;</button>
   </div>
   <div id="oh-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
 </div>
@@ -16486,12 +16487,17 @@ var OH_CAT_CODES={
   'Marketing & Advertising':'4312','Miscellaneous':'4313'
 };
 
+function ohCanEdit(){ return typeof canAccess==='function' ? canAccess('overheads','edit') : (currentUser&&currentUser.role==='admin'); }
+function ohCanDelete(){ return typeof canAccess==='function' ? canAccess('overheads','delete') : (currentUser&&currentUser.role==='admin'); }
+
 async function initOverheads(){
   var cont=document.getElementById('oh-content'); if(!cont) return;
   cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
   try{
     var rows=await sbFetch('company_expenses',{select:'*',order:'date.desc'});
     OH_LIST=Array.isArray(rows)?rows:[];
+    var addBtn=document.getElementById('oh-add-btn');
+    if(addBtn) addBtn.style.display=ohCanEdit()?'':'none';
     ohRender();
   }catch(e){
     console.error('initOverheads:',e);
@@ -16525,7 +16531,7 @@ function ohRender(){
       '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;">'+
         '<button onclick="ohExportExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
         '<button onclick="ohExportPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
-        '<button onclick="ohOpenEntry()" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Expense</button>'+
+        (ohCanEdit()?'<button onclick="ohOpenEntry()" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Expense</button>':'')+
       '</div>'+
     '</div>'+
     (catKeys.length?
@@ -16541,7 +16547,7 @@ function ohRender(){
           '<td>'+(x.party_name||'—')+'</td>'+
           '<td>'+(x.payment_mode||'—')+'</td>'+
           '<td style="text-align:right;font-weight:800;">'+fmtINR(parseFloat(x.amount)||0)+'</td>'+
-          '<td><button class="btn btn-sm btn-red" onclick="ohDelete(\''+x.id+'\')">&#128465;</button></td></tr>';
+          '<td>'+(ohCanDelete()?'<button class="btn btn-sm btn-red" onclick="ohDelete(\''+x.id+'\')">&#128465;</button>':'')+'</td></tr>';
       }).join('')+'</tbody></table></div>'
       :'<div style="text-align:center;padding:30px;color:var(--text3);">No overhead expenses recorded yet.<br><span style="font-size:11px;">Use <b>+ Expense</b> for CA fees, office rent, bank charges and other costs that don\'t belong to a specific project.</span></div>');
 }
@@ -16568,6 +16574,7 @@ function ohOpenEntry(){
 }
 
 async function ohSave(){
+  if(!ohCanEdit()){ toast('You do not have permission to add overhead expenses','warning'); return; }
   var gv=function(id){var el=document.getElementById(id);return el?el.value:'';};
   var amt=parseFloat(gv('oh-amt'))||0;
   if(amt<=0){ toast('Enter a valid amount','warning'); return; }
@@ -16600,6 +16607,7 @@ async function ohSave(){
 }
 
 async function ohDelete(id){
+  if(!ohCanDelete()){ toast('You do not have permission to delete overhead expenses','warning'); return; }
   if(!confirm('Delete this overhead expense? This also removes its accounting entry.')) return;
   try{
     await sbDelete('company_expenses',id);
@@ -17756,6 +17764,7 @@ var AC_MODS=[
   // Accounting — view/edit/delete
   {key:'accounts',         label:'Accounts',           icon:'&#128176;',group:'Accounting',    params:['view','edit','delete']},
   {key:'petty-cash',       label:'Petty Cash',         icon:'&#128181;',group:'Accounting',    params:['view','edit','delete']},
+  {key:'overheads',        label:'Company Overheads',  icon:'&#127970;',group:'Accounting',    params:['view','edit','delete']},
 
   // Settings — view/edit/delete
   {key:'access',           label:'Access Control',     icon:'&#128274;',group:'Settings',      params:['view','edit','delete']},
