@@ -16447,6 +16447,55 @@ async function pcDeleteEntry(id,type){
 
 // ── ACCOUNTS ──────────────────────────────────────────────
 var ACC_ACCOUNTS=[], ACC_VOUCHERS=[], ACC_VOU_ITEMS=[], ACC_GST=[];
+
+// ── Auto-posting bridge: lets other modules (Sales Bill, Purchase/Work
+// Bill, Petty Cash, Other Expenses) silently create the matching
+// double-entry voucher, without the user re-entering it manually in
+// Accounts and without Accounts needing to have been opened first. ──
+var ACC_COA_CACHE = null;
+async function accGetAccountId(code){
+  if(!ACC_COA_CACHE){
+    try{
+      var rows = await sbFetch('chart_of_accounts',{select:'id,code'});
+      ACC_COA_CACHE = {};
+      (Array.isArray(rows)?rows:[]).forEach(function(r){ ACC_COA_CACHE[r.code]=r.id; });
+    }catch(e){ console.error('Could not load Chart of Accounts for auto-posting', e); ACC_COA_CACHE={}; }
+  }
+  return ACC_COA_CACHE[code]||null;
+}
+// opts: {type, date, partyName, debitCode, creditCode, amount, narration, sourceType, sourceId}
+// Silently no-ops (with a console warning) if the mapped GL account codes
+// haven't been set up in Chart of Accounts yet — a missing ledger mapping
+// should never block the actual business transaction from saving.
+async function accAutoPost(opts){
+  if(!opts || !opts.amount || opts.amount<=0) return;
+  try{
+    var debitId = await accGetAccountId(opts.debitCode);
+    var creditId = await accGetAccountId(opts.creditCode);
+    if(!debitId || !creditId){
+      console.warn('Auto-post skipped — missing Chart of Accounts entry for code '+(!debitId?opts.debitCode:opts.creditCode)+' ('+opts.sourceType+')');
+      return;
+    }
+    var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL'}[opts.type]||'VOU';
+    var vou_no=prefix+'-AUTO-'+String(Date.now()).slice(-7);
+    var res = await sbInsert('vouchers',{
+      vou_no:vou_no, type:opts.type, date:opts.date||new Date().toISOString().slice(0,10),
+      party_name:opts.partyName||null, debit_account:debitId, credit_account:creditId,
+      amount:opts.amount, narration:opts.narration||null,
+      source_type:opts.sourceType||null, source_id:opts.sourceId||null, auto_posted:true
+    });
+    if(res && res[0]) ACC_VOUCHERS.unshift(res[0]);
+  }catch(e){ console.error('accAutoPost failed for '+(opts&&opts.sourceType), e); }
+}
+// Petty cash expense category -> GL account code
+var ACC_PETTY_CAT_CODES={
+  'Fuel & Transport':'4101','Site Materials':'4102','Labour Wages':'4103',
+  'Food & Refreshment':'4104','Office Expenses':'4105','Equipment Repair':'4106',
+  'Safety Items':'4107','Utilities':'4108','Medical':'4109','Miscellaneous':'4110'
+};
+// Other Expenses type -> GL account code
+var ACC_OTHEREXP_CODES={interest:'4201', tax:'4202', depreciation:'4203', amortization:'4204'};
+
 var ACC_PARTY_CACHE={};
 var ACC_TAB='dashboard';
 var VOU_TYPES=['Payment','Receipt','Journal','Contra','Purchase','Sales'];
@@ -16487,6 +16536,119 @@ function accSwitchTab(tab){
   if(tab==='coa')accCoa();
 }
 
+// One-time (repeatable/safe) sweep that posts GL vouchers for existing
+// Sales Bills, Sales Payments, Purchase/Work Bills, Work Payments, Petty
+// Cash (funding + expenses), and Other Expenses that were created before
+// auto-posting existed, or otherwise haven't been posted yet. Skips
+// anything that already has a matching source_type+source_id voucher, so
+// it's safe to click more than once.
+async function accBackfillHistorical(){
+  if(!confirm('This will scan Sales Bills, Purchase Bills, Petty Cash and Other Expenses, and create the matching GL vouchers for anything not already posted. Continue?')) return;
+  toast('Scanning history…','info');
+  try{
+    var posted = await sbFetch('vouchers',{select:'source_type,source_id',filter:'source_id=not.is.null'});
+    var doneSet = {};
+    (Array.isArray(posted)?posted:[]).forEach(function(v){ doneSet[v.source_type+':'+v.source_id]=true; });
+    var isDone=function(type,id){ return !!doneSet[type+':'+id]; };
+
+    var r = await Promise.all([
+      sbFetch('projects',{select:'id,name,client'}).catch(function(){return [];}),
+      sbFetch('employees',{select:'id,first_name,last_name'}).catch(function(){return [];}),
+      sbFetch('sales_bills',{select:'*'}).catch(function(){return [];}),
+      sbFetch('sales_payments',{select:'*'}).catch(function(){return [];}),
+      sbFetch('work_bills',{select:'*'}).catch(function(){return [];}),
+      sbFetch('work_payments',{select:'*'}).catch(function(){return [];}),
+      sbFetch('petty_cash_in',{select:'*'}).catch(function(){return [];}),
+      sbFetch('petty_cash_expenses',{select:'*'}).catch(function(){return [];}),
+      sbFetch('other_expenses',{select:'*'}).catch(function(){return [];})
+    ]);
+    var projects=r[0]||[], emps=r[1]||[], salesBills=r[2]||[], salesPayments=r[3]||[],
+        workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[], otherExp=r[8]||[];
+    var projById={}; projects.forEach(function(p){ projById[p.id]=p; });
+    var empName={}; emps.forEach(function(e){ empName[e.id]=((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim(); });
+
+    var count=0;
+
+    for(var i=0;i<salesBills.length;i++){
+      var b=salesBills[i]; if(isDone('sales_bill',b.id)) continue;
+      var proj=projById[b.project_id]||{};
+      var adds=[]; try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var gstAmt=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var nonGstTotal=(parseFloat(b.bill_amount)||0)-gstAmt;
+      await accAutoPost({type:'Sales', date:b.bill_date, partyName:proj.client||proj.name||'Client',
+        debitCode:'1201', creditCode:'3001', amount:nonGstTotal,
+        narration:'Sales Bill '+(b.bill_ref||b.id)+(proj.name?' — '+proj.name:''),
+        sourceType:'sales_bill', sourceId:b.id});
+      if(gstAmt>0){
+        await accAutoPost({type:'Sales', date:b.bill_date, partyName:proj.client||proj.name||'Client',
+          debitCode:'1201', creditCode:'2101', amount:gstAmt,
+          narration:'GST on Sales Bill '+(b.bill_ref||b.id), sourceType:'sales_bill_gst', sourceId:b.id});
+      }
+      count++;
+    }
+
+    for(var i=0;i<salesPayments.length;i++){
+      var p=salesPayments[i]; if(isDone('sales_payment',p.id)) continue;
+      var proj=projById[p.project_id]||{};
+      await accAutoPost({type:'Receipt', date:p.payment_date, partyName:proj.client||proj.name||'Client',
+        debitCode:(p.payment_mode==='Cash'?'1001':'1002'), creditCode:'1201', amount:parseFloat(p.amount)||0,
+        narration:'Payment received'+(p.reference?' (Ref: '+p.reference+')':'')+(proj.name?' — '+proj.name:''),
+        sourceType:'sales_payment', sourceId:p.id});
+      count++;
+    }
+
+    for(var i=0;i<workBills.length;i++){
+      var b=workBills[i]; if(isDone('work_bill',b.id)) continue;
+      await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
+        debitCode:'4001', creditCode:'2001', amount:parseFloat(b.bill_amount)||0,
+        narration:'Purchase/Work Bill '+(b.bill_ref||b.id), sourceType:'work_bill', sourceId:b.id});
+      count++;
+    }
+
+    for(var i=0;i<workPayments.length;i++){
+      var p=workPayments[i]; if(isDone('work_payment',p.id)) continue;
+      await accAutoPost({type:'Payment', date:p.payment_date, partyName:p.party_name,
+        debitCode:'2001', creditCode:(p.payment_mode==='Cash'?'1001':'1002'), amount:parseFloat(p.amount)||0,
+        narration:'Payment against Work Bill'+(p.reference?' (Ref: '+p.reference+')':''),
+        sourceType:'work_payment', sourceId:p.id});
+      count++;
+    }
+
+    for(var i=0;i<pettyIn.length;i++){
+      var p=pettyIn[i]; if(isDone('petty_cash_in',p.id)) continue;
+      var nm=empName[p.emp_id]||p.emp_id;
+      await accAutoPost({type:'Contra', date:p.date, partyName:nm,
+        debitCode:'1101', creditCode:'1002', amount:parseFloat(p.amount)||0,
+        narration:'Petty cash funded to '+nm+(p.purpose?' — '+p.purpose:''),
+        sourceType:'petty_cash_in', sourceId:p.id});
+      count++;
+    }
+
+    for(var i=0;i<pettyExp.length;i++){
+      var p=pettyExp[i]; if(isDone('petty_cash_expense',p.id)) continue;
+      await accAutoPost({type:'Journal', date:p.date, partyName:p.description,
+        debitCode:(typeof ACC_PETTY_CAT_CODES!=='undefined'&&ACC_PETTY_CAT_CODES[p.category])||'4110', creditCode:'1101', amount:parseFloat(p.amount)||0,
+        narration:'Petty cash — '+p.category+' — '+p.description, sourceType:'petty_cash_expense', sourceId:p.id});
+      count++;
+    }
+
+    for(var i=0;i<otherExp.length;i++){
+      var p=otherExp[i]; if(isDone('other_expense',p.id)) continue;
+      await accAutoPost({type:'Payment', date:p.date, partyName:p.description,
+        debitCode:(typeof ACC_OTHEREXP_CODES!=='undefined'&&ACC_OTHEREXP_CODES[p.type])||'4201', creditCode:'1002', amount:parseFloat(p.amount)||0,
+        narration:p.type+' — '+p.description, sourceType:'other_expense', sourceId:p.id});
+      count++;
+    }
+
+    toast(count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted','success');
+    initAccounts();
+  }catch(e){
+    console.error('accBackfillHistorical failed', e);
+    toast('Backfill error: '+e.message,'error');
+  }
+}
+
+
 function accDash(){
   var cont=document.getElementById('acc-content');if(!cont)return;
   var totalVouchers=ACC_VOUCHERS.length;
@@ -16506,7 +16668,10 @@ function accDash(){
     '</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'+
       '<div style="font-size:14px;font-weight:800;">Recent Vouchers</div>'+
-      '<button class="btn btn-navy btn-sm" onclick="accOpenVoucher()">+ Voucher</button></div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button class="btn btn-outline btn-sm" onclick="accBackfillHistorical()" title="Post GL vouchers for existing Sales Bills, Purchase Bills, Petty Cash and Other Expenses that haven\'t been posted yet">&#8635; Backfill from History</button>'+
+        '<button class="btn btn-navy btn-sm" onclick="accOpenVoucher()">+ Voucher</button>'+
+      '</div></div>'+
     (!ACC_VOUCHERS.length?'<div style="text-align:center;padding:30px;color:var(--text3);">No vouchers yet</div>':
     '<div class="table-card"><table class="att-table"><thead><tr><th>Vou No</th><th>Date</th><th>Type</th><th>Party</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
       ACC_VOUCHERS.slice(0,20).map(function(v){
@@ -19307,8 +19472,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260801b"></script>
-<script src="js/employee.js?v=20260801b"></script>
-<script src="js/projects.js?v=20260801b"></script>
-<script src="js/finance.js?v=20260801b"></script>
+<script src="js/registry.js?v=20260802a"></script>
+<script src="js/employee.js?v=20260802a"></script>
+<script src="js/projects.js?v=20260802a"></script>
+<script src="js/finance.js?v=20260802a"></script>
 </html>

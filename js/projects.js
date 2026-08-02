@@ -3496,6 +3496,15 @@ async function execSaveSalesPayment(billId,projId){
       toast('₹'+amount.toLocaleString('en-IN')+' payment recorded','success');
       closeSheet('ov-exec','sh-exec');
       execRenderSales();
+
+      // Auto-post to Accounts: Dr Bank/Cash, Cr Sundry Debtors
+      if(typeof accAutoPost==='function'){
+        var acProj2=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+        accAutoPost({type:'Receipt', date:date, partyName:acProj2.client||acProj2.name||'Client',
+          debitCode:(mode==='Cash'?'1001':'1002'), creditCode:'1201', amount:amount,
+          narration:'Payment received'+(ref?' (Ref: '+ref+')':'')+(acProj2.name?' — '+acProj2.name:''),
+          sourceType:'sales_payment', sourceId:res[0].id});
+      }
     }
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
@@ -4000,10 +4009,17 @@ async function execSaveOtherExpense(type,projId){
   if(!desc){toast('Description required','warning');return;}
   if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
   try{
-    await sbInsert('other_expenses',{project_id:projId,type:type,description:desc,amount:amount,date:date||null,remarks:remarks||null});
+    var res=await sbInsert('other_expenses',{project_id:projId,type:type,description:desc,amount:amount,date:date||null,remarks:remarks||null});
     closeSheet('ov-exec','sh-exec');
     toast('Saved','success');
     execRenderOtherExpenses();
+
+    // Auto-post to Accounts: Dr [Interest/Tax/Depreciation/Amortization], Cr Bank
+    if(res&&res[0]&&typeof accAutoPost==='function'&&typeof ACC_OTHEREXP_CODES!=='undefined'){
+      accAutoPost({type:'Payment', date:date||new Date().toISOString().slice(0,10), partyName:desc,
+        debitCode:ACC_OTHEREXP_CODES[type]||'4201', creditCode:'1002', amount:amount,
+        narration:type+' — '+desc, sourceType:'other_expense', sourceId:res[0].id});
+    }
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -4553,6 +4569,21 @@ async function execSaveSalesBill(){
       toast(billRef+' generated \u2014 '+'\u20b9'+totalAmt.toLocaleString('en-IN'),'success');
       SALES_SUBTAB='viewbills';
       execRenderSales();
+
+      // Auto-post to Accounts: Dr Sundry Debtors, Cr Sales Revenue (+ GST Payable if any)
+      var acProj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+      if(typeof accAutoPost==='function'){
+        var nonGstTotal=workAmt+addAmt-dedAmt;
+        accAutoPost({type:'Sales', date:date, partyName:acProj.client||acProj.name||'Client',
+          debitCode:'1201', creditCode:'3001', amount:nonGstTotal,
+          narration:'Sales Bill '+billRef+(acProj.name?' — '+acProj.name:''),
+          sourceType:'sales_bill', sourceId:res[0].id});
+        if(gstAmt>0){
+          accAutoPost({type:'Sales', date:date, partyName:acProj.client||acProj.name||'Client',
+            debitCode:'1201', creditCode:'2101', amount:gstAmt,
+            narration:'GST on Sales Bill '+billRef, sourceType:'sales_bill_gst', sourceId:res[0].id});
+        }
+      }
     }
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
@@ -8303,6 +8334,13 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     });
     if(res&&res[0]){
       WA_BILLS.push(res[0]);
+
+      // Auto-post to Accounts: Dr Project Purchases/Direct Expenses, Cr Sundry Creditors
+      if(typeof accAutoPost==='function'){
+        accAutoPost({type:'Purchase', date:date, partyName:partyName,
+          debitCode:'4001', creditCode:'2001', amount:Math.round(grossAmount),
+          narration:'Purchase/Work Bill '+billRef, sourceType:'work_bill', sourceId:res[0].id});
+      }
       // Update adjusted_amount for each advance (cumulative partial tracking)
       if(adjAdvIds.length){
         // Collect per-advance amounts from checkboxes
@@ -8731,7 +8769,16 @@ async function execSavePaymentAdv(projId,balAmount){
         payment_date:date,amount:cashAmt,
         payment_mode:mode,reference:ref,remarks:remarks
       });
-      if(res&&res[0]) WA_PAYMENTS.push(res[0]);
+      if(res&&res[0]){
+        WA_PAYMENTS.push(res[0]);
+        // Auto-post to Accounts: Dr Sundry Creditors, Cr Bank/Cash
+        if(typeof accAutoPost==='function'){
+          accAutoPost({type:'Payment', date:date, partyName:partyName,
+            debitCode:'2001', creditCode:(mode==='Cash'?'1001':'1002'), amount:cashAmt,
+            narration:'Payment against Work Bill'+(ref?' (Ref: '+ref+')':''),
+            sourceType:'work_payment', sourceId:res[0].id});
+        }
+      }
     }catch(e){toast('Payment save error: '+e.message,'error');console.error(e);return;}
   }
 

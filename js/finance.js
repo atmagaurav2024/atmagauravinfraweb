@@ -201,8 +201,17 @@ async function pcSaveCashIn(){
   if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
   try{
     var today=new Date().toISOString().slice(0,10);
-    await sbInsert('petty_cash_in',{emp_id:emp,amount:amount,date:today,project:gv('pci-proj')||'All Projects',purpose:gv('pci-purpose'),remarks:gv('pci-remarks')});
+    var res=await sbInsert('petty_cash_in',{emp_id:emp,amount:amount,date:today,project:gv('pci-proj')||'All Projects',purpose:gv('pci-purpose'),remarks:gv('pci-remarks')});
     closeSheet('ov-pc','sh-pc');await initPettyCash();toast('Employee funded: '+pcFmt(amount),'success');
+
+    // Auto-post to Accounts: Dr Petty Cash in Hand, Cr Bank
+    if(res&&res[0]&&typeof accAutoPost==='function'){
+      var empName=(PC_EMPS.find(function(x){return x.empId===emp;})||{}).name||emp;
+      accAutoPost({type:'Contra', date:today, partyName:empName,
+        debitCode:'1101', creditCode:'1002', amount:amount,
+        narration:'Petty cash funded to '+empName+(gv('pci-purpose')?' — '+gv('pci-purpose'):''),
+        sourceType:'petty_cash_in', sourceId:res[0].id});
+    }
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -290,7 +299,7 @@ async function pcSaveExpense(){
   var bal=pcEmpBal(emp);
   if(amount>bal){toast('Insufficient balance. Available: '+pcFmt(bal),'warning');}
   try{
-    await sbInsert('petty_cash_expenses',{
+    var res=await sbInsert('petty_cash_expenses',{
       emp_id:emp,category:cat,amount:amount,date:gv('pce-date'),
       project:allocations.map(function(p){return p.name;}).join(', '),
       project_ids:JSON.stringify(allocations.map(function(p){return p.id;})),
@@ -299,6 +308,13 @@ async function pcSaveExpense(){
       description:desc,bill_no:gv('pce-bill'),remarks:gv('pce-remarks')
     });
     closeSheet('ov-pc','sh-pc');await initPettyCash();toast('Expense recorded: '+pcFmt(amount),'success');
+
+    // Auto-post to Accounts: Dr [Category Expense], Cr Petty Cash in Hand
+    if(res&&res[0]&&typeof accAutoPost==='function'&&typeof ACC_PETTY_CAT_CODES!=='undefined'){
+      accAutoPost({type:'Journal', date:gv('pce-date'), partyName:desc,
+        debitCode:ACC_PETTY_CAT_CODES[cat]||'4110', creditCode:'1101', amount:amount,
+        narration:'Petty cash — '+cat+' — '+desc, sourceType:'petty_cash_expense', sourceId:res[0].id});
+    }
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
