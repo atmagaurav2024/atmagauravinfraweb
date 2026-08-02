@@ -16752,13 +16752,13 @@ function accDash(){
         '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">Receipts</div>'+
         '<div style="font-size:20px;font-weight:900;color:var(--green);margin-top:4px;">'+fmtINR(totalReceipts)+'</div></div>'+
     '</div>'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'+
-      '<div style="font-size:14px;font-weight:800;">Recent Vouchers</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn btn-outline btn-sm" onclick="accVouchersExcel()">&#128229; Excel</button>'+
-        '<button class="btn btn-outline btn-sm" onclick="accVouchersPDF()">&#128438; PDF</button>'+
-        '<button class="btn btn-outline btn-sm" onclick="accBackfillHistorical()" title="Post GL vouchers for existing Sales Bills, Purchase Bills, Petty Cash and Other Expenses that haven\'t been posted yet">&#8635; Backfill from History</button>'+
-        '<button class="btn btn-navy btn-sm" onclick="accOpenVoucher()">+ Voucher</button>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;">'+
+      '<div style="font-size:14px;font-weight:800;white-space:nowrap;">Recent Vouchers</div>'+
+      '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;">'+
+        '<button onclick="accVouchersExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
+        '<button onclick="accVouchersPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
+        '<button onclick="accBackfillHistorical()" title="Post GL vouchers for existing Sales Bills, Purchase Bills, Petty Cash and Other Expenses that haven\'t been posted yet" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#8635; Backfill</button>'+
+        '<button onclick="accOpenVoucher()" style="background:#1A237E;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Voucher</button>'+
       '</div></div>'+
     (!ACC_VOUCHERS.length?'<div style="text-align:center;padding:30px;color:var(--text3);">No vouchers yet</div>':
     '<div class="table-card"><table class="att-table"><thead><tr><th>Vou No</th><th>Date</th><th>Type</th><th>Party</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
@@ -16990,9 +16990,9 @@ function accShowReport(which){
   if(!ACC_ACCOUNTS.length){ body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No accounts set up yet — see Chart of Accounts.</div>'; return; }
 
   var exportBtns = (which==='trial'||which==='pl'||which==='bs')
-    ? '<div style="display:flex;justify-content:flex-start;gap:8px;margin-bottom:8px;flex-wrap:wrap;">'+
-        '<button class="btn btn-outline btn-sm" onclick="accReportExcel(\''+which+'\')">&#128229; Excel</button>'+
-        '<button class="btn btn-outline btn-sm" onclick="accReportPDF(\''+which+'\')">&#128438; PDF</button>'+
+    ? '<div style="display:flex;justify-content:flex-start;gap:0;margin-bottom:8px;">'+
+        '<button onclick="accReportExcel(\''+which+'\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
+        '<button onclick="accReportPDF(\''+which+'\')" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128196; PDF</button>'+
       '</div>'
     : '';
 
