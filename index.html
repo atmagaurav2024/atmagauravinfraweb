@@ -16752,9 +16752,9 @@ function accDash(){
         '<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">Receipts</div>'+
         '<div style="font-size:20px;font-weight:900;color:var(--green);margin-top:4px;">'+fmtINR(totalReceipts)+'</div></div>'+
     '</div>'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'+
       '<div style="font-size:14px;font-weight:800;">Recent Vouchers</div>'+
-      '<div style="display:flex;gap:8px;">'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
         '<button class="btn btn-outline btn-sm" onclick="accVouchersExcel()">&#128229; Excel</button>'+
         '<button class="btn btn-outline btn-sm" onclick="accVouchersPDF()">&#128438; PDF</button>'+
         '<button class="btn btn-outline btn-sm" onclick="accBackfillHistorical()" title="Post GL vouchers for existing Sales Bills, Purchase Bills, Petty Cash and Other Expenses that haven\'t been posted yet">&#8635; Backfill from History</button>'+
@@ -16990,7 +16990,7 @@ function accShowReport(which){
   if(!ACC_ACCOUNTS.length){ body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No accounts set up yet — see Chart of Accounts.</div>'; return; }
 
   var exportBtns = (which==='trial'||which==='pl'||which==='bs')
-    ? '<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;">'+
+    ? '<div style="display:flex;justify-content:flex-start;gap:8px;margin-bottom:8px;flex-wrap:wrap;">'+
         '<button class="btn btn-outline btn-sm" onclick="accReportExcel(\''+which+'\')">&#128229; Excel</button>'+
         '<button class="btn btn-outline btn-sm" onclick="accReportPDF(\''+which+'\')">&#128438; PDF</button>'+
       '</div>'
