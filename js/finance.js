@@ -323,6 +323,7 @@ async function pcDeleteEntry(id,type){
   var table=type==='in'?'petty_cash_in':'petty_cash_expenses';
   try{
     await sbDelete(table,id);
+    if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);
     if(type==='in')PC_IN=PC_IN.filter(function(i){return i.id!==id;});
     else PC_EXP=PC_EXP.filter(function(e){return e.id!==id;});
     pcRefresh();toast('Deleted','success');

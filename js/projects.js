@@ -3513,7 +3513,7 @@ async function execDelSalesPayment(id){
   if(!confirm('Delete this payment?')) return;
   WA_SALES_PAYMENTS=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.id!==id;});
   execRenderSales();
-  try{await sbDelete('sales_payments',id);}catch(e){console.error(e);}
+  try{await sbDelete('sales_payments',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
   toast('Payment deleted','success');
 }
 
@@ -4027,6 +4027,7 @@ async function execDeleteOtherExpense(id,type){
   if(!confirm('Delete this entry?')) return;
   try{
     await sbDelete('other_expenses',id);
+    if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);
     toast('Deleted','success');
     execRenderOtherExpenses();
   }catch(e){toast('Error: '+e.message,'error');}
@@ -4592,7 +4593,7 @@ async function execDelSalesBill(id){
   if(!confirm('Delete this sales bill?')) return;
   WA_SALES_BILLS=WA_SALES_BILLS.filter(function(b){return b.id!==id;});
   execRenderSales();
-  try{await sbDelete('sales_bills',id);}catch(e){console.error(e);}
+  try{await sbDelete('sales_bills',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
   toast('Sales bill deleted','success');
 }
 
@@ -9175,12 +9176,12 @@ async function execDelBill(id){
     : 'Delete this bill? This cannot be undone.';
   if(!confirm(msg))return;
   if(hasPaid){
-    for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);}catch(e){}
+    for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(relPays[i].id);}catch(e){}
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
   if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
-  try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
+  try{await sbDelete('work_bills',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);toast('Bill deleted','success');}catch(e){console.error(e);}
 }
 
 async function execEditBill(billId){
@@ -9676,7 +9677,7 @@ async function execDelPayment(id){
   if(!confirm('Delete this payment record?'))return;
   WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.id!==id;});
   if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
-  try{await sbDelete('work_payments',id);}catch(e){console.error(e);}
+  try{await sbDelete('work_payments',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){}
 }
 
 

@@ -15389,12 +15389,12 @@ async function execDelBill(id){
     : 'Delete this bill? This cannot be undone.';
   if(!confirm(msg))return;
   if(hasPaid){
-    for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);}catch(e){}
+    for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);accCleanupVouchersForSource(relPays[i].id);}catch(e){}
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
   execRenderBills();
-  try{await sbDelete('work_bills',id);toast('Bill deleted','success');}catch(e){console.error(e);}
+  try{await sbDelete('work_bills',id);accCleanupVouchersForSource(id);toast('Bill deleted','success');}catch(e){console.error(e);}
 }
 
 
@@ -15417,7 +15417,7 @@ async function execDelPayment(id){
   if(!confirm('Delete this payment record?'))return;
   WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.id!==id;});
   execRenderBills();
-  try{await sbDelete('work_payments',id);}catch(e){console.error(e);}
+  try{await sbDelete('work_payments',id);accCleanupVouchersForSource(id);}catch(e){console.error(e);}
 }
 
 
@@ -16439,6 +16439,7 @@ async function pcDeleteEntry(id,type){
   var table=type==='in'?'petty_cash_in':'petty_cash_expenses';
   try{
     await sbDelete(table,id);
+    if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);
     if(type==='in')PC_IN=PC_IN.filter(function(i){return i.id!==id;});
     else PC_EXP=PC_EXP.filter(function(e){return e.id!==id;});
     pcRefresh();toast('Deleted','success');
@@ -16493,6 +16494,23 @@ async function accAutoPost(opts){
   }
 }
 var ACC_AUTOPOST_LAST_ERROR = null;
+
+// When a source record (sales bill, payment, petty cash entry, etc.) is
+// deleted in its own module, remove any GL vouchers auto-posted from it —
+// keeps Accounts consistent without manual cleanup. Matched purely by
+// source_id, which also covers multi-leg posts (e.g. a sales bill's base
+// + GST vouchers share one source_id). Fire-and-forget safe.
+async function accCleanupVouchersForSource(sourceId){
+  if(!sourceId) return;
+  try{
+    var vs = await sbFetch('vouchers',{select:'id',filter:'source_id=eq.'+sourceId});
+    if(!Array.isArray(vs)||!vs.length) return;
+    for(var i=0;i<vs.length;i++){ try{ await sbDelete('vouchers',vs[i].id); }catch(e){} }
+    if(typeof ACC_VOUCHERS!=='undefined'&&Array.isArray(ACC_VOUCHERS)){
+      ACC_VOUCHERS=ACC_VOUCHERS.filter(function(v){return v.source_id!==sourceId;});
+    }
+  }catch(e){ console.warn('accCleanupVouchersForSource failed for '+sourceId, e); }
+}
 // Petty cash expense category -> GL account code
 var ACC_PETTY_CAT_CODES={
   'Fuel & Transport':'4101','Site Materials':'4102','Labour Wages':'4103',
@@ -16722,10 +16740,33 @@ async function accBackfillHistorical(){
         narration:p.type+' — '+p.description, sourceType:'other_expense', sourceId:p.id})) count++; else fail++;
     }
 
+    // Clean up orphaned auto-posted vouchers whose source record has since
+    // been deleted in its module (covers deletions made before delete-hooks
+    // existed, or on another device).
+    var liveIds={};
+    salesBills.forEach(function(x){liveIds[x.id]=1;});
+    salesPayments.forEach(function(x){liveIds[x.id]=1;});
+    workBills.forEach(function(x){liveIds[x.id]=1;});
+    workPayments.forEach(function(x){liveIds[x.id]=1;});
+    pettyIn.forEach(function(x){liveIds[x.id]=1;});
+    pettyExp.forEach(function(x){liveIds[x.id]=1;});
+    otherExp.forEach(function(x){liveIds[x.id]=1;});
+    var orphans = await sbFetch('vouchers',{select:'id,source_id',filter:'source_id=not.is.null'});
+    var removed=0;
+    for(var i=0;i<(orphans||[]).length;i++){
+      var ov=orphans[i];
+      if(ov.source_id && !liveIds[ov.source_id]){
+        try{ await sbDelete('vouchers',ov.id); removed++; }catch(e){}
+      }
+    }
+    if(removed>0){
+      ACC_VOUCHERS=ACC_VOUCHERS.filter(function(v){ return !v.source_id || liveIds[v.source_id]; });
+    }
+
     if(fail>0){
       toast('Backfill: '+count+' posted, '+fail+' FAILED'+(ACC_AUTOPOST_LAST_ERROR?' — '+ACC_AUTOPOST_LAST_ERROR:'')+'. See browser console for details.','error');
     } else {
-      toast(count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted','success');
+      toast((count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted')+(removed?' · '+removed+' orphaned voucher'+(removed!==1?'s':'')+' removed':''),'success');
     }
     initAccounts();
   }catch(e){
@@ -19937,8 +19978,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260802a"></script>
-<script src="js/employee.js?v=20260802a"></script>
-<script src="js/projects.js?v=20260802a"></script>
-<script src="js/finance.js?v=20260802a"></script>
+<script src="js/registry.js?v=20260802b"></script>
+<script src="js/employee.js?v=20260802b"></script>
+<script src="js/projects.js?v=20260802b"></script>
+<script src="js/finance.js?v=20260802b"></script>
 </html>
