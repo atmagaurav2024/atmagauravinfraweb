@@ -16782,7 +16782,6 @@ var ACC_DEFAULT_COA=[
   {code:'3001', name:'Sales Revenue (Contract Work)', type:'Income', group:'Direct Income'},
   {code:'3002', name:'Sales Bill Additions',     type:'Income',    group:'Direct Income'},
   {code:'3003', name:'Sales Bill Deductions',    type:'Income',    group:'Direct Income'},
-  {code:'3004', name:'Personal Sales',           type:'Income',    group:'Other Income'},
   {code:'4001', name:'Purchases / Direct Work Expenses', type:'Expense', group:'Direct Expenses'},
   {code:'4002', name:'Purchase Bill Additions',  type:'Expense',   group:'Direct Expenses'},
   {code:'4003', name:'Purchase Bill Deductions', type:'Expense',   group:'Direct Expenses'},
@@ -16836,7 +16835,7 @@ async function accSeedDefaultCoa(){
 
 var ACC_PARTY_CACHE={};
 var ACC_TAB='dashboard';
-var VOU_TYPES=['Payment','Receipt','Journal','Contra','Purchase','Sales','Personal Sales'];
+var VOU_TYPES=['Payment','Receipt','Journal','Contra','Purchase','Sales'];
 
 var ACC_TAB_DEFS=[
   {id:'dashboard', label:'📊 Dashboard'},
@@ -16844,7 +16843,8 @@ var ACC_TAB_DEFS=[
   {id:'ledger',    label:'📒 Ledger'},
   {id:'coa',       label:'📚 Chart of Accounts'},
   {id:'reports',   label:'📈 Reports'},
-  {id:'gst',       label:'🏛 GST'}
+  {id:'gst',       label:'🏛 GST'},
+  {id:'personal',  label:'🔒 Personal'}
 ];
 
 function accRenderTabBar(){
@@ -16891,6 +16891,7 @@ function accSwitchTab(tab){
   if(tab==='ledger')accLedger();
   if(tab==='reports')accReports();
   if(tab==='gst')accGstTab();
+  if(tab==='personal')accPersonalTab();
   if(tab==='coa')accCoa();
 }
 
@@ -17092,9 +17093,12 @@ async function accBackfillHistorical(){
 
 function accDash(){
   var cont=document.getElementById('acc-content');if(!cont)return;
-  var totalVouchers=ACC_VOUCHERS.length;
-  var totalPayments=ACC_VOUCHERS.filter(function(v){return v.type==='Payment';}).reduce(function(s,v){return s+(v.amount||0);},0);
-  var totalReceipts=ACC_VOUCHERS.filter(function(v){return v.type==='Receipt';}).reduce(function(s,v){return s+(v.amount||0);},0);
+  // Personal Sales are excluded from the business dashboard entirely —
+  // they live only on the Personal tab.
+  var BIZ=ACC_VOUCHERS.filter(function(v){return !accIsPersonal(v);});
+  var totalVouchers=BIZ.length;
+  var totalPayments=BIZ.filter(function(v){return v.type==='Payment';}).reduce(function(s,v){return s+(v.amount||0);},0);
+  var totalReceipts=BIZ.filter(function(v){return v.type==='Receipt';}).reduce(function(s,v){return s+(v.amount||0);},0);
   cont.innerHTML=
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">'+
       '<div class="card" style="text-align:center;">'+
@@ -17115,9 +17119,9 @@ function accDash(){
         '<button onclick="accBackfillHistorical()" title="Post GL vouchers for existing Sales Bills, Purchase Bills, Petty Cash and Other Expenses that haven\'t been posted yet" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#8635; Backfill</button>'+
         '<button onclick="accOpenVoucher()" style="background:#1A237E;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Voucher</button>'+
       '</div></div>'+
-    (!ACC_VOUCHERS.length?'<div style="text-align:center;padding:30px;color:var(--text3);">No vouchers yet</div>':
+    (!BIZ.length?'<div style="text-align:center;padding:30px;color:var(--text3);">No vouchers yet</div>':
     '<div class="table-card"><table class="att-table"><thead><tr><th>Vou No</th><th>Date</th><th>Type</th><th>Party</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
-      ACC_VOUCHERS.slice(0,20).map(function(v){
+      BIZ.slice(0,20).map(function(v){
         var typeColors={Payment:'vou-payment',Receipt:'vou-receipt',Purchase:'vou-purchase',Journal:'vou-journal',Contra:'vou-contra',Sales:'vou-receipt'};
         return '<tr><td><strong>'+v.vou_no+'</strong></td><td>'+fmtDate(v.date)+'</td>'+
           '<td><span class="vou-badge '+(typeColors[v.type]||'vou-journal')+'">'+v.type+'</span></td>'+
@@ -17229,9 +17233,15 @@ function accHasActivity(a, asOn){
   var m=accMovements(a.id, asOn);
   return (m.dr>=0.005||m.cr>=0.005);
 }
+// Personal Sales are a private side-ledger: excluded from every report,
+// the dashboard and the GST tab. Whole vouchers are excluded (both legs),
+// so double-entry integrity is preserved and the Trial Balance still ties.
+function accIsPersonal(v){ return String(v&&v.type||'')==='Personal Sales'; }
+
 function accMovements(accountId, asOn){
   var dr=0, cr=0;
   ACC_VOUCHERS.forEach(function(v){
+    if(accIsPersonal(v)) return;
     if(!accInPeriod(v, asOn)) return;
     if(v.debit_account===accountId) dr+=(parseFloat(v.amount)||0);
     if(v.credit_account===accountId) cr+=(parseFloat(v.amount)||0);
@@ -17254,7 +17264,7 @@ function accLoadLedger(accountId){
   var a=ACC_ACCOUNTS.find(function(x){return x.id===accountId;});
   if(!a){ body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Account not found</div>'; return; }
   var entries=ACC_VOUCHERS
-    .filter(function(v){ return v.debit_account===accountId || v.credit_account===accountId; })
+    .filter(function(v){ return !accIsPersonal(v) && (v.debit_account===accountId || v.credit_account===accountId); })
     .sort(function(x,y){ return String(x.date||'').localeCompare(String(y.date||'')); });
   var open=parseFloat(a.opening_balance)||0;
   var run=open; // running balance on the account's normal side
@@ -17351,12 +17361,13 @@ function accAcctName(id){ var a=ACC_ACCOUNTS.find(function(x){return x.id===id;}
 
 function accVouchersExportData(){
   var header=['Vou No','Date','Type','Party','Debit Account','Credit Account','Amount','Narration'];
-  var rows=ACC_VOUCHERS.map(function(v){
+  var biz=ACC_VOUCHERS.filter(function(v){return !accIsPersonal(v);});
+  var rows=biz.map(function(v){
     return [v.vou_no||v.voucher_no||'', fmtDate(v.date), v.type||'', v.party_name||'',
       accAcctName(v.debit_account), accAcctName(v.credit_account),
       Math.round((parseFloat(v.amount)||0)), v.narration||''];
   });
-  var total=ACC_VOUCHERS.reduce(function(s,v){return s+(parseFloat(v.amount)||0);},0);
+  var total=biz.reduce(function(s,v){return s+(parseFloat(v.amount)||0);},0);
   rows.push(['TOTAL','','','','','',Math.round(total),'']);
   return {header:header, rows:rows};
 }
@@ -17420,7 +17431,7 @@ function accReportExportData(which){
     var cashIds={}; cashAccts.forEach(function(a){ cashIds[a.id]=a; });
     var rows=[], inflow=0, outflow=0;
     ACC_VOUCHERS
-      .filter(function(v){ return (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false); })
+      .filter(function(v){ return !accIsPersonal(v) && (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false); })
       .sort(function(x,y){ return String(y.date||'').localeCompare(String(x.date||'')); })
       .forEach(function(v){
         var amt=parseFloat(v.amount)||0;
@@ -17547,7 +17558,7 @@ function accShowReport(which){
     var cashIds={}; cashAccts.forEach(function(a){ cashIds[a.id]=a; });
     var inflow=0, outflow=0;
     var rows=ACC_VOUCHERS
-      .filter(function(v){ return (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false); })
+      .filter(function(v){ return !accIsPersonal(v) && (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false); })
       .sort(function(x,y){ return String(y.date||'').localeCompare(String(x.date||'')); })
       .map(function(v){
         var amt=parseFloat(v.amount)||0;
@@ -17676,6 +17687,128 @@ function gstShowDetail(which){
   openSheet('ov-acc','sh-acc');
 }
 
+// ── Personal Sales (private) ─────────────────────────────────────────────
+// Deliberately isolated: these vouchers are filtered out of the dashboard,
+// all reports, the ledger, the GST tab and every export. Nothing here
+// touches business figures.
+function accPersonalTab(){
+  var cont=document.getElementById('acc-content');if(!cont)return;
+  var rows=ACC_VOUCHERS.filter(accIsPersonal)
+    .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+  var total=rows.reduce(function(s,v){return s+(parseFloat(v.amount)||0);},0);
+
+  var thisYear=String(new Date().getFullYear());
+  var ytd=rows.filter(function(v){return String(v.date||'').slice(0,4)===thisYear;})
+    .reduce(function(s,v){return s+(parseFloat(v.amount)||0);},0);
+  var thisMonth=new Date().toISOString().slice(0,7);
+  var mtd=rows.filter(function(v){return String(v.date||'').slice(0,7)===thisMonth;})
+    .reduce(function(s,v){return s+(parseFloat(v.amount)||0);},0);
+
+  var byMonth={};
+  rows.forEach(function(v){
+    var m=String(v.date||'').slice(0,7); if(!m) return;
+    byMonth[m]=(byMonth[m]||0)+(parseFloat(v.amount)||0);
+  });
+  var mKeys=Object.keys(byMonth).sort().reverse();
+  var mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var fmtM=function(ym){var p=ym.split('-');return (mNames[parseInt(p[1],10)-1]||p[1])+' '+p[0];};
+
+  var canDel = typeof canAccess==='function' ? canAccess('accounts','delete') : (currentUser&&currentUser.role==='admin');
+
+  cont.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">'+
+      '<div style="font-size:16px;font-weight:800;">&#128274; Personal Sales</div>'+
+      '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;">'+
+        '<button onclick="accPersonalExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
+        '<button onclick="accPersonalPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
+        '<button onclick="accOpenPersonalVoucher()" style="background:#6A1B9A;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Personal Sale</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">Private record for your own calculation only. These entries are excluded from the dashboard, Trial Balance, P&amp;L, Balance Sheet, Cash Flow, GST and all business exports.</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">THIS MONTH</div><div style="font-size:16px;font-weight:900;color:#6A1B9A;">'+fmtINR(mtd)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">'+thisYear+'</div><div style="font-size:16px;font-weight:900;color:#6A1B9A;">'+fmtINR(ytd)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL</div><div style="font-size:16px;font-weight:900;color:var(--navy);">'+fmtINR(total)+'</div></div>'+
+    '</div>'+
+    (mKeys.length?
+      '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Month-wise</div>'+
+      '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Month</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+
+      mKeys.map(function(m){return '<tr><td>'+fmtM(m)+'</td><td style="text-align:right;font-weight:700;">'+fmtINR(byMonth[m])+'</td></tr>';}).join('')+
+      '</tbody></table></div>':'')+
+    '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Entries</div>'+
+    (rows.length?
+      '<div class="table-card"><table class="att-table"><thead><tr><th>Vou No</th><th>Date</th><th>Party</th><th>Narration</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>'+
+      rows.map(function(v){
+        return '<tr><td><strong>'+(v.vou_no||v.voucher_no||'—')+'</strong></td>'+
+          '<td style="white-space:nowrap;">'+fmtDate(v.date)+'</td>'+
+          '<td>'+(v.party_name||'—')+'</td>'+
+          '<td>'+(v.narration||'—')+'</td>'+
+          '<td style="text-align:right;font-weight:800;color:#6A1B9A;">'+fmtINR(parseFloat(v.amount)||0)+'</td>'+
+          '<td>'+(canDel?'<button class="btn btn-sm btn-red" onclick="accDelPersonal(\''+v.id+'\')">&#128465;</button>':'')+'</td></tr>';
+      }).join('')+
+      '<tr style="background:#F3E5F5;font-weight:900;"><td colspan="4">TOTAL</td><td style="text-align:right;">'+fmtINR(total)+'</td><td></td></tr>'+
+      '</tbody></table></div>'
+      :'<div style="text-align:center;padding:30px;color:var(--text3);">No personal sales recorded yet.</div>');
+}
+
+// Simplified entry — no debit/credit pickers, since these entries are
+// intentionally outside the double-entry books.
+function accOpenPersonalVoucher(){
+  openSheet('ov-acc','sh-acc');
+  document.getElementById('acc-sheet-title').textContent='New Personal Sale';
+  document.getElementById('acc-sheet-body').innerHTML=
+    '<label class="flbl">Date *</label><input class="finp" id="ps-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Party / Buyer</label><input class="finp" id="ps-party" placeholder="Name">'+
+    '<label class="flbl">Amount (&#8377;) *</label><input class="finp" id="ps-amount" type="number" placeholder="0">'+
+    '<label class="flbl">Narration</label><textarea class="ftxt" id="ps-narration" placeholder="What was sold"></textarea>'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:8px;">Private entry — kept out of all business reports, GST and exports.</div>';
+  document.getElementById('acc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeAccSheet()">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="accSavePersonal()">&#128190; Save</button>';
+}
+
+async function accSavePersonal(){
+  var amount=parseFloat(gv('ps-amount'));
+  if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
+  var vou_no='PSAL-'+String(Date.now()).slice(-6);
+  try{
+    var res=await sbInsert('vouchers',{vou_no:vou_no,voucher_no:vou_no,type:'Personal Sales',
+      date:gv('ps-date'),party_name:gv('ps-party'),amount:amount,narration:gv('ps-narration')});
+    if(res&&res[0]) ACC_VOUCHERS.unshift(res[0]);
+    closeAccSheet(); accPersonalTab(); toast('Personal sale saved: '+vou_no,'success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function accDelPersonal(id){
+  var v=ACC_VOUCHERS.find(function(x){return x.id===id;});
+  if(!confirm('Delete '+((v&&(v.vou_no||v.voucher_no))||'this entry')+'?')) return;
+  try{
+    await sbDelete('vouchers',id);
+    ACC_VOUCHERS=ACC_VOUCHERS.filter(function(x){return x.id!==id;});
+    accPersonalTab(); toast('Deleted','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function accPersonalExportData(){
+  var rows=ACC_VOUCHERS.filter(accIsPersonal)
+    .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));})
+    .map(function(v){return [(v.vou_no||v.voucher_no||''), fmtDate(v.date), v.party_name||'', v.narration||'', Math.round(parseFloat(v.amount)||0)];});
+  var total=rows.reduce(function(s,r){return s+r[4];},0);
+  rows.push(['TOTAL','','','',Math.round(total)]);
+  return {header:['Vou No','Date','Party','Narration','Amount'], rows:rows};
+}
+function accPersonalExcel(){
+  var d=accPersonalExportData();
+  if(d.rows.length<=1){toast('Nothing to export','warning');return;}
+  accExportCSV('Personal_Sales_'+new Date().toISOString().slice(0,10)+'.csv',[['Personal Sales (Private)'],[''],d.header].concat(d.rows));
+}
+function accPersonalPDF(){
+  var d=accPersonalExportData();
+  if(d.rows.length<=1){toast('Nothing to export','warning');return;}
+  d.rows=d.rows.map(function(r){ r[4]=fmtINR(r[4]); return r; });
+  accExportPDF('Personal Sales (Private)', d.header, d.rows);
+}
+
 async function accGstTab(){
   var cont=document.getElementById('acc-content');if(!cont)return;
   cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading GST summary…</div>';
@@ -17737,6 +17870,7 @@ async function accGstTab(){
     var setoffs=[], gstPayments=[];
     if(gstPayAcct){
       ACC_VOUCHERS.forEach(function(v){
+        if(accIsPersonal(v)) return;
         if(v.debit_account!==gstPayAcct.id) return;   // Dr GST Payable = settling it
         if(v.source_type) return;                      // skip auto-posted bill legs
         var amt=parseFloat(v.amount)||0; if(amt<=0) return;
