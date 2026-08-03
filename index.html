@@ -16544,7 +16544,7 @@ function ohRender(){
       OH_LIST.map(function(x){
         return '<tr><td style="white-space:nowrap;">'+fmtDate(x.date)+'</td>'+
           '<td>'+(x.category||'—')+'</td>'+
-          '<td>'+(x.description||'—')+(x.bill_no?'<div style="font-size:10px;color:var(--text3);">Bill: '+x.bill_no+'</div>':'')+(x.include_personal?'<div style="font-size:9px;color:#6A1B9A;font-weight:700;">&#128274; IN PERSONAL</div>':'')+'</td>'+
+          '<td>'+(x.description||'—')+(x.bill_no?'<div style="font-size:10px;color:var(--text3);">Bill: '+x.bill_no+'</div>':'')+(x.include_personal?'<div style="font-size:9px;color:#6A1B9A;font-weight:700;">&#128274; IN PERSONAL '+fmtINR((parseFloat(x.personal_amount)||0)>0?parseFloat(x.personal_amount):(parseFloat(x.amount)||0))+'</div>':'')+'</td>'+
           '<td>'+(x.party_name||'—')+'</td>'+
           '<td>'+(x.payment_mode||'—')+'</td>'+
           '<td style="text-align:right;">'+fmtINR(parseFloat(x.amount)||0)+'</td>'+
@@ -16576,8 +16576,16 @@ function ohOpenEntry(){
     '<div style="background:#F3E5F5;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;font-weight:800;color:#4A148C;">Total Payable: <span id="oh-total">&#8377;0</span></div>'+
     '<div class="fgrp" style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:8px;padding:8px 10px;">'+
       '<label class="flbl" style="display:flex;align-items:center;gap:6px;margin:0;">'+
-      '<input id="oh-personal" type="checkbox" style="width:auto;margin:0;"> &#128274; Also include in Personal Sales</label>'+
-      '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Records the overhead normally <b>and</b> adds a matching entry to your private Personal Sales tab. Only the taxable amount is carried across &mdash; GST is never included.</div>'+
+      '<input id="oh-personal" type="checkbox" style="width:auto;margin:0;" onchange="ohTogglePersonal()"> &#128274; Also include in Personal Sales</label>'+
+      '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Records the overhead normally <b>and</b> adds a matching entry to your private Personal Sales tab. GST is never included.</div>'+
+      '<div id="oh-personal-opts" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #B39DDB;">'+
+        '<label class="flbl" style="display:flex;align-items:center;gap:6px;margin:0 0 4px;font-size:11px;">'+
+          '<input type="radio" name="oh-pmode" id="oh-pmode-full" value="full" checked style="width:auto;margin:0;" onchange="ohTogglePersonal()"> Full taxable amount (<span id="oh-ptax">&#8377;0</span>)</label>'+
+        '<label class="flbl" style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;">'+
+          '<input type="radio" name="oh-pmode" id="oh-pmode-custom" value="custom" style="width:auto;margin:0;" onchange="ohTogglePersonal()"> Custom amount</label>'+
+        '<input id="oh-pamt" class="finp" type="number" step="0.01" placeholder="0.00" style="display:none;margin-top:6px;" oninput="ohUpdateTotal()">'+
+        '<div id="oh-pwarn" style="font-size:10px;color:#C62828;margin-top:4px;display:none;">Custom amount exceeds the taxable value.</div>'+
+      '</div>'+
     '</div>'+
     '<div class="fgrp"><label class="flbl">Payment Mode</label><select id="oh-mode" class="fsel"><option>Bank</option><option>Cash</option></select></div>'+
     '<div class="fgrp"><label class="flbl">Bill / Invoice No. (optional)</label><input id="oh-bill" class="finp"></div>'+
@@ -16587,6 +16595,23 @@ function ohOpenEntry(){
   foot.innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-oh\',\'sh-oh\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="ohSave()">Save Expense</button>';
   openSheet('ov-oh','sh-oh');
+}
+
+// Shows/hides the Personal Sales amount options and the custom input.
+function ohTogglePersonal(){
+  var on=(document.getElementById('oh-personal')||{}).checked;
+  var opts=document.getElementById('oh-personal-opts');
+  if(opts) opts.style.display=on?'':'none';
+  var custom=(document.getElementById('oh-pmode-custom')||{}).checked;
+  var amtEl=document.getElementById('oh-pamt');
+  if(amtEl){
+    amtEl.style.display=(on&&custom)?'':'none';
+    if(on&&custom&&!amtEl.value){
+      var t=parseFloat((document.getElementById('oh-amt')||{}).value)||0;
+      if(t>0) amtEl.value=t.toFixed(2);
+    }
+  }
+  ohUpdateTotal();
 }
 
 // Rate -> GST amount (when taxable or rate changes)
@@ -16606,6 +16631,14 @@ function ohUpdateTotal(){
   var gst=parseFloat(gv('oh-gstamt'))||0;
   var el=document.getElementById('oh-total');
   if(el) el.innerHTML=fmtINR(taxable+gst);
+  var pt=document.getElementById('oh-ptax');
+  if(pt) pt.innerHTML=fmtINR(taxable);
+  var warn=document.getElementById('oh-pwarn');
+  if(warn){
+    var custom=(document.getElementById('oh-pmode-custom')||{}).checked;
+    var pv=parseFloat((document.getElementById('oh-pamt')||{}).value)||0;
+    warn.style.display=(custom&&pv>taxable+0.005)?'':'none';
+  }
 }
 
 async function ohSave(){
@@ -16622,6 +16655,14 @@ async function ohSave(){
     party_name:gv('oh-party')||null, amount:amt,
     gst_amount:gstAmt, gst_rate:parseFloat(gv('oh-gstrate'))||0, itc_claimable:itcOk,
     include_personal:(document.getElementById('oh-personal')||{}).checked||false,
+    personal_amount:(function(){
+      if(!((document.getElementById('oh-personal')||{}).checked)) return null;
+      if((document.getElementById('oh-pmode-custom')||{}).checked){
+        var v=parseFloat((document.getElementById('oh-pamt')||{}).value)||0;
+        return v>0?v:null;   // null falls back to the full taxable amount
+      }
+      return null;
+    })(),
     payment_mode:gv('oh-mode')||'Bank', bill_no:gv('oh-bill')||null,
     remarks:gv('oh-rem')||null, created_by:(currentUser&&currentUser.id)||null
   };
@@ -16670,15 +16711,20 @@ async function ohPostToAccounts(x){
 // so deleting the overhead removes this too.
 async function ohCreatePersonalEntry(x){
   var taxable=parseFloat(x.amount)||0;
-  if(taxable<=0) return;
+  // personal_amount set = a custom figure was chosen; otherwise mirror the
+  // full taxable value. GST is excluded either way.
+  var custom=parseFloat(x.personal_amount)||0;
+  var amt=custom>0?custom:taxable;
+  if(amt<=0) return;
   // Guard against duplicates if a backfill re-runs over the same record
   var dup=ACC_VOUCHERS.find(function(v){ return v.source_type==='personal_from_overhead' && v.source_id===x.id; });
   if(dup) return;
   var vou_no='PSAL-'+String(Date.now()).slice(-6);
   try{
     var res=await sbInsert('vouchers',{vou_no:vou_no, voucher_no:vou_no, type:'Personal Sales',
-      date:x.date, party_name:x.party_name||x.category, amount:taxable,
-      narration:(x.category||'Overhead')+(x.description?' — '+x.description:'')+' (from overhead, taxable only)',
+      date:x.date, party_name:x.party_name||x.category, amount:amt,
+      narration:(x.category||'Overhead')+(x.description?' — '+x.description:'')+
+        (custom>0?' (from overhead, part amount)':' (from overhead, taxable only)'),
       source_type:'personal_from_overhead', source_id:x.id});
     if(res&&res[0]) ACC_VOUCHERS.unshift(res[0]);
   }catch(e){ console.warn('ohCreatePersonalEntry failed', e); }
