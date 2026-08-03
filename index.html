@@ -17147,27 +17147,102 @@ function accLedger(){
 // Debit increases Assets & Expenses; Credit increases Liabilities, Income
 // & Equity. Opening balances count toward the account's normal side.
 function accIsDebitNormal(a){ return a.type==='Asset'||a.type==='Expense'; }
+
+// ── Report period ────────────────────────────────────────────────────────
+// P&L and Cash Flow cover a period (from..to). Balance Sheet and Trial
+// Balance are "as on" statements — cumulative from inception up to the
+// end date — so they ignore the from bound and always include opening
+// balances. Indian FY runs Apr 1 to Mar 31.
+var ACC_RPT_FROM=null, ACC_RPT_TO=null, ACC_RPT_LABEL='';
+function accFyBounds(offsetYears){
+  var d=new Date(); var y=d.getFullYear();
+  var fyStartYear=(d.getMonth()<3)?y-1:y;   // Jan-Mar belongs to previous FY
+  fyStartYear+=(offsetYears||0);
+  return {from:fyStartYear+'-04-01', to:(fyStartYear+1)+'-03-31',
+          label:'FY '+fyStartYear+'-'+String(fyStartYear+1).slice(2)};
+}
+function accInitPeriod(){
+  if(ACC_RPT_FROM&&ACC_RPT_TO) return;
+  var fy=accFyBounds(0);
+  ACC_RPT_FROM=fy.from; ACC_RPT_TO=fy.to; ACC_RPT_LABEL=fy.label;
+}
+function accSetPeriod(kind){
+  var d=new Date(), y=d.getFullYear(), m=d.getMonth();
+  var p=function(n){return String(n).padStart(2,'0');};
+  if(kind==='thismonth'){
+    ACC_RPT_FROM=y+'-'+p(m+1)+'-01';
+    ACC_RPT_TO=y+'-'+p(m+1)+'-'+p(new Date(y,m+1,0).getDate());
+    ACC_RPT_LABEL=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]+' '+y;
+  } else if(kind==='lastmonth'){
+    var lm=new Date(y,m-1,1), ly=lm.getFullYear(), lmo=lm.getMonth();
+    ACC_RPT_FROM=ly+'-'+p(lmo+1)+'-01';
+    ACC_RPT_TO=ly+'-'+p(lmo+1)+'-'+p(new Date(ly,lmo+1,0).getDate());
+    ACC_RPT_LABEL=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][lmo]+' '+ly;
+  } else if(kind==='thisfy'){
+    var fy=accFyBounds(0); ACC_RPT_FROM=fy.from; ACC_RPT_TO=fy.to; ACC_RPT_LABEL=fy.label;
+  } else if(kind==='lastfy'){
+    var lfy=accFyBounds(-1); ACC_RPT_FROM=lfy.from; ACC_RPT_TO=lfy.to; ACC_RPT_LABEL=lfy.label;
+  } else if(kind==='all'){
+    ACC_RPT_FROM='1900-01-01'; ACC_RPT_TO='2999-12-31'; ACC_RPT_LABEL='All Time';
+  } else if(kind==='custom'){
+    var f=document.getElementById('acc-rpt-from'), t=document.getElementById('acc-rpt-to');
+    if(f&&f.value) ACC_RPT_FROM=f.value;
+    if(t&&t.value) ACC_RPT_TO=t.value;
+    ACC_RPT_LABEL=fmtDate(ACC_RPT_FROM)+' to '+fmtDate(ACC_RPT_TO);
+  }
+  accReports();
+  if(ACC_RPT_WHICH) accShowReport(ACC_RPT_WHICH);
+}
+function accPeriodSelectorHtml(){
+  accInitPeriod();
+  var btn=function(k,l){ return '<button onclick="accSetPeriod(\''+k+'\')" style="background:transparent;border:1.5px solid var(--border);border-radius:8px;padding:5px 9px;font-size:10.5px;font-weight:800;cursor:pointer;margin-right:6px;white-space:nowrap;font-family:Nunito,sans-serif;">'+l+'</button>'; };
+  return '<div style="background:white;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;">'+
+    '<div style="font-size:10px;color:var(--text3);font-weight:800;margin-bottom:6px;">REPORT PERIOD — <span style="color:#1A237E;">'+ACC_RPT_LABEL+'</span></div>'+
+    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;margin-bottom:8px;">'+
+      btn('thismonth','This Month')+btn('lastmonth','Last Month')+btn('thisfy','This FY')+btn('lastfy','Last FY')+btn('all','All Time')+
+    '</div>'+
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+
+      '<input type="date" id="acc-rpt-from" value="'+ACC_RPT_FROM+'" style="flex:1;min-width:120px;padding:5px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;">'+
+      '<span style="font-size:10px;color:var(--text3);">to</span>'+
+      '<input type="date" id="acc-rpt-to" value="'+ACC_RPT_TO+'" style="flex:1;min-width:120px;padding:5px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;">'+
+      '<button onclick="accSetPeriod(\'custom\')" style="background:#1A237E;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Apply</button>'+
+    '</div></div>';
+}
+// Date-bounded movements. asOn=true means cumulative up to ACC_RPT_TO
+// (Balance Sheet / Trial Balance); otherwise the from..to window.
+function accInPeriod(v, asOn){
+  var d=String(v.date||'');
+  if(!d) return false;
+  accInitPeriod();
+  if(d>ACC_RPT_TO) return false;
+  if(!asOn && d<ACC_RPT_FROM) return false;
+  return true;
+}
 // An account is worth showing in a report if it carries a balance OR saw any
 // movement in the period. Hiding purely on "balance is zero" made fully
 // settled accounts vanish — e.g. paying off GST Payable in full dropped both
 // the liability and the payment from view, making the entry look lost.
-function accHasActivity(a){
-  var bal=accNetBalance(a);
+function accHasActivity(a, asOn){
+  var bal=accNetBalance(a, asOn);
   if(Math.abs(bal)>=0.005) return true;
-  var m=accMovements(a.id);
+  var m=accMovements(a.id, asOn);
   return (m.dr>=0.005||m.cr>=0.005);
 }
-function accMovements(accountId){
+function accMovements(accountId, asOn){
   var dr=0, cr=0;
   ACC_VOUCHERS.forEach(function(v){
+    if(!accInPeriod(v, asOn)) return;
     if(v.debit_account===accountId) dr+=(parseFloat(v.amount)||0);
     if(v.credit_account===accountId) cr+=(parseFloat(v.amount)||0);
   });
   return {dr:dr, cr:cr};
 }
-function accNetBalance(a){ // +ve = balance on the account's normal side
-  var m=accMovements(a.id);
-  var open=parseFloat(a.opening_balance)||0;
+// +ve = balance on the account's normal side. asOn=true gives the
+// cumulative position (includes opening balance); otherwise it's the
+// movement within the selected period only.
+function accNetBalance(a, asOn){
+  var m=accMovements(a.id, asOn);
+  var open=asOn?(parseFloat(a.opening_balance)||0):0;
   return accIsDebitNormal(a) ? open+m.dr-m.cr : open+m.cr-m.dr;
 }
 
@@ -17200,9 +17275,12 @@ function accLoadLedger(accountId){
     '</tbody></table></div>';
 }
 
+var ACC_RPT_WHICH=null;
 function accReports(){
   var cont=document.getElementById('acc-content');if(!cont)return;
-  cont.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:14px;">Reports</div>'+
+  accInitPeriod();
+  cont.innerHTML='<div style="font-size:16px;font-weight:800;margin-bottom:10px;">Reports</div>'+
+    accPeriodSelectorHtml()+
     '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">'+
       [['trial','Trial Balance'],['pl','P&L Statement'],['bs','Balance Sheet'],['cash','Cash Flow']].map(function(r){
         return '<div class="card" style="cursor:pointer;text-align:center;padding:20px;" onclick="accShowReport(\''+r[0]+'\')">'+
@@ -17259,7 +17337,7 @@ function accExportPDF(title, tableHeaders, tableRows, extraNoteHtml){
     '</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">'+
       '<div style="font-size:14px;font-weight:900;">'+title+'</div>'+
-      '<div style="font-size:11px;color:#666;">As on: '+today+'</div>'+
+      '<div style="font-size:11px;color:#666;text-align:right;">'+(typeof ACC_RPT_LABEL!=='undefined'&&ACC_RPT_LABEL?'Period: '+ACC_RPT_LABEL+'<br>':'')+'<span style="font-size:9.5px;">Generated: '+today+'</span></div>'+
     '</div>'+
     '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'+
     (extraNoteHtml||'')+
@@ -17295,35 +17373,36 @@ function accVouchersPDF(){
 
 // Builds header/rows for a report id ('trial'|'pl'|'bs') for both formats.
 function accReportExportData(which){
+  accInitPeriod();
   if(which==='trial'){
     var rows=[], totDr=0, totCr=0;
     ACC_ACCOUNTS.forEach(function(a){
-      var bal=accNetBalance(a);
-      if(!accHasActivity(a)) return;
+      var bal=accNetBalance(a,true);
+      if(!accHasActivity(a,true)) return;
       var drBal=accIsDebitNormal(a)?(bal>0?bal:0):(bal<0?-bal:0);
       var crBal=accIsDebitNormal(a)?(bal<0?-bal:0):(bal>0?bal:0);
       totDr+=drBal; totCr+=crBal;
       rows.push([a.code+' - '+a.name, a.type, Math.round(drBal)||'', Math.round(crBal)||'']);
     });
     rows.push(['TOTAL','',Math.round(totDr),Math.round(totCr)]);
-    return {title:'Trial Balance', header:['Account','Type','Debit','Credit'], rows:rows, moneyCols:[2,3]};
+    return {title:'Trial Balance (as on '+fmtDate(ACC_RPT_TO)+')', header:['Account','Type','Debit','Credit'], rows:rows, moneyCols:[2,3]};
   }
   if(which==='pl'){
     var rows=[], income=0, expense=0;
-    ACC_ACCOUNTS.forEach(function(a){ if(a.type==='Income'){ var b=accNetBalance(a); if(Math.abs(b)>=0.005){income+=b; rows.push(['[Income] '+a.name,Math.round(b)]);} } });
-    ACC_ACCOUNTS.forEach(function(a){ if(a.type==='Expense'){ var b=accNetBalance(a); if(Math.abs(b)>=0.005){expense+=b; rows.push(['[Expense] '+a.name,Math.round(b)]);} } });
+    ACC_ACCOUNTS.forEach(function(a){ if(a.type==='Income'){ var b=accNetBalance(a,false); if(Math.abs(b)>=0.005){income+=b; rows.push(['[Income] '+a.name,Math.round(b)]);} } });
+    ACC_ACCOUNTS.forEach(function(a){ if(a.type==='Expense'){ var b=accNetBalance(a,false); if(Math.abs(b)>=0.005){expense+=b; rows.push(['[Expense] '+a.name,Math.round(b)]);} } });
     rows.push(['TOTAL INCOME',Math.round(income)]);
     rows.push(['TOTAL EXPENSES',Math.round(expense)]);
     rows.push(['NET '+(income-expense>=0?'PROFIT':'LOSS'),Math.round(Math.abs(income-expense))]);
-    return {title:'Profit & Loss Statement', header:['Particulars','Amount'], rows:rows, moneyCols:[1]};
+    return {title:'Profit & Loss Statement ('+ACC_RPT_LABEL+')', header:['Particulars','Amount'], rows:rows, moneyCols:[1]};
   }
   if(which==='bs'){
     var rows=[], assets=0, liab=0, equity=0, income=0, expense=0;
     ACC_ACCOUNTS.forEach(function(a){
-      var b=accNetBalance(a);
+      var b=accNetBalance(a,true);
       if(a.type==='Income') income+=b;
       if(a.type==='Expense') expense+=b;
-      if(!accHasActivity(a)) return;
+      if(!accHasActivity(a,true)) return;
       if(a.type==='Asset'){assets+=b; rows.push(['[Asset] '+a.name,Math.round(b)]);}
       if(a.type==='Liability'){liab+=b; rows.push(['[Liability] '+a.name,Math.round(b)]);}
       if(a.type==='Equity'){equity+=b; rows.push(['[Equity] '+a.name,Math.round(b)]);}
@@ -17332,7 +17411,7 @@ function accReportExportData(which){
     rows.push(['TOTAL ASSETS',Math.round(assets)]);
     rows.push(['Net Profit (current)',Math.round(netProfit)]);
     rows.push(['TOTAL LIABILITIES + EQUITY',Math.round(liab+equity+netProfit)]);
-    return {title:'Balance Sheet', header:['Particulars','Amount'], rows:rows, moneyCols:[1]};
+    return {title:'Balance Sheet (as on '+fmtDate(ACC_RPT_TO)+')', header:['Particulars','Amount'], rows:rows, moneyCols:[1]};
   }
   if(which==='cash'){
     var cashAccts=ACC_ACCOUNTS.filter(function(a){ return ['1001','1002','1101'].indexOf(String(a.code))>-1 || /cash|bank/i.test(a.name||''); });
@@ -17340,7 +17419,7 @@ function accReportExportData(which){
     var cashIds={}; cashAccts.forEach(function(a){ cashIds[a.id]=a; });
     var rows=[], inflow=0, outflow=0;
     ACC_VOUCHERS
-      .filter(function(v){ return cashIds[v.debit_account]||cashIds[v.credit_account]; })
+      .filter(function(v){ return (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false); })
       .sort(function(x,y){ return String(y.date||'').localeCompare(String(x.date||'')); })
       .forEach(function(v){
         var amt=parseFloat(v.amount)||0;
@@ -17353,7 +17432,7 @@ function accReportExportData(which){
     rows.push(['TOTAL INFLOW','','','',Math.round(inflow)]);
     rows.push(['TOTAL OUTFLOW','','','',Math.round(outflow)]);
     rows.push(['NET (incl. opening '+Math.round(opening)+')','','','',Math.round(opening+inflow-outflow)]);
-    return {title:'Cash Flow (Cash, Bank & Petty Cash)', header:['Voucher','Date','Narration','Flow','Amount'], rows:rows, moneyCols:[4]};
+    return {title:'Cash Flow ('+ACC_RPT_LABEL+')', header:['Voucher','Date','Narration','Flow','Amount'], rows:rows, moneyCols:[4]};
   }
   return null;
 }
@@ -17370,8 +17449,16 @@ function accReportPDF(which){
 }
 
 function accShowReport(which){
+  ACC_RPT_WHICH=which;
+  accInitPeriod();
   var body=document.getElementById('acc-report-body');
   if(!body) return;
+  // Balance Sheet & Trial Balance are "as on" statements (cumulative from
+  // inception); P&L and Cash Flow cover the selected window only.
+  var asOn=(which==='bs'||which==='trial');
+  var periodHdr='<div style="background:#E8EAF6;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:10.5px;font-weight:700;color:#1A237E;">'+
+    (asOn?'As on '+fmtDate(ACC_RPT_TO)+' (cumulative)':'Period: '+fmtDate(ACC_RPT_FROM)+' to '+fmtDate(ACC_RPT_TO))+
+    ' · <span style="font-weight:600;">'+ACC_RPT_LABEL+'</span></div>';
   if(!ACC_ACCOUNTS.length){ body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No accounts set up yet — see Chart of Accounts.</div>'; return; }
 
   var exportBtns = (which==='trial'||which==='pl'||which==='bs'||which==='cash')
@@ -17384,8 +17471,8 @@ function accShowReport(which){
   if(which==='trial'){
     var totDr=0, totCr=0;
     var rows=ACC_ACCOUNTS.map(function(a){
-      var bal=accNetBalance(a);
-      if(!accHasActivity(a)) return '';
+      var bal=accNetBalance(a,true);
+      if(!accHasActivity(a,true)) return '';
       var drBal = accIsDebitNormal(a) ? (bal>0?bal:0) : (bal<0?-bal:0);
       var crBal = accIsDebitNormal(a) ? (bal<0?-bal:0) : (bal>0?bal:0);
       totDr+=drBal; totCr+=crBal;
@@ -17394,7 +17481,7 @@ function accShowReport(which){
         '<td style="text-align:right;">'+(crBal?fmtINR(crBal):'—')+'</td></tr>';
     }).join('');
     var balanced=Math.abs(totDr-totCr)<0.01;
-    body.innerHTML=exportBtns+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Trial Balance</div>'+
+    body.innerHTML=exportBtns+periodHdr+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Trial Balance</div>'+
       '<div class="table-card"><table class="att-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th></tr></thead><tbody>'+
       (rows||'<tr><td colspan="5" style="text-align:center;color:var(--text3);">No balances yet</td></tr>')+
       '<tr style="background:#F3E5F5;font-weight:900;"><td colspan="3">TOTAL</td><td style="text-align:right;">'+fmtINR(totDr)+'</td><td style="text-align:right;">'+fmtINR(totCr)+'</td></tr>'+
@@ -17407,13 +17494,13 @@ function accShowReport(which){
   if(which==='pl'){
     var income=0, expense=0, incRows='', expRows='';
     ACC_ACCOUNTS.forEach(function(a){
-      var bal=accNetBalance(a);
-      if(!accHasActivity(a)) return;
+      var bal=accNetBalance(a,false);
+      if(!accHasActivity(a,false)) return;
       if(a.type==='Income'){ income+=bal; incRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
       if(a.type==='Expense'){ expense+=bal; expRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
     });
     var net=income-expense;
-    body.innerHTML=exportBtns+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Profit &amp; Loss Statement</div>'+
+    body.innerHTML=exportBtns+periodHdr+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Profit &amp; Loss Statement</div>'+
       '<div class="table-card"><table class="att-table"><tbody>'+
       '<tr style="background:#E8F5E9;font-weight:800;"><td>INCOME</td><td style="text-align:right;">'+fmtINR(income)+'</td></tr>'+(incRows||'<tr><td colspan="2" style="color:var(--text3);">No income recorded</td></tr>')+
       '<tr style="background:#FFEBEE;font-weight:800;"><td>EXPENSES</td><td style="text-align:right;">'+fmtINR(expense)+'</td></tr>'+(expRows||'<tr><td colspan="2" style="color:var(--text3);">No expenses recorded</td></tr>')+
@@ -17425,17 +17512,17 @@ function accShowReport(which){
   if(which==='bs'){
     var assets=0, liab=0, equity=0, aRows='', lRows='', eRows='', income=0, expense=0;
     ACC_ACCOUNTS.forEach(function(a){
-      var bal=accNetBalance(a);
+      var bal=accNetBalance(a,true);
       if(a.type==='Income') income+=bal;
       if(a.type==='Expense') expense+=bal;
-      if(!accHasActivity(a)) return;
+      if(!accHasActivity(a,true)) return;
       if(a.type==='Asset'){ assets+=bal; aRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
       if(a.type==='Liability'){ liab+=bal; lRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
       if(a.type==='Equity'){ equity+=bal; eRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
     });
     var netProfit=income-expense;
     var totalLE=liab+equity+netProfit;
-    body.innerHTML=exportBtns+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Balance Sheet</div>'+
+    body.innerHTML=exportBtns+periodHdr+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Balance Sheet</div>'+
       '<div class="table-card"><table class="att-table"><tbody>'+
       '<tr style="background:#E3F2FD;font-weight:800;"><td>ASSETS</td><td style="text-align:right;">'+fmtINR(assets)+'</td></tr>'+(aRows||'<tr><td colspan="2" style="color:var(--text3);">None</td></tr>')+
       '<tr style="background:#FFF3E0;font-weight:800;"><td>LIABILITIES</td><td style="text-align:right;">'+fmtINR(liab)+'</td></tr>'+(lRows||'<tr><td colspan="2" style="color:var(--text3);">None</td></tr>')+
@@ -17459,7 +17546,7 @@ function accShowReport(which){
     var cashIds={}; cashAccts.forEach(function(a){ cashIds[a.id]=a; });
     var inflow=0, outflow=0;
     var rows=ACC_VOUCHERS
-      .filter(function(v){ return cashIds[v.debit_account]||cashIds[v.credit_account]; })
+      .filter(function(v){ return (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false); })
       .sort(function(x,y){ return String(y.date||'').localeCompare(String(x.date||'')); })
       .map(function(v){
         var amt=parseFloat(v.amount)||0;
@@ -17471,7 +17558,7 @@ function accShowReport(which){
         return '<tr><td>'+fmtDate(v.date)+'</td><td>'+(v.vou_no||v.voucher_no||'—')+'</td><td>'+(v.narration||v.party_name||'—')+'</td><td>'+tag+'</td><td style="text-align:right;">'+fmtINR(amt)+'</td></tr>';
       }).join('');
     var opening=cashAccts.reduce(function(s,a){return s+(parseFloat(a.opening_balance)||0);},0);
-    body.innerHTML=exportBtns+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Cash Flow (Cash, Bank &amp; Petty Cash)</div>'+
+    body.innerHTML=exportBtns+periodHdr+'<div style="font-size:14px;font-weight:800;margin-bottom:8px;">Cash Flow (Cash, Bank &amp; Petty Cash)</div>'+
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INFLOW</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(inflow)+'</div></div>'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTFLOW</div><div style="font-size:16px;font-weight:900;color:#C62828;">'+fmtINR(outflow)+'</div></div>'+
@@ -17658,8 +17745,8 @@ async function accGstTab(){
     var gstCanDel = typeof canAccess==='function' ? canAccess('accounts','delete') : (currentUser&&currentUser.role==='admin');
     var sumOf=function(arr){return arr.reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);};
     var setoffTotal=sumOf(setoffs), paidTotal=sumOf(gstPayments);
-    var itcBal=itcAcct?accNetBalance(itcAcct):0;
-    var payableBal=gstPayAcct?accNetBalance(gstPayAcct):0;
+    var itcBal=itcAcct?accNetBalance(itcAcct,true):0;
+    var payableBal=gstPayAcct?accNetBalance(gstPayAcct,true):0;
     var settleRows=setoffs.concat(gstPayments)
       .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));})
       .map(function(v){
