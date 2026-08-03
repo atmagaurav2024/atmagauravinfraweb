@@ -17147,6 +17147,16 @@ function accLedger(){
 // Debit increases Assets & Expenses; Credit increases Liabilities, Income
 // & Equity. Opening balances count toward the account's normal side.
 function accIsDebitNormal(a){ return a.type==='Asset'||a.type==='Expense'; }
+// An account is worth showing in a report if it carries a balance OR saw any
+// movement in the period. Hiding purely on "balance is zero" made fully
+// settled accounts vanish — e.g. paying off GST Payable in full dropped both
+// the liability and the payment from view, making the entry look lost.
+function accHasActivity(a){
+  var bal=accNetBalance(a);
+  if(Math.abs(bal)>=0.005) return true;
+  var m=accMovements(a.id);
+  return (m.dr>=0.005||m.cr>=0.005);
+}
 function accMovements(accountId){
   var dr=0, cr=0;
   ACC_VOUCHERS.forEach(function(v){
@@ -17289,7 +17299,7 @@ function accReportExportData(which){
     var rows=[], totDr=0, totCr=0;
     ACC_ACCOUNTS.forEach(function(a){
       var bal=accNetBalance(a);
-      if(Math.abs(bal)<0.005) return;
+      if(!accHasActivity(a)) return;
       var drBal=accIsDebitNormal(a)?(bal>0?bal:0):(bal<0?-bal:0);
       var crBal=accIsDebitNormal(a)?(bal<0?-bal:0):(bal>0?bal:0);
       totDr+=drBal; totCr+=crBal;
@@ -17313,7 +17323,7 @@ function accReportExportData(which){
       var b=accNetBalance(a);
       if(a.type==='Income') income+=b;
       if(a.type==='Expense') expense+=b;
-      if(Math.abs(b)<0.005) return;
+      if(!accHasActivity(a)) return;
       if(a.type==='Asset'){assets+=b; rows.push(['[Asset] '+a.name,Math.round(b)]);}
       if(a.type==='Liability'){liab+=b; rows.push(['[Liability] '+a.name,Math.round(b)]);}
       if(a.type==='Equity'){equity+=b; rows.push(['[Equity] '+a.name,Math.round(b)]);}
@@ -17375,7 +17385,7 @@ function accShowReport(which){
     var totDr=0, totCr=0;
     var rows=ACC_ACCOUNTS.map(function(a){
       var bal=accNetBalance(a);
-      if(Math.abs(bal)<0.005) return '';
+      if(!accHasActivity(a)) return '';
       var drBal = accIsDebitNormal(a) ? (bal>0?bal:0) : (bal<0?-bal:0);
       var crBal = accIsDebitNormal(a) ? (bal<0?-bal:0) : (bal>0?bal:0);
       totDr+=drBal; totCr+=crBal;
@@ -17398,7 +17408,7 @@ function accShowReport(which){
     var income=0, expense=0, incRows='', expRows='';
     ACC_ACCOUNTS.forEach(function(a){
       var bal=accNetBalance(a);
-      if(Math.abs(bal)<0.005) return;
+      if(!accHasActivity(a)) return;
       if(a.type==='Income'){ income+=bal; incRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
       if(a.type==='Expense'){ expense+=bal; expRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
     });
@@ -17418,7 +17428,7 @@ function accShowReport(which){
       var bal=accNetBalance(a);
       if(a.type==='Income') income+=bal;
       if(a.type==='Expense') expense+=bal;
-      if(Math.abs(bal)<0.005) return;
+      if(!accHasActivity(a)) return;
       if(a.type==='Asset'){ assets+=bal; aRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
       if(a.type==='Liability'){ liab+=bal; lRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
       if(a.type==='Equity'){ equity+=bal; eRows+='<tr><td>'+a.name+'</td><td style="text-align:right;">'+fmtINR(bal)+'</td></tr>'; }
@@ -17434,7 +17444,12 @@ function accShowReport(which){
       '<tr style="font-weight:900;"><td>TOTAL LIABILITIES + EQUITY</td><td style="text-align:right;">'+fmtINR(totalLE)+'</td></tr>'+
       '</tbody></table></div>'+
       (Math.abs(assets-totalLE)<0.01?'<div style="font-size:11px;color:#2E7D32;font-weight:700;margin-top:6px;">✓ Assets = Liabilities + Equity</div>'
-        :'<div style="font-size:11px;color:#C62828;font-weight:700;margin-top:6px;">⚠ Off by '+fmtINR(Math.abs(assets-totalLE))+' — check opening balances</div>');
+        :'<div style="font-size:11px;color:#C62828;font-weight:700;margin-top:6px;">⚠ Off by '+fmtINR(Math.abs(assets-totalLE))+' — check opening balances</div>')+
+      '<div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6;">'+
+        'GST sits here, not in the P&amp;L: <b>GST Payable</b> is a liability (collected for the government), '+
+        '<b>GST Input Credit</b> is an asset (recoverable). Paying GST reduces the Bank asset and the GST Payable liability — '+
+        'it is never an expense, so it correctly does not affect profit. Accounts settled to nil are still listed if they had movement.'+
+      '</div>';
     return;
   }
 
