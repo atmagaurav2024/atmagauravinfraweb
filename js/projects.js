@@ -910,7 +910,15 @@ async function jmLoadItems(){
 function jmRender(){
   var el=document.getElementById('jm-content');if(!el)return;
   if(!JM_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items. Add BOQ items first.</div>';return;}
-  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="jmDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="jmDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+  // Items still short of their BOQ quantity — what a bulk complete would fill
+  var pendingCount=JM_ITEMS.filter(function(it){
+    var bq=parseFloat(it.boq_qty)||0;
+    var done=JM_JMS.filter(function(j){return j.boq_item_id===it.id;}).reduce(function(a,j){return a+(parseFloat(j.jm_qty)||0);},0);
+    return bq>0 && (bq-done)>0.0001;
+  }).length;
+  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'+
+    (pendingCount?'<button onclick="jmCompleteAllPrompt()" style="background:#F57F17;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Complete All ('+pendingCount+')</button>':'')+
+    '<button onclick="jmDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="jmDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
     JM_ITEMS.map(function(item){
     var boqQty=parseFloat(item.boq_qty)||0;var iJMs=JM_JMS.filter(function(j){return j.boq_item_id===item.id;});
     var totalJM=iJMs.reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
@@ -1054,6 +1062,97 @@ async function jmSave(itemId,boqQty,unit,editId,jmNum){
     closeSheet('ov-jm','sh-jm');jmRender();
   }catch(e){toast('Error: '+e.message,'error');}
 }
+// ── Bulk complete: raise a JM for the outstanding balance on every item ──
+// Destructive and wide-reaching (it can create dozens of measurement records
+// at once and feeds billing), so it requires re-entering the login password.
+function jmCompleteAllPrompt(){
+  var pending=JM_ITEMS.map(function(it){
+    var bq=parseFloat(it.boq_qty)||0;
+    var done=JM_JMS.filter(function(j){return j.boq_item_id===it.id;}).reduce(function(a,j){return a+(parseFloat(j.jm_qty)||0);},0);
+    return {item:it, bal:bq-done};
+  }).filter(function(x){return x.bal>0.0001;});
+  if(!pending.length){ toast('All items are already measured in full','info'); return; }
+
+  var listHtml=pending.slice(0,50).map(function(x){
+    return '<tr><td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
+      '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
+      '<td style="padding:3px 6px;text-align:right;font-size:11px;font-weight:700;">'+String(x.bal.toFixed(3)).replace(/\.?0+$/,'')+' '+(x.item.unit||'')+'</td></tr>';
+  }).join('');
+
+  var ov=document.getElementById('jm-cmpl-ov');
+  if(ov) ov.remove();
+  var d=document.createElement('div');
+  d.id='jm-cmpl-ov';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  d.innerHTML='<div style="background:white;border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
+    '<div style="font-size:15px;font-weight:900;color:#E65100;margin-bottom:6px;">&#9888; Complete All JMs</div>'+
+    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will raise a joint measurement for the <b>full outstanding balance</b> on <b>'+pending.length+' item'+(pending.length!==1?'s':'')+'</b>, bringing every item to 100% of its BOQ quantity.<br><b style="color:#C62828;">This affects billing and cannot be undone in bulk</b> — each JM would have to be deleted individually.</div>'+
+    '<div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Balance to add</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+      (pending.length>50?'<div style="padding:6px;font-size:10px;color:#888;text-align:center;">…and '+(pending.length-50)+' more</div>':'')+
+    '</div>'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Date for these JMs</label>'+
+    '<input type="date" id="jm-cmpl-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Reference (optional)</label>'+
+    '<input type="text" id="jm-cmpl-ref" placeholder="e.g. Final measurement" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:#C62828;display:block;margin-bottom:4px;">Re-enter your login password to confirm *</label>'+
+    '<input type="password" id="jm-cmpl-pass" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
+    '<div id="jm-cmpl-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button onclick="document.getElementById(\'jm-cmpl-ov\').remove()" style="background:white;border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button id="jm-cmpl-go" onclick="jmCompleteAllConfirm()" style="background:#F57F17;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Complete</button>'+
+    '</div></div>';
+  document.body.appendChild(d);
+}
+
+async function jmCompleteAllConfirm(){
+  var msg=document.getElementById('jm-cmpl-msg');
+  var go=document.getElementById('jm-cmpl-go');
+  var setMsg=function(t,c){ if(msg){msg.textContent=t; msg.style.color=c||'#C62828';} };
+  var pass=(document.getElementById('jm-cmpl-pass')||{}).value||'';
+  if(!pass){ setMsg('Enter your password to confirm'); return; }
+
+  var projId=(document.getElementById('jm-proj-sel')||{}).value||'';
+  if(!projId){ setMsg('No project selected'); return; }
+
+  // Verify the password by re-authenticating, same as the change-password flow
+  setMsg('Verifying password…','#1565C0');
+  if(go){ go.disabled=true; go.style.opacity='.6'; }
+  try{
+    var ph=(typeof currentUser!=='undefined'&&currentUser&&currentUser.phone)?currentUser.phone:'';
+    var vr=await authSignIn(ph, pass);
+    if(!vr||!vr.access_token){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
+  }catch(e){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
+
+  var date=(document.getElementById('jm-cmpl-date')||{}).value||new Date().toISOString().slice(0,10);
+  var ref=(document.getElementById('jm-cmpl-ref')||{}).value||'Bulk completion';
+
+  var pending=JM_ITEMS.map(function(it){
+    var bq=parseFloat(it.boq_qty)||0;
+    var done=JM_JMS.filter(function(j){return j.boq_item_id===it.id;}).reduce(function(a,j){return a+(parseFloat(j.jm_qty)||0);},0);
+    return {item:it, bal:bq-done};
+  }).filter(function(x){return x.bal>0.0001;});
+
+  var ok=0, failed=0;
+  for(var i=0;i<pending.length;i++){
+    var x=pending[i];
+    setMsg('Creating JMs… '+(i+1)+' of '+pending.length,'#1565C0');
+    // Next JM number for this item, continuing its existing sequence
+    var iJMs=JM_JMS.filter(function(j){return j.boq_item_id===x.item.id;});
+    var jmNum=iJMs.length?Math.max.apply(null,iJMs.map(function(j){return parseInt(j.jm_number,10)||0;}))+1:1;
+    try{
+      var res=await sbInsert('boq_jm',{project_id:projId, boq_item_id:x.item.id, jm_number:jmNum,
+        date:date, jm_qty:parseFloat(x.bal.toFixed(3)), reference:ref});
+      if(res&&res[0]){ JM_JMS.push(res[0]); ok++; } else failed++;
+    }catch(e){ console.error('bulk JM failed for '+x.item.item_code, e); failed++; }
+  }
+
+  var ov=document.getElementById('jm-cmpl-ov'); if(ov) ov.remove();
+  jmRender();
+  if(failed) toast(ok+' JM'+(ok!==1?'s':'')+' created, '+failed+' failed — see console','warning');
+  else toast('All items completed — '+ok+' JM'+(ok!==1?'s':'')+' created','success');
+}
+
 async function jmDelete(id){if(!confirm('Delete?'))return;JM_JMS=JM_JMS.filter(function(j){return j.id!==id;});jmRender();try{await sbDelete('boq_jm',id);}catch(e){console.error(e);}}
 
 // ════ PLANNING ════════════════════════════════════════════
