@@ -16544,7 +16544,7 @@ function ohRender(){
       OH_LIST.map(function(x){
         return '<tr><td style="white-space:nowrap;">'+fmtDate(x.date)+'</td>'+
           '<td>'+(x.category||'—')+'</td>'+
-          '<td>'+(x.description||'—')+(x.bill_no?'<div style="font-size:10px;color:var(--text3);">Bill: '+x.bill_no+'</div>':'')+'</td>'+
+          '<td>'+(x.description||'—')+(x.bill_no?'<div style="font-size:10px;color:var(--text3);">Bill: '+x.bill_no+'</div>':'')+(x.include_personal?'<div style="font-size:9px;color:#6A1B9A;font-weight:700;">&#128274; IN PERSONAL</div>':'')+'</td>'+
           '<td>'+(x.party_name||'—')+'</td>'+
           '<td>'+(x.payment_mode||'—')+'</td>'+
           '<td style="text-align:right;">'+fmtINR(parseFloat(x.amount)||0)+'</td>'+
@@ -16574,6 +16574,11 @@ function ohOpenEntry(){
       '<input id="oh-itc" type="checkbox" checked style="width:auto;margin:0;" onchange="ohRecalc()"> ITC claimable</label>'+
       '<div style="font-size:10px;color:var(--text3);">Untick for blocked credits (e.g. staff welfare, some insurance) \u2014 the GST then becomes part of the expense instead of an input credit.</div></div>'+
     '<div style="background:#F3E5F5;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;font-weight:800;color:#4A148C;">Total Payable: <span id="oh-total">&#8377;0</span></div>'+
+    '<div class="fgrp" style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:8px;padding:8px 10px;">'+
+      '<label class="flbl" style="display:flex;align-items:center;gap:6px;margin:0;">'+
+      '<input id="oh-personal" type="checkbox" style="width:auto;margin:0;"> &#128274; Also include in Personal Sales</label>'+
+      '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Records the overhead normally <b>and</b> adds a matching entry to your private Personal Sales tab. Only the taxable amount is carried across &mdash; GST is never included.</div>'+
+    '</div>'+
     '<div class="fgrp"><label class="flbl">Payment Mode</label><select id="oh-mode" class="fsel"><option>Bank</option><option>Cash</option></select></div>'+
     '<div class="fgrp"><label class="flbl">Bill / Invoice No. (optional)</label><input id="oh-bill" class="finp"></div>'+
     '<div class="fgrp"><label class="flbl">Remarks (optional)</label><input id="oh-rem" class="finp"></div>'+
@@ -16616,6 +16621,7 @@ async function ohSave(){
     category:gv('oh-cat'), description:gv('oh-desc')||null,
     party_name:gv('oh-party')||null, amount:amt,
     gst_amount:gstAmt, gst_rate:parseFloat(gv('oh-gstrate'))||0, itc_claimable:itcOk,
+    include_personal:(document.getElementById('oh-personal')||{}).checked||false,
     payment_mode:gv('oh-mode')||'Bank', bill_no:gv('oh-bill')||null,
     remarks:gv('oh-rem')||null, created_by:(currentUser&&currentUser.id)||null
   };
@@ -16626,6 +16632,7 @@ async function ohSave(){
       OH_LIST.unshift(saved);
       // Auto-post to Accounts, same as every other transaction source
       if(typeof accAutoPost==='function') ohPostToAccounts(saved);
+      if(saved.include_personal) ohCreatePersonalEntry(saved);
     }
     closeSheet('ov-oh','sh-oh');
     ohRender();
@@ -16655,6 +16662,26 @@ async function ohPostToAccounts(x){
       narration:'GST (ITC) on '+narr, sourceType:'company_expense_gst', sourceId:x.id});
   }
   return ok;
+}
+
+// Mirrors an overhead into the private Personal Sales ledger. Deliberately
+// carries the taxable amount only — GST is a pass-through to the government
+// and has no place in a personal calculation. Tagged with the overhead's id
+// so deleting the overhead removes this too.
+async function ohCreatePersonalEntry(x){
+  var taxable=parseFloat(x.amount)||0;
+  if(taxable<=0) return;
+  // Guard against duplicates if a backfill re-runs over the same record
+  var dup=ACC_VOUCHERS.find(function(v){ return v.source_type==='personal_from_overhead' && v.source_id===x.id; });
+  if(dup) return;
+  var vou_no='PSAL-'+String(Date.now()).slice(-6);
+  try{
+    var res=await sbInsert('vouchers',{vou_no:vou_no, voucher_no:vou_no, type:'Personal Sales',
+      date:x.date, party_name:x.party_name||x.category, amount:taxable,
+      narration:(x.category||'Overhead')+(x.description?' — '+x.description:'')+' (from overhead, taxable only)',
+      source_type:'personal_from_overhead', source_id:x.id});
+    if(res&&res[0]) ACC_VOUCHERS.unshift(res[0]);
+  }catch(e){ console.warn('ohCreatePersonalEntry failed', e); }
 }
 
 async function ohDelete(id){
@@ -17050,7 +17077,9 @@ async function accBackfillHistorical(){
     }
 
     for(var i=0;i<companyExp.length;i++){
-      var ce=companyExp[i]; if(isDone('company_expense',ce.id)) continue;
+      var ce=companyExp[i];
+      if(ce.include_personal) await ohCreatePersonalEntry(ce);
+      if(isDone('company_expense',ce.id)) continue;
       if(await ohPostToAccounts(ce)) count++; else fail++;
     }
 
@@ -17739,7 +17768,8 @@ function accPersonalTab(){
     (rows.length?
       '<div class="table-card"><table class="att-table"><thead><tr><th>Vou No</th><th>Date</th><th>Party</th><th>Narration</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>'+
       rows.map(function(v){
-        return '<tr><td><strong>'+(v.vou_no||v.voucher_no||'—')+'</strong></td>'+
+        return '<tr><td><strong>'+(v.vou_no||v.voucher_no||'—')+'</strong>'+
+            (v.source_type==='personal_from_overhead'?'<div style="font-size:9px;color:#4A148C;font-weight:700;">FROM OVERHEAD</div>':'')+'</td>'+
           '<td style="white-space:nowrap;">'+fmtDate(v.date)+'</td>'+
           '<td>'+(v.party_name||'—')+'</td>'+
           '<td>'+(v.narration||'—')+'</td>'+
