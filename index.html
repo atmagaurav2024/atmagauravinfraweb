@@ -16724,7 +16724,7 @@ async function accAutoPost(opts){
       console.warn('Auto-post skipped — missing Chart of Accounts entry for code '+(!debitId?opts.debitCode:opts.creditCode)+' ('+opts.sourceType+')');
       return false;
     }
-    var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL'}[opts.type]||'VOU';
+    var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL','Personal Sales':'PSAL'}[opts.type]||'VOU';
     var vou_no=prefix+'-AUTO-'+String(Date.now()).slice(-7);
     var res = await sbInsert('vouchers',{
       vou_no:vou_no, voucher_no:vou_no, type:opts.type, date:opts.date||new Date().toISOString().slice(0,10),
@@ -16782,6 +16782,7 @@ var ACC_DEFAULT_COA=[
   {code:'3001', name:'Sales Revenue (Contract Work)', type:'Income', group:'Direct Income'},
   {code:'3002', name:'Sales Bill Additions',     type:'Income',    group:'Direct Income'},
   {code:'3003', name:'Sales Bill Deductions',    type:'Income',    group:'Direct Income'},
+  {code:'3004', name:'Personal Sales',           type:'Income',    group:'Other Income'},
   {code:'4001', name:'Purchases / Direct Work Expenses', type:'Expense', group:'Direct Expenses'},
   {code:'4002', name:'Purchase Bill Additions',  type:'Expense',   group:'Direct Expenses'},
   {code:'4003', name:'Purchase Bill Deductions', type:'Expense',   group:'Direct Expenses'},
@@ -16835,7 +16836,7 @@ async function accSeedDefaultCoa(){
 
 var ACC_PARTY_CACHE={};
 var ACC_TAB='dashboard';
-var VOU_TYPES=['Payment','Receipt','Journal','Contra','Purchase','Sales'];
+var VOU_TYPES=['Payment','Receipt','Journal','Contra','Purchase','Sales','Personal Sales'];
 
 var ACC_TAB_DEFS=[
   {id:'dashboard', label:'📊 Dashboard'},
@@ -17909,7 +17910,7 @@ async function accSaveVoucher(){
   var amount=parseFloat(gv('vou-amount'));
   if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
   var type=gv('vou-type');
-  var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL'}[type]||'VOU';
+  var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL','Personal Sales':'PSAL'}[type]||'VOU';
   var vou_no=prefix+'-'+String(Date.now()).slice(-6);
   try{
     await sbInsert('vouchers',{vou_no:vou_no,voucher_no:vou_no,type:type,date:gv('vou-date'),party_name:gv('vou-party'),debit_account:gv('vou-debit')||null,credit_account:gv('vou-credit')||null,amount:amount,narration:gv('vou-narration')});
