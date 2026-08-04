@@ -16901,18 +16901,22 @@ async function lnDiagnose(){
 // ── Loan Ledger ──────────────────────────────────────────────────────────
 // Convention as specified: loan amount Cr, repayment Dr, interest Cr.
 // Balance = credits less debits = amount still outstanding.
-var LG_PARTY='', LG_DIR='taken', LG_INTERVAL='monthly';
+var LG_PARTY='', LG_DIR='taken';
 function lgSet(k,v){
-  if(k==='party') LG_PARTY=v; else if(k==='dir') LG_DIR=v; else if(k==='interval') LG_INTERVAL=v;
+  if(k==='party') LG_PARTY=v; else if(k==='dir') LG_DIR=v;
   lnRenderLedger();
 }
-var LG_INTERVALS={monthly:{label:'Monthly',months:1}, quarterly:{label:'Quarterly',months:3},
-  halfyearly:{label:'Half Yearly',months:6}, yearly:{label:'Yearly',months:12}};
+// Interest is posted on each loan's own basis — compounding loans at their
+// compounding frequency, simple-interest loans monthly. No separate choice
+// is needed, since the loan already defines it.
+function lgLoanInterval(l){
+  var m={yearly:12, halfyearly:6, quarterly:3, monthly:1}[l.interest_type||'simple'];
+  return {months:m||1, label:m?(LN_INT_TYPES[l.interest_type]||'').replace('Compound ','').replace(/[()]/g,''):'Monthly'};
+}
 
-function lgBuild(pid, dir, interval){
+function lgBuild(pid, dir){
   var loans=LN_LOANS.filter(function(l){return l.party_id===pid && l.direction===dir;});
   if(!loans.length) return {rows:[], loans:[]};
-  var months=(LG_INTERVALS[interval]||LG_INTERVALS.monthly).months;
   var todayStr=new Date().toISOString().slice(0,10);
   var ev=[];
 
@@ -16927,6 +16931,7 @@ function lgBuild(pid, dir, interval){
     // reducing balance and compounding are honoured.
     var rate=parseFloat(l.interest_rate)||0;
     if(rate>0 && l.start_date){
+      var iv=lgLoanInterval(l), months=iv.months;
       var d0=new Date(l.start_date+'T00:00:00');
       if(!isNaN(d0)){
         var prev=0, guard=0;
@@ -16935,8 +16940,7 @@ function lgBuild(pid, dir, interval){
           var ymd=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
           if(ymd>todayStr) break;
           var upto=lnAccruedInterest(l, ymd), amt=upto-prev; prev=upto;
-          if(amt>0.005) ev.push({date:ymd, sort:1, particulars:'Interest @'+rate+'% ('+
-            (LG_INTERVALS[interval]||LG_INTERVALS.monthly).label.toLowerCase()+') \u00b7 loan of '+fmtDate(l.start_date),
+          if(amt>0.005) ev.push({date:ymd, sort:1, particulars:'Interest @'+rate+'% \u00b7 loan of '+fmtDate(l.start_date),
             ref:'', cr:amt, dr:0, kind:'interest'});
           cur=new Date(cur.getFullYear(), cur.getMonth()+months, cur.getDate());
         }
@@ -16982,9 +16986,8 @@ function lnRenderLedger(){
         '<button onclick="lgPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128196; PDF</button>'+
       '</div></div>'+
     '<div style="background:white;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;">'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">'+
+      '<div style="margin-bottom:6px;">'+
         sel('lg-dir',LG_DIR,[['taken','Loans Taken'],['given','Loans Given']],'dir')+
-        sel('lg-int',LG_INTERVAL,[['monthly','Interest: Monthly'],['quarterly','Interest: Quarterly'],['halfyearly','Interest: Half Yearly'],['yearly','Interest: Yearly']],'interval')+
       '</div>'+
       (parties.length?sel('lg-party',LG_PARTY,parties.map(function(p){return [p.id,p.name];}),'party')
         :'<div style="font-size:11px;color:var(--text3);">No parties with '+(LG_DIR==='taken'?'loans taken':'loans given')+'</div>')+
@@ -16992,7 +16995,7 @@ function lnRenderLedger(){
 
   if(!parties.length){ c.innerHTML=head+'<div style="text-align:center;padding:30px;color:var(--text3);">Nothing to show.</div>'; return; }
 
-  var L=lgBuild(LG_PARTY, LG_DIR, LG_INTERVAL);
+  var L=lgBuild(LG_PARTY, LG_DIR);
   var totCr=L.rows.reduce(function(a,r){return a+r.cr;},0);
   var totDr=L.rows.reduce(function(a,r){return a+r.dr;},0);
   var closing=totCr-totDr;
@@ -17024,20 +17027,19 @@ function lnRenderLedger(){
         '<td style="text-align:right;">'+fmtINR(totCr)+'</td>'+
         '<td style="text-align:right;">'+fmtINR(Math.abs(closing))+'</td></tr>'+
       '</tbody></table></div>'+
-      '<div style="font-size:9.5px;color:var(--text3);margin-top:8px;">Loan amount and interest are credited; repayments are debited. Balance is the amount still outstanding including interest charged to date. Interest rows are computed on the reducing balance at the loan\u2019s own rate and basis \u2014 they are a statement of position, not accounting vouchers.</div>'
+      '<div style="font-size:9.5px;color:var(--text3);margin-top:8px;">Loan amount and interest are credited; repayments are debited. Balance is the amount still outstanding including interest charged to date. Interest is charged on each loan\u2019s own basis \u2014 compounding loans at their compounding frequency, simple-interest loans monthly \u2014 computed on the reducing balance. Interest rows are a statement of position, not accounting vouchers.</div>'
       :'<div style="text-align:center;padding:30px;color:var(--text3);">No entries for this party.</div>');
 }
 
 function lgExportData(){
-  var L=lgBuild(LG_PARTY, LG_DIR, LG_INTERVAL);
+  var L=lgBuild(LG_PARTY, LG_DIR);
   var rows=L.rows.map(function(r){
     return [fmtDate(r.date), r.particulars, r.ref||'', r.dr?Math.round(r.dr):'', r.cr?Math.round(r.cr):'', Math.round(Math.abs(r.balance))];
   });
   var totCr=L.rows.reduce(function(a,r){return a+r.cr;},0);
   var totDr=L.rows.reduce(function(a,r){return a+r.dr;},0);
   rows.push(['TOTAL','','',Math.round(totDr),Math.round(totCr),Math.round(Math.abs(totCr-totDr))]);
-  return {title:'Loan Ledger \u2014 '+lnPartyName(LG_PARTY)+' ('+(LG_DIR==='taken'?'Loans Taken':'Loans Given')+
-      ', interest '+(LG_INTERVALS[LG_INTERVAL]||LG_INTERVALS.monthly).label.toLowerCase()+')',
+  return {title:'Loan Ledger \u2014 '+lnPartyName(LG_PARTY)+' ('+(LG_DIR==='taken'?'Loans Taken':'Loans Given')+')',
     header:['Date','Particulars','Ref','Debit','Credit','Balance'], rows:rows};
 }
 function lgExcel(){
