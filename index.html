@@ -17312,27 +17312,44 @@ async function lnSaveLoan(dir, editId){
       // straight to Petty Cash in Hand and create the Fund Employee entry.
       // The petty cash row deliberately carries no GL post of its own —
       // this single entry already accounts for the money.
+      // Two distinct events, kept separate so the trail is visible:
+      //   1. the loan arrives in the employee's account  (Dr 1102 / Cr 2201)
+      //   2. it is transferred to their petty cash float (Dr 1101 / Cr 1102)
+      // Posting one combined entry would hide the transfer; posting both as
+      // fresh funding would double count. This nets 1102 back to zero.
+      var pettyRowId=null;
       if(toPetty){
         var e=LN_EMPS.find(function(x){return x.id===modeEmp;});
         if(e&&e.code){
           try{
-            await sbInsert('petty_cash_in',{emp_id:e.code,amount:principal,date:saved.start_date,
+            var pcRes=await sbInsert('petty_cash_in',{emp_id:e.code,amount:principal,date:saved.start_date,
               project:'All Projects',purpose:'Loan from '+lnPartyName(saved.party_id)+(saved.purpose?' \u2014 '+saved.purpose:''),
               remarks:saved.reference?('Ref: '+saved.reference):null,
               funded_by:'Loan \u2014 '+lnPartyName(saved.party_id), funded_by_type:'loan', funded_by_emp:null,
               loan_id:saved.id});
+            if(pcRes&&pcRes[0]) pettyRowId=pcRes[0].id;
           }catch(pe){ console.warn('petty cash funding entry failed', pe); toast('Loan saved, but the petty cash entry failed: '+pe.message,'warning'); }
         } else {
           toast('Loan saved, but no employee code found \u2014 petty cash entry skipped','warning');
         }
       }
       if(typeof accAutoPost==='function'){
-        var cashCode=toPetty?'1101':lnCashCode(mode);
-        var via=(mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account'+(toPetty?', as petty cash':'')+')':'';
+        var cashCode=lnCashCode(mode);
+        var via=(mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'';
         accAutoPost({type:isTaken?'Receipt':'Payment', date:saved.start_date, partyName:lnPartyName(saved.party_id),
           debitCode:isTaken?cashCode:'1401', creditCode:isTaken?'2201':cashCode, amount:principal,
           narration:(isTaken?'Loan taken from ':'Loan given to ')+lnPartyName(saved.party_id)+(saved.purpose?' \u2014 '+saved.purpose:'')+via,
           sourceType:'loan', sourceId:saved.id});
+
+        // Leg 2: internal transfer from the employee's account into their
+        // petty cash float. Keyed to the petty cash row so Petty Cash owns
+        // this entry and deleting it removes the right voucher.
+        if(pettyRowId){
+          accAutoPost({type:'Contra', date:saved.start_date, partyName:lnEmpName(modeEmp),
+            debitCode:'1101', creditCode:'1102', amount:principal,
+            narration:'Transfer to petty cash \u2014 '+lnEmpName(modeEmp)+' \u00b7 from loan of '+lnPartyName(saved.party_id),
+            sourceType:'petty_cash_in', sourceId:pettyRowId});
+        }
       }
     }
     closeSheet('ov-ln','sh-ln'); lnRender(); toast('Loan saved','success');
@@ -18374,13 +18391,16 @@ async function accReconcile(){
     pettyIn.forEach(function(p){
       if(isDone('petty_cash_in',p.id)) return;
       var amt=parseFloat(p.amount)||0;
-      if(p.funded_by_type==='loan'||p.loan_id) return;                       // posted by the loan
-      if(loanFunded[(p.emp_id||'')+'|'+(p.date||'')+'|'+Math.round(amt)]) return;   // legacy loan-funded row
-      if(p.funded_by_type==='emp'||p.funded_by_type==='transfer_out'||amt<=0) return;  // internal transfer
+      if(p.funded_by_type==='emp'||p.funded_by_type==='transfer_out'||amt<=0) return;  // between staff, no GL effect
       var nm=empName[p.emp_id]||p.emp_id;
+      // Loan-funded float: the loan already credited Loans Payable and
+      // debited Funds with Employees, so this leg only moves the money
+      // from the employee's account into petty cash.
+      var fromLoan=(p.funded_by_type==='loan'||p.loan_id||loanFunded[(p.emp_id||'')+'|'+(p.date||'')+'|'+Math.round(amt)]);
+      var srcCode=fromLoan?'1102':(p.funded_by_type==='cash'?'1001':'1002');
       add('Petty cash funding','petty_cash_in',p.id,{type:'Contra',date:p.date,partyName:nm,
-        debitCode:'1101',creditCode:(p.funded_by_type==='cash'?'1001':'1002'),amount:amt,
-        narration:'Petty cash funded to '+nm+(p.purpose?' — '+p.purpose:'')});
+        debitCode:'1101',creditCode:srcCode,amount:amt,
+        narration:(fromLoan?'Transfer to petty cash — '+nm+' · from loan':'Petty cash funded to '+nm)+(p.purpose?' — '+p.purpose:'')});
     });
     pettyExp.forEach(function(p){
       if(isDone('petty_cash_expense',p.id)) return;
@@ -18410,7 +18430,7 @@ async function accReconcile(){
     loans.forEach(function(l){
       if(isDone('loan',l.id)) return;
       var taken=(l.direction==='taken');
-      var cc=l.to_petty_cash?'1101':(l.mode==='Cash'?'1001':(l.mode==='EmpBank'?'1102':'1002'));
+      var cc=(l.mode==='Cash'?'1001':(l.mode==='EmpBank'?'1102':'1002'));
       var pn=partyName[l.party_id]||'Party';
       add('Loans','loan',l.id,{type:taken?'Receipt':'Payment',date:l.start_date,partyName:pn,
         debitCode:taken?cc:'1401',creditCode:taken?'2201':cc,amount:parseFloat(l.principal)||0,
