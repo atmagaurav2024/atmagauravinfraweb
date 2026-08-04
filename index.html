@@ -16489,7 +16489,8 @@ var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken';
 var LN_TAB_DEFS=[
   {id:'taken',   label:'\u2b07 Loans Taken'},
   {id:'given',   label:'\u2b06 Loans Given'},
-  {id:'parties', label:'\ud83d\udc65 Party-wise'}
+  {id:'parties', label:'\ud83d\udc65 Party-wise'},
+  {id:'payments',label:'\ud83e\uddfe Payments'}
 ];
 function lnCanEdit(){ return typeof canAccess==='function'?canAccess('loans','edit'):(currentUser&&currentUser.role==='admin'); }
 function lnCanDelete(){ return typeof canAccess==='function'?canAccess('loans','delete'):(currentUser&&currentUser.role==='admin'); }
@@ -16646,6 +16647,7 @@ function lnToggleLoanParty(id){ LN_OPEN_PARTY=(LN_OPEN_PARTY===id)?null:id; lnRe
 function lnRender(){
   var c=document.getElementById('ln-content'); if(!c)return;
   if(LN_TAB==='parties') return lnRenderParties();
+  if(LN_TAB==='payments') return lnRenderPayments();
   var dir=(LN_TAB==='taken')?'taken':'given';
   var isTaken=(dir==='taken');
   var accent=isTaken?'#C62828':'#2E7D32';
@@ -16743,6 +16745,117 @@ function lnRender(){
     }).join('')
     :'<div style="text-align:center;padding:30px;color:var(--text3);">No '+(isTaken?'loans taken':'loans given')+' recorded yet.'+
       (LN_PARTIES.length?'':'<br><span style="font-size:11px;">Add a party first from the <b>Party-wise</b> tab.</span>')+'</div>');
+}
+
+var LN_PAY_FILTER='all';
+function lnPayFilter(f){ LN_PAY_FILTER=f; lnRenderPayments(); }
+
+// Groups transactions by receipt number so one payment covering several
+// loans appears as a single record, the way it was actually made.
+// Older rows without a receipt number fall back to their own id.
+function lnPaymentGroups(){
+  var byRcpt={};
+  LN_TXNS.forEach(function(t){
+    var loan=LN_LOANS.find(function(l){return l.id===t.loan_id;});
+    if(!loan) return;
+    if(LN_PAY_FILTER!=='all' && loan.direction!==LN_PAY_FILTER) return;
+    var key=t.receipt_no||('single:'+t.id);
+    if(!byRcpt[key]) byRcpt[key]={key:key, receiptNo:t.receipt_no||null, date:t.date, dir:loan.direction,
+      partyId:loan.party_id, mode:t.mode, modeEmp:t.mode_emp_id, ref:t.reference, remarks:t.remarks,
+      interest:0, principal:0, lines:[]};
+    var g=byRcpt[key];
+    if(t.txn_type==='interest') g.interest+=(parseFloat(t.amount)||0);
+    else g.principal+=(parseFloat(t.amount)||0);
+    var ln=g.lines.find(function(x){return x.loan.id===loan.id;});
+    if(!ln){ ln={loan:loan, interest:0, principal:0}; g.lines.push(ln); }
+    if(t.txn_type==='interest') ln.interest+=(parseFloat(t.amount)||0);
+    else ln.principal+=(parseFloat(t.amount)||0);
+  });
+  return Object.keys(byRcpt).map(function(k){return byRcpt[k];})
+    .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+}
+
+function lnRenderPayments(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  var groups=lnPaymentGroups();
+  var tInt=groups.reduce(function(a,g){return a+g.interest;},0);
+  var tPrin=groups.reduce(function(a,g){return a+g.principal;},0);
+  var fbtn=function(k,l){
+    var a=(LN_PAY_FILTER===k);
+    return '<button onclick="lnPayFilter(\''+k+'\')" style="background:'+(a?'#00695C':'transparent')+';color:'+(a?'white':'var(--text2)')+';border:1.5px solid '+(a?'#00695C':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:6px;white-space:nowrap;font-family:Nunito,sans-serif;">'+l+'</button>';
+  };
+
+  c.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
+      '<div style="font-size:14px;font-weight:800;">Payment Records</div>'+
+      '<div style="display:flex;gap:0;">'+
+        '<button onclick="lnPayExportExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
+        '<button onclick="lnPayExportPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128196; PDF</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">PAYMENTS</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+groups.length+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+fmtINR(tInt)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">PRINCIPAL</div><div style="font-size:15px;font-weight:900;color:#2E7D32;">'+fmtINR(tPrin)+'</div></div>'+
+    '</div>'+
+    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;margin-bottom:10px;">'+
+      fbtn('all','All')+fbtn('taken','On Loans Taken')+fbtn('given','On Loans Given')+
+    '</div>'+
+    (groups.length? groups.map(function(g,i){
+      var isTaken=(g.dir==='taken');
+      var modeLabel=g.mode==='EmpBank'?(lnEmpName(g.modeEmp)+'\u2019s a/c'):(g.mode||'\u2014');
+      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:10px 12px;">'+
+        '<div style="display:flex;align-items:flex-start;gap:8px;">'+
+          '<span style="background:'+(isTaken?'#C62828':'#2E7D32')+';color:white;font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;">'+(isTaken?'PAID':'RECEIVED')+'</span>'+
+          '<div style="flex:1;">'+
+            '<div style="font-size:12.5px;font-weight:800;">'+lnPartyName(g.partyId)+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">'+fmtDate(g.date)+' \u00b7 '+modeLabel+
+              (g.receiptNo?' \u00b7 '+g.receiptNo:'')+(g.ref?' \u00b7 Ref '+g.ref:'')+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">'+g.lines.length+' loan'+(g.lines.length!==1?'s':'')+
+              ' \u00b7 interest <b style="color:#E65100;">'+fmtINR(g.interest)+'</b> + principal <b style="color:#2E7D32;">'+fmtINR(g.principal)+'</b></div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0;">'+
+            '<div style="font-size:14px;font-weight:900;color:var(--navy);">'+fmtINR(g.interest+g.principal)+'</div>'+
+            '<button onclick="lnReprintReceipt('+i+')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;margin-top:4px;">&#128438; Receipt</button>'+
+          '</div>'+
+        '</div></div>';
+    }).join('')
+    :'<div style="text-align:center;padding:30px;color:var(--text3);">No loan payments recorded yet.</div>');
+}
+
+function lnReprintReceipt(i){
+  var g=lnPaymentGroups()[i]; if(!g){toast('Record not found','warning');return;}
+  lnGenerateReceipt({receiptNo:g.receiptNo||'(no number)', party:lnPartyName(g.partyId), date:g.date,
+    mode:g.mode, modeEmp:g.modeEmp, ref:g.ref, remarks:g.remarks, dir:g.dir, lines:g.lines,
+    totalInterest:g.interest, totalPrincipal:g.principal});
+}
+
+function lnPayExportData(){
+  var groups=lnPaymentGroups();
+  var rows=[];
+  groups.forEach(function(g){
+    g.lines.forEach(function(l){
+      rows.push([g.receiptNo||'', fmtDate(g.date), (g.dir==='taken'?'Paid':'Received'), lnPartyName(g.partyId),
+        fmtDate(l.loan.start_date), Math.round(parseFloat(l.loan.principal)||0), (l.loan.interest_rate||0),
+        Math.round(l.interest), Math.round(l.principal), Math.round(l.interest+l.principal),
+        (g.mode==='EmpBank'?lnEmpName(g.modeEmp)+" a/c":(g.mode||'')), g.ref||'']);
+    });
+  });
+  var tI=groups.reduce(function(a,g){return a+g.interest;},0);
+  var tP=groups.reduce(function(a,g){return a+g.principal;},0);
+  rows.push(['TOTAL','','','','','','',Math.round(tI),Math.round(tP),Math.round(tI+tP),'','']);
+  return {title:'Loan Payment Records', header:['Receipt No','Date','Type','Party','Loan Date','Loan Amount','Rate %','Interest','Principal','Total','Mode','Reference'], rows:rows};
+}
+function lnPayExportExcel(){
+  var d=lnPayExportData();
+  if(d.rows.length<=1){toast('Nothing to export','warning');return;}
+  accExportCSV('Loan_Payments_'+new Date().toISOString().slice(0,10)+'.csv',[[d.title],[''],d.header].concat(d.rows));
+}
+function lnPayExportPDF(){
+  var d=lnPayExportData();
+  if(d.rows.length<=1){toast('Nothing to export','warning');return;}
+  d.rows=d.rows.map(function(r){ [5,7,8,9].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
+  accExportPDF(d.title, d.header, d.rows);
 }
 
 function lnRenderParties(){
