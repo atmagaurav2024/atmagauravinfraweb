@@ -18463,11 +18463,12 @@ async function accReconcile(){
     // Same source posted more than once — the signature of a double entry
     var dupes=[];
     try{
-      var allPosted=await sbFetch('vouchers',{select:'id,source_type,source_id,amount,date',filter:'source_id=not.is.null'});
-      var seenKey={};
+      var allPosted=await sbFetch('vouchers',{select:'*',filter:'source_id=not.is.null',order:'created_at.asc'});
+      var firstOf={};
       (allPosted||[]).forEach(function(v){
         var k=v.source_type+':'+v.source_id;
-        if(seenKey[k]) dupes.push(v); else seenKey[k]=1;
+        if(firstOf[k]) dupes.push({dup:v, original:firstOf[k]});
+        else firstOf[k]=v;
       });
     }catch(e){}
 
@@ -18503,8 +18504,8 @@ function accShowReconReport(){
       }).join('')+
     '</table>'+
     ((R.dupes&&R.dupes.length)?'<div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
-      '<b style="color:#C62828;">'+R.dupes.length+' duplicate voucher'+(R.dupes.length!==1?'s':'')+'</b> \u2014 the same record has been posted more than once, so those amounts are counted twice.'+
-      '<button onclick="accRemoveDupes()" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:6px;display:block;">Remove '+R.dupes.length+' duplicate'+(R.dupes.length!==1?'s':'')+'</button></div>':'')+
+      '<b style="color:#C62828;">'+R.dupes.length+' possible duplicate'+(R.dupes.length!==1?'s':'')+'</b> \u2014 the same source record appears to be posted more than once.'+
+      '<button onclick="accReviewDupes()" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:6px;display:block;">Review one by one</button></div>':'')+
     (R.orphans.length?'<div style="background:#FFF3E0;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
       '<b>'+R.orphans.length+' voucher'+(R.orphans.length!==1?'s':'')+'</b> reference a record that no longer exists. Review them in the voucher list before deleting \u2014 nothing is removed automatically.</div>':'')+
     '<div style="font-size:10px;color:var(--text3);margin-top:10px;">New entries post to the ledger automatically as you save them. This check is only for catching anything that slipped through.</div>';
@@ -18517,17 +18518,59 @@ function accShowReconReport(){
   openSheet('ov-acc','sh-acc');
 }
 
-// Deletes only the surplus copies, keeping the first posting of each record.
-async function accRemoveDupes(){
+// Lists each suspected duplicate alongside the entry it duplicates, so
+// each can be checked and deleted individually. Nothing is bulk-deleted:
+// an automatic sweep is what destroyed valid vouchers previously.
+function accReviewDupes(){
   var R=ACC_RECON; if(!R||!R.dupes||!R.dupes.length) return;
-  if(!confirm('Remove '+R.dupes.length+' duplicate voucher'+(R.dupes.length!==1?'s':'')+'?\n\nThe first posting of each record is kept \u2014 only the extra copies are deleted.')) return;
-  var ok=0;
-  for(var i=0;i<R.dupes.length;i++){
-    try{ await sbDelete('vouchers',R.dupes[i].id); ok++; }catch(e){}
-  }
-  closeAccSheet();
-  toast(ok+' duplicate'+(ok!==1?'s':'')+' removed','success');
-  await initAccounts();
+  var card=function(v,label,colour){
+    return '<div style="flex:1;min-width:0;background:'+colour+';border-radius:6px;padding:6px 8px;">'+
+      '<div style="font-size:9px;font-weight:900;color:var(--text3);margin-bottom:2px;">'+label+'</div>'+
+      '<div style="font-size:11px;font-weight:800;">'+(v.vou_no||v.voucher_no||'\u2014')+'</div>'+
+      '<div style="font-size:10px;color:var(--text3);">'+fmtDate(v.date)+' \u00b7 '+(v.type||'')+'</div>'+
+      '<div style="font-size:11px;font-weight:800;">'+fmtINR(parseFloat(v.amount)||0)+'</div>'+
+      '<div style="font-size:9.5px;color:var(--text3);">Dr '+accAcctName(v.debit_account)+'</div>'+
+      '<div style="font-size:9.5px;color:var(--text3);">Cr '+accAcctName(v.credit_account)+'</div>'+
+      (v.narration?'<div style="font-size:9.5px;color:var(--text3);margin-top:2px;">'+v.narration+'</div>':'')+
+    '</div>';
+  };
+  document.getElementById('acc-sheet-title').textContent='Review Duplicates ('+R.dupes.length+')';
+  document.getElementById('acc-sheet-body').innerHTML=
+    '<div style="font-size:10.5px;color:var(--text3);margin-bottom:10px;">Each pair below shares the same source record. Check them against your books \u2014 if the entry on the right is genuinely a second copy, delete it. Nothing is removed unless you say so.</div>'+
+    R.dupes.map(function(d,i){
+      return '<div id="dup-row-'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">'+
+        '<div style="font-size:9.5px;color:var(--text3);margin-bottom:4px;">Source: '+d.dup.source_type+'</div>'+
+        '<div style="display:flex;gap:6px;">'+
+          card(d.original,'KEPT (first posted)','#E8F5E9')+
+          card(d.dup,'DUPLICATE','#FFEBEE')+
+        '</div>'+
+        '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">'+
+          '<button onclick="accKeepDupe('+i+')" style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Keep both</button>'+
+          '<button onclick="accDeleteDupe('+i+')" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Delete duplicate</button>'+
+        '</div></div>';
+    }).join('');
+  document.getElementById('acc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeAccSheet();initAccounts();">Done</button>';
+  openSheet('ov-acc','sh-acc');
+}
+
+function accKeepDupe(i){
+  var el=document.getElementById('dup-row-'+i);
+  if(el) el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px;">Kept \u2014 both entries left in place.</div>';
+}
+
+async function accDeleteDupe(i){
+  var R=ACC_RECON; if(!R||!R.dupes[i]) return;
+  var d=R.dupes[i];
+  var label=(d.dup.vou_no||d.dup.voucher_no||'this voucher')+' \u00b7 '+fmtINR(parseFloat(d.dup.amount)||0);
+  if(!confirm('Delete '+label+'?\n\nThe first posting is kept. This cannot be undone.')) return;
+  try{
+    await sbDelete('vouchers',d.dup.id);
+    ACC_VOUCHERS=ACC_VOUCHERS.filter(function(v){return v.id!==d.dup.id;});
+    var el=document.getElementById('dup-row-'+i);
+    if(el) el.innerHTML='<div style="font-size:11px;color:#2E7D32;font-weight:700;padding:4px;">\u2713 Duplicate deleted.</div>';
+    toast('Deleted','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 async function accPostMissing(){
