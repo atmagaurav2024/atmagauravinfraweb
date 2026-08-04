@@ -16967,6 +16967,35 @@ function lnLedSet(k,v){
   lnRenderLedger();
 }
 
+// Reports exactly what the database holds for loan transactions, so a
+// missing repayment can be traced to insert failure vs display filtering.
+async function lnDiagnose(){
+  try{
+    toast('Checking database...','info');
+    var rows=await sbFetch('loan_transactions',{select:'*'});
+    var all=Array.isArray(rows)?rows:[];
+    var reps=all.filter(function(t){return t.txn_type==='repayment';});
+    var ints=all.filter(function(t){return t.txn_type==='interest';});
+    var others=all.filter(function(t){return t.txn_type!=='repayment'&&t.txn_type!=='interest';});
+    var loanIds={}; LN_LOANS.forEach(function(l){loanIds[l.id]=1;});
+    var orphans=all.filter(function(t){return !loanIds[t.loan_id];});
+    var noDate=all.filter(function(t){return !t.date;});
+    var msg='In database: '+all.length+' transaction'+(all.length!==1?'s':'')+
+      '\n  \u2022 repayments: '+reps.length+
+      '\n  \u2022 interest: '+ints.length+
+      (others.length?'\n  \u2022 OTHER txn_type ('+others.map(function(t){return t.txn_type;}).join(', ')+'): '+others.length:'')+
+      '\n\nLoaded in app: '+LN_TXNS.length+
+      (orphans.length?'\n\u26a0 '+orphans.length+' row(s) point to a loan that no longer exists':'')+
+      (noDate.length?'\n\u26a0 '+noDate.length+' row(s) have no date':'');
+    if(!all.length) msg+='\n\nNothing has been saved. Repayments are failing at insert \u2014 the next attempt will now show the database error.';
+    else if(all.length>LN_TXNS.length) msg+='\n\nDatabase has more than the app loaded \u2014 reloading now.';
+    alert(msg);
+    if(all.length!==LN_TXNS.length){ LN_TXNS=all; lnRender(); toast('Reloaded '+all.length+' transactions','success'); }
+  }catch(e){
+    alert('Could not read loan_transactions:\n\n'+(e.message||e)+'\n\nThis usually means the table is missing or blocked by row-level security \u2014 run the latest SQL migration.');
+  }
+}
+
 function lnRenderLedger(){
   var c=document.getElementById('ln-content'); if(!c)return;
   var withLoans={}; LN_LOANS.forEach(function(l){ withLoans[l.party_id]=1; });
@@ -16999,6 +17028,7 @@ function lnRenderLedger(){
       '</div>'+
       '<label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;font-weight:700;cursor:pointer;">'+
         '<input type="checkbox" '+(LN_LED_ACCRUE?'checked':'')+' style="width:auto;margin:0;" onchange="lnLedToggleAccrue(this.checked)"> Charge interest month-wise</label>'+
+      '<button onclick="lnDiagnose()" style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:8px;font-family:Nunito,sans-serif;">&#128269; Repayments missing? Check database</button>'+
       '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;">Leave dates blank for the full history. With month-wise interest on, the closing balance includes interest accrued but not yet paid.</div>'+
     '</div>';
 
