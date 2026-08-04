@@ -4719,19 +4719,25 @@ async function execSaveSalesBill(){
       SALES_SUBTAB='viewbills';
       execRenderSales();
 
-      // Auto-post to Accounts: Dr Sundry Debtors, Cr Sales Revenue (+ GST Payable if any)
+      // Auto-post to Accounts. Work amount, additions, deductions and GST
+      // each post separately so the P&L shows them as distinct lines and
+      // GST stays out of income — matching what Reconcile expects.
       var acProj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
       if(typeof accAutoPost==='function'){
-        var nonGstTotal=workAmt+addAmt-dedAmt;
-        accAutoPost({type:'Sales', date:date, partyName:acProj.client||acProj.name||'Client',
-          debitCode:'1201', creditCode:'3001', amount:nonGstTotal,
-          narration:'Sales Bill '+billRef+(acProj.name?' — '+acProj.name:''),
-          sourceType:'sales_bill', sourceId:res[0].id});
-        if(gstAmt>0){
-          accAutoPost({type:'Sales', date:date, partyName:acProj.client||acProj.name||'Client',
-            debitCode:'1201', creditCode:'2101', amount:gstAmt,
-            narration:'GST on Sales Bill '+billRef, sourceType:'sales_bill_gst', sourceId:res[0].id});
-        }
+        var acParty=acProj.client||acProj.name||'Client';
+        var acRef='Sales Bill '+billRef+(acProj.name?' — '+acProj.name:'');
+        if(workAmt>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
+          debitCode:'1201', creditCode:'3001', amount:workAmt,
+          narration:acRef, sourceType:'sales_bill', sourceId:res[0].id});
+        if(addAmt>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
+          debitCode:'1201', creditCode:'3002', amount:addAmt,
+          narration:'Additions on '+acRef, sourceType:'sales_bill_add', sourceId:res[0].id});
+        if(dedAmt>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
+          debitCode:'3003', creditCode:'1201', amount:dedAmt,
+          narration:'Deductions on '+acRef, sourceType:'sales_bill_ded', sourceId:res[0].id});
+        if(gstAmt>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
+          debitCode:'1201', creditCode:'2101', amount:gstAmt,
+          narration:'GST on '+acRef, sourceType:'sales_bill_gst', sourceId:res[0].id});
       }
     }
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
@@ -8484,11 +8490,28 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     if(res&&res[0]){
       WA_BILLS.push(res[0]);
 
-      // Auto-post to Accounts: Dr Project Purchases/Direct Expenses, Cr Sundry Creditors
+      // Auto-post to Accounts, split the same way as sales bills: GST on
+      // purchases is input credit (an asset), not an expense, and additions
+      // and deductions post to their own heads. Posting the gross amount to
+      // 4001 would inflate expenses and understate profit.
       if(typeof accAutoPost==='function'){
-        accAutoPost({type:'Purchase', date:date, partyName:partyName,
-          debitCode:'4001', creditCode:'2001', amount:Math.round(grossAmount),
-          narration:'Purchase/Work Bill '+billRef, sourceType:'work_bill', sourceId:res[0].id});
+        var pbGst=additions.filter(function(a){return a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
+        var pbAdd=additions.filter(function(a){return !a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
+        var pbDed=deductions.reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
+        var pbWork=Math.round(grossAmount)-pbGst-pbAdd+pbDed;
+        var pbRef='Purchase/Work Bill '+billRef;
+        if(pbWork>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+          debitCode:'4001', creditCode:'2001', amount:pbWork,
+          narration:pbRef, sourceType:'work_bill', sourceId:res[0].id});
+        if(pbAdd>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+          debitCode:'4002', creditCode:'2001', amount:pbAdd,
+          narration:'Additions on '+pbRef, sourceType:'work_bill_add', sourceId:res[0].id});
+        if(pbDed>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+          debitCode:'2001', creditCode:'4003', amount:pbDed,
+          narration:'Deductions on '+pbRef, sourceType:'work_bill_ded', sourceId:res[0].id});
+        if(pbGst>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+          debitCode:'1301', creditCode:'2001', amount:pbGst,
+          narration:'GST (ITC) on '+pbRef, sourceType:'work_bill_gst', sourceId:res[0].id});
       }
       // Update adjusted_amount for each advance (cumulative partial tracking)
       if(adjAdvIds.length){
