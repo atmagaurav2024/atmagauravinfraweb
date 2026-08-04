@@ -18277,276 +18277,213 @@ function accSwitchTab(tab){
 // auto-posting existed, or otherwise haven't been posted yet. Skips
 // anything that already has a matching source_type+source_id voucher, so
 // it's safe to click more than once.
-async function accBackfillHistorical(){
-  // The mappings below rely on the default GL codes — if they're missing
-  // (fresh setup), every post would silently skip. Offer to create them.
-  var haveCodes={}; ACC_ACCOUNTS.forEach(function(a){ haveCodes[String(a.code)]=true; });
-  var missing=ACC_DEFAULT_COA.filter(function(a){ return !haveCodes[a.code]; });
-  if(missing.length){
-    if(confirm(missing.length+' of the standard accounts used for auto-posting are missing from your Chart of Accounts. Create them now? (Required for the backfill to post correctly.)')){
-      await accSeedDefaultCoa();
-    } else {
-      toast('Backfill cancelled — entries would be skipped without those accounts','warning');
-      return;
-    }
-  }
-  if(!confirm('This will scan Sales Bills, Purchase Bills, Petty Cash and Other Expenses, and create the matching GL vouchers for anything not already posted. Continue?')) return;
-  toast('Scanning history…','info');
-  ACC_COA_CACHE = null; // re-read Chart of Accounts fresh — it may have been seeded after the cache was built
-  ACC_AUTOPOST_LAST_ERROR = null;
-  var fail=0;
-  var bfFailed=[];
-  try{
-    var posted = await sbFetch('vouchers',{select:'source_type,source_id',filter:'source_id=not.is.null'});
-    var doneSet = {};
-    (Array.isArray(posted)?posted:[]).forEach(function(v){ doneSet[v.source_type+':'+v.source_id]=true; });
-    var isDone=function(type,id){ return !!doneSet[type+':'+id]; };
+// ── Reconciliation ───────────────────────────────────────────────────────
+// Read-only by default: scans every source that should be reflected in the
+// GL and reports what is not posted. Nothing is written or deleted unless
+// the user explicitly asks to post the listed items. Replaces the old
+// backfill, which mutated the ledger in bulk and could not tell a failed
+// read from an empty table.
+var ACC_RECON=null;
 
-    var r = await Promise.all([
-      // A failed fetch must be distinguishable from a genuinely empty
-      // table — otherwise the orphan sweep below treats every record in
-      // that table as deleted and wipes its vouchers.
-      sbFetch('projects',{select:'id,name,client'}).catch(function(e){bfFailed.push('projects');return null;}),
-      sbFetch('employees',{select:'id,first_name,last_name'}).catch(function(e){bfFailed.push('employees');return null;}),
-      sbFetch('sales_bills',{select:'*'}).catch(function(e){bfFailed.push('sales_bills');return null;}),
-      sbFetch('sales_payments',{select:'*'}).catch(function(e){bfFailed.push('sales_payments');return null;}),
-      sbFetch('work_bills',{select:'*'}).catch(function(e){bfFailed.push('work_bills');return null;}),
-      sbFetch('work_payments',{select:'*'}).catch(function(e){bfFailed.push('work_payments');return null;}),
-      sbFetch('petty_cash_in',{select:'*'}).catch(function(e){bfFailed.push('petty_cash_in');return null;}),
-      sbFetch('petty_cash_expenses',{select:'*'}).catch(function(e){bfFailed.push('petty_cash_expenses');return null;}),
-      sbFetch('other_expenses',{select:'*'}).catch(function(e){bfFailed.push('other_expenses');return null;}),
-      sbFetch('company_expenses',{select:'*'}).catch(function(e){bfFailed.push('company_expenses');return null;}),
-      sbFetch('loans',{select:'*'}).catch(function(e){bfFailed.push('loans');return null;}),
-      sbFetch('loan_transactions',{select:'*'}).catch(function(e){bfFailed.push('loan_transactions');return null;})
+async function accReconcile(){
+  toast('Checking records against the ledger…','info');
+  ACC_COA_CACHE=null; ACC_AUTOPOST_LAST_ERROR=null;
+  var failed=[];
+  var get=function(t,sel){ return sbFetch(t,{select:sel||'*'}).catch(function(){ failed.push(t); return null; }); };
+  try{
+    var posted=await sbFetch('vouchers',{select:'source_type,source_id',filter:'source_id=not.is.null'});
+    var done={}; (posted||[]).forEach(function(v){ done[v.source_type+':'+v.source_id]=1; });
+    var isDone=function(t,id){ return !!done[t+':'+id]; };
+
+    var r=await Promise.all([
+      get('projects','id,name,client'), get('employees','id,emp_id,first_name,last_name'),
+      get('sales_bills'), get('sales_payments'), get('work_bills'), get('work_payments'),
+      get('petty_cash_in'), get('petty_cash_expenses'), get('other_expenses'),
+      get('company_expenses'), get('loans'), get('loan_transactions'), get('loan_parties','id,name')
     ]);
     var projects=r[0]||[], emps=r[1]||[], salesBills=r[2]||[], salesPayments=r[3]||[],
-        workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[], otherExp=r[8]||[],
-        companyExp=r[9]||[], bfLoans=r[10]||[], bfLoanTxns=r[11]||[];
-    var projById={}; projects.forEach(function(p){ projById[p.id]=p; });
-    var empName={}; emps.forEach(function(e){ empName[e.id]=((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim(); });
+        workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[],
+        otherExp=r[8]||[], companyExp=r[9]||[], loans=r[10]||[], loanTxns=r[11]||[], lparties=r[12]||[];
 
-    var count=0;
+    var projById={}; projects.forEach(function(p){projById[p.id]=p;});
+    var empName={}; emps.forEach(function(e){empName[e.emp_id]=((e.first_name||'')+' '+(e.last_name||'')).trim();});
+    var partyName={}; lparties.forEach(function(p){partyName[p.id]=p.name;});
+    var loanById={}; loans.forEach(function(l){loanById[l.id]=l;});
 
-    for(var i=0;i<salesBills.length;i++){
-      var b=salesBills[i]; if(isDone('sales_bill',b.id)) continue;
+    // Build the list of postings each unposted record would produce.
+    var jobs=[], groups={};
+    var add=function(cat, srcType, id, opts){
+      jobs.push({cat:cat, srcType:srcType, id:id, opts:opts});
+      groups[cat]=(groups[cat]||0)+1;
+    };
+
+    salesBills.forEach(function(b){
+      if(isDone('sales_bill',b.id)) return;
       var proj=projById[b.project_id]||{};
       var adds=[]; try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
       var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
-      var gstAmt=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var gst=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var addAmt=adds.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-      // bill_amount = work + additions − deductions + GST  →  work = bill − GST − additions + deductions
-      var workAmt=(parseFloat(b.bill_amount)||0)-gstAmt-addAmt+dedAmt;
-      var party=proj.client||proj.name||'Client';
-      var ref='Sales Bill '+(b.bill_ref||b.id)+(proj.name?' — '+proj.name:'');
-      if(await accAutoPost({type:'Sales', date:b.bill_date, partyName:party,
-        debitCode:'1201', creditCode:'3001', amount:workAmt,
-        narration:ref, sourceType:'sales_bill', sourceId:b.id})) count++; else fail++;
-      if(addAmt>0){
-        if(!(await accAutoPost({type:'Sales', date:b.bill_date, partyName:party,
-          debitCode:'1201', creditCode:'3002', amount:addAmt,
-          narration:'Additions on '+ref, sourceType:'sales_bill_add', sourceId:b.id}))) fail++;
-      }
-      if(dedAmt>0){
-        // Deductions reduce both the receivable and effective income
-        if(!(await accAutoPost({type:'Sales', date:b.bill_date, partyName:party,
-          debitCode:'3003', creditCode:'1201', amount:dedAmt,
-          narration:'Deductions on '+ref, sourceType:'sales_bill_ded', sourceId:b.id}))) fail++;
-      }
-      if(gstAmt>0){
-        if(!(await accAutoPost({type:'Sales', date:b.bill_date, partyName:party,
-          debitCode:'1201', creditCode:'2101', amount:gstAmt,
-          narration:'GST on '+ref, sourceType:'sales_bill_gst', sourceId:b.id}))) fail++;
-      }
-    }
-
-    for(var i=0;i<salesPayments.length;i++){
-      var p=salesPayments[i]; if(isDone('sales_payment',p.id)) continue;
+      var work=(parseFloat(b.bill_amount)||0)-gst-addAmt+dedAmt;
+      var party=proj.client||proj.name||'Client', ref='Sales Bill '+(b.bill_ref||b.id);
+      if(work>0) add('Sales bills','sales_bill',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3001',amount:work,narration:ref});
+      if(addAmt>0) add('Sales bills','sales_bill_add',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3002',amount:addAmt,narration:'Additions on '+ref});
+      if(dedAmt>0) add('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmt,narration:'Deductions on '+ref});
+      if(gst>0) add('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gst,narration:'GST on '+ref});
+    });
+    salesPayments.forEach(function(p){
+      if(isDone('sales_payment',p.id)) return;
       var proj=projById[p.project_id]||{};
-      if(await accAutoPost({type:'Receipt', date:p.payment_date, partyName:proj.client||proj.name||'Client',
-        debitCode:(p.payment_mode==='Cash'?'1001':'1002'), creditCode:'1201', amount:parseFloat(p.amount)||0,
-        narration:'Payment received'+(p.reference?' (Ref: '+p.reference+')':'')+(proj.name?' — '+proj.name:''),
-        sourceType:'sales_payment', sourceId:p.id})) count++; else fail++;
-    }
-
-    for(var i=0;i<workBills.length;i++){
-      var b=workBills[i]; if(isDone('work_bill',b.id)) continue;
-      var wAdds=[]; try{wAdds=b.additions?JSON.parse(b.additions):[];}catch(e){}
-      var wDeds=[]; try{wDeds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
-      var wGst=wAdds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-      var wAdd=wAdds.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-      var wDed=wDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-      var wWork=(parseFloat(b.bill_amount)||0)-wGst-wAdd+wDed;
-      var wRef='Purchase/Work Bill '+(b.bill_ref||b.id);
-      if(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
-        debitCode:'4001', creditCode:'2001', amount:wWork,
-        narration:wRef, sourceType:'work_bill', sourceId:b.id})) count++; else fail++;
-      if(wAdd>0){
-        if(!(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
-          debitCode:'4002', creditCode:'2001', amount:wAdd,
-          narration:'Additions on '+wRef, sourceType:'work_bill_add', sourceId:b.id}))) fail++;
-      }
-      if(wDed>0){
-        // Deductions reduce both what's owed to the vendor and effective expense
-        if(!(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
-          debitCode:'2001', creditCode:'4003', amount:wDed,
-          narration:'Deductions on '+wRef, sourceType:'work_bill_ded', sourceId:b.id}))) fail++;
-      }
-      if(wGst>0){
-        // GST paid on purchases is an input credit (asset), not an expense
-        if(!(await accAutoPost({type:'Purchase', date:b.bill_date, partyName:b.party_name,
-          debitCode:'1301', creditCode:'2001', amount:wGst,
-          narration:'GST (ITC) on '+wRef, sourceType:'work_bill_gst', sourceId:b.id}))) fail++;
-      }
-    }
-
-    for(var i=0;i<workPayments.length;i++){
-      var p=workPayments[i]; if(isDone('work_payment',p.id)) continue;
-      if(await accAutoPost({type:'Payment', date:p.payment_date, partyName:p.party_name,
-        debitCode:'2001', creditCode:(p.payment_mode==='Cash'?'1001':'1002'), amount:parseFloat(p.amount)||0,
-        narration:'Payment against Work Bill'+(p.reference?' (Ref: '+p.reference+')':''),
-        sourceType:'work_payment', sourceId:p.id})) count++; else fail++;
-    }
-
-    for(var i=0;i<pettyIn.length;i++){
-      var p=pettyIn[i]; if(isDone('petty_cash_in',p.id)) continue;
+      add('Sales payments','sales_payment',p.id,{type:'Receipt',date:p.payment_date,partyName:proj.client||proj.name||'Client',
+        debitCode:(p.payment_mode==='Cash'?'1001':'1002'),creditCode:'1201',amount:parseFloat(p.amount)||0,
+        narration:'Payment received'+(p.reference?' (Ref: '+p.reference+')':'')});
+    });
+    workBills.forEach(function(b){
+      if(isDone('work_bill',b.id)) return;
+      var adds=[]; try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      var gst=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var addAmt=adds.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var work=(parseFloat(b.bill_amount)||0)-gst-addAmt+dedAmt;
+      var ref='Purchase/Work Bill '+(b.bill_ref||b.id);
+      if(work>0) add('Purchase bills','work_bill',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4001',creditCode:'2001',amount:work,narration:ref});
+      if(addAmt>0) add('Purchase bills','work_bill_add',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4002',creditCode:'2001',amount:addAmt,narration:'Additions on '+ref});
+      if(dedAmt>0) add('Purchase bills','work_bill_ded',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'4003',amount:dedAmt,narration:'Deductions on '+ref});
+      if(gst>0) add('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gst,narration:'GST (ITC) on '+ref});
+    });
+    workPayments.forEach(function(p){
+      if(isDone('work_payment',p.id)) return;
+      add('Purchase payments','work_payment',p.id,{type:'Payment',date:p.payment_date,partyName:p.party_name,
+        debitCode:'2001',creditCode:(p.payment_mode==='Cash'?'1001':'1002'),amount:parseFloat(p.amount)||0,
+        narration:'Payment made'+(p.reference?' (Ref: '+p.reference+')':'')});
+    });
+    pettyIn.forEach(function(p){
+      if(isDone('petty_cash_in',p.id)) return;
+      var amt=parseFloat(p.amount)||0;
+      if(p.funded_by_type==='loan'||p.loan_id) return;                       // posted by the loan
+      if(p.funded_by_type==='emp'||p.funded_by_type==='transfer_out'||amt<=0) return;  // internal transfer
       var nm=empName[p.emp_id]||p.emp_id;
-      var amtIn=parseFloat(p.amount)||0;
+      add('Petty cash funding','petty_cash_in',p.id,{type:'Contra',date:p.date,partyName:nm,
+        debitCode:'1101',creditCode:(p.funded_by_type==='cash'?'1001':'1002'),amount:amt,
+        narration:'Petty cash funded to '+nm+(p.purpose?' — '+p.purpose:'')});
+    });
+    pettyExp.forEach(function(p){
+      if(isDone('petty_cash_expense',p.id)) return;
+      var amt=parseFloat(p.amount)||0; if(amt<=0) return;
+      var nm=empName[p.emp_id]||p.emp_id;
+      add('Petty cash expenses','petty_cash_expense',p.id,{type:'Payment',date:p.date,partyName:nm,
+        debitCode:(ACC_PETTY_CAT_CODES[p.category]||'4110'),creditCode:'1101',amount:amt,
+        narration:(p.category||'Petty expense')+(p.description?' — '+p.description:'')});
+    });
+    otherExp.forEach(function(x){
+      if(isDone('other_expense',x.id)) return;
+      var amt=parseFloat(x.amount)||0; if(amt<=0) return;
+      add('Other expenses','other_expense',x.id,{type:'Payment',date:x.date,partyName:(projById[x.project_id]||{}).name||'',
+        debitCode:(ACC_OTHEREXP_CODES[x.type]||'4204'),creditCode:'1002',amount:amt,
+        narration:(x.type||'Other expense')+(x.description?' — '+x.description:'')});
+    });
+    companyExp.forEach(function(x){
+      if(isDone('company_expense',x.id)) return;
+      var tx=parseFloat(x.amount)||0, g=parseFloat(x.gst_amount)||0, itc=(x.itc_claimable!==false);
+      var cc=(x.payment_mode==='Cash')?'1001':'1002';
+      var narr=(x.category||'Overhead')+(x.description?' — '+x.description:'');
+      if(tx>0) add('Company overheads','company_expense',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
+        debitCode:(OH_CAT_CODES[x.category]||'4313'),creditCode:cc,amount:(itc?tx:tx+g),narration:narr});
+      if(g>0&&itc) add('Company overheads','company_expense_gst',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
+        debitCode:'1301',creditCode:cc,amount:g,narration:'GST (ITC) on '+narr});
+    });
+    loans.forEach(function(l){
+      if(isDone('loan',l.id)) return;
+      var taken=(l.direction==='taken');
+      var cc=l.to_petty_cash?'1101':(l.mode==='Cash'?'1001':(l.mode==='EmpBank'?'1102':'1002'));
+      var pn=partyName[l.party_id]||'Party';
+      add('Loans','loan',l.id,{type:taken?'Receipt':'Payment',date:l.start_date,partyName:pn,
+        debitCode:taken?cc:'1401',creditCode:taken?'2201':cc,amount:parseFloat(l.principal)||0,
+        narration:(taken?'Loan taken from ':'Loan given to ')+pn});
+    });
+    loanTxns.forEach(function(t){
+      if(isDone('loan_txn',t.id)) return;
+      var l=loanById[t.loan_id]; if(!l) return;
+      var taken=(l.direction==='taken'), pn=partyName[l.party_id]||'Party';
+      var cc=(t.mode==='Cash'?'1001':(t.mode==='EmpBank'?'1102':'1002'));
+      var o=(t.txn_type==='interest')
+        ? (taken?{type:'Payment',debitCode:'4201',creditCode:cc,narration:'Interest paid to '+pn}
+                :{type:'Receipt',debitCode:cc,creditCode:'3005',narration:'Interest received from '+pn})
+        : (taken?{type:'Payment',debitCode:'2201',creditCode:cc,narration:'Loan repaid to '+pn}
+                :{type:'Receipt',debitCode:cc,creditCode:'1401',narration:'Loan recovered from '+pn});
+      add('Loan repayments/interest','loan_txn',t.id,{type:o.type,date:t.date,partyName:pn,
+        debitCode:o.debitCode,creditCode:o.creditCode,amount:parseFloat(t.amount)||0,narration:o.narration});
+    });
 
-      // Funded out of a loan: the loan itself already posted Dr Petty Cash
-      // / Cr Loans Payable, so posting again here would double count both
-      // the petty cash and the source of the money.
-      if(p.funded_by_type==='loan' || p.loan_id) continue;
-
-      // Employee-to-employee transfers are recorded as a positive row on
-      // the receiver and a negative row on the sender. Company petty cash
-      // is unchanged, so there is nothing to post at GL level.
-      if(p.funded_by_type==='emp' || p.funded_by_type==='transfer_out' || amtIn<0) continue;
-      if(amtIn<=0) continue;
-
-      // Credit the account the money actually came from, rather than
-      // assuming Bank for every funding.
-      var srcCode=(p.funded_by_type==='cash')?'1001':'1002';
-      if(await accAutoPost({type:'Contra', date:p.date, partyName:nm,
-        debitCode:'1101', creditCode:srcCode, amount:amtIn,
-        narration:'Petty cash funded to '+nm+(p.funded_by?' from '+p.funded_by:'')+(p.purpose?' — '+p.purpose:''),
-        sourceType:'petty_cash_in', sourceId:p.id})) count++; else fail++;
+    // Vouchers whose source no longer exists — reported only, never removed
+    var orphans=[];
+    if(!failed.length){
+      var live={};
+      [salesBills,salesPayments,workBills,workPayments,pettyIn,pettyExp,otherExp,companyExp,loans,loanTxns]
+        .forEach(function(a){a.forEach(function(x){live[x.id]=1;});});
+      var allV=await sbFetch('vouchers',{select:'id,source_id,source_type',filter:'source_id=not.is.null'});
+      orphans=(allV||[]).filter(function(v){ return v.source_type!=='loan_interest_accrual' && v.source_id && !live[v.source_id]; });
     }
 
-    for(var i=0;i<pettyExp.length;i++){
-      var p=pettyExp[i]; if(isDone('petty_cash_expense',p.id)) continue;
-      if((parseFloat(p.amount)||0)<=0) continue;
-      if(await accAutoPost({type:'Journal', date:p.date, partyName:p.description,
-        debitCode:(typeof ACC_PETTY_CAT_CODES!=='undefined'&&ACC_PETTY_CAT_CODES[p.category])||'4110', creditCode:'1101', amount:parseFloat(p.amount)||0,
-        narration:'Petty cash — '+p.category+' — '+p.description, sourceType:'petty_cash_expense', sourceId:p.id})) count++; else fail++;
-    }
-
-    for(var i=0;i<otherExp.length;i++){
-      var p=otherExp[i]; if(isDone('other_expense',p.id)) continue;
-      if(await accAutoPost({type:'Payment', date:p.date, partyName:p.description,
-        debitCode:(typeof ACC_OTHEREXP_CODES!=='undefined'&&ACC_OTHEREXP_CODES[p.type])||'4201', creditCode:'1002', amount:parseFloat(p.amount)||0,
-        narration:p.type+' — '+p.description, sourceType:'other_expense', sourceId:p.id})) count++; else fail++;
-    }
-
-    for(var i=0;i<companyExp.length;i++){
-      var ce=companyExp[i];
-      if(ce.include_personal) await ohCreatePersonalEntry(ce);
-      if(isDone('company_expense',ce.id)) continue;
-      if(await ohPostToAccounts(ce)) count++; else fail++;
-    }
-
-    // Loans: principal in/out, then each repayment and interest settlement
-    var bfParty={};
-    (LN_PARTIES.length?LN_PARTIES:[]).forEach(function(p){ bfParty[p.id]=p.name; });
-    if(!LN_PARTIES.length){
-      try{ var lp=await sbFetch('loan_parties',{select:'id,name'}); (lp||[]).forEach(function(p){ bfParty[p.id]=p.name; }); }catch(e){}
-    }
-    var bfLoanById={}; bfLoans.forEach(function(l){ bfLoanById[l.id]=l; });
-
-    for(var i=0;i<bfLoans.length;i++){
-      var ln=bfLoans[i]; if(isDone('loan',ln.id)) continue;
-      var taken=(ln.direction==='taken');
-      var cc=ln.to_petty_cash?'1101':(ln.mode==='Cash'?'1001':(ln.mode==='EmpBank'?'1102':'1002'));
-      if(await accAutoPost({type:taken?'Receipt':'Payment', date:ln.start_date, partyName:bfParty[ln.party_id]||'Party',
-        debitCode:taken?cc:'1401', creditCode:taken?'2201':cc, amount:parseFloat(ln.principal)||0,
-        narration:(taken?'Loan taken from ':'Loan given to ')+(bfParty[ln.party_id]||'Party')+(ln.purpose?' \u2014 '+ln.purpose:''),
-        sourceType:'loan', sourceId:ln.id})) count++; else fail++;
-    }
-    for(var i=0;i<bfLoanTxns.length;i++){
-      var t=bfLoanTxns[i]; if(isDone('loan_txn',t.id)) continue;
-      var ln2=bfLoanById[t.loan_id]; if(!ln2) continue;
-      var taken2=(ln2.direction==='taken');
-      var cc2=(t.mode==='Cash'?'1001':(t.mode==='EmpBank'?'1102':'1002'));
-      var pn2=bfParty[ln2.party_id]||'Party';
-      var o2;
-      if(t.txn_type==='interest'){
-        o2=taken2?{type:'Payment',debitCode:'4201',creditCode:cc2,narration:'Interest paid to '+pn2}
-                 :{type:'Receipt',debitCode:cc2,creditCode:'3005',narration:'Interest received from '+pn2};
-      } else {
-        o2=taken2?{type:'Payment',debitCode:'2201',creditCode:cc2,narration:'Loan repaid to '+pn2}
-                 :{type:'Receipt',debitCode:cc2,creditCode:'1401',narration:'Loan recovered from '+pn2};
-      }
-      if(await accAutoPost({type:o2.type, date:t.date, partyName:pn2, debitCode:o2.debitCode,
-        creditCode:o2.creditCode, amount:parseFloat(t.amount)||0, narration:o2.narration,
-        sourceType:'loan_txn', sourceId:t.id})) count++; else fail++;
-    }
-
-    // Clean up orphaned auto-posted vouchers whose source record has since
-    // been deleted in its module (covers deletions made before delete-hooks
-    // existed, or on another device).
-    var liveIds={};
-    [salesBills,salesPayments,workBills,workPayments,pettyIn,pettyExp,otherExp,companyExp,bfLoans,bfLoanTxns]
-      .forEach(function(arr){ arr.forEach(function(x){liveIds[x.id]=1;}); });
-
-    var removed=0;
-    if(bfFailed.length){
-      // Skipping is the only safe option: a table we could not read looks
-      // identical to a table whose records were all deleted.
-      console.warn('Orphan cleanup skipped — could not read:', bfFailed.join(', '));
-    } else {
-      var orphans = await sbFetch('vouchers',{select:'id,source_id,source_type',filter:'source_id=not.is.null'});
-      var candidates=(orphans||[]).filter(function(ov){
-        // Never touch the interest-accrual provisions: they are keyed to a
-        // loan id but are journal entries in their own right.
-        if(ov.source_type==='loan_interest_accrual') return false;
-        return ov.source_id && !liveIds[ov.source_id];
-      });
-      if(candidates.length){
-        if(confirm(candidates.length+' voucher'+(candidates.length!==1?'s':'')+' reference a source record that no longer exists.\n\nDelete them?\n\nChoose Cancel to keep them — nothing else in this backfill is affected.')){
-          for(var i=0;i<candidates.length;i++){
-            try{ await sbDelete('vouchers',candidates[i].id); removed++; }catch(e){}
-          }
-        }
-      }
-    }
-    if(removed>0){
-      ACC_VOUCHERS=ACC_VOUCHERS.filter(function(v){ return !v.source_id || liveIds[v.source_id]; });
-    }
-
-    if(fail>0){
-      toast('Backfill: '+count+' posted, '+fail+' FAILED'+(ACC_AUTOPOST_LAST_ERROR?' — '+ACC_AUTOPOST_LAST_ERROR:'')+'. See browser console for details.','error');
-    } else {
-      // Report coverage so a source with zero rows is visibly empty rather
-      // than silently skipped — that is how gaps went unnoticed before.
-      var seen=[
-        ['Sales bills',salesBills.length],['Sales payments',salesPayments.length],
-        ['Purchase bills',workBills.length],['Purchase payments',workPayments.length],
-        ['Petty cash funding',pettyIn.length],['Petty cash expenses',pettyExp.length],
-        ['Other expenses',otherExp.length],['Company overheads',companyExp.length],
-        ['Loans',bfLoans.length],['Loan repayments/interest',bfLoanTxns.length]
-      ];
-      console.log('Backfill scanned:', seen.map(function(x){return x[0]+': '+x[1];}).join(' | '));
-      var empty=seen.filter(function(x){return !x[1];}).map(function(x){return x[0];});
-      toast((count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted')+
-        (removed?' · '+removed+' orphaned removed':'')+
-        (empty.length?' · no records found in: '+empty.join(', '):''),'success');
-      if(bfFailed.length) toast('Could not read: '+bfFailed.join(', ')+'. Those sources were skipped and no cleanup was done.','warning');
-    }
-    initAccounts();
+    ACC_RECON={jobs:jobs, groups:groups, orphans:orphans, failed:failed,
+      counts:{'Sales bills':salesBills.length,'Sales payments':salesPayments.length,
+        'Purchase bills':workBills.length,'Purchase payments':workPayments.length,
+        'Petty cash funding':pettyIn.length,'Petty cash expenses':pettyExp.length,
+        'Other expenses':otherExp.length,'Company overheads':companyExp.length,
+        'Loans':loans.length,'Loan repayments/interest':loanTxns.length}};
+    accShowReconReport();
   }catch(e){
-    console.error('accBackfillHistorical failed', e);
-    toast('Backfill error: '+e.message,'error');
+    console.error('reconcile failed',e);
+    toast('Could not complete the check: '+e.message,'error');
   }
+}
+
+function accShowReconReport(){
+  var R=ACC_RECON; if(!R) return;
+  var cats=Object.keys(R.counts);
+  var totalMissing=R.jobs.length;
+  var body=
+    (R.failed.length?'<div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:#C62828;">Could not read: <b>'+R.failed.join(', ')+'</b>. Those sources were not checked.</div>':'')+
+    '<div style="background:'+(totalMissing?'#FFF8E1':'#E8F5E9')+';border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;">'+
+      (totalMissing?'<b>'+totalMissing+' entr'+(totalMissing!==1?'ies are':'y is')+' not in the ledger.</b>':'<b>Everything is posted.</b> The ledger matches your records.')+
+    '</div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:11.5px;">'+
+      '<tr style="color:var(--text3);font-size:10px;"><th style="text-align:left;padding:3px 0;">SOURCE</th><th style="text-align:right;">RECORDS</th><th style="text-align:right;">NOT POSTED</th></tr>'+
+      cats.map(function(c){
+        var miss=R.groups[c]||0;
+        return '<tr style="border-top:1px solid var(--border);"><td style="padding:5px 0;">'+c+'</td>'+
+          '<td style="text-align:right;color:var(--text3);">'+R.counts[c]+'</td>'+
+          '<td style="text-align:right;font-weight:800;color:'+(miss?'#E65100':'#2E7D32')+';">'+(miss||'\u2713')+'</td></tr>';
+      }).join('')+
+    '</table>'+
+    (R.orphans.length?'<div style="background:#FFF3E0;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
+      '<b>'+R.orphans.length+' voucher'+(R.orphans.length!==1?'s':'')+'</b> reference a record that no longer exists. Review them in the voucher list before deleting \u2014 nothing is removed automatically.</div>':'')+
+    '<div style="font-size:10px;color:var(--text3);margin-top:10px;">New entries post to the ledger automatically as you save them. This check is only for catching anything that slipped through.</div>';
+
+  document.getElementById('acc-sheet-title').textContent='Ledger Reconciliation';
+  document.getElementById('acc-sheet-body').innerHTML=body;
+  document.getElementById('acc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeAccSheet()">Close</button>'+
+    (totalMissing?'<button class="btn btn-navy" onclick="accPostMissing()">Post '+totalMissing+' missing</button>':'');
+  openSheet('ov-acc','sh-acc');
+}
+
+async function accPostMissing(){
+  var R=ACC_RECON; if(!R||!R.jobs.length) return;
+  if(!confirm('Post '+R.jobs.length+' missing entr'+(R.jobs.length!==1?'ies':'y')+' to the ledger?\n\nOnly these are affected. Nothing existing is changed or deleted.')) return;
+  closeAccSheet();
+  toast('Posting '+R.jobs.length+' entries…','info');
+  var ok=0, bad=0;
+  for(var i=0;i<R.jobs.length;i++){
+    var j=R.jobs[i];
+    var opts=j.opts; opts.sourceType=j.srcType; opts.sourceId=j.id;
+    if(await accAutoPost(opts)) ok++; else bad++;
+  }
+  if(bad) toast(ok+' posted, '+bad+' failed'+(ACC_AUTOPOST_LAST_ERROR?' \u2014 '+ACC_AUTOPOST_LAST_ERROR:''),'warning');
+  else toast(ok+' entr'+(ok!==1?'ies':'y')+' posted','success');
+  await initAccounts();
 }
 
 
@@ -18575,7 +18512,7 @@ function accDash(){
       '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;">'+
         '<button onclick="accVouchersExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
         '<button onclick="accVouchersPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
-        '<button onclick="accBackfillHistorical()" title="Post GL vouchers for existing Sales Bills, Purchase Bills, Petty Cash and Other Expenses that haven\'t been posted yet" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#8635; Backfill</button>'+
+        '<button onclick="accReconcile()" title="Check every record against the ledger and report anything not posted. Read-only \u2014 nothing is written unless you choose to post the listed items." style="background:#1565C0;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#9989; Reconcile</button>'+
         '<button onclick="accOpenVoucher()" style="background:#1A237E;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Voucher</button>'+
       '</div></div>'+
     (!BIZ.length?'<div style="text-align:center;padding:30px;color:var(--text3);">No vouchers yet</div>':
