@@ -18295,6 +18295,7 @@ async function accBackfillHistorical(){
   ACC_COA_CACHE = null; // re-read Chart of Accounts fresh — it may have been seeded after the cache was built
   ACC_AUTOPOST_LAST_ERROR = null;
   var fail=0;
+  var bfFailed=[];
   try{
     var posted = await sbFetch('vouchers',{select:'source_type,source_id',filter:'source_id=not.is.null'});
     var doneSet = {};
@@ -18302,18 +18303,21 @@ async function accBackfillHistorical(){
     var isDone=function(type,id){ return !!doneSet[type+':'+id]; };
 
     var r = await Promise.all([
-      sbFetch('projects',{select:'id,name,client'}).catch(function(){return [];}),
-      sbFetch('employees',{select:'id,first_name,last_name'}).catch(function(){return [];}),
-      sbFetch('sales_bills',{select:'*'}).catch(function(){return [];}),
-      sbFetch('sales_payments',{select:'*'}).catch(function(){return [];}),
-      sbFetch('work_bills',{select:'*'}).catch(function(){return [];}),
-      sbFetch('work_payments',{select:'*'}).catch(function(){return [];}),
-      sbFetch('petty_cash_in',{select:'*'}).catch(function(){return [];}),
-      sbFetch('petty_cash_expenses',{select:'*'}).catch(function(){return [];}),
-      sbFetch('other_expenses',{select:'*'}).catch(function(){return [];}),
-      sbFetch('company_expenses',{select:'*'}).catch(function(){return [];}),
-      sbFetch('loans',{select:'*'}).catch(function(){return [];}),
-      sbFetch('loan_transactions',{select:'*'}).catch(function(){return [];})
+      // A failed fetch must be distinguishable from a genuinely empty
+      // table — otherwise the orphan sweep below treats every record in
+      // that table as deleted and wipes its vouchers.
+      sbFetch('projects',{select:'id,name,client'}).catch(function(e){bfFailed.push('projects');return null;}),
+      sbFetch('employees',{select:'id,first_name,last_name'}).catch(function(e){bfFailed.push('employees');return null;}),
+      sbFetch('sales_bills',{select:'*'}).catch(function(e){bfFailed.push('sales_bills');return null;}),
+      sbFetch('sales_payments',{select:'*'}).catch(function(e){bfFailed.push('sales_payments');return null;}),
+      sbFetch('work_bills',{select:'*'}).catch(function(e){bfFailed.push('work_bills');return null;}),
+      sbFetch('work_payments',{select:'*'}).catch(function(e){bfFailed.push('work_payments');return null;}),
+      sbFetch('petty_cash_in',{select:'*'}).catch(function(e){bfFailed.push('petty_cash_in');return null;}),
+      sbFetch('petty_cash_expenses',{select:'*'}).catch(function(e){bfFailed.push('petty_cash_expenses');return null;}),
+      sbFetch('other_expenses',{select:'*'}).catch(function(e){bfFailed.push('other_expenses');return null;}),
+      sbFetch('company_expenses',{select:'*'}).catch(function(e){bfFailed.push('company_expenses');return null;}),
+      sbFetch('loans',{select:'*'}).catch(function(e){bfFailed.push('loans');return null;}),
+      sbFetch('loan_transactions',{select:'*'}).catch(function(e){bfFailed.push('loan_transactions');return null;})
     ]);
     var projects=r[0]||[], emps=r[1]||[], salesBills=r[2]||[], salesPayments=r[3]||[],
         workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[], otherExp=r[8]||[],
@@ -18491,22 +18495,28 @@ async function accBackfillHistorical(){
     // been deleted in its module (covers deletions made before delete-hooks
     // existed, or on another device).
     var liveIds={};
-    salesBills.forEach(function(x){liveIds[x.id]=1;});
-    salesPayments.forEach(function(x){liveIds[x.id]=1;});
-    workBills.forEach(function(x){liveIds[x.id]=1;});
-    workPayments.forEach(function(x){liveIds[x.id]=1;});
-    pettyIn.forEach(function(x){liveIds[x.id]=1;});
-    pettyExp.forEach(function(x){liveIds[x.id]=1;});
-    otherExp.forEach(function(x){liveIds[x.id]=1;});
-    companyExp.forEach(function(x){liveIds[x.id]=1;});
-    bfLoans.forEach(function(x){liveIds[x.id]=1;});
-    bfLoanTxns.forEach(function(x){liveIds[x.id]=1;});
-    var orphans = await sbFetch('vouchers',{select:'id,source_id',filter:'source_id=not.is.null'});
+    [salesBills,salesPayments,workBills,workPayments,pettyIn,pettyExp,otherExp,companyExp,bfLoans,bfLoanTxns]
+      .forEach(function(arr){ arr.forEach(function(x){liveIds[x.id]=1;}); });
+
     var removed=0;
-    for(var i=0;i<(orphans||[]).length;i++){
-      var ov=orphans[i];
-      if(ov.source_id && !liveIds[ov.source_id]){
-        try{ await sbDelete('vouchers',ov.id); removed++; }catch(e){}
+    if(bfFailed.length){
+      // Skipping is the only safe option: a table we could not read looks
+      // identical to a table whose records were all deleted.
+      console.warn('Orphan cleanup skipped — could not read:', bfFailed.join(', '));
+    } else {
+      var orphans = await sbFetch('vouchers',{select:'id,source_id,source_type',filter:'source_id=not.is.null'});
+      var candidates=(orphans||[]).filter(function(ov){
+        // Never touch the interest-accrual provisions: they are keyed to a
+        // loan id but are journal entries in their own right.
+        if(ov.source_type==='loan_interest_accrual') return false;
+        return ov.source_id && !liveIds[ov.source_id];
+      });
+      if(candidates.length){
+        if(confirm(candidates.length+' voucher'+(candidates.length!==1?'s':'')+' reference a source record that no longer exists.\n\nDelete them?\n\nChoose Cancel to keep them — nothing else in this backfill is affected.')){
+          for(var i=0;i<candidates.length;i++){
+            try{ await sbDelete('vouchers',candidates[i].id); removed++; }catch(e){}
+          }
+        }
       }
     }
     if(removed>0){
@@ -18530,6 +18540,7 @@ async function accBackfillHistorical(){
       toast((count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted')+
         (removed?' · '+removed+' orphaned removed':'')+
         (empty.length?' · no records found in: '+empty.join(', '):''),'success');
+      if(bfFailed.length) toast('Could not read: '+bfFailed.join(', ')+'. Those sources were skipped and no cleanup was done.','warning');
     }
     initAccounts();
   }catch(e){
