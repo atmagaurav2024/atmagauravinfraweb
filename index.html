@@ -2977,6 +2977,7 @@ function showApp(name){
   else if(isProjectTab){ initProjects(); }
   else if(name==='petty-cash'){initPettyCash();}
   else if(name==='overheads'){initOverheads();}
+  else if(name==='loans'){initLoans();}
   else if(name==='accounts'){initAccounts();}
   else if(name==='access'){acInitModule();}
   else if(name==='company'){initCompany();}
@@ -6701,6 +6702,7 @@ function applyDrawerPermissions(){
     'accounts':     function(){ return canAccess('accounts','view'); },
     'petty-cash':   function(){ return canAccess('petty-cash','view'); },
     'overheads':    function(){ return canAccess('overheads','view'); },
+    'loans':        function(){ return canAccess('loans','view'); },
     'access':       function(){ return canAccess('access','view'); },
     'company':      function(){ return canAccess('company','view'); },
     'registry':     function(){ return canAccess('registry','view'); }
@@ -6813,6 +6815,10 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
     <div class="drawer-item" onclick="showApp('petty-cash');closeDrawer();">
       <div class="drawer-item-ic" style="background:#FFF8E1;">&#128181;</div>
       <div class="drawer-item-info"><div class="drawer-item-title">Petty Cash</div><div class="drawer-item-sub">Cash in hand & site expenses</div></div>
+    </div>
+    <div class="drawer-item" onclick="showApp('loans');closeDrawer();">
+      <div class="drawer-item-ic" style="background:#E0F2F1;">&#127974;</div>
+      <div class="drawer-item-info"><div class="drawer-item-title">Loans</div><div class="drawer-item-sub">Loans taken &amp; given, lenders &amp; borrowers</div></div>
     </div>
     <div class="drawer-item" onclick="showApp('overheads');closeDrawer();">
       <div class="drawer-item-ic" style="background:#F3E5F5;">&#127970;</div>
@@ -10217,6 +10223,17 @@ async function empSavePay(){
 </div>
 <div class="sh-overlay" id="ov-acc" onclick="closeAccSheet()"></div>
 <div class="sheet" id="sh-acc"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="acc-sheet-title">New Voucher</div><span class="sh-close" onclick="closeAccSheet()">&#10005;</span></div><div class="sh-body" id="acc-sheet-body"></div><div class="sh-foot" id="acc-sheet-foot"></div></div>
+
+<div class="app-screen" id="app-loans">
+  <div style="background:#00695C;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127974; Loans</div>
+  </div>
+  <div id="ln-tab-bar" style="display:flex;overflow-x:auto;background:#00695C;padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;"></div>
+  <div id="ln-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
+</div>
+<div class="sh-overlay" id="ov-ln" onclick="closeSheet('ov-ln','sh-ln')"></div>
+<div class="sheet" id="sh-ln"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="ln-sheet-title">Loans</div><span class="sh-close" onclick="closeSheet('ov-ln','sh-ln')">&#10005;</span></div><div class="sh-body" id="ln-sheet-body"></div><div class="sh-foot" id="ln-sheet-foot"></div></div>
 
 <div class="app-screen" id="app-overheads">
   <div style="background:#4A148C;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
@@ -16465,6 +16482,337 @@ async function pcDeleteEntry(id,type){
 
 // ── ACCOUNTS ──────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════
+// LOANS — money borrowed from lenders (creditors) and lent to borrowers
+// (debtors), with party records, repayment tracking and GL posting.
+// ════════════════════════════════════════════════════════════════════════
+var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_TAB='taken';
+var LN_TAB_DEFS=[
+  {id:'taken',   label:'\u2b07 Loans Taken'},
+  {id:'given',   label:'\u2b06 Loans Given'},
+  {id:'parties', label:'\ud83d\udc65 Parties'}
+];
+function lnCanEdit(){ return typeof canAccess==='function'?canAccess('loans','edit'):(currentUser&&currentUser.role==='admin'); }
+function lnCanDelete(){ return typeof canAccess==='function'?canAccess('loans','delete'):(currentUser&&currentUser.role==='admin'); }
+
+function lnRenderTabBar(){
+  var bar=document.getElementById('ln-tab-bar'); if(!bar)return;
+  bar.innerHTML=LN_TAB_DEFS.map(function(t){
+    var a=LN_TAB===t.id;
+    return '<button onclick="lnSwitchTab(\''+t.id+'\')" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:'+(a?'white':'transparent')+';color:'+(a?'#00695C':'rgba(255,255,255,.65)')+';">'+t.label+'</button>';
+  }).join('');
+}
+function lnSwitchTab(t){ LN_TAB=t; lnRenderTabBar(); lnRender(); }
+
+async function initLoans(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  lnRenderTabBar();
+  c.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
+  try{
+    var r=await Promise.all([
+      sbFetch('loan_parties',{select:'*',order:'name.asc'}).catch(function(){return [];}),
+      sbFetch('loans',{select:'*',order:'start_date.desc'}).catch(function(){return [];}),
+      sbFetch('loan_transactions',{select:'*',order:'date.desc'}).catch(function(){return [];})
+    ]);
+    LN_PARTIES=r[0]||[]; LN_LOANS=r[1]||[]; LN_TXNS=r[2]||[];
+    lnRender();
+  }catch(e){
+    console.error('initLoans:',e);
+    c.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading loans: '+e.message+'<div style="font-size:11px;color:var(--text3);margin-top:8px;">If the tables are missing, run the latest SQL migration in Supabase.</div></div>';
+  }
+}
+
+function lnPartyName(id){ var p=LN_PARTIES.find(function(x){return x.id===id;}); return p?p.name:'\u2014'; }
+// Outstanding = principal disbursed less repayments of principal. Interest
+// is tracked separately so it never inflates the principal balance.
+function lnLoanStats(loanId){
+  var t=LN_TXNS.filter(function(x){return x.loan_id===loanId;});
+  var repaid=t.filter(function(x){return x.txn_type==='repayment';}).reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
+  var interest=t.filter(function(x){return x.txn_type==='interest';}).reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
+  var loan=LN_LOANS.find(function(x){return x.id===loanId;})||{};
+  var principal=parseFloat(loan.principal)||0;
+  return {principal:principal, repaid:repaid, interest:interest, outstanding:principal-repaid, count:t.length};
+}
+
+function lnRender(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  if(LN_TAB==='parties') return lnRenderParties();
+  var dir=(LN_TAB==='taken')?'taken':'given';
+  var loans=LN_LOANS.filter(function(l){return l.direction===dir;});
+  var totPrin=0, totOut=0, totInt=0;
+  loans.forEach(function(l){ var s=lnLoanStats(l.id); totPrin+=s.principal; totOut+=s.outstanding; totInt+=s.interest; });
+  var isTaken=(dir==='taken');
+  var accent=isTaken?'#C62828':'#2E7D32';
+
+  c.innerHTML=
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL '+(isTaken?'BORROWED':'LENT')+'</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(totPrin)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTSTANDING</div><div style="font-size:15px;font-weight:900;color:'+accent+';">'+fmtINR(totOut)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST '+(isTaken?'PAID':'EARNED')+'</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+fmtINR(totInt)+'</div></div>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
+      '<div style="font-size:14px;font-weight:800;white-space:nowrap;">'+(isTaken?'Loans Taken':'Loans Given')+'</div>'+
+      '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;">'+
+        '<button onclick="lnExportExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
+        '<button onclick="lnExportPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
+        (lnCanEdit()?'<button onclick="lnOpenLoan(\''+dir+'\')" style="background:#00695C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Loan</button>':'')+
+      '</div>'+
+    '</div>'+
+    (loans.length? loans.map(function(l){
+      var st=lnLoanStats(l.id);
+      var pct=st.principal>0?Math.min(100,Math.round(st.repaid/st.principal*100)):0;
+      var txns=LN_TXNS.filter(function(x){return x.loan_id===l.id;}).sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+      return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+        '<div style="padding:10px 14px;background:#E0F2F1;display:flex;align-items:flex-start;gap:8px;">'+
+          '<div style="flex:1;">'+
+            '<div style="font-size:13px;font-weight:800;">'+lnPartyName(l.party_id)+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">'+(l.purpose||'\u2014')+(l.reference?' \u00b7 Ref: '+l.reference:'')+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">From '+fmtDate(l.start_date)+(l.interest_rate?' \u00b7 '+l.interest_rate+'% p.a.':' \u00b7 Interest-free')+(l.tenure_months?' \u00b7 '+l.tenure_months+' months':'')+'</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0;">'+
+            '<div style="font-size:14px;font-weight:900;color:'+accent+';">'+fmtINR(st.outstanding)+'</div>'+
+            '<div style="font-size:9.5px;color:var(--text3);">of '+fmtINR(st.principal)+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="height:4px;background:#E0F2F1;"><div style="height:100%;width:'+pct+'%;background:#00695C;"></div></div>'+
+        '<div style="padding:4px 14px;font-size:10px;color:var(--text3);background:#F3F4F6;display:flex;justify-content:space-between;">'+
+          '<span>Repaid: '+fmtINR(st.repaid)+' \u00b7 Interest: '+fmtINR(st.interest)+'</span><span>'+pct+'% repaid</span>'+
+        '</div>'+
+        '<div style="padding:8px 14px;">'+
+          (txns.length?txns.map(function(t){
+            var tc=t.txn_type==='interest'?'#E65100':(t.txn_type==='repayment'?'#2E7D32':'#1565C0');
+            var tl=t.txn_type==='interest'?'Interest':(t.txn_type==='repayment'?(isTaken?'Repaid':'Received'):'Disbursed');
+            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">'+
+              '<span style="background:'+tc+';color:white;font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;">'+tl+'</span>'+
+              '<div style="flex:1;"><div style="font-size:11.5px;font-weight:700;">'+fmtINR(parseFloat(t.amount)||0)+'</div>'+
+              '<div style="font-size:9.5px;color:var(--text3);">'+fmtDate(t.date)+(t.mode?' \u00b7 '+t.mode:'')+(t.remarks?' \u00b7 '+t.remarks:'')+'</div></div>'+
+              (lnCanDelete()?'<button onclick="lnDelTxn(\''+t.id+'\')" style="background:none;border:none;color:#C62828;font-size:15px;cursor:pointer;">\u00d7</button>':'')+
+            '</div>';
+          }).join(''):'<div style="font-size:11px;color:var(--text3);padding:4px 0;">No repayments recorded yet</div>')+
+        '</div>'+
+        '<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'+
+          (lnCanEdit()?'<button onclick="lnOpenTxn(\''+l.id+'\',\'repayment\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ '+(isTaken?'Repayment':'Receipt')+'</button>':'')+
+          (lnCanEdit()?'<button onclick="lnOpenTxn(\''+l.id+'\',\'interest\')" style="background:#E65100;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Interest</button>':'')+
+          (lnCanDelete()?'<button onclick="lnDelLoan(\''+l.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
+        '</div></div>';
+    }).join('')
+    :'<div style="text-align:center;padding:30px;color:var(--text3);">No '+(isTaken?'loans taken':'loans given')+' recorded yet.'+
+      (LN_PARTIES.length?'':'<br><span style="font-size:11px;">Add a party first from the <b>Parties</b> tab.</span>')+'</div>');
+}
+
+function lnRenderParties(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  c.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">'+
+      '<div style="font-size:14px;font-weight:800;">Parties</div>'+
+      (lnCanEdit()?'<button onclick="lnOpenParty()" style="background:#00695C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Party</button>':'')+
+    '</div>'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-bottom:10px;">Creditors are those you borrow from; debtors are those you lend to. A party can be both.</div>'+
+    (LN_PARTIES.length?
+      '<div class="table-card"><table class="att-table"><thead><tr><th>Name</th><th>Type</th><th>Contact</th><th>PAN</th><th style="text-align:right;">Loans</th><th></th></tr></thead><tbody>'+
+      LN_PARTIES.map(function(p){
+        var n=LN_LOANS.filter(function(l){return l.party_id===p.id;}).length;
+        return '<tr><td><strong>'+p.name+'</strong>'+(p.address?'<div style="font-size:10px;color:var(--text3);">'+p.address+'</div>':'')+'</td>'+
+          '<td><span style="font-size:10px;font-weight:800;color:'+(p.party_type==='creditor'?'#C62828':(p.party_type==='debtor'?'#2E7D32':'#1565C0'))+';">'+(p.party_type==='creditor'?'Creditor':(p.party_type==='debtor'?'Debtor':'Both'))+'</span></td>'+
+          '<td>'+(p.contact||'\u2014')+'</td><td style="font-family:monospace;font-size:10.5px;">'+(p.pan||'\u2014')+'</td>'+
+          '<td style="text-align:right;">'+n+'</td>'+
+          '<td>'+(lnCanDelete()?'<button class="btn btn-sm btn-red" onclick="lnDelParty(\''+p.id+'\')">&#128465;</button>':'')+'</td></tr>';
+      }).join('')+'</tbody></table></div>'
+      :'<div style="text-align:center;padding:30px;color:var(--text3);">No parties yet. Add creditors (lenders) and debtors (borrowers) here first.</div>');
+}
+
+function lnOpenParty(){
+  document.getElementById('ln-sheet-title').textContent='New Party';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<label class="flbl">Name *</label><input class="finp" id="lp-name" placeholder="Person or company name">'+
+    '<label class="flbl">Type *</label><select class="fsel" id="lp-type"><option value="creditor">Creditor (I borrow from them)</option><option value="debtor">Debtor (I lend to them)</option><option value="both">Both</option></select>'+
+    '<label class="flbl">Contact</label><input class="finp" id="lp-contact" placeholder="Phone / email">'+
+    '<label class="flbl">Address</label><input class="finp" id="lp-address">'+
+    '<label class="flbl">PAN</label><input class="finp" id="lp-pan" placeholder="ABCDE1234F">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="lp-remarks">';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="lnSaveParty()">Save Party</button>';
+  openSheet('ov-ln','sh-ln');
+}
+async function lnSaveParty(){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var name=gv('lp-name'); if(!name){toast('Enter a name','warning');return;}
+  try{
+    var res=await sbInsert('loan_parties',{name:name,party_type:gv('lp-type'),contact:gv('lp-contact')||null,
+      address:gv('lp-address')||null,pan:gv('lp-pan')||null,remarks:gv('lp-remarks')||null});
+    if(res&&res[0]) LN_PARTIES.push(res[0]);
+    LN_PARTIES.sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
+    closeSheet('ov-ln','sh-ln'); lnRender(); toast('Party saved','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function lnDelParty(id){
+  if(!lnCanDelete()){toast('No permission','warning');return;}
+  if(LN_LOANS.some(function(l){return l.party_id===id;})){ toast('Cannot delete \u2014 this party has loans recorded','warning'); return; }
+  if(!confirm('Delete this party?'))return;
+  try{ await sbDelete('loan_parties',id); LN_PARTIES=LN_PARTIES.filter(function(p){return p.id!==id;}); lnRender(); toast('Deleted','success'); }
+  catch(e){toast('Error: '+e.message,'error');}
+}
+
+function lnOpenLoan(dir){
+  var isTaken=(dir==='taken');
+  var elig=LN_PARTIES.filter(function(p){return p.party_type==='both'||p.party_type===(isTaken?'creditor':'debtor');});
+  if(!elig.length){ toast('Add a '+(isTaken?'creditor':'debtor')+' in the Parties tab first','warning'); return; }
+  document.getElementById('ln-sheet-title').textContent=isTaken?'New Loan Taken':'New Loan Given';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<label class="flbl">'+(isTaken?'Lender (Creditor)':'Borrower (Debtor)')+' *</label><select class="fsel" id="ll-party">'+
+      elig.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('')+'</select>'+
+    '<label class="flbl">Principal Amount (&#8377;) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00">'+
+    '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free">'+
+    '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional">'+
+    '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Working capital">'+
+    '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref">'+
+    '<label class="flbl">Received / Paid Via</label><select class="fsel" id="ll-mode"><option>Bank</option><option>Cash</option></select>'+
+    '<label class="flbl">Remarks</label><input class="finp" id="ll-remarks">'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">Posts to Accounts as '+
+      (isTaken?'Dr <b>Bank/Cash</b> / Cr <b>Loans Payable</b> (liability)':'Dr <b>Loans Receivable</b> (asset) / Cr <b>Bank/Cash</b>')+'.</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="lnSaveLoan(\''+dir+'\')">Save Loan</button>';
+  openSheet('ov-ln','sh-ln');
+}
+async function lnSaveLoan(dir){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var principal=parseFloat(gv('ll-principal'))||0;
+  if(principal<=0){toast('Enter a valid principal amount','warning');return;}
+  var isTaken=(dir==='taken');
+  var mode=gv('ll-mode')||'Bank';
+  try{
+    var res=await sbInsert('loans',{party_id:gv('ll-party'),direction:dir,principal:principal,
+      start_date:gv('ll-date'),interest_rate:parseFloat(gv('ll-rate'))||0,
+      tenure_months:parseInt(gv('ll-tenure'),10)||null,purpose:gv('ll-purpose')||null,
+      reference:gv('ll-ref')||null,mode:mode,remarks:gv('ll-remarks')||null,status:'active'});
+    var saved=(res&&res[0])?res[0]:null;
+    if(saved){
+      LN_LOANS.unshift(saved);
+      if(typeof accAutoPost==='function'){
+        var cashCode=(mode==='Cash')?'1001':'1002';
+        accAutoPost({type:isTaken?'Receipt':'Payment', date:saved.start_date, partyName:lnPartyName(saved.party_id),
+          debitCode:isTaken?cashCode:'1401', creditCode:isTaken?'2201':cashCode, amount:principal,
+          narration:(isTaken?'Loan taken from ':'Loan given to ')+lnPartyName(saved.party_id)+(saved.purpose?' \u2014 '+saved.purpose:''),
+          sourceType:'loan', sourceId:saved.id});
+      }
+    }
+    closeSheet('ov-ln','sh-ln'); lnRender(); toast('Loan saved','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function lnDelLoan(id){
+  if(!lnCanDelete()){toast('No permission','warning');return;}
+  var n=LN_TXNS.filter(function(t){return t.loan_id===id;}).length;
+  if(!confirm('Delete this loan'+(n?' and its '+n+' transaction'+(n!==1?'s':''):'')+'? The related accounting entries will also be removed.'))return;
+  try{
+    var kids=LN_TXNS.filter(function(t){return t.loan_id===id;});
+    for(var i=0;i<kids.length;i++){ try{ await sbDelete('loan_transactions',kids[i].id); if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(kids[i].id); }catch(e){} }
+    await sbDelete('loans',id);
+    if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(id);
+    LN_TXNS=LN_TXNS.filter(function(t){return t.loan_id!==id;});
+    LN_LOANS=LN_LOANS.filter(function(l){return l.id!==id;});
+    lnRender(); toast('Loan deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+function lnOpenTxn(loanId,type){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan)return;
+  var isTaken=(loan.direction==='taken');
+  var st=lnLoanStats(loanId);
+  var isInt=(type==='interest');
+  document.getElementById('ln-sheet-title').textContent=isInt?('Interest '+(isTaken?'Paid':'Received')):(isTaken?'Repayment Made':'Repayment Received');
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="background:#E0F2F1;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;">'+
+      '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b></div>'+
+    '<label class="flbl">Amount (&#8377;) *</label><input class="finp" id="lt-amount" type="number" step="0.01" placeholder="0.00">'+
+    '<label class="flbl">Date *</label><input class="finp" id="lt-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Mode</label><select class="fsel" id="lt-mode"><option>Bank</option><option>Cash</option></select>'+
+    '<label class="flbl">Reference</label><input class="finp" id="lt-ref">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="lt-remarks">'+
+    (isInt?'<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">Interest is tracked separately and does not reduce the principal outstanding.</div>':'');
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="lnSaveTxn(\''+loanId+'\',\''+type+'\')">Save</button>';
+  openSheet('ov-ln','sh-ln');
+}
+async function lnSaveTxn(loanId,type){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var amt=parseFloat(gv('lt-amount'))||0;
+  if(amt<=0){toast('Enter a valid amount','warning');return;}
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan)return;
+  var isTaken=(loan.direction==='taken'), isInt=(type==='interest');
+  var st=lnLoanStats(loanId);
+  if(!isInt && amt>st.outstanding+0.005){
+    if(!confirm('This repayment of '+fmtINR(amt)+' exceeds the outstanding principal of '+fmtINR(st.outstanding)+'. Continue anyway?')) return;
+  }
+  var mode=gv('lt-mode')||'Bank';
+  try{
+    var res=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:type,amount:amt,
+      date:gv('lt-date'),mode:mode,reference:gv('lt-ref')||null,remarks:gv('lt-remarks')||null});
+    var saved=(res&&res[0])?res[0]:null;
+    if(saved){
+      LN_TXNS.unshift(saved);
+      if(typeof accAutoPost==='function'){
+        var cashCode=(mode==='Cash')?'1001':'1002';
+        var pn=lnPartyName(loan.party_id);
+        var o;
+        if(isInt){
+          // Interest paid is an expense; interest earned is income
+          o=isTaken
+            ? {type:'Payment', debitCode:'4201', creditCode:cashCode, narration:'Interest paid to '+pn}
+            : {type:'Receipt', debitCode:cashCode, creditCode:'3005', narration:'Interest received from '+pn};
+        } else {
+          // Principal repayment settles the liability / recovers the asset
+          o=isTaken
+            ? {type:'Payment', debitCode:'2201', creditCode:cashCode, narration:'Loan repaid to '+pn}
+            : {type:'Receipt', debitCode:cashCode, creditCode:'1401', narration:'Loan recovered from '+pn};
+        }
+        accAutoPost({type:o.type, date:saved.date, partyName:pn, debitCode:o.debitCode,
+          creditCode:o.creditCode, amount:amt, narration:o.narration,
+          sourceType:'loan_txn', sourceId:saved.id});
+      }
+    }
+    closeSheet('ov-ln','sh-ln'); lnRender(); toast('Saved','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function lnDelTxn(id){
+  if(!lnCanDelete()){toast('No permission','warning');return;}
+  if(!confirm('Delete this entry? Its accounting entry will also be removed.'))return;
+  try{
+    await sbDelete('loan_transactions',id);
+    if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(id);
+    LN_TXNS=LN_TXNS.filter(function(t){return t.id!==id;});
+    lnRender(); toast('Deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+function lnExportData(){
+  var dir=(LN_TAB==='given')?'given':'taken';
+  var loans=LN_LOANS.filter(function(l){return l.direction===dir;});
+  var header=['Party','Principal','Start Date','Rate %','Tenure','Purpose','Repaid','Interest','Outstanding','Reference'];
+  var rows=loans.map(function(l){
+    var s=lnLoanStats(l.id);
+    return [lnPartyName(l.party_id),Math.round(s.principal),fmtDate(l.start_date),l.interest_rate||0,
+      l.tenure_months||'',l.purpose||'',Math.round(s.repaid),Math.round(s.interest),Math.round(s.outstanding),l.reference||''];
+  });
+  var t=function(f){return loans.reduce(function(a,l){return a+lnLoanStats(l.id)[f];},0);};
+  rows.push(['TOTAL',Math.round(t('principal')),'','','','',Math.round(t('repaid')),Math.round(t('interest')),Math.round(t('outstanding')),'']);
+  return {title:(dir==='taken'?'Loans Taken':'Loans Given'), header:header, rows:rows};
+}
+function lnExportExcel(){
+  var d=lnExportData();
+  if(d.rows.length<=1){toast('Nothing to export','warning');return;}
+  accExportCSV(d.title.replace(/ /g,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv',[[d.title],[''],d.header].concat(d.rows));
+}
+function lnExportPDF(){
+  var d=lnExportData();
+  if(d.rows.length<=1){toast('Nothing to export','warning');return;}
+  d.rows=d.rows.map(function(r){ [1,6,7,8].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
+  accExportPDF(d.title, d.header, d.rows);
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // COMPANY OVERHEADS — expenses not tied to any project
 // (CA/professional fees, audit, ROC, office rent, bank charges, insurance,
 // admin salaries, legal, software, non-site travel, misc)
@@ -16850,11 +17198,14 @@ var ACC_DEFAULT_COA=[
   {code:'1101', name:'Petty Cash in Hand',       type:'Asset',     group:'Current Assets'},
   {code:'1201', name:'Sundry Debtors (Clients)', type:'Asset',     group:'Current Assets'},
   {code:'1301', name:'GST Input Credit (ITC)',   type:'Asset',     group:'Current Assets'},
+  {code:'1401', name:'Loans & Advances Receivable',type:'Asset',    group:'Loans & Advances'},
   {code:'2001', name:'Sundry Creditors (Vendors)',type:'Liability',group:'Current Liabilities'},
   {code:'2101', name:'GST Payable',              type:'Liability', group:'Duties & Taxes'},
+  {code:'2201', name:'Loans Payable (Borrowings)',type:'Liability', group:'Loans (Liability)'},
   {code:'3001', name:'Sales Revenue (Contract Work)', type:'Income', group:'Direct Income'},
   {code:'3002', name:'Sales Bill Additions',     type:'Income',    group:'Direct Income'},
   {code:'3003', name:'Sales Bill Deductions',    type:'Income',    group:'Direct Income'},
+  {code:'3005', name:'Interest Income',          type:'Income',    group:'Other Income'},
   {code:'4001', name:'Purchases / Direct Work Expenses', type:'Expense', group:'Direct Expenses'},
   {code:'4002', name:'Purchase Bill Additions',  type:'Expense',   group:'Direct Expenses'},
   {code:'4003', name:'Purchase Bill Deductions', type:'Expense',   group:'Direct Expenses'},
@@ -18288,6 +18639,7 @@ var AC_MODS=[
   {key:'accounts',         label:'Accounts',           icon:'&#128176;',group:'Accounting',    params:['view','edit','delete']},
   {key:'petty-cash',       label:'Petty Cash',         icon:'&#128181;',group:'Accounting',    params:['view','edit','delete']},
   {key:'overheads',        label:'Company Overheads',  icon:'&#127970;',group:'Accounting',    params:['view','edit','delete']},
+  {key:'loans',            label:'Loans',              icon:'&#127974;',group:'Accounting',    params:['view','edit','delete']},
 
   // Settings — view/edit/delete
   {key:'access',           label:'Access Control',     icon:'&#128274;',group:'Settings',      params:['view','edit','delete']},
