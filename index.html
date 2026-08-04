@@ -18359,10 +18359,23 @@ async function accReconcile(){
         debitCode:'2001',creditCode:(p.payment_mode==='Cash'?'1001':'1002'),amount:parseFloat(p.amount)||0,
         narration:'Payment made'+(p.reference?' (Ref: '+p.reference+')':'')});
     });
+    // Loans routed into an employee's account as petty cash post once, via
+    // the loan (Dr Petty Cash / Cr Loans Payable). The matching funding row
+    // must never post again. Older rows may predate the funded_by_type and
+    // loan_id columns, so also match on employee, date and amount against a
+    // loan flagged to_petty_cash — otherwise those post a second time.
+    var loanFunded={};
+    loans.forEach(function(l){
+      if(!l.to_petty_cash) return;
+      var e=emps.find(function(x){return x.id===l.mode_emp_id;});
+      loanFunded[(e&&e.emp_id||'')+'|'+(l.start_date||'')+'|'+Math.round(parseFloat(l.principal)||0)]=1;
+    });
+
     pettyIn.forEach(function(p){
       if(isDone('petty_cash_in',p.id)) return;
       var amt=parseFloat(p.amount)||0;
       if(p.funded_by_type==='loan'||p.loan_id) return;                       // posted by the loan
+      if(loanFunded[(p.emp_id||'')+'|'+(p.date||'')+'|'+Math.round(amt)]) return;   // legacy loan-funded row
       if(p.funded_by_type==='emp'||p.funded_by_type==='transfer_out'||amt<=0) return;  // internal transfer
       var nm=empName[p.emp_id]||p.emp_id;
       add('Petty cash funding','petty_cash_in',p.id,{type:'Contra',date:p.date,partyName:nm,
@@ -18427,7 +18440,18 @@ async function accReconcile(){
       orphans=(allV||[]).filter(function(v){ return v.source_type!=='loan_interest_accrual' && v.source_id && !live[v.source_id]; });
     }
 
-    ACC_RECON={jobs:jobs, groups:groups, orphans:orphans, failed:failed,
+    // Same source posted more than once — the signature of a double entry
+    var dupes=[];
+    try{
+      var allPosted=await sbFetch('vouchers',{select:'id,source_type,source_id,amount,date',filter:'source_id=not.is.null'});
+      var seenKey={};
+      (allPosted||[]).forEach(function(v){
+        var k=v.source_type+':'+v.source_id;
+        if(seenKey[k]) dupes.push(v); else seenKey[k]=1;
+      });
+    }catch(e){}
+
+    ACC_RECON={jobs:jobs, groups:groups, orphans:orphans, failed:failed, dupes:dupes,
       counts:{'Sales bills':salesBills.length,'Sales payments':salesPayments.length,
         'Purchase bills':workBills.length,'Purchase payments':workPayments.length,
         'Petty cash funding':pettyIn.length,'Petty cash expenses':pettyExp.length,
@@ -18458,6 +18482,9 @@ function accShowReconReport(){
           '<td style="text-align:right;font-weight:800;color:'+(miss?'#E65100':'#2E7D32')+';">'+(miss||'\u2713')+'</td></tr>';
       }).join('')+
     '</table>'+
+    ((R.dupes&&R.dupes.length)?'<div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
+      '<b style="color:#C62828;">'+R.dupes.length+' duplicate voucher'+(R.dupes.length!==1?'s':'')+'</b> \u2014 the same record has been posted more than once, so those amounts are counted twice.'+
+      '<button onclick="accRemoveDupes()" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:6px;display:block;">Remove '+R.dupes.length+' duplicate'+(R.dupes.length!==1?'s':'')+'</button></div>':'')+
     (R.orphans.length?'<div style="background:#FFF3E0;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
       '<b>'+R.orphans.length+' voucher'+(R.orphans.length!==1?'s':'')+'</b> reference a record that no longer exists. Review them in the voucher list before deleting \u2014 nothing is removed automatically.</div>':'')+
     '<div style="font-size:10px;color:var(--text3);margin-top:10px;">New entries post to the ledger automatically as you save them. This check is only for catching anything that slipped through.</div>';
@@ -18468,6 +18495,19 @@ function accShowReconReport(){
     '<button class="btn btn-outline" onclick="closeAccSheet()">Close</button>'+
     (totalMissing?'<button class="btn btn-navy" onclick="accPostMissing()">Post '+totalMissing+' missing</button>':'');
   openSheet('ov-acc','sh-acc');
+}
+
+// Deletes only the surplus copies, keeping the first posting of each record.
+async function accRemoveDupes(){
+  var R=ACC_RECON; if(!R||!R.dupes||!R.dupes.length) return;
+  if(!confirm('Remove '+R.dupes.length+' duplicate voucher'+(R.dupes.length!==1?'s':'')+'?\n\nThe first posting of each record is kept \u2014 only the extra copies are deleted.')) return;
+  var ok=0;
+  for(var i=0;i<R.dupes.length;i++){
+    try{ await sbDelete('vouchers',R.dupes[i].id); ok++; }catch(e){}
+  }
+  closeAccSheet();
+  toast(ok+' duplicate'+(ok!==1?'s':'')+' removed','success');
+  await initAccounts();
 }
 
 async function accPostMissing(){
