@@ -16490,7 +16490,8 @@ var LN_TAB_DEFS=[
   {id:'taken',   label:'\u2b07 Loans Taken'},
   {id:'given',   label:'\u2b06 Loans Given'},
   {id:'parties', label:'\ud83d\udc65 Party-wise'},
-  {id:'payments',label:'\ud83e\uddfe Payments'}
+  {id:'payments',label:'\ud83e\uddfe Payments'},
+  {id:'ledger',  label:'\ud83d\udcd2 Ledger'}
 ];
 function lnCanEdit(){ return typeof canAccess==='function'?canAccess('loans','edit'):(currentUser&&currentUser.role==='admin'); }
 function lnCanDelete(){ return typeof canAccess==='function'?canAccess('loans','delete'):(currentUser&&currentUser.role==='admin'); }
@@ -16656,6 +16657,7 @@ function lnRender(){
   var c=document.getElementById('ln-content'); if(!c)return;
   if(LN_TAB==='parties') return lnRenderParties();
   if(LN_TAB==='payments') return lnRenderPayments();
+  if(LN_TAB==='ledger') return lnRenderLedger();
   var dir=(LN_TAB==='taken')?'taken':'given';
   var isTaken=(dir==='taken');
   var accent=isTaken?'#C62828':'#2E7D32';
@@ -16863,6 +16865,165 @@ function lnPayExportPDF(){
   var d=lnPayExportData();
   if(d.rows.length<=1){toast('Nothing to export','warning');return;}
   d.rows=d.rows.map(function(r){ [5,7,8,9].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
+  accExportPDF(d.title, d.header, d.rows);
+}
+
+var LN_LED_PARTY='', LN_LED_DIR='all', LN_LED_FROM='', LN_LED_TO='';
+
+// Party ledger: opening position, then every loan disbursement, repayment
+// and interest entry in date order with a running balance. Balance is what
+// the party owes us (given) or we owe them (taken) at that point.
+function lnLedgerRows(pid, dir, from, to){
+  var loans=LN_LOANS.filter(function(l){
+    return l.party_id===pid && (dir==='all'||l.direction===dir);
+  });
+  if(!loans.length) return {rows:[], opening:0, closing:0, loans:[]};
+  var byId={}; loans.forEach(function(l){ byId[l.id]=l; });
+
+  var ev=[];
+  loans.forEach(function(l){
+    ev.push({date:l.start_date, kind:'loan', loan:l, amount:parseFloat(l.principal)||0,
+      particulars:(l.direction==='taken'?'Loan taken':'Loan given')+(l.purpose?' \u2014 '+l.purpose:'')+
+        (l.interest_rate?' @'+l.interest_rate+'%':''), ref:l.reference||''});
+  });
+  LN_TXNS.forEach(function(t){
+    var l=byId[t.loan_id]; if(!l) return;
+    ev.push({date:t.date, kind:t.txn_type, loan:l, amount:parseFloat(t.amount)||0,
+      particulars:(t.txn_type==='interest'?'Interest ':'Principal ')+
+        (l.direction==='taken'?'paid':'received')+' \u00b7 loan of '+fmtDate(l.start_date),
+      ref:(t.receipt_no||'')+(t.reference?' / '+t.reference:''), mode:t.mode, modeEmp:t.mode_emp_id});
+  });
+  ev.sort(function(a,b){
+    var d=String(a.date||'').localeCompare(String(b.date||''));
+    if(d!==0) return d;
+    return (a.kind==='loan'?-1:1);      // a loan is created before it is repaid
+  });
+
+  // Sign convention: positive = balance in our favour (they owe us).
+  var sign=function(e){
+    var taken=(e.loan.direction==='taken');
+    if(e.kind==='loan')      return taken?-1:1;   // borrowing puts us in debit to them
+    if(e.kind==='repayment') return taken?1:-1;   // repaying clears it
+    return taken?1:-1;                            // interest settled likewise
+  };
+
+  var opening=0, rows=[], bal=0;
+  ev.forEach(function(e){
+    var delta=sign(e)*e.amount;
+    if(from && String(e.date||'')<from){ opening+=delta; return; }
+    if(to && String(e.date||'')>to) return;
+    bal=(rows.length?bal:opening)+delta;
+    rows.push({date:e.date, particulars:e.particulars, ref:e.ref, kind:e.kind,
+      debit:delta>0?delta:0, credit:delta<0?-delta:0, balance:bal,
+      mode:e.mode, modeEmp:e.modeEmp});
+  });
+  return {rows:rows, opening:opening, closing:rows.length?bal:opening, loans:loans};
+}
+
+function lnLedSet(k,v){
+  if(k==='party') LN_LED_PARTY=v; else if(k==='dir') LN_LED_DIR=v;
+  else if(k==='from') LN_LED_FROM=v; else if(k==='to') LN_LED_TO=v;
+  lnRenderLedger();
+}
+
+function lnRenderLedger(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  var withLoans={}; LN_LOANS.forEach(function(l){ withLoans[l.party_id]=1; });
+  var parties=LN_PARTIES.filter(function(p){return withLoans[p.id];});
+  if(!LN_LED_PARTY && parties.length) LN_LED_PARTY=parties[0].id;
+
+  var head=
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
+      '<div style="font-size:14px;font-weight:800;">Loan Ledger</div>'+
+      '<div style="display:flex;gap:0;">'+
+        '<button onclick="lnLedExportExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
+        '<button onclick="lnLedExportPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128196; PDF</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="background:white;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;">'+
+      '<label class="flbl" style="font-size:10px;">Party</label>'+
+      '<select class="fsel" style="margin-bottom:8px;" onchange="lnLedSet(\'party\',this.value)">'+
+        (parties.length?parties.map(function(p){
+          return '<option value="'+p.id+'"'+(LN_LED_PARTY===p.id?' selected':'')+'>'+p.name+'</option>';
+        }).join(''):'<option value="">No parties with loans</option>')+'</select>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+
+        '<select class="fsel" style="flex:1;min-width:110px;margin:0;" onchange="lnLedSet(\'dir\',this.value)">'+
+          ['all|Both directions','taken|Loans Taken','given|Loans Given'].map(function(o){
+            var p=o.split('|');
+            return '<option value="'+p[0]+'"'+(LN_LED_DIR===p[0]?' selected':'')+'>'+p[1]+'</option>';
+          }).join('')+'</select>'+
+        '<input type="date" class="finp" style="flex:1;min-width:120px;margin:0;" value="'+LN_LED_FROM+'" onchange="lnLedSet(\'from\',this.value)">'+
+        '<span style="font-size:10px;color:var(--text3);">to</span>'+
+        '<input type="date" class="finp" style="flex:1;min-width:120px;margin:0;" value="'+LN_LED_TO+'" onchange="lnLedSet(\'to\',this.value)">'+
+      '</div>'+
+      '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;">Leave dates blank for the full history.</div>'+
+    '</div>';
+
+  if(!parties.length || !LN_LED_PARTY){
+    c.innerHTML=head+'<div style="text-align:center;padding:30px;color:var(--text3);">No loans recorded yet.</div>';
+    return;
+  }
+
+  var L=lnLedgerRows(LN_LED_PARTY, LN_LED_DIR, LN_LED_FROM, LN_LED_TO);
+  var totDr=L.rows.reduce(function(a,r){return a+r.debit;},0);
+  var totCr=L.rows.reduce(function(a,r){return a+r.credit;},0);
+  var closing=L.closing;
+  var closeLabel=closing>0.5?'Receivable from party':(closing<-0.5?'Payable to party':'Settled');
+  var closeColor=closing>0.5?'#2E7D32':(closing<-0.5?'#C62828':'var(--text3)');
+
+  c.innerHTML=head+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OPENING</div><div style="font-size:14px;font-weight:900;color:var(--navy);">'+fmtINR(Math.abs(L.opening))+'</div><div style="font-size:9px;color:var(--text3);">'+(L.opening>0.5?'Dr':(L.opening<-0.5?'Cr':'Nil'))+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ENTRIES</div><div style="font-size:14px;font-weight:900;color:var(--navy);">'+L.rows.length+'</div><div style="font-size:9px;color:var(--text3);">'+L.loans.length+' loan'+(L.loans.length!==1?'s':'')+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">CLOSING</div><div style="font-size:14px;font-weight:900;color:'+closeColor+';">'+fmtINR(Math.abs(closing))+'</div><div style="font-size:9px;color:var(--text3);">'+closeLabel+'</div></div>'+
+    '</div>'+
+    (L.rows.length?
+      '<div class="table-card"><table class="att-table"><thead><tr>'+
+        '<th>Date</th><th>Particulars</th><th>Ref</th>'+
+        '<th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Balance</th>'+
+      '</tr></thead><tbody>'+
+      '<tr style="background:#F5F5F5;"><td colspan="5" style="font-weight:700;color:var(--text3);">Opening Balance</td>'+
+        '<td style="text-align:right;font-weight:700;">'+fmtINR(Math.abs(L.opening))+' '+(L.opening>=0?'Dr':'Cr')+'</td></tr>'+
+      L.rows.map(function(r){
+        return '<tr><td style="white-space:nowrap;">'+fmtDate(r.date)+'</td>'+
+          '<td>'+r.particulars+(r.mode?'<div style="font-size:9.5px;color:var(--text3);">'+(r.mode==='EmpBank'?lnEmpName(r.modeEmp)+'\u2019s a/c':r.mode)+'</div>':'')+'</td>'+
+          '<td style="font-size:10px;color:var(--text3);">'+(r.ref||'\u2014')+'</td>'+
+          '<td style="text-align:right;">'+(r.debit?fmtINR(r.debit):'\u2014')+'</td>'+
+          '<td style="text-align:right;">'+(r.credit?fmtINR(r.credit):'\u2014')+'</td>'+
+          '<td style="text-align:right;font-weight:700;">'+fmtINR(Math.abs(r.balance))+' '+(r.balance>=0?'Dr':'Cr')+'</td></tr>';
+      }).join('')+
+      '<tr style="background:#E0F2F1;font-weight:900;"><td colspan="3">TOTAL</td>'+
+        '<td style="text-align:right;">'+fmtINR(totDr)+'</td><td style="text-align:right;">'+fmtINR(totCr)+'</td>'+
+        '<td style="text-align:right;">'+fmtINR(Math.abs(closing))+' '+(closing>=0?'Dr':'Cr')+'</td></tr>'+
+      '</tbody></table></div>'+
+      '<div style="font-size:9.5px;color:var(--text3);margin-top:8px;">Dr = receivable from the party, Cr = payable to them. Interest shown is what has actually been settled; interest accrued but unpaid is not a ledger entry \u2014 see the Loans tabs for that.</div>'
+      :'<div style="text-align:center;padding:30px;color:var(--text3);">No entries for this party in the selected range.</div>');
+}
+
+function lnLedExportData(){
+  var L=lnLedgerRows(LN_LED_PARTY, LN_LED_DIR, LN_LED_FROM, LN_LED_TO);
+  var rows=[['Opening Balance','','','','',Math.round(Math.abs(L.opening))+' '+(L.opening>=0?'Dr':'Cr')]];
+  L.rows.forEach(function(r){
+    rows.push([fmtDate(r.date), r.particulars, r.ref||'', r.debit?Math.round(r.debit):'', r.credit?Math.round(r.credit):'',
+      Math.round(Math.abs(r.balance))+' '+(r.balance>=0?'Dr':'Cr')]);
+  });
+  var totDr=L.rows.reduce(function(a,r){return a+r.debit;},0);
+  var totCr=L.rows.reduce(function(a,r){return a+r.credit;},0);
+  rows.push(['TOTAL','','',Math.round(totDr),Math.round(totCr),Math.round(Math.abs(L.closing))+' '+(L.closing>=0?'Dr':'Cr')]);
+  var range=(LN_LED_FROM||LN_LED_TO)?(' ('+(LN_LED_FROM?fmtDate(LN_LED_FROM):'start')+' to '+(LN_LED_TO?fmtDate(LN_LED_TO):'date')+')'):'';
+  return {title:'Loan Ledger \u2014 '+lnPartyName(LN_LED_PARTY)+range,
+    header:['Date','Particulars','Ref','Debit','Credit','Balance'], rows:rows};
+}
+function lnLedExportExcel(){
+  if(!LN_LED_PARTY){toast('Select a party','warning');return;}
+  var d=lnLedExportData();
+  accExportCSV('Loan_Ledger_'+lnPartyName(LN_LED_PARTY).replace(/[^a-z0-9]/gi,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv',
+    [[d.title],[''],d.header].concat(d.rows));
+}
+function lnLedExportPDF(){
+  if(!LN_LED_PARTY){toast('Select a party','warning');return;}
+  var d=lnLedExportData();
+  d.rows=d.rows.map(function(r){ [3,4].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
   accExportPDF(d.title, d.header, d.rows);
 }
 
