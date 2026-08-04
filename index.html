@@ -16868,7 +16868,8 @@ function lnPayExportPDF(){
   accExportPDF(d.title, d.header, d.rows);
 }
 
-var LN_LED_PARTY='', LN_LED_DIR='all', LN_LED_FROM='', LN_LED_TO='';
+var LN_LED_PARTY='', LN_LED_DIR='all', LN_LED_FROM='', LN_LED_TO='', LN_LED_ACCRUE=true;
+function lnLedToggleAccrue(v){ LN_LED_ACCRUE=v; lnRenderLedger(); }
 
 // Party ledger: opening position, then every loan disbursement, repayment
 // and interest entry in date order with a running balance. Balance is what
@@ -16888,21 +16889,61 @@ function lnLedgerRows(pid, dir, from, to){
   });
   LN_TXNS.forEach(function(t){
     var l=byId[t.loan_id]; if(!l) return;
-    ev.push({date:t.date, kind:t.txn_type, loan:l, amount:parseFloat(t.amount)||0,
+    // Fall back to the loan date if a transaction has no date, so it is
+    // still shown rather than silently dropped by the range filter.
+    var td=t.date||l.start_date;
+    ev.push({date:td, kind:(t.txn_type==='interest'?'interest':'repayment'), loan:l, amount:parseFloat(t.amount)||0,
       particulars:(t.txn_type==='interest'?'Interest ':'Principal ')+
         (l.direction==='taken'?'paid':'received')+' \u00b7 loan of '+fmtDate(l.start_date),
       ref:(t.receipt_no||'')+(t.reference?' / '+t.reference:''), mode:t.mode, modeEmp:t.mode_emp_id});
   });
+
+  // Month-wise interest charged to the account, the way a lender's
+  // statement shows it. Each month's figure is the accrual to that
+  // month-end less the accrual to the previous month-end, so it reuses
+  // the same reducing-balance/compounding logic as everywhere else.
+  if(LN_LED_ACCRUE){
+    var todayStr=new Date().toISOString().slice(0,10);
+    var lastStr=(to&&to<todayStr)?to:todayStr;
+    loans.forEach(function(l){
+      var rate=parseFloat(l.interest_rate)||0;
+      if(rate<=0||!l.start_date) return;
+      var d=new Date(l.start_date+'T00:00:00'); if(isNaN(d)) return;
+      var prev=0, guard=0;
+      var cur=new Date(d.getFullYear(), d.getMonth()+1, 0);   // first month-end
+      while(guard++<600){
+        var ymd=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
+        if(ymd>lastStr) break;
+        var upto=lnAccruedInterest(l, ymd);
+        var monthAmt=upto-prev; prev=upto;
+        if(monthAmt>0.005){
+          ev.push({date:ymd, kind:'accrual', loan:l, amount:monthAmt,
+            particulars:'Interest charged @'+rate+'% \u00b7 loan of '+fmtDate(l.start_date),
+            ref:'accrual'});
+        }
+        cur=new Date(cur.getFullYear(), cur.getMonth()+2, 0);
+      }
+      // Part-month up to the closing date
+      var tail=lnAccruedInterest(l, lastStr)-prev;
+      if(tail>0.005){
+        ev.push({date:lastStr, kind:'accrual', loan:l, amount:tail,
+          particulars:'Interest charged @'+rate+'% (part month) \u00b7 loan of '+fmtDate(l.start_date),
+          ref:'accrual'});
+      }
+    });
+  }
   ev.sort(function(a,b){
     var d=String(a.date||'').localeCompare(String(b.date||''));
     if(d!==0) return d;
-    return (a.kind==='loan'?-1:1);      // a loan is created before it is repaid
+    var ord={loan:0, accrual:1, interest:2, repayment:3};   // same-day ordering
+    return (ord[a.kind]||9)-(ord[b.kind]||9);
   });
 
   // Sign convention: positive = balance in our favour (they owe us).
   var sign=function(e){
     var taken=(e.loan.direction==='taken');
     if(e.kind==='loan')      return taken?-1:1;   // borrowing puts us in debit to them
+    if(e.kind==='accrual')   return taken?-1:1;   // interest charged grows the same side as the loan
     if(e.kind==='repayment') return taken?1:-1;   // repaying clears it
     return taken?1:-1;                            // interest settled likewise
   };
@@ -16956,7 +16997,9 @@ function lnRenderLedger(){
         '<span style="font-size:10px;color:var(--text3);">to</span>'+
         '<input type="date" class="finp" style="flex:1;min-width:120px;margin:0;" value="'+LN_LED_TO+'" onchange="lnLedSet(\'to\',this.value)">'+
       '</div>'+
-      '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;">Leave dates blank for the full history.</div>'+
+      '<label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;font-weight:700;cursor:pointer;">'+
+        '<input type="checkbox" '+(LN_LED_ACCRUE?'checked':'')+' style="width:auto;margin:0;" onchange="lnLedToggleAccrue(this.checked)"> Charge interest month-wise</label>'+
+      '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;">Leave dates blank for the full history. With month-wise interest on, the closing balance includes interest accrued but not yet paid.</div>'+
     '</div>';
 
   if(!parties.length || !LN_LED_PARTY){
@@ -16985,9 +17028,12 @@ function lnRenderLedger(){
       '<tr style="background:#F5F5F5;"><td colspan="5" style="font-weight:700;color:var(--text3);">Opening Balance</td>'+
         '<td style="text-align:right;font-weight:700;">'+fmtINR(Math.abs(L.opening))+' '+(L.opening>=0?'Dr':'Cr')+'</td></tr>'+
       L.rows.map(function(r){
-        return '<tr><td style="white-space:nowrap;">'+fmtDate(r.date)+'</td>'+
-          '<td>'+r.particulars+(r.mode?'<div style="font-size:9.5px;color:var(--text3);">'+(r.mode==='EmpBank'?lnEmpName(r.modeEmp)+'\u2019s a/c':r.mode)+'</div>':'')+'</td>'+
-          '<td style="font-size:10px;color:var(--text3);">'+(r.ref||'\u2014')+'</td>'+
+        var tag=r.kind==='accrual'?'<span style="background:#FFF3E0;color:#E65100;font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:4px;margin-right:4px;">INT</span>'
+          :(r.kind==='loan'?'<span style="background:#E3F2FD;color:#1565C0;font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:4px;margin-right:4px;">LOAN</span>'
+          :'<span style="background:#E8F5E9;color:#2E7D32;font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:4px;margin-right:4px;">PAY</span>');
+        return '<tr'+(r.kind==='accrual'?' style="background:#FFFDF7;"':'')+'><td style="white-space:nowrap;">'+fmtDate(r.date)+'</td>'+
+          '<td>'+tag+r.particulars+(r.mode?'<div style="font-size:9.5px;color:var(--text3);">'+(r.mode==='EmpBank'?lnEmpName(r.modeEmp)+'\u2019s a/c':r.mode)+'</div>':'')+'</td>'+
+          '<td style="font-size:10px;color:var(--text3);">'+(r.ref==='accrual'?'\u2014':(r.ref||'\u2014'))+'</td>'+
           '<td style="text-align:right;">'+(r.debit?fmtINR(r.debit):'\u2014')+'</td>'+
           '<td style="text-align:right;">'+(r.credit?fmtINR(r.credit):'\u2014')+'</td>'+
           '<td style="text-align:right;font-weight:700;">'+fmtINR(Math.abs(r.balance))+' '+(r.balance>=0?'Dr':'Cr')+'</td></tr>';
@@ -16996,7 +17042,8 @@ function lnRenderLedger(){
         '<td style="text-align:right;">'+fmtINR(totDr)+'</td><td style="text-align:right;">'+fmtINR(totCr)+'</td>'+
         '<td style="text-align:right;">'+fmtINR(Math.abs(closing))+' '+(closing>=0?'Dr':'Cr')+'</td></tr>'+
       '</tbody></table></div>'+
-      '<div style="font-size:9.5px;color:var(--text3);margin-top:8px;">Dr = receivable from the party, Cr = payable to them. Interest shown is what has actually been settled; interest accrued but unpaid is not a ledger entry \u2014 see the Loans tabs for that.</div>'
+      '<div style="font-size:9.5px;color:var(--text3);margin-top:8px;">Dr = receivable from the party, Cr = payable to them. '+
+        (LN_LED_ACCRUE?'<b>INT</b> rows are interest charged at each month-end (and a part month to the closing date), computed on the reducing balance. They are a statement of position, not accounting vouchers \u2014 only interest actually paid is posted to the books.':'Month-wise interest is switched off, so only actual transactions are listed.')+'</div>'
       :'<div style="text-align:center;padding:30px;color:var(--text3);">No entries for this party in the selected range.</div>');
 }
 
@@ -17004,14 +17051,14 @@ function lnLedExportData(){
   var L=lnLedgerRows(LN_LED_PARTY, LN_LED_DIR, LN_LED_FROM, LN_LED_TO);
   var rows=[['Opening Balance','','','','',Math.round(Math.abs(L.opening))+' '+(L.opening>=0?'Dr':'Cr')]];
   L.rows.forEach(function(r){
-    rows.push([fmtDate(r.date), r.particulars, r.ref||'', r.debit?Math.round(r.debit):'', r.credit?Math.round(r.credit):'',
+    rows.push([fmtDate(r.date), (r.kind==='accrual'?'[INT] ':'')+r.particulars, (r.ref==='accrual'?'':(r.ref||'')), r.debit?Math.round(r.debit):'', r.credit?Math.round(r.credit):'',
       Math.round(Math.abs(r.balance))+' '+(r.balance>=0?'Dr':'Cr')]);
   });
   var totDr=L.rows.reduce(function(a,r){return a+r.debit;},0);
   var totCr=L.rows.reduce(function(a,r){return a+r.credit;},0);
   rows.push(['TOTAL','','',Math.round(totDr),Math.round(totCr),Math.round(Math.abs(L.closing))+' '+(L.closing>=0?'Dr':'Cr')]);
   var range=(LN_LED_FROM||LN_LED_TO)?(' ('+(LN_LED_FROM?fmtDate(LN_LED_FROM):'start')+' to '+(LN_LED_TO?fmtDate(LN_LED_TO):'date')+')'):'';
-  return {title:'Loan Ledger \u2014 '+lnPartyName(LN_LED_PARTY)+range,
+  return {title:'Loan Ledger \u2014 '+lnPartyName(LN_LED_PARTY)+range+(LN_LED_ACCRUE?' [incl. month-wise interest]':''),
     header:['Date','Particulars','Ref','Debit','Credit','Balance'], rows:rows};
 }
 function lnLedExportExcel(){
