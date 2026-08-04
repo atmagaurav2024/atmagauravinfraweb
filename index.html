@@ -16701,6 +16701,7 @@ function lnRender(){
         '<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'+
           (lnCanEdit()?'<button onclick="lnOpenTxn(\''+l.id+'\',\'repayment\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ '+(isTaken?'Repayment':'Receipt')+'</button>':'')+
           (lnCanEdit()?'<button onclick="lnOpenTxn(\''+l.id+'\',\'interest\')" style="background:#E65100;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Interest</button>':'')+
+          (lnCanEdit()?'<button onclick="lnOpenLoan(\''+l.direction+'\',\''+l.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button>':'')+
           (lnCanDelete()?'<button onclick="lnDelLoan(\''+l.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
         '</div></div>';
     }).join('')
@@ -16724,34 +16725,48 @@ function lnRenderParties(){
           '<td><span style="font-size:10px;font-weight:800;color:'+(p.party_type==='creditor'?'#C62828':(p.party_type==='debtor'?'#2E7D32':'#1565C0'))+';">'+(p.party_type==='creditor'?'Creditor':(p.party_type==='debtor'?'Debtor':'Both'))+'</span></td>'+
           '<td>'+(p.contact||'\u2014')+'</td><td style="font-family:monospace;font-size:10.5px;">'+(p.pan||'\u2014')+'</td>'+
           '<td style="text-align:right;">'+n+'</td>'+
-          '<td>'+(lnCanDelete()?'<button class="btn btn-sm btn-red" onclick="lnDelParty(\''+p.id+'\')">&#128465;</button>':'')+'</td></tr>';
+          '<td style="white-space:nowrap;">'+(lnCanEdit()?'<button class="btn btn-sm btn-navy" onclick="lnOpenParty(\''+p.id+'\')">&#9998;</button> ':'')+(lnCanDelete()?'<button class="btn btn-sm btn-red" onclick="lnDelParty(\''+p.id+'\')">&#128465;</button>':'')+'</td></tr>';
       }).join('')+'</tbody></table></div>'
       :'<div style="text-align:center;padding:30px;color:var(--text3);">No parties yet. Add creditors (lenders) and debtors (borrowers) here first.</div>');
 }
 
-function lnOpenParty(){
-  document.getElementById('ln-sheet-title').textContent='New Party';
+function lnOpenParty(editId){
+  var ex=editId?LN_PARTIES.find(function(p){return p.id===editId;}):null;
+  if(editId&&!ex){ toast('Party not found','warning'); return; }
+  var esc=function(v){ return String(v||'').replace(/"/g,'&quot;'); };
+  document.getElementById('ln-sheet-title').textContent=ex?'Edit Party':'New Party';
   document.getElementById('ln-sheet-body').innerHTML=
-    '<label class="flbl">Name *</label><input class="finp" id="lp-name" placeholder="Person or company name">'+
-    '<label class="flbl">Type *</label><select class="fsel" id="lp-type"><option value="creditor">Creditor (I borrow from them)</option><option value="debtor">Debtor (I lend to them)</option><option value="both">Both</option></select>'+
-    '<label class="flbl">Contact</label><input class="finp" id="lp-contact" placeholder="Phone / email">'+
-    '<label class="flbl">Address</label><input class="finp" id="lp-address">'+
-    '<label class="flbl">PAN</label><input class="finp" id="lp-pan" placeholder="ABCDE1234F">'+
-    '<label class="flbl">Remarks</label><input class="finp" id="lp-remarks">';
+    '<label class="flbl">Name *</label><input class="finp" id="lp-name" placeholder="Person or company name" value="'+esc(ex&&ex.name)+'">'+
+    '<label class="flbl">Type *</label><select class="fsel" id="lp-type">'+
+      ['creditor|Creditor (I borrow from them)','debtor|Debtor (I lend to them)','both|Both'].map(function(o){
+        var p=o.split('|');
+        return '<option value="'+p[0]+'"'+((ex&&ex.party_type===p[0])?' selected':'')+'>'+p[1]+'</option>';
+      }).join('')+'</select>'+
+    '<label class="flbl">Contact</label><input class="finp" id="lp-contact" placeholder="Phone / email" value="'+esc(ex&&ex.contact)+'">'+
+    '<label class="flbl">Address</label><input class="finp" id="lp-address" value="'+esc(ex&&ex.address)+'">'+
+    '<label class="flbl">PAN</label><input class="finp" id="lp-pan" placeholder="ABCDE1234F" value="'+esc(ex&&ex.pan)+'">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="lp-remarks" value="'+esc(ex&&ex.remarks)+'">';
   document.getElementById('ln-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
-    '<button class="btn btn-navy" onclick="lnSaveParty()">Save Party</button>';
+    '<button class="btn btn-navy" onclick="lnSaveParty('+(ex?'\''+ex.id+'\'':'')+')">'+(ex?'Update Party':'Save Party')+'</button>';
   openSheet('ov-ln','sh-ln');
 }
-async function lnSaveParty(){
+async function lnSaveParty(editId){
   if(!lnCanEdit()){toast('No permission','warning');return;}
   var name=gv('lp-name'); if(!name){toast('Enter a name','warning');return;}
+  var fields={name:name,party_type:gv('lp-type'),contact:gv('lp-contact')||null,
+    address:gv('lp-address')||null,pan:gv('lp-pan')||null,remarks:gv('lp-remarks')||null};
   try{
-    var res=await sbInsert('loan_parties',{name:name,party_type:gv('lp-type'),contact:gv('lp-contact')||null,
-      address:gv('lp-address')||null,pan:gv('lp-pan')||null,remarks:gv('lp-remarks')||null});
-    if(res&&res[0]) LN_PARTIES.push(res[0]);
+    if(editId){
+      await sbUpdate('loan_parties', editId, fields);
+      var i=LN_PARTIES.findIndex(function(p){return p.id===editId;});
+      if(i>-1) LN_PARTIES[i]=Object.assign({},LN_PARTIES[i],fields);
+    } else {
+      var res=await sbInsert('loan_parties',fields);
+      if(res&&res[0]) LN_PARTIES.push(res[0]);
+    }
     LN_PARTIES.sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
-    closeSheet('ov-ln','sh-ln'); lnRender(); toast('Party saved','success');
+    closeSheet('ov-ln','sh-ln'); lnRender(); toast(editId?'Party updated':'Party saved','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
 async function lnDelParty(id){
@@ -16762,37 +16777,40 @@ async function lnDelParty(id){
   catch(e){toast('Error: '+e.message,'error');}
 }
 
-function lnOpenLoan(dir){
+function lnOpenLoan(dir, editId){
+  var ex=editId?LN_LOANS.find(function(l){return l.id===editId;}):null;
+  if(editId&&!ex){ toast('Loan not found','warning'); return; }
+  if(ex) dir=ex.direction;
   var isTaken=(dir==='taken');
   var elig=LN_PARTIES.filter(function(p){return p.party_type==='both'||p.party_type===(isTaken?'creditor':'debtor');});
   if(!elig.length){ toast('Add a '+(isTaken?'creditor':'debtor')+' in the Parties tab first','warning'); return; }
-  document.getElementById('ln-sheet-title').textContent=isTaken?'New Loan Taken':'New Loan Given';
+  document.getElementById('ln-sheet-title').textContent=ex?'Edit Loan':(isTaken?'New Loan Taken':'New Loan Given');
   document.getElementById('ln-sheet-body').innerHTML=
     '<label class="flbl">'+(isTaken?'Lender (Creditor)':'Borrower (Debtor)')+' *</label><select class="fsel" id="ll-party">'+
-      elig.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('')+'</select>'+
-    '<label class="flbl">Principal Amount (&#8377;) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00">'+
-    '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
-    '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free">'+
+      elig.map(function(p){return '<option value="'+p.id+'"'+((ex&&ex.party_id===p.id)?' selected':'')+'>'+p.name+'</option>';}).join('')+'</select>'+
+    '<label class="flbl">Principal Amount (&#8377;) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00" value="'+(ex?(parseFloat(ex.principal)||''):'')+'">'+
+    '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+((ex&&ex.start_date)||new Date().toISOString().slice(0,10))+'">'+
+    '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free" value="'+(ex?(parseFloat(ex.interest_rate)||''):'')+'">'+
     '<label class="flbl">Interest Type</label><select class="fsel" id="ll-inttype">'+
-      '<option value="simple">Simple Interest</option>'+
-      '<option value="yearly">Compound \u2014 Yearly</option>'+
-      '<option value="halfyearly">Compound \u2014 Half Yearly</option>'+
-      '<option value="quarterly">Compound \u2014 Quarterly</option>'+
-      '<option value="monthly">Compound \u2014 Monthly</option>'+
+      ['simple|Simple Interest','yearly|Compound \u2014 Yearly','halfyearly|Compound \u2014 Half Yearly',
+       'quarterly|Compound \u2014 Quarterly','monthly|Compound \u2014 Monthly'].map(function(o){
+        var p=o.split('|');
+        return '<option value="'+p[0]+'"'+((ex&&(ex.interest_type||'simple')===p[0])?' selected':'')+'>'+p[1]+'</option>';
+      }).join('')+
     '</select>'+
-    '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional">'+
-    '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Working capital">'+
-    '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref">'+
+    '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional" value="'+((ex&&ex.tenure_months)||'')+'">'+
+    '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Working capital" value="'+((ex&&ex.purpose)||'').replace(/"/g,'&quot;')+'">'+
+    '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref" value="'+((ex&&ex.reference)||'').replace(/"/g,'&quot;')+'">'+
     '<label class="flbl">Received / Paid Via</label>'+lnModeOptionsHtml('ll-mode')+
-    '<label class="flbl">Remarks</label><input class="finp" id="ll-remarks">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="ll-remarks" value="'+((ex&&ex.remarks)||'').replace(/"/g,'&quot;')+'">'+
     '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">Posts to Accounts as '+
       (isTaken?'Dr <b>Bank/Cash</b> / Cr <b>Loans Payable</b> (liability)':'Dr <b>Loans Receivable</b> (asset) / Cr <b>Bank/Cash</b>')+'.</div>';
   document.getElementById('ln-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
-    '<button class="btn btn-navy" onclick="lnSaveLoan(\''+dir+'\')">Save Loan</button>';
+    '<button class="btn btn-navy" onclick="lnSaveLoan(\''+dir+'\''+(ex?',\''+ex.id+'\'':'')+')">'+(ex?'Update Loan':'Save Loan')+'</button>';
   openSheet('ov-ln','sh-ln');
 }
-async function lnSaveLoan(dir){
+async function lnSaveLoan(dir, editId){
   if(!lnCanEdit()){toast('No permission','warning');return;}
   var principal=parseFloat(gv('ll-principal'))||0;
   if(principal<=0){toast('Enter a valid principal amount','warning');return;}
@@ -16801,13 +16819,34 @@ async function lnSaveLoan(dir){
   var modeEmp=gv('ll-mode-emp')||null;
   if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
   var toPetty=(mode==='EmpBank'&&isTaken&&((document.getElementById('ll-topetty')||{}).checked));
-  try{
-    var res=await sbInsert('loans',{party_id:gv('ll-party'),direction:dir,principal:principal,
+  var fields={party_id:gv('ll-party'),direction:dir,principal:principal,
       start_date:gv('ll-date'),interest_rate:parseFloat(gv('ll-rate'))||0,
       interest_type:gv('ll-inttype')||'simple',
       tenure_months:parseInt(gv('ll-tenure'),10)||null,purpose:gv('ll-purpose')||null,
-      reference:gv('ll-ref')||null,mode:mode,mode_emp_id:modeEmp,to_petty_cash:toPetty,
-      remarks:gv('ll-remarks')||null,status:'active'});
+      reference:gv('ll-ref')||null,mode:mode,mode_emp_id:modeEmp,
+      remarks:gv('ll-remarks')||null};
+  try{
+    if(editId){
+      // Editing: replace the loan's own GL entry so the ledger matches the
+      // revised amount/date/party. Repayment and interest vouchers are
+      // untouched — they are separate transactions with their own records.
+      await sbUpdate('loans', editId, fields);
+      var idx=LN_LOANS.findIndex(function(l){return l.id===editId;});
+      if(idx>-1) LN_LOANS[idx]=Object.assign({},LN_LOANS[idx],fields);
+      var cur=LN_LOANS[idx]||{};
+      if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(editId);
+      if(typeof accAutoPost==='function'){
+        var cc=cur.to_petty_cash?'1101':lnCashCode(mode);
+        accAutoPost({type:isTaken?'Receipt':'Payment', date:fields.start_date, partyName:lnPartyName(fields.party_id),
+          debitCode:isTaken?cc:'1401', creditCode:isTaken?'2201':cc, amount:principal,
+          narration:(isTaken?'Loan taken from ':'Loan given to ')+lnPartyName(fields.party_id)+(fields.purpose?' \u2014 '+fields.purpose:''),
+          sourceType:'loan', sourceId:editId});
+      }
+      closeSheet('ov-ln','sh-ln'); lnRender(); toast('Loan updated','success');
+      return;
+    }
+    fields.to_petty_cash=toPetty; fields.status='active';
+    var res=await sbInsert('loans',fields);
     var saved=(res&&res[0])?res[0]:null;
     if(saved){
       LN_LOANS.unshift(saved);
