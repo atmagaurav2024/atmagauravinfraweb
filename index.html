@@ -16644,7 +16644,14 @@ function lnRender(){
   var c=document.getElementById('ln-content'); if(!c)return;
   if(LN_TAB==='parties') return lnRenderParties();
   var dir=(LN_TAB==='taken')?'taken':'given';
-  var loans=LN_LOANS.filter(function(l){return l.direction===dir;});
+  // Newest loans first by start date; blank dates sort last. Falls back to
+  // created_at so same-day loans keep a stable, predictable order.
+  var loans=LN_LOANS.filter(function(l){return l.direction===dir;})
+    .slice().sort(function(a,b){
+      var da=String(a.start_date||''), db=String(b.start_date||'');
+      if(da!==db) return (db||'0').localeCompare(da||'0');
+      return String(b.created_at||'').localeCompare(String(a.created_at||''));
+    });
   var totPrin=0, totOut=0, totInt=0, totAccr=0, totDue=0;
   loans.forEach(function(l){ var s=lnLoanStats(l.id); totPrin+=s.principal; totOut+=s.outstanding; totInt+=s.interest; totAccr+=s.accrued; totDue+=s.intDue; });
   var isTaken=(dir==='taken');
@@ -17000,7 +17007,14 @@ async function lnDelTxn(id){
 
 function lnExportData(){
   var dir=(LN_TAB==='given')?'given':'taken';
-  var loans=LN_LOANS.filter(function(l){return l.direction===dir;});
+  // Newest loans first by start date; blank dates sort last. Falls back to
+  // created_at so same-day loans keep a stable, predictable order.
+  var loans=LN_LOANS.filter(function(l){return l.direction===dir;})
+    .slice().sort(function(a,b){
+      var da=String(a.start_date||''), db=String(b.start_date||'');
+      if(da!==db) return (db||'0').localeCompare(da||'0');
+      return String(b.created_at||'').localeCompare(String(a.created_at||''));
+    });
   var header=['Party','Principal','Start Date','Rate %','Interest Type','Tenure','Purpose','Repaid','Outstanding','Int Accrued','Int Settled','Int Due','Reference'];
   var rows=loans.map(function(l){
     var s=lnLoanStats(l.id);
