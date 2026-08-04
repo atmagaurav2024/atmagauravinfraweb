@@ -16562,6 +16562,16 @@ function lnPartyName(id){ var p=LN_PARTIES.find(function(x){return x.id===id;});
 // Day-wise simple interest on the reducing outstanding balance: walks each
 // repayment in date order, accruing interest on the balance that actually
 // stood during each period, then up to today. Uses a 365-day year.
+var LN_INT_TYPES={simple:'Simple Interest', yearly:'Compound (Yearly)', halfyearly:'Compound (Half Yearly)',
+  quarterly:'Compound (Quarterly)', monthly:'Compound (Monthly)'};
+// Compounding periods per year; simple interest has none.
+var LN_INT_FREQ={yearly:1, halfyearly:2, quarterly:4, monthly:12};
+
+// Interest accrued to date on the reducing outstanding balance.
+// Simple: balance x rate x days/365 for each period the balance stood.
+// Compound: the same day-count walk, but at each compounding date the
+// interest earned so far is added to the balance, so subsequent interest
+// is charged on interest too. Repayments reduce the balance on their date.
 function lnAccruedInterest(loan){
   var rate=parseFloat(loan.interest_rate)||0;
   if(rate<=0) return 0;
@@ -16571,22 +16581,51 @@ function lnAccruedInterest(loan){
   var today=new Date(new Date().toISOString().slice(0,10)+'T00:00:00');
   if(today<d0) return 0;
 
-  var reps=LN_TXNS.filter(function(t){return t.loan_id===loan.id && t.txn_type==='repayment';})
-    .slice().sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));});
+  var type=loan.interest_type||'simple';
+  var freq=LN_INT_FREQ[type]||0;
 
-  var bal=parseFloat(loan.principal)||0;
-  var cursor=d0, accrued=0;
-  for(var i=0;i<reps.length;i++){
-    var rd=new Date(String(reps[i].date)+'T00:00:00');
-    if(isNaN(rd)||rd<=cursor){ bal-=(parseFloat(reps[i].amount)||0); continue; }
-    if(rd>today) break;
-    var days=Math.round((rd-cursor)/dayMs);
-    if(days>0&&bal>0) accrued += bal*(rate/100)*(days/365);
-    bal-=(parseFloat(reps[i].amount)||0);
-    cursor=rd;
+  // Build the event timeline: repayments, plus compounding dates if any
+  var events=LN_TXNS.filter(function(t){return t.loan_id===loan.id && t.txn_type==='repayment';})
+    .map(function(t){return {date:new Date(String(t.date)+'T00:00:00'), kind:'repay', amt:parseFloat(t.amount)||0};})
+    .filter(function(e){return !isNaN(e.date);});
+
+  if(freq>0){
+    var stepMonths=12/freq;
+    var c=new Date(d0.getTime());
+    for(var g=0; g<400; g++){
+      c=new Date(c.getFullYear(), c.getMonth()+stepMonths, c.getDate());
+      if(c>today) break;
+      events.push({date:new Date(c.getTime()), kind:'compound'});
+    }
   }
-  var lastDays=Math.round((today-cursor)/dayMs);
-  if(lastDays>0&&bal>0) accrued += bal*(rate/100)*(lastDays/365);
+  events.sort(function(a,b){
+    var d=a.date-b.date;
+    if(d!==0) return d;
+    return a.kind==='repay'?-1:1;   // apply repayment before compounding same-day
+  });
+
+  var bal=parseFloat(loan.principal)||0;   // includes capitalised interest once compounded
+  var pending=0;                            // interest accrued but not yet capitalised
+  var accrued=0;                            // total interest accrued
+  var cursor=d0;
+
+  var accrueTo=function(to){
+    var days=Math.round((to-cursor)/dayMs);
+    if(days>0&&bal>0){
+      var amt=bal*(rate/100)*(days/365);
+      accrued+=amt; pending+=amt;
+    }
+    cursor=to;
+  };
+
+  for(var i=0;i<events.length;i++){
+    var e=events[i];
+    if(e.date>today) break;
+    if(e.date>cursor) accrueTo(e.date);
+    if(e.kind==='repay'){ bal-=e.amt; }
+    else { bal+=pending; pending=0; }   // capitalise
+  }
+  accrueTo(today);
   return accrued>0?accrued:0;
 }
 
@@ -16635,7 +16674,7 @@ function lnRender(){
           '<div style="flex:1;">'+
             '<div style="font-size:13px;font-weight:800;">'+lnPartyName(l.party_id)+'</div>'+
             '<div style="font-size:10px;color:var(--text3);">'+(l.purpose||'\u2014')+(l.reference?' \u00b7 Ref: '+l.reference:'')+'</div>'+
-            '<div style="font-size:10px;color:var(--text3);">'+(l.mode==='EmpBank'?'\ud83d\udc64 via '+lnEmpName(l.mode_emp_id)+'\u2019s a/c'+(l.to_petty_cash?' \ud83d\udcb5 petty cash':'')+' \u00b7 ':'')+'From '+fmtDate(l.start_date)+(l.interest_rate?' \u00b7 '+l.interest_rate+'% p.a.':' \u00b7 Interest-free')+(l.tenure_months?' \u00b7 '+l.tenure_months+' months':'')+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">'+(l.mode==='EmpBank'?'\ud83d\udc64 via '+lnEmpName(l.mode_emp_id)+'\u2019s a/c'+(l.to_petty_cash?' \ud83d\udcb5 petty cash':'')+' \u00b7 ':'')+'From '+fmtDate(l.start_date)+(l.interest_rate?' \u00b7 '+l.interest_rate+'% p.a. '+(LN_INT_TYPES[l.interest_type||'simple']||'')  :' \u00b7 Interest-free')+(l.tenure_months?' \u00b7 '+l.tenure_months+' months':'')+'</div>'+
           '</div>'+
           '<div style="text-align:right;flex-shrink:0;">'+
             '<div style="font-size:14px;font-weight:900;color:'+accent+';">'+fmtINR(st.outstanding)+'</div>'+
@@ -16734,6 +16773,13 @@ function lnOpenLoan(dir){
     '<label class="flbl">Principal Amount (&#8377;) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00">'+
     '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free">'+
+    '<label class="flbl">Interest Type</label><select class="fsel" id="ll-inttype">'+
+      '<option value="simple">Simple Interest</option>'+
+      '<option value="yearly">Compound \u2014 Yearly</option>'+
+      '<option value="halfyearly">Compound \u2014 Half Yearly</option>'+
+      '<option value="quarterly">Compound \u2014 Quarterly</option>'+
+      '<option value="monthly">Compound \u2014 Monthly</option>'+
+    '</select>'+
     '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional">'+
     '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Working capital">'+
     '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref">'+
@@ -16758,6 +16804,7 @@ async function lnSaveLoan(dir){
   try{
     var res=await sbInsert('loans',{party_id:gv('ll-party'),direction:dir,principal:principal,
       start_date:gv('ll-date'),interest_rate:parseFloat(gv('ll-rate'))||0,
+      interest_type:gv('ll-inttype')||'simple',
       tenure_months:parseInt(gv('ll-tenure'),10)||null,purpose:gv('ll-purpose')||null,
       reference:gv('ll-ref')||null,mode:mode,mode_emp_id:modeEmp,to_petty_cash:toPetty,
       remarks:gv('ll-remarks')||null,status:'active'});
@@ -16819,7 +16866,7 @@ function lnOpenTxn(loanId,type){
       '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b>'+
       (isInt?'<br>Accrued to date: <b>'+fmtINR(st.accrued)+'</b> \u00b7 already '+(isTaken?'paid':'received')+': '+fmtINR(st.interest)+
         '<br><span style="color:#C62828;font-weight:800;">Due now: '+fmtINR(st.intDue)+'</span>'+
-        '<div style="font-size:10px;color:var(--text3);margin-top:4px;">'+(parseFloat(loan.interest_rate)||0)+'% p.a., simple interest on the reducing balance from '+fmtDate(loan.start_date)+'.</div>':'')+
+        '<div style="font-size:10px;color:var(--text3);margin-top:4px;">'+(parseFloat(loan.interest_rate)||0)+'% p.a. \u00b7 '+(LN_INT_TYPES[loan.interest_type||'simple']||'Simple Interest')+', on the reducing balance from '+fmtDate(loan.start_date)+'.</div>':'')+
     '</div>'+
     '<label class="flbl">Amount (&#8377;) *</label><input class="finp" id="lt-amount" type="number" step="0.01" placeholder="0.00" value="'+(isInt&&st.intDue>0.5?st.intDue.toFixed(2):'')+'">'+
     '<label class="flbl">Date *</label><input class="finp" id="lt-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
@@ -16888,15 +16935,16 @@ async function lnDelTxn(id){
 function lnExportData(){
   var dir=(LN_TAB==='given')?'given':'taken';
   var loans=LN_LOANS.filter(function(l){return l.direction===dir;});
-  var header=['Party','Principal','Start Date','Rate %','Tenure','Purpose','Repaid','Outstanding','Int Accrued','Int Settled','Int Due','Reference'];
+  var header=['Party','Principal','Start Date','Rate %','Interest Type','Tenure','Purpose','Repaid','Outstanding','Int Accrued','Int Settled','Int Due','Reference'];
   var rows=loans.map(function(l){
     var s=lnLoanStats(l.id);
     return [lnPartyName(l.party_id),Math.round(s.principal),fmtDate(l.start_date),l.interest_rate||0,
+      (LN_INT_TYPES[l.interest_type||'simple']||'Simple Interest'),
       l.tenure_months||'',l.purpose||'',Math.round(s.repaid),Math.round(s.outstanding),
       Math.round(s.accrued),Math.round(s.interest),Math.round(s.intDue),l.reference||''];
   });
   var t=function(f){return loans.reduce(function(a,l){return a+lnLoanStats(l.id)[f];},0);};
-  rows.push(['TOTAL',Math.round(t('principal')),'','','','',Math.round(t('repaid')),Math.round(t('outstanding')),
+  rows.push(['TOTAL',Math.round(t('principal')),'','','','','',Math.round(t('repaid')),Math.round(t('outstanding')),
     Math.round(t('accrued')),Math.round(t('interest')),Math.round(t('intDue')),'']);
   return {title:(dir==='taken'?'Loans Taken':'Loans Given'), header:header, rows:rows};
 }
@@ -16908,7 +16956,7 @@ function lnExportExcel(){
 function lnExportPDF(){
   var d=lnExportData();
   if(d.rows.length<=1){toast('Nothing to export','warning');return;}
-  d.rows=d.rows.map(function(r){ [1,6,7,8,9,10].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
+  d.rows=d.rows.map(function(r){ [1,7,8,9,10,11].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
   accExportPDF(d.title, d.header, d.rows);
 }
 
