@@ -16559,13 +16559,46 @@ function lnCashCode(mode){ return mode==='Cash'?'1001':(mode==='EmpBank'?'1102':
 function lnPartyName(id){ var p=LN_PARTIES.find(function(x){return x.id===id;}); return p?p.name:'\u2014'; }
 // Outstanding = principal disbursed less repayments of principal. Interest
 // is tracked separately so it never inflates the principal balance.
+// Day-wise simple interest on the reducing outstanding balance: walks each
+// repayment in date order, accruing interest on the balance that actually
+// stood during each period, then up to today. Uses a 365-day year.
+function lnAccruedInterest(loan){
+  var rate=parseFloat(loan.interest_rate)||0;
+  if(rate<=0) return 0;
+  var start=loan.start_date; if(!start) return 0;
+  var dayMs=86400000;
+  var d0=new Date(start+'T00:00:00'); if(isNaN(d0)) return 0;
+  var today=new Date(new Date().toISOString().slice(0,10)+'T00:00:00');
+  if(today<d0) return 0;
+
+  var reps=LN_TXNS.filter(function(t){return t.loan_id===loan.id && t.txn_type==='repayment';})
+    .slice().sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));});
+
+  var bal=parseFloat(loan.principal)||0;
+  var cursor=d0, accrued=0;
+  for(var i=0;i<reps.length;i++){
+    var rd=new Date(String(reps[i].date)+'T00:00:00');
+    if(isNaN(rd)||rd<=cursor){ bal-=(parseFloat(reps[i].amount)||0); continue; }
+    if(rd>today) break;
+    var days=Math.round((rd-cursor)/dayMs);
+    if(days>0&&bal>0) accrued += bal*(rate/100)*(days/365);
+    bal-=(parseFloat(reps[i].amount)||0);
+    cursor=rd;
+  }
+  var lastDays=Math.round((today-cursor)/dayMs);
+  if(lastDays>0&&bal>0) accrued += bal*(rate/100)*(lastDays/365);
+  return accrued>0?accrued:0;
+}
+
 function lnLoanStats(loanId){
   var t=LN_TXNS.filter(function(x){return x.loan_id===loanId;});
   var repaid=t.filter(function(x){return x.txn_type==='repayment';}).reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
   var interest=t.filter(function(x){return x.txn_type==='interest';}).reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
   var loan=LN_LOANS.find(function(x){return x.id===loanId;})||{};
   var principal=parseFloat(loan.principal)||0;
-  return {principal:principal, repaid:repaid, interest:interest, outstanding:principal-repaid, count:t.length};
+  var accrued=lnAccruedInterest(loan);
+  return {principal:principal, repaid:repaid, interest:interest, outstanding:principal-repaid,
+    accrued:accrued, intDue:Math.max(0,accrued-interest), count:t.length};
 }
 
 function lnRender(){
@@ -16573,16 +16606,17 @@ function lnRender(){
   if(LN_TAB==='parties') return lnRenderParties();
   var dir=(LN_TAB==='taken')?'taken':'given';
   var loans=LN_LOANS.filter(function(l){return l.direction===dir;});
-  var totPrin=0, totOut=0, totInt=0;
-  loans.forEach(function(l){ var s=lnLoanStats(l.id); totPrin+=s.principal; totOut+=s.outstanding; totInt+=s.interest; });
+  var totPrin=0, totOut=0, totInt=0, totAccr=0, totDue=0;
+  loans.forEach(function(l){ var s=lnLoanStats(l.id); totPrin+=s.principal; totOut+=s.outstanding; totInt+=s.interest; totAccr+=s.accrued; totDue+=s.intDue; });
   var isTaken=(dir==='taken');
   var accent=isTaken?'#C62828':'#2E7D32';
 
   c.innerHTML=
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'+
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;">'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL '+(isTaken?'BORROWED':'LENT')+'</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(totPrin)+'</div></div>'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTSTANDING</div><div style="font-size:15px;font-weight:900;color:'+accent+';">'+fmtINR(totOut)+'</div></div>'+
-      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST '+(isTaken?'PAID':'EARNED')+'</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+fmtINR(totInt)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST ACCRUED</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+fmtINR(totAccr)+'</div><div style="font-size:9px;color:var(--text3);">'+fmtINR(totInt)+' '+(isTaken?'paid':'received')+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST '+(isTaken?'PAYABLE':'RECEIVABLE')+'</div><div style="font-size:15px;font-weight:900;color:'+(totDue>0.5?'#C62828':'#2E7D32')+';">'+fmtINR(totDue)+'</div><div style="font-size:9px;color:var(--text3);">as on '+fmtDate(new Date().toISOString().slice(0,10))+'</div></div>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
       '<div style="font-size:14px;font-weight:800;white-space:nowrap;">'+(isTaken?'Loans Taken':'Loans Given')+'</div>'+
@@ -16610,7 +16644,8 @@ function lnRender(){
         '</div>'+
         '<div style="height:4px;background:#E0F2F1;"><div style="height:100%;width:'+pct+'%;background:#00695C;"></div></div>'+
         '<div style="padding:4px 14px;font-size:10px;color:var(--text3);background:#F3F4F6;display:flex;justify-content:space-between;">'+
-          '<span>Repaid: '+fmtINR(st.repaid)+' \u00b7 Interest: '+fmtINR(st.interest)+'</span><span>'+pct+'% repaid</span>'+
+          '<span>Repaid: '+fmtINR(st.repaid)+' \u00b7 Int accrued: '+fmtINR(st.accrued)+' \u00b7 '+(isTaken?'paid':'recd')+': '+fmtINR(st.interest)+
+            (st.intDue>0.5?' \u00b7 <b style="color:#C62828;">due '+fmtINR(st.intDue)+'</b>':'')+'</span><span>'+pct+'% repaid</span>'+
         '</div>'+
         '<div style="padding:8px 14px;">'+
           (txns.length?txns.map(function(t){
@@ -16781,8 +16816,12 @@ function lnOpenTxn(loanId,type){
   document.getElementById('ln-sheet-title').textContent=isInt?('Interest '+(isTaken?'Paid':'Received')):(isTaken?'Repayment Made':'Repayment Received');
   document.getElementById('ln-sheet-body').innerHTML=
     '<div style="background:#E0F2F1;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;">'+
-      '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b></div>'+
-    '<label class="flbl">Amount (&#8377;) *</label><input class="finp" id="lt-amount" type="number" step="0.01" placeholder="0.00">'+
+      '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b>'+
+      (isInt?'<br>Accrued to date: <b>'+fmtINR(st.accrued)+'</b> \u00b7 already '+(isTaken?'paid':'received')+': '+fmtINR(st.interest)+
+        '<br><span style="color:#C62828;font-weight:800;">Due now: '+fmtINR(st.intDue)+'</span>'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:4px;">'+(parseFloat(loan.interest_rate)||0)+'% p.a., simple interest on the reducing balance from '+fmtDate(loan.start_date)+'.</div>':'')+
+    '</div>'+
+    '<label class="flbl">Amount (&#8377;) *</label><input class="finp" id="lt-amount" type="number" step="0.01" placeholder="0.00" value="'+(isInt&&st.intDue>0.5?st.intDue.toFixed(2):'')+'">'+
     '<label class="flbl">Date *</label><input class="finp" id="lt-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Mode</label>'+lnModeOptionsHtml('lt-mode')+
     '<label class="flbl">Reference</label><input class="finp" id="lt-ref">'+
@@ -16849,14 +16888,16 @@ async function lnDelTxn(id){
 function lnExportData(){
   var dir=(LN_TAB==='given')?'given':'taken';
   var loans=LN_LOANS.filter(function(l){return l.direction===dir;});
-  var header=['Party','Principal','Start Date','Rate %','Tenure','Purpose','Repaid','Interest','Outstanding','Reference'];
+  var header=['Party','Principal','Start Date','Rate %','Tenure','Purpose','Repaid','Outstanding','Int Accrued','Int Settled','Int Due','Reference'];
   var rows=loans.map(function(l){
     var s=lnLoanStats(l.id);
     return [lnPartyName(l.party_id),Math.round(s.principal),fmtDate(l.start_date),l.interest_rate||0,
-      l.tenure_months||'',l.purpose||'',Math.round(s.repaid),Math.round(s.interest),Math.round(s.outstanding),l.reference||''];
+      l.tenure_months||'',l.purpose||'',Math.round(s.repaid),Math.round(s.outstanding),
+      Math.round(s.accrued),Math.round(s.interest),Math.round(s.intDue),l.reference||''];
   });
   var t=function(f){return loans.reduce(function(a,l){return a+lnLoanStats(l.id)[f];},0);};
-  rows.push(['TOTAL',Math.round(t('principal')),'','','','',Math.round(t('repaid')),Math.round(t('interest')),Math.round(t('outstanding')),'']);
+  rows.push(['TOTAL',Math.round(t('principal')),'','','','',Math.round(t('repaid')),Math.round(t('outstanding')),
+    Math.round(t('accrued')),Math.round(t('interest')),Math.round(t('intDue')),'']);
   return {title:(dir==='taken'?'Loans Taken':'Loans Given'), header:header, rows:rows};
 }
 function lnExportExcel(){
@@ -16867,7 +16908,7 @@ function lnExportExcel(){
 function lnExportPDF(){
   var d=lnExportData();
   if(d.rows.length<=1){toast('Nothing to export','warning');return;}
-  d.rows=d.rows.map(function(r){ [1,6,7,8].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
+  d.rows=d.rows.map(function(r){ [1,6,7,8,9,10].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
   accExportPDF(d.title, d.header, d.rows);
 }
 
