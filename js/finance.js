@@ -363,7 +363,14 @@ async function pcSaveExpense(){
 }
 
 async function pcDeleteEntry(id,type){
-  if(!confirm('Delete this entry?'))return;
+  // Warn if this funding came from a loan — deleting it here leaves the
+  // loan itself in place, so the two records would disagree.
+  var row=(type==='in'?PC_IN:PC_EXP).find(function(x){return x.id===id;});
+  if(row&&row.funded_by_type==='loan'){
+    if(!confirm('This funding entry was created automatically from a loan.\n\nDeleting it here removes the petty cash credit but keeps the loan record. To remove both, delete the loan in the Loans module instead.\n\nDelete anyway?'))return;
+  } else {
+    if(!confirm('Delete this entry?'))return;
+  }
   var table=type==='in'?'petty_cash_in':'petty_cash_expenses';
   try{
     await sbDelete(table,id);

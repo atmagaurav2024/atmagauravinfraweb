@@ -16861,7 +16861,8 @@ async function lnSaveLoan(dir, editId){
             await sbInsert('petty_cash_in',{emp_id:e.code,amount:principal,date:saved.start_date,
               project:'All Projects',purpose:'Loan from '+lnPartyName(saved.party_id)+(saved.purpose?' \u2014 '+saved.purpose:''),
               remarks:saved.reference?('Ref: '+saved.reference):null,
-              funded_by:'Loan \u2014 '+lnPartyName(saved.party_id), funded_by_type:'loan', funded_by_emp:null});
+              funded_by:'Loan \u2014 '+lnPartyName(saved.party_id), funded_by_type:'loan', funded_by_emp:null,
+              loan_id:saved.id});
           }catch(pe){ console.warn('petty cash funding entry failed', pe); toast('Loan saved, but the petty cash entry failed: '+pe.message,'warning'); }
         } else {
           toast('Loan saved, but no employee code found \u2014 petty cash entry skipped','warning');
@@ -16881,11 +16882,37 @@ async function lnSaveLoan(dir, editId){
 }
 async function lnDelLoan(id){
   if(!lnCanDelete()){toast('No permission','warning');return;}
+  var loan=LN_LOANS.find(function(l){return l.id===id;})||{};
   var n=LN_TXNS.filter(function(t){return t.loan_id===id;}).length;
-  if(!confirm('Delete this loan'+(n?' and its '+n+' transaction'+(n!==1?'s':''):'')+'? The related accounting entries will also be removed.'))return;
+  if(!confirm('Delete this loan'+(n?' and its '+n+' transaction'+(n!==1?'s':''):'')+'?'+
+    (loan.to_petty_cash?'\n\nThe petty cash funding entry created from this loan will also be removed, reducing that employee\u2019s petty cash balance.':'')+
+    '\n\nRelated accounting entries will also be removed.'))return;
   try{
     var kids=LN_TXNS.filter(function(t){return t.loan_id===id;});
     for(var i=0;i<kids.length;i++){ try{ await sbDelete('loan_transactions',kids[i].id); if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(kids[i].id); }catch(e){} }
+
+    // Remove the petty cash funding entry this loan generated. Matched on
+    // loan_id; falls back to the legacy signature (employee + date + amount
+    // + funded_by_type) for rows created before loan_id was stored.
+    if(loan.to_petty_cash){
+      try{
+        var pcRows=await sbFetch('petty_cash_in',{select:'*',filter:'loan_id=eq.'+id});
+        if(!Array.isArray(pcRows)||!pcRows.length){
+          var e=LN_EMPS.find(function(x){return x.id===loan.mode_emp_id;});
+          var all=await sbFetch('petty_cash_in',{select:'*',filter:'funded_by_type=eq.loan'});
+          pcRows=(all||[]).filter(function(r){
+            return (!e||r.emp_id===e.code) && r.date===loan.start_date &&
+              Math.abs((parseFloat(r.amount)||0)-(parseFloat(loan.principal)||0))<0.01;
+          });
+        }
+        for(var k=0;k<pcRows.length;k++){ await sbDelete('petty_cash_in',pcRows[k].id); }
+        if(pcRows.length && typeof PC_IN!=='undefined' && Array.isArray(PC_IN)){
+          var gone={}; pcRows.forEach(function(r){gone[r.id]=1;});
+          PC_IN=PC_IN.filter(function(r){return !gone[r.id];});
+        }
+      }catch(pe){ console.warn('petty cash cleanup failed', pe); toast('Loan deleted, but its petty cash entry could not be removed \u2014 delete it manually in Petty Cash','warning'); }
+    }
+
     await sbDelete('loans',id);
     if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(id);
     LN_TXNS=LN_TXNS.filter(function(t){return t.loan_id!==id;});
@@ -21360,8 +21387,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260802h"></script>
-<script src="js/employee.js?v=20260802h"></script>
-<script src="js/projects.js?v=20260802h"></script>
-<script src="js/finance.js?v=20260802h"></script>
+<script src="js/registry.js?v=20260802i"></script>
+<script src="js/employee.js?v=20260802i"></script>
+<script src="js/projects.js?v=20260802i"></script>
+<script src="js/finance.js?v=20260802i"></script>
 </html>
