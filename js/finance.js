@@ -168,8 +168,9 @@ function pcRenderList(){
       '<div style="display:flex;align-items:center;gap:10px;">'+
         '<div style="width:36px;height:36px;border-radius:10px;background:'+col+'20;display:flex;align-items:center;justify-content:center;font-size:16px;">'+(isIn?'💰':'🧾')+'</div>'+
         '<div>'+
-          '<div style="font-size:13px;font-weight:800;">'+(item.category||item.description||'Entry')+'</div>'+
+          '<div style="font-size:13px;font-weight:800;">'+(item.category||item.description||item.purpose||'Entry')+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(pcEmpName(item.emp_id))+(item.project?' · '+item.project:'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
+          (isIn&&item.funded_by?'<div style="font-size:10px;color:#1565C0;font-weight:700;">'+(item.funded_by_type==='transfer_out'?'&#8594; to '+pcEmpName(item.funded_by_emp):'&#8592; from '+item.funded_by)+'</div>':'')+
         '</div>'+
       '</div>'+
       '<div style="text-align:right;">'+
@@ -180,6 +181,12 @@ function pcRenderList(){
   }).join('');
 }
 
+function pcToggleSrcEmp(){
+  var v=(document.getElementById('pci-src')||{}).value;
+  var w=document.getElementById('pci-src-emp-wrap');
+  if(w) w.style.display=(v==='emp')?'':'none';
+}
+
 function pcOpenCashIn(){
   openSheet('ov-pc','sh-pc');
   document.getElementById('pc-sheet-body').innerHTML=
@@ -187,6 +194,17 @@ function pcOpenCashIn(){
     '<label class="flbl">Employee *</label><select class="fsel" id="pci-emp"><option value="">Select employee...</option>'+
       PC_EMPS.map(function(e){return '<option value="'+e.empId+'">'+e.name+(e.dept?' ('+e.dept+')':'')+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pci-amount" type="number" placeholder="0">'+
+    '<label class="flbl">Funded By *</label><select class="fsel" id="pci-src" onchange="pcToggleSrcEmp()">'+
+      '<option value="bank">Company — Bank</option>'+
+      '<option value="cash">Company — Cash in Hand</option>'+
+      '<option value="emp">Another Employee (transfer)</option>'+
+    '</select>'+
+    '<div id="pci-src-emp-wrap" style="display:none;">'+
+      '<label class="flbl">Transferred From *</label><select class="fsel" id="pci-src-emp"><option value="">Select employee...</option>'+
+        PC_EMPS.map(function(e){return '<option value="'+e.empId+'">'+e.name+(e.dept?' ('+e.dept+')':'')+'</option>';}).join('')+'</select>'+
+      '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">The sender\'s petty cash balance will be reduced by the same amount.</div>'+
+    '</div>'+
+    '<label class="flbl">Date</label><input class="finp" id="pci-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Project</label><select class="fsel" id="pci-proj"><option value="">All Projects</option>'+PC_PROJS.map(function(p){return '<option value="'+p.name+'">'+p.name+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Purpose</label><input class="finp" id="pci-purpose" placeholder="Purpose of funding">'+
     '<label class="flbl">Remarks</label><input class="finp" id="pci-remarks" placeholder="Remarks">';
@@ -199,17 +217,41 @@ async function pcSaveCashIn(){
   var emp=gv('pci-emp'), amount=parseFloat(gv('pci-amount'));
   if(!emp){toast('Select employee','warning');return;}
   if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
+  var src=gv('pci-src')||'bank';
+  var srcEmp=gv('pci-src-emp');
+  if(src==='emp'){
+    if(!srcEmp){toast('Select the employee transferring the funds','warning');return;}
+    if(srcEmp===emp){toast('Cannot transfer to the same employee','warning');return;}
+  }
+  var nameOf=function(id){ return (PC_EMPS.find(function(x){return x.empId===id;})||{}).name||id; };
+  var empName=nameOf(emp);
+  var srcLabel = src==='bank' ? 'Company — Bank' : src==='cash' ? 'Company — Cash in Hand' : nameOf(srcEmp);
   try{
-    var today=new Date().toISOString().slice(0,10);
-    var res=await sbInsert('petty_cash_in',{emp_id:emp,amount:amount,date:today,project:gv('pci-proj')||'All Projects',purpose:gv('pci-purpose'),remarks:gv('pci-remarks')});
-    closeSheet('ov-pc','sh-pc');await initPettyCash();toast('Employee funded: '+pcFmt(amount),'success');
+    var when=gv('pci-date')||new Date().toISOString().slice(0,10);
+    var res=await sbInsert('petty_cash_in',{emp_id:emp,amount:amount,date:when,
+      project:gv('pci-proj')||'All Projects',purpose:gv('pci-purpose'),remarks:gv('pci-remarks'),
+      funded_by:srcLabel, funded_by_type:src, funded_by_emp:(src==='emp'?srcEmp:null)});
 
-    // Auto-post to Accounts: Dr Petty Cash in Hand, Cr Bank
-    if(res&&res[0]&&typeof accAutoPost==='function'){
-      var empName=(PC_EMPS.find(function(x){return x.empId===emp;})||{}).name||emp;
-      accAutoPost({type:'Contra', date:today, partyName:empName,
-        debitCode:'1101', creditCode:'1002', amount:amount,
-        narration:'Petty cash funded to '+empName+(gv('pci-purpose')?' — '+gv('pci-purpose'):''),
+    // Employee-to-employee transfer: the company's total petty cash is
+    // unchanged, so the sender must be debited by the same amount —
+    // otherwise the money would appear twice across the two balances.
+    if(src==='emp'){
+      await sbInsert('petty_cash_in',{emp_id:srcEmp,amount:-amount,date:when,
+        project:gv('pci-proj')||'All Projects',
+        purpose:'Transfer to '+empName+(gv('pci-purpose')?' — '+gv('pci-purpose'):''),
+        remarks:gv('pci-remarks'), funded_by:'Transfer out', funded_by_type:'transfer_out', funded_by_emp:emp});
+    }
+
+    closeSheet('ov-pc','sh-pc');await initPettyCash();
+    toast(src==='emp'?('Transferred '+pcFmt(amount)+' from '+srcLabel+' to '+empName):('Employee funded: '+pcFmt(amount)),'success');
+
+    // GL: Dr Petty Cash in Hand / Cr Bank or Cash. An employee-to-employee
+    // transfer moves cash within Petty Cash in Hand, so there is nothing to
+    // post at company level — the ledger balance is unchanged.
+    if(src!=='emp' && res&&res[0]&&typeof accAutoPost==='function'){
+      accAutoPost({type:'Contra', date:when, partyName:empName,
+        debitCode:'1101', creditCode:(src==='cash'?'1001':'1002'), amount:amount,
+        narration:'Petty cash funded to '+empName+' from '+srcLabel+(gv('pci-purpose')?' — '+gv('pci-purpose'):''),
         sourceType:'petty_cash_in', sourceId:res[0].id});
     }
   }catch(e){toast('Error: '+e.message,'error');}
