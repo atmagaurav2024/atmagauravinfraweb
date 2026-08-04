@@ -18487,6 +18487,9 @@ async function accPostMissing(){
 }
 
 
+var ACC_DASH_ALL=false;
+function accDashToggleAll(){ ACC_DASH_ALL=!ACC_DASH_ALL; accDash(); }
+
 function accDash(){
   var cont=document.getElementById('acc-content');if(!cont)return;
   // Personal Sales are excluded from the business dashboard entirely —
@@ -18508,7 +18511,14 @@ function accDash(){
         '<div style="font-size:20px;font-weight:900;color:var(--green);margin-top:4px;">'+fmtINR(totalReceipts)+'</div></div>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;">'+
-      '<div style="font-size:14px;font-weight:800;white-space:nowrap;">Recent Vouchers</div>'+
+      '<div style="white-space:nowrap;">'+
+        '<span style="font-size:14px;font-weight:800;">Vouchers</span>'+
+        '<div style="font-size:9.5px;color:var(--text3);">'+
+          (BIZ.length>20?(ACC_DASH_ALL?('all '+BIZ.length):('latest 20 of '+BIZ.length))
+            :(BIZ.length+' total'))+
+          (BIZ.length>20?' \u00b7 <span onclick="accDashToggleAll()" style="color:#1565C0;font-weight:800;cursor:pointer;">'+(ACC_DASH_ALL?'show latest 20':'show all')+'</span>':'')+
+        '</div>'+
+      '</div>'+
       '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;">'+
         '<button onclick="accVouchersExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
         '<button onclick="accVouchersPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
@@ -18517,7 +18527,7 @@ function accDash(){
       '</div></div>'+
     (!BIZ.length?'<div style="text-align:center;padding:30px;color:var(--text3);">No vouchers yet</div>':
     '<div class="table-card"><table class="att-table"><thead><tr><th>Vou No</th><th>Date</th><th>Type</th><th>Party</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
-      BIZ.slice(0,20).map(function(v){
+      (ACC_DASH_ALL?BIZ:BIZ.slice(0,20)).map(function(v){
         var typeColors={Payment:'vou-payment',Receipt:'vou-receipt',Purchase:'vou-purchase',Journal:'vou-journal',Contra:'vou-contra',Sales:'vou-receipt'};
         return '<tr><td><strong>'+v.vou_no+'</strong></td><td>'+fmtDate(v.date)+'</td>'+
           '<td><span class="vou-badge '+(typeColors[v.type]||'vou-journal')+'">'+v.type+'</span></td>'+
