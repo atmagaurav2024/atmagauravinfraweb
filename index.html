@@ -18407,14 +18407,31 @@ async function accBackfillHistorical(){
     for(var i=0;i<pettyIn.length;i++){
       var p=pettyIn[i]; if(isDone('petty_cash_in',p.id)) continue;
       var nm=empName[p.emp_id]||p.emp_id;
+      var amtIn=parseFloat(p.amount)||0;
+
+      // Funded out of a loan: the loan itself already posted Dr Petty Cash
+      // / Cr Loans Payable, so posting again here would double count both
+      // the petty cash and the source of the money.
+      if(p.funded_by_type==='loan' || p.loan_id) continue;
+
+      // Employee-to-employee transfers are recorded as a positive row on
+      // the receiver and a negative row on the sender. Company petty cash
+      // is unchanged, so there is nothing to post at GL level.
+      if(p.funded_by_type==='emp' || p.funded_by_type==='transfer_out' || amtIn<0) continue;
+      if(amtIn<=0) continue;
+
+      // Credit the account the money actually came from, rather than
+      // assuming Bank for every funding.
+      var srcCode=(p.funded_by_type==='cash')?'1001':'1002';
       if(await accAutoPost({type:'Contra', date:p.date, partyName:nm,
-        debitCode:'1101', creditCode:'1002', amount:parseFloat(p.amount)||0,
-        narration:'Petty cash funded to '+nm+(p.purpose?' — '+p.purpose:''),
+        debitCode:'1101', creditCode:srcCode, amount:amtIn,
+        narration:'Petty cash funded to '+nm+(p.funded_by?' from '+p.funded_by:'')+(p.purpose?' — '+p.purpose:''),
         sourceType:'petty_cash_in', sourceId:p.id})) count++; else fail++;
     }
 
     for(var i=0;i<pettyExp.length;i++){
       var p=pettyExp[i]; if(isDone('petty_cash_expense',p.id)) continue;
+      if((parseFloat(p.amount)||0)<=0) continue;
       if(await accAutoPost({type:'Journal', date:p.date, partyName:p.description,
         debitCode:(typeof ACC_PETTY_CAT_CODES!=='undefined'&&ACC_PETTY_CAT_CODES[p.category])||'4110', creditCode:'1101', amount:parseFloat(p.amount)||0,
         narration:'Petty cash — '+p.category+' — '+p.description, sourceType:'petty_cash_expense', sourceId:p.id})) count++; else fail++;
@@ -18499,7 +18516,20 @@ async function accBackfillHistorical(){
     if(fail>0){
       toast('Backfill: '+count+' posted, '+fail+' FAILED'+(ACC_AUTOPOST_LAST_ERROR?' — '+ACC_AUTOPOST_LAST_ERROR:'')+'. See browser console for details.','error');
     } else {
-      toast((count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted')+(removed?' · '+removed+' orphaned voucher'+(removed!==1?'s':'')+' removed':''),'success');
+      // Report coverage so a source with zero rows is visibly empty rather
+      // than silently skipped — that is how gaps went unnoticed before.
+      var seen=[
+        ['Sales bills',salesBills.length],['Sales payments',salesPayments.length],
+        ['Purchase bills',workBills.length],['Purchase payments',workPayments.length],
+        ['Petty cash funding',pettyIn.length],['Petty cash expenses',pettyExp.length],
+        ['Other expenses',otherExp.length],['Company overheads',companyExp.length],
+        ['Loans',bfLoans.length],['Loan repayments/interest',bfLoanTxns.length]
+      ];
+      console.log('Backfill scanned:', seen.map(function(x){return x[0]+': '+x[1];}).join(' | '));
+      var empty=seen.filter(function(x){return !x[1];}).map(function(x){return x[0];});
+      toast((count?('Backfill complete — '+count+' voucher'+(count!==1?'s':'')+' posted'):'Nothing new to backfill — everything already posted')+
+        (removed?' · '+removed+' orphaned removed':'')+
+        (empty.length?' · no records found in: '+empty.join(', '):''),'success');
     }
     initAccounts();
   }catch(e){
