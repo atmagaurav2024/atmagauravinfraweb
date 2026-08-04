@@ -16687,6 +16687,7 @@ function lnRender(){
       '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;">'+
         '<button onclick="lnExportExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
         '<button onclick="lnExportPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
+        (lnCanEdit()?'<button onclick="lnProvideInterest()" title="Book interest accrued but not yet paid, so it appears as a liability (or receivable) in the Balance Sheet" style="background:#E65100;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#9878; Book Interest</button>':'')+
         (lnCanEdit()?'<button onclick="lnOpenLoan(\''+dir+'\')" style="background:#00695C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Loan</button>':'')+
       '</div>'+
     '</div>'+
@@ -17055,6 +17056,44 @@ function lgPDF(){
   if(d.rows.length<=1){toast('Nothing to export','warning');return;}
   d.rows=d.rows.map(function(r){ [3,4,5].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
   accExportPDF(d.title, d.header, d.rows);
+}
+
+// Books a provision for interest that has accrued but not yet been paid,
+// so the balance sheet shows the full obligation rather than only settled
+// interest. Taken: Dr Interest Expense / Cr Interest Payable. Given:
+// Dr Interest Receivable / Cr Interest Income. Idempotent per loan+date.
+async function lnProvideInterest(){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var asOn=new Date().toISOString().slice(0,10);
+  var items=[];
+  LN_LOANS.forEach(function(l){
+    var st=lnLoanStats(l.id, asOn);
+    // Interest already provided for this loan, so a re-run tops up only
+    var prov=ACC_VOUCHERS.filter(function(v){return v.source_type==='loan_interest_accrual'&&v.source_id===l.id;})
+      .reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);
+    var net=st.intDue-prov;
+    if(net>0.5) items.push({loan:l, amount:net, prov:prov, due:st.intDue});
+  });
+  if(!items.length){ toast('No unprovided interest \u2014 the books are already up to date','info'); return; }
+  var tot=items.reduce(function(a,x){return a+x.amount;},0);
+  if(!confirm('Book interest accrued but not yet paid, as on '+fmtDate(asOn)+'?\n\n'+
+    items.length+' loan'+(items.length!==1?'s':'')+' \u00b7 '+fmtINR(tot)+'\n\n'+
+    'Loans taken:  Dr Interest Expense / Cr Interest Payable\n'+
+    'Loans given:  Dr Interest Receivable / Cr Interest Income\n\n'+
+    'Already-provided amounts are excluded, so this can be run again later.')) return;
+
+  var ok=0, bad=0;
+  for(var i=0;i<items.length;i++){
+    var x=items[i], taken=(x.loan.direction==='taken');
+    var pn=lnPartyName(x.loan.party_id);
+    var done=await accAutoPost({type:'Journal', date:asOn, partyName:pn,
+      debitCode:taken?'4201':'1402', creditCode:taken?'2202':'3005', amount:x.amount,
+      narration:'Interest accrued to '+fmtDate(asOn)+' on loan of '+fmtDate(x.loan.start_date)+' \u00b7 '+pn,
+      sourceType:'loan_interest_accrual', sourceId:x.loan.id});
+    if(done) ok++; else bad++;
+  }
+  if(bad) toast(ok+' provided, '+bad+' failed'+(ACC_AUTOPOST_LAST_ERROR?' \u2014 '+ACC_AUTOPOST_LAST_ERROR:''),'warning');
+  else toast('Interest provision booked \u00b7 '+fmtINR(tot),'success');
 }
 
 function lnRenderParties(){
@@ -18110,9 +18149,11 @@ var ACC_DEFAULT_COA=[
   {code:'1201', name:'Sundry Debtors (Clients)', type:'Asset',     group:'Current Assets'},
   {code:'1301', name:'GST Input Credit (ITC)',   type:'Asset',     group:'Current Assets'},
   {code:'1401', name:'Loans & Advances Receivable',type:'Asset',    group:'Loans & Advances'},
+  {code:'1402', name:'Interest Receivable (Accrued)',type:'Asset',  group:'Loans & Advances'},
   {code:'2001', name:'Sundry Creditors (Vendors)',type:'Liability',group:'Current Liabilities'},
   {code:'2101', name:'GST Payable',              type:'Liability', group:'Duties & Taxes'},
   {code:'2201', name:'Loans Payable (Borrowings)',type:'Liability', group:'Loans (Liability)'},
+  {code:'2202', name:'Interest Payable (Accrued)',type:'Liability', group:'Loans (Liability)'},
   {code:'3001', name:'Sales Revenue (Contract Work)', type:'Income', group:'Direct Income'},
   {code:'3002', name:'Sales Bill Additions',     type:'Income',    group:'Direct Income'},
   {code:'3003', name:'Sales Bill Deductions',    type:'Income',    group:'Direct Income'},
@@ -18270,11 +18311,13 @@ async function accBackfillHistorical(){
       sbFetch('petty_cash_in',{select:'*'}).catch(function(){return [];}),
       sbFetch('petty_cash_expenses',{select:'*'}).catch(function(){return [];}),
       sbFetch('other_expenses',{select:'*'}).catch(function(){return [];}),
-      sbFetch('company_expenses',{select:'*'}).catch(function(){return [];})
+      sbFetch('company_expenses',{select:'*'}).catch(function(){return [];}),
+      sbFetch('loans',{select:'*'}).catch(function(){return [];}),
+      sbFetch('loan_transactions',{select:'*'}).catch(function(){return [];})
     ]);
     var projects=r[0]||[], emps=r[1]||[], salesBills=r[2]||[], salesPayments=r[3]||[],
         workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[], otherExp=r[8]||[],
-        companyExp=r[9]||[];
+        companyExp=r[9]||[], bfLoans=r[10]||[], bfLoanTxns=r[11]||[];
     var projById={}; projects.forEach(function(p){ projById[p.id]=p; });
     var empName={}; emps.forEach(function(e){ empName[e.id]=((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim(); });
 
@@ -18391,6 +18434,42 @@ async function accBackfillHistorical(){
       if(await ohPostToAccounts(ce)) count++; else fail++;
     }
 
+    // Loans: principal in/out, then each repayment and interest settlement
+    var bfParty={};
+    (LN_PARTIES.length?LN_PARTIES:[]).forEach(function(p){ bfParty[p.id]=p.name; });
+    if(!LN_PARTIES.length){
+      try{ var lp=await sbFetch('loan_parties',{select:'id,name'}); (lp||[]).forEach(function(p){ bfParty[p.id]=p.name; }); }catch(e){}
+    }
+    var bfLoanById={}; bfLoans.forEach(function(l){ bfLoanById[l.id]=l; });
+
+    for(var i=0;i<bfLoans.length;i++){
+      var ln=bfLoans[i]; if(isDone('loan',ln.id)) continue;
+      var taken=(ln.direction==='taken');
+      var cc=ln.to_petty_cash?'1101':(ln.mode==='Cash'?'1001':(ln.mode==='EmpBank'?'1102':'1002'));
+      if(await accAutoPost({type:taken?'Receipt':'Payment', date:ln.start_date, partyName:bfParty[ln.party_id]||'Party',
+        debitCode:taken?cc:'1401', creditCode:taken?'2201':cc, amount:parseFloat(ln.principal)||0,
+        narration:(taken?'Loan taken from ':'Loan given to ')+(bfParty[ln.party_id]||'Party')+(ln.purpose?' \u2014 '+ln.purpose:''),
+        sourceType:'loan', sourceId:ln.id})) count++; else fail++;
+    }
+    for(var i=0;i<bfLoanTxns.length;i++){
+      var t=bfLoanTxns[i]; if(isDone('loan_txn',t.id)) continue;
+      var ln2=bfLoanById[t.loan_id]; if(!ln2) continue;
+      var taken2=(ln2.direction==='taken');
+      var cc2=(t.mode==='Cash'?'1001':(t.mode==='EmpBank'?'1102':'1002'));
+      var pn2=bfParty[ln2.party_id]||'Party';
+      var o2;
+      if(t.txn_type==='interest'){
+        o2=taken2?{type:'Payment',debitCode:'4201',creditCode:cc2,narration:'Interest paid to '+pn2}
+                 :{type:'Receipt',debitCode:cc2,creditCode:'3005',narration:'Interest received from '+pn2};
+      } else {
+        o2=taken2?{type:'Payment',debitCode:'2201',creditCode:cc2,narration:'Loan repaid to '+pn2}
+                 :{type:'Receipt',debitCode:cc2,creditCode:'1401',narration:'Loan recovered from '+pn2};
+      }
+      if(await accAutoPost({type:o2.type, date:t.date, partyName:pn2, debitCode:o2.debitCode,
+        creditCode:o2.creditCode, amount:parseFloat(t.amount)||0, narration:o2.narration,
+        sourceType:'loan_txn', sourceId:t.id})) count++; else fail++;
+    }
+
     // Clean up orphaned auto-posted vouchers whose source record has since
     // been deleted in its module (covers deletions made before delete-hooks
     // existed, or on another device).
@@ -18403,6 +18482,8 @@ async function accBackfillHistorical(){
     pettyExp.forEach(function(x){liveIds[x.id]=1;});
     otherExp.forEach(function(x){liveIds[x.id]=1;});
     companyExp.forEach(function(x){liveIds[x.id]=1;});
+    bfLoans.forEach(function(x){liveIds[x.id]=1;});
+    bfLoanTxns.forEach(function(x){liveIds[x.id]=1;});
     var orphans = await sbFetch('vouchers',{select:'id,source_id',filter:'source_id=not.is.null'});
     var removed=0;
     for(var i=0;i<(orphans||[]).length;i++){
