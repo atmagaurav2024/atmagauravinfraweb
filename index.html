@@ -16579,14 +16579,14 @@ var LN_INT_FREQ={yearly:1, halfyearly:2, quarterly:4, monthly:12};
 // Compound: the same day-count walk, but at each compounding date the
 // interest earned so far is added to the balance, so subsequent interest
 // is charged on interest too. Repayments reduce the balance on their date.
-function lnAccruedInterest(loan){
+function lnAccruedInterest(loan, asOn){
   var rate=parseFloat(loan.interest_rate)||0;
   if(rate<=0) return 0;
   var start=loan.start_date; if(!start) return 0;
   var dayMs=86400000;
   var d0=new Date(start+'T00:00:00'); if(isNaN(d0)) return 0;
-  var today=new Date(new Date().toISOString().slice(0,10)+'T00:00:00');
-  if(today<d0) return 0;
+  var today=new Date((asOn||new Date().toISOString().slice(0,10))+'T00:00:00');
+  if(isNaN(today)||today<d0) return 0;
 
   var type=loan.interest_type||'simple';
   var freq=LN_INT_FREQ[type]||0;
@@ -16636,13 +16636,15 @@ function lnAccruedInterest(loan){
   return accrued>0?accrued:0;
 }
 
-function lnLoanStats(loanId){
-  var t=LN_TXNS.filter(function(x){return x.loan_id===loanId;});
+function lnLoanStats(loanId, asOn){
+  // asOn limits the view to that date: later repayments and interest
+  // settlements are excluded, so the position is what it genuinely was then.
+  var t=LN_TXNS.filter(function(x){return x.loan_id===loanId && (!asOn || String(x.date||'')<=asOn);});
   var repaid=t.filter(function(x){return x.txn_type==='repayment';}).reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
   var interest=t.filter(function(x){return x.txn_type==='interest';}).reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
   var loan=LN_LOANS.find(function(x){return x.id===loanId;})||{};
   var principal=parseFloat(loan.principal)||0;
-  var accrued=lnAccruedInterest(loan);
+  var accrued=lnAccruedInterest(loan, asOn);
   return {principal:principal, repaid:repaid, interest:interest, outstanding:principal-repaid,
     accrued:accrued, intDue:Math.max(0,accrued-interest), count:t.length};
 }
@@ -17152,21 +17154,22 @@ async function lnDelLoan(id){
 // convention, and it stops interest quietly compounding while principal is
 // paid down. Each loan touched keeps its own transaction rows and GL
 // postings, so per-loan history stays exact.
-function lnAllocatePayment(pid, dir, amount){
+function lnAllocatePayment(pid, dir, amount, asOn){
   var loans=LN_LOANS.filter(function(l){return l.party_id===pid&&l.direction===dir;})
+    .filter(function(l){ return !asOn || String(l.start_date||'')<=asOn; })   // loans not yet taken on that date
     .slice().sort(function(a,b){return String(a.start_date||'').localeCompare(String(b.start_date||''));});
   var left=amount, map={};
   var row=function(l){ if(!map[l.id]) map[l.id]={loan:l, interest:0, principal:0}; return map[l.id]; };
 
   loans.forEach(function(l){                      // pass 1 — interest
     if(left<=0.005) return;
-    var due=lnLoanStats(l.id).intDue;
+    var due=lnLoanStats(l.id, asOn).intDue;
     if(due<=0.005) return;
     var take=Math.min(left,due); row(l).interest=take; left-=take;
   });
   loans.forEach(function(l){                      // pass 2 — principal
     if(left<=0.005) return;
-    var out=lnLoanStats(l.id).outstanding;
+    var out=lnLoanStats(l.id, asOn).outstanding;
     if(out<=0.005) return;
     var take=Math.min(left,out); row(l).principal=take; left-=take;
   });
@@ -17179,11 +17182,13 @@ function lnAllocatePayment(pid, dir, amount){
 
 function lnPreviewPayment(pid,dir){
   var amt=parseFloat(gv('lpt-amount'))||0;
+  var asOn=gv('lpt-date')||new Date().toISOString().slice(0,10);
+  lnUpdateDueHeader(pid,dir,asOn);
   var box=document.getElementById('lpt-alloc'); if(!box)return;
   if(amt<=0){ box.innerHTML='<div style="font-size:10.5px;color:var(--text3);">Enter an amount to see how it will be applied.</div>'; return; }
-  var a=lnAllocatePayment(pid,dir,amt);
+  var a=lnAllocatePayment(pid,dir,amt,asOn);
   box.innerHTML=
-    '<div style="font-size:10px;font-weight:900;color:var(--text3);margin-bottom:4px;">HOW THIS WILL BE APPLIED</div>'+
+    '<div style="font-size:10px;font-weight:900;color:var(--text3);margin-bottom:4px;">HOW THIS WILL BE APPLIED \u00b7 AS ON '+fmtDate(asOn)+'</div>'+
     (a.rows.length?
       '<table style="width:100%;border-collapse:collapse;font-size:10.5px;">'+
       '<tr style="color:var(--text3);"><th style="text-align:left;font-weight:700;padding:2px 0;">Loan</th><th style="text-align:right;font-weight:700;">Interest</th><th style="text-align:right;font-weight:700;">Principal</th></tr>'+
@@ -17201,6 +17206,17 @@ function lnPreviewPayment(pid,dir){
     (a.unallocated>0.5?'<div style="font-size:10.5px;color:#C62828;font-weight:700;margin-top:4px;">'+fmtINR(a.unallocated)+' exceeds what is due and will not be recorded.</div>':'');
 }
 
+// Recomputes the due figures for the date currently chosen in the sheet
+function lnUpdateDueHeader(pid,dir,asOn){
+  var el=document.getElementById('lpt-due'); if(!el)return;
+  var out=0,due=0,n=0;
+  LN_LOANS.filter(function(l){return l.party_id===pid&&l.direction===dir&&(!asOn||String(l.start_date||'')<=asOn);})
+    .forEach(function(l){ var st=lnLoanStats(l.id, asOn); out+=st.outstanding; due+=st.intDue; n++; });
+  el.innerHTML=n+' loan'+(n!==1?'s':'')+' as on <b>'+fmtDate(asOn)+'</b><br>'+
+    'Interest due: <b style="color:#E65100;">'+fmtINR(due)+'</b> \u00b7 Principal outstanding: <b>'+fmtINR(out)+'</b><br>'+
+    'Total to settle: <b>'+fmtINR(out+due)+'</b>';
+}
+
 function lnOpenPartyTxn(pid, dir){
   var isTaken=(dir==='taken');
   var loans=LN_LOANS.filter(function(l){return l.party_id===pid&&l.direction===dir;});
@@ -17209,14 +17225,12 @@ function lnOpenPartyTxn(pid, dir){
   document.getElementById('ln-sheet-title').textContent=isTaken?'Record Payment':'Record Receipt';
   document.getElementById('ln-sheet-body').innerHTML=
     '<div style="background:#E0F2F1;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;">'+
-      '<b>'+lnPartyName(pid)+'</b> \u00b7 '+loans.length+' loan'+(loans.length!==1?'s':'')+'<br>'+
-      'Interest due: <b style="color:#E65100;">'+fmtINR(due)+'</b> \u00b7 Principal outstanding: <b>'+fmtINR(out)+'</b><br>'+
-      'Total to settle: <b>'+fmtINR(out+due)+'</b>'+
-      '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Interest is cleared first, then principal \u2014 oldest loan first.</div>'+
+      '<b>'+lnPartyName(pid)+'</b><br><span id="lpt-due"></span>'+
+      '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Interest is cleared first, then principal \u2014 oldest loan first. Figures update with the date below.</div>'+
     '</div>'+
     '<label class="flbl">Amount (&#8377;) *</label><input class="finp" id="lpt-amount" type="number" step="0.01" placeholder="0.00" value="'+((out+due)>0.5?(out+due).toFixed(2):'')+'" oninput="lnPreviewPayment(\''+pid+'\',\''+dir+'\')">'+
     '<div id="lpt-alloc" style="background:#F5F5F5;border-radius:8px;padding:8px 10px;margin-bottom:10px;"></div>'+
-    '<label class="flbl">Date *</label><input class="finp" id="lpt-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Payment Date *</label><input class="finp" id="lpt-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" onchange="lnPreviewPayment(\''+pid+'\',\''+dir+'\')">'+
     '<label class="flbl">Mode</label>'+lnModeOptionsHtml('lpt-mode')+
     '<label class="flbl">Reference / Cheque / UTR No.</label><input class="finp" id="lpt-ref" placeholder="e.g. UTR123456789">'+
     '<label class="flbl">Remarks</label><input class="finp" id="lpt-remarks">';
@@ -17234,12 +17248,12 @@ async function lnSavePartyTxn(pid,dir){
   var mode=gv('lpt-mode')||'Bank';
   var modeEmp=gv('lpt-mode-emp')||null;
   if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
-  var a=lnAllocatePayment(pid,dir,amt);
-  if(!a.rows.length){ toast('Nothing outstanding to apply this against','warning'); return; }
+  var date=gv('lpt-date')||new Date().toISOString().slice(0,10);
+  var a=lnAllocatePayment(pid,dir,amt,date);
+  if(!a.rows.length){ toast('Nothing outstanding to apply this against as on '+fmtDate(date),'warning'); return; }
   if(a.unallocated>0.5 && !confirm(fmtINR(a.unallocated)+' exceeds what is due and will not be recorded. Continue with '+fmtINR(amt-a.unallocated)+'?')) return;
 
   var isTaken=(dir==='taken');
-  var date=gv('lpt-date')||new Date().toISOString().slice(0,10);
   var ref=gv('lpt-ref')||null, rem=gv('lpt-remarks')||null;
   var receiptNo=(isTaken?'LPY-':'LRC-')+String(Date.now()).slice(-8);
   var cashCode=lnCashCode(mode);
@@ -17297,7 +17311,7 @@ function lnGenerateReceipt(d){
 
   var anyInterest=d.lines.some(function(l){return l.interest>0.005;});
   var rows=d.lines.map(function(l){
-    var st=lnLoanStats(l.loan.id);
+    var st=lnLoanStats(l.loan.id, d.date);   // position as on the payment date
     var rate=parseFloat(l.loan.interest_rate)||0;
     var basis=LN_INT_TYPES[l.loan.interest_type||'simple']||'Simple Interest';
     var days=lnDaysBetween(l.loan.start_date, d.date);
