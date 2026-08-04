@@ -16489,7 +16489,7 @@ var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken';
 var LN_TAB_DEFS=[
   {id:'taken',   label:'\u2b07 Loans Taken'},
   {id:'given',   label:'\u2b06 Loans Given'},
-  {id:'parties', label:'\ud83d\udc65 Parties'}
+  {id:'parties', label:'\ud83d\udc65 Party-wise'}
 ];
 function lnCanEdit(){ return typeof canAccess==='function'?canAccess('loans','edit'):(currentUser&&currentUser.role==='admin'); }
 function lnCanDelete(){ return typeof canAccess==='function'?canAccess('loans','delete'):(currentUser&&currentUser.role==='admin'); }
@@ -16716,25 +16716,94 @@ function lnRender(){
       (LN_PARTIES.length?'':'<br><span style="font-size:11px;">Add a party first from the <b>Parties</b> tab.</span>')+'</div>');
 }
 
+var LN_PARTY_OPEN=null, LN_PARTY_FILTER='all';
+function lnPartyFilter(f){ LN_PARTY_FILTER=f; lnRenderParties(); }
+function lnTogglePartyDetail(id){ LN_PARTY_OPEN=(LN_PARTY_OPEN===id)?null:id; lnRenderParties(); }
+
+// Totals for a party across both directions
+function lnPartyStats(pid){
+  var out={borrowed:0,lent:0,owedByUs:0,owedToUs:0,intPayable:0,intReceivable:0,count:0};
+  LN_LOANS.filter(function(l){return l.party_id===pid;}).forEach(function(l){
+    var st=lnLoanStats(l.id); out.count++;
+    if(l.direction==='taken'){ out.borrowed+=st.principal; out.owedByUs+=st.outstanding; out.intPayable+=st.intDue; }
+    else { out.lent+=st.principal; out.owedToUs+=st.outstanding; out.intReceivable+=st.intDue; }
+  });
+  return out;
+}
+
 function lnRenderParties(){
   var c=document.getElementById('ln-content'); if(!c)return;
+  var list=LN_PARTIES.filter(function(p){
+    if(LN_PARTY_FILTER==='all') return true;
+    return p.party_type===LN_PARTY_FILTER||p.party_type==='both';
+  });
+  var fbtn=function(k,l){
+    var a=(LN_PARTY_FILTER===k);
+    return '<button onclick="lnPartyFilter(\''+k+'\')" style="background:'+(a?'#00695C':'transparent')+';color:'+(a?'white':'var(--text2)')+';border:1.5px solid '+(a?'#00695C':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:6px;white-space:nowrap;font-family:Nunito,sans-serif;">'+l+'</button>';
+  };
+  // Net position across all parties
+  var tB=0,tL=0;
+  LN_PARTIES.forEach(function(p){ var st=lnPartyStats(p.id); tB+=st.owedByUs; tL+=st.owedToUs; });
+
   c.innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">'+
-      '<div style="font-size:14px;font-weight:800;">Parties</div>'+
+      '<div style="font-size:14px;font-weight:800;">Party-wise Summary</div>'+
       (lnCanEdit()?'<button onclick="lnOpenParty()" style="background:#00695C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Party</button>':'')+
     '</div>'+
-    '<div style="font-size:10.5px;color:var(--text3);margin-bottom:10px;">Creditors are those you borrow from; debtors are those you lend to. A party can be both.</div>'+
-    (LN_PARTIES.length?
-      '<div class="table-card"><table class="att-table"><thead><tr><th>Name</th><th>Type</th><th>Contact</th><th>PAN</th><th style="text-align:right;">Loans</th><th></th></tr></thead><tbody>'+
-      LN_PARTIES.map(function(p){
-        var n=LN_LOANS.filter(function(l){return l.party_id===p.id;}).length;
-        return '<tr><td><strong>'+p.name+'</strong>'+(p.address?'<div style="font-size:10px;color:var(--text3);">'+p.address+'</div>':'')+'</td>'+
-          '<td><span style="font-size:10px;font-weight:800;color:'+(p.party_type==='creditor'?'#C62828':(p.party_type==='debtor'?'#2E7D32':'#1565C0'))+';">'+(p.party_type==='creditor'?'Creditor':(p.party_type==='debtor'?'Debtor':'Both'))+'</span></td>'+
-          '<td>'+(p.contact||'\u2014')+'</td><td style="font-family:monospace;font-size:10.5px;">'+(p.pan||'\u2014')+'</td>'+
-          '<td style="text-align:right;">'+n+'</td>'+
-          '<td style="white-space:nowrap;">'+(lnCanEdit()?'<button class="btn btn-sm btn-navy" onclick="lnOpenParty(\''+p.id+'\')">&#9998;</button> ':'')+(lnCanDelete()?'<button class="btn btn-sm btn-red" onclick="lnDelParty(\''+p.id+'\')">&#128465;</button>':'')+'</td></tr>';
-      }).join('')+'</tbody></table></div>'
-      :'<div style="text-align:center;padding:30px;color:var(--text3);">No parties yet. Add creditors (lenders) and debtors (borrowers) here first.</div>');
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">WE OWE (CREDITORS)</div><div style="font-size:15px;font-weight:900;color:#C62828;">'+fmtINR(tB)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OWED TO US (DEBTORS)</div><div style="font-size:15px;font-weight:900;color:#2E7D32;">'+fmtINR(tL)+'</div></div>'+
+    '</div>'+
+    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;margin-bottom:10px;">'+
+      fbtn('all','All')+fbtn('creditor','Creditors')+fbtn('debtor','Debtors')+
+    '</div>'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-bottom:10px;">Tap a party to see their loans. Creditors are those you borrow from; debtors are those you lend to.</div>'+
+    (list.length? list.map(function(p){
+      var st=lnPartyStats(p.id);
+      var open=(LN_PARTY_OPEN===p.id);
+      var pLoans=LN_LOANS.filter(function(l){return l.party_id===p.id;})
+        .slice().sort(function(a,b){return String(b.start_date||'').localeCompare(String(a.start_date||''));});
+      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
+        '<div onclick="lnTogglePartyDetail(\''+p.id+'\')" style="padding:10px 12px;display:flex;align-items:flex-start;gap:8px;cursor:pointer;">'+
+          '<div style="flex:1;">'+
+            '<div style="font-size:13px;font-weight:800;">'+p.name+
+              ' <span style="font-size:9.5px;font-weight:800;color:'+(p.party_type==='creditor'?'#C62828':(p.party_type==='debtor'?'#2E7D32':'#1565C0'))+';">'+(p.party_type==='creditor'?'CREDITOR':(p.party_type==='debtor'?'DEBTOR':'BOTH'))+'</span></div>'+
+            '<div style="font-size:10px;color:var(--text3);">'+(p.contact||'\u2014')+(p.pan?' \u00b7 PAN '+p.pan:'')+' \u00b7 '+st.count+' loan'+(st.count!==1?'s':'')+'</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0;">'+
+            (st.owedByUs>0.5?'<div style="font-size:12.5px;font-weight:900;color:#C62828;">\u2212'+fmtINR(st.owedByUs)+'</div><div style="font-size:9px;color:var(--text3);">we owe</div>':'')+
+            (st.owedToUs>0.5?'<div style="font-size:12.5px;font-weight:900;color:#2E7D32;">+'+fmtINR(st.owedToUs)+'</div><div style="font-size:9px;color:var(--text3);">owed to us</div>':'')+
+            ((st.owedByUs<=0.5&&st.owedToUs<=0.5)?'<div style="font-size:11px;color:var(--text3);">Settled</div>':'')+
+          '</div>'+
+          '<div style="font-size:13px;color:var(--text3);">'+(open?'\u25b2':'\u25bc')+'</div>'+
+        '</div>'+
+        (open?
+          '<div style="border-top:1px solid var(--border);padding:8px 12px;background:#FAFAFA;">'+
+            ((st.intPayable>0.5||st.intReceivable>0.5)?
+              '<div style="font-size:10.5px;color:#E65100;font-weight:700;margin-bottom:6px;">'+
+                (st.intPayable>0.5?'Interest payable: '+fmtINR(st.intPayable)+' ':'')+
+                (st.intReceivable>0.5?'Interest receivable: '+fmtINR(st.intReceivable):'')+'</div>':'')+
+            (pLoans.length? pLoans.map(function(l){
+              var ls=lnLoanStats(l.id);
+              var taken=(l.direction==='taken');
+              return '<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:flex-start;">'+
+                '<span style="background:'+(taken?'#C62828':'#2E7D32')+';color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;white-space:nowrap;">'+(taken?'TAKEN':'GIVEN')+'</span>'+
+                '<div style="flex:1;">'+
+                  '<div style="font-size:11.5px;font-weight:700;">'+fmtINR(ls.principal)+
+                    ' <span style="font-weight:400;color:var(--text3);">\u00b7 '+fmtDate(l.start_date)+
+                    (l.interest_rate?' \u00b7 '+l.interest_rate+'%':'')+'</span></div>'+
+                  '<div style="font-size:10px;color:var(--text3);">'+(l.purpose||'\u2014')+
+                    ' \u00b7 Repaid '+fmtINR(ls.repaid)+' \u00b7 Outstanding <b>'+fmtINR(ls.outstanding)+'</b></div>'+
+                '</div></div>';
+            }).join('') : '<div style="font-size:11px;color:var(--text3);">No loans recorded for this party</div>')+
+            '<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px;">'+
+              (lnCanEdit()?'<button onclick="lnOpenParty(\''+p.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:8px;padding:4px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button>':'')+
+              (lnCanDelete()?'<button onclick="lnDelParty(\''+p.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:8px;padding:4px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
+            '</div>'+
+          '</div>':'')+
+      '</div>';
+    }).join('')
+    :'<div style="text-align:center;padding:30px;color:var(--text3);">'+(LN_PARTIES.length?'No parties match this filter.':'No parties yet. Add creditors (lenders) and debtors (borrowers) here first.')+'</div>');
 }
 
 function lnOpenParty(editId){
