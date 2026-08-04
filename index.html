@@ -17467,6 +17467,7 @@ async function lnSavePartyTxn(pid,dir){
   var cashCode=lnCashCode(mode);
   var pn=lnPartyName(pid);
   var lines=[];
+  var failCount=0, lastErr='', schemaWarn=false, savedCount=0;
 
   for(var i=0;i<a.rows.length;i++){
     var r=a.rows[i];
@@ -17476,11 +17477,23 @@ async function lnSavePartyTxn(pid,dir){
     for(var j=0;j<parts.length;j++){
       var p=parts[j];
       try{
-        var res=await sbInsert('loan_transactions',{loan_id:r.loan.id,txn_type:p.type,amount:p.amount,
-          date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:rem,receipt_no:receiptNo});
+        var payload={loan_id:r.loan.id,txn_type:p.type,amount:p.amount,
+          date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:rem,receipt_no:receiptNo};
+        var res;
+        try{
+          res=await sbInsert('loan_transactions',payload);
+        }catch(colErr){
+          // Older schema without receipt_no / mode_emp_id: retry with the
+          // core columns so the payment is still recorded rather than lost.
+          if(/receipt_no|mode_emp_id|column/i.test(colErr.message||'')){
+            schemaWarn=true;
+            res=await sbInsert('loan_transactions',{loan_id:r.loan.id,txn_type:p.type,amount:p.amount,
+              date:date,mode:mode,reference:ref,remarks:rem});
+          } else { throw colErr; }
+        }
         var saved=(res&&res[0])?res[0]:null;
         if(saved){
-          LN_TXNS.unshift(saved);
+          LN_TXNS.unshift(saved); savedCount++;
           if(typeof accAutoPost==='function'){
             var pnv=pn+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
             var o;
@@ -17495,13 +17508,26 @@ async function lnSavePartyTxn(pid,dir){
               amount:p.amount,narration:o.narration+' \u00b7 '+receiptNo,sourceType:'loan_txn',sourceId:saved.id});
           }
         }
-      }catch(e){ console.error('payment row failed',e); }
+      }catch(e){ console.error('payment row failed',e); failCount++; lastErr=e.message||String(e); }
     }
     lines.push({loan:r.loan, interest:r.interest, principal:r.principal});
   }
 
   closeSheet('ov-ln','sh-ln'); lnRender();
-  toast('Payment recorded \u00b7 '+receiptNo,'success');
+
+  if(!savedCount){
+    // Nothing was written — do not print a receipt for a payment that
+    // does not exist in the records.
+    toast('Payment NOT saved'+(lastErr?': '+lastErr:'')+'. Nothing was recorded.','error');
+    return;
+  }
+  if(failCount){
+    toast(savedCount+' entr'+(savedCount!==1?'ies':'y')+' saved, '+failCount+' FAILED'+(lastErr?' \u2014 '+lastErr:'')+'. Check the loan before relying on this receipt.','warning');
+  } else if(schemaWarn){
+    toast('Payment recorded, but without the receipt number \u2014 run the latest SQL migration to enable it.','warning');
+  } else {
+    toast('Payment recorded \u00b7 '+receiptNo,'success');
+  }
   lnGenerateReceipt({receiptNo:receiptNo, party:pn, date:date, mode:mode, modeEmp:modeEmp,
     ref:ref, remarks:rem, dir:dir, lines:lines,
     totalInterest:a.totalInterest, totalPrincipal:a.totalPrincipal});
