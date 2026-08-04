@@ -898,6 +898,12 @@ async function boqDeleteItem(id){
 
 // ════ JM ════════════════════════════════════════════════
 var JM_ITEMS=[],JM_JMS=[];
+// JM dates are stored yyyy-mm-dd but displayed and exported as dd-mm-yyyy
+function jmDate(d){
+  if(!d) return '';
+  var m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? (m[3]+'-'+m[2]+'-'+m[1]) : String(d);
+}
 function initJM(){jmLoadProjs();}
 async function jmLoadProjs(){var sel=document.getElementById('jm-proj-sel');if(!sel)return;try{var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}catch(e){}}
 async function jmLoadItems(){
@@ -910,20 +916,40 @@ async function jmLoadItems(){
 function jmRender(){
   var el=document.getElementById('jm-content');if(!el)return;
   if(!JM_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items. Add BOQ items first.</div>';return;}
+  // Value measured so far across all items, at BOQ rates
+  var grandBoq=0, grandJM=0;
+  JM_ITEMS.forEach(function(it){
+    var bq=parseFloat(it.boq_qty)||0, rt=parseFloat(it.rate)||0;
+    var done=JM_JMS.filter(function(j){return j.boq_item_id===it.id;}).reduce(function(a,j){return a+(parseFloat(j.jm_qty)||0);},0);
+    grandBoq+=bq*rt; grandJM+=done*rt;
+  });
+  var grandPct=grandBoq>0?Math.round(grandJM/grandBoq*100):0;
+
   // Items still short of their BOQ quantity — what a bulk complete would fill
   var pendingCount=JM_ITEMS.filter(function(it){
     var bq=parseFloat(it.boq_qty)||0;
     var done=JM_JMS.filter(function(j){return j.boq_item_id===it.id;}).reduce(function(a,j){return a+(parseFloat(j.jm_qty)||0);},0);
     return bq>0 && (bq-done)>0.0001;
   }).length;
-  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'+
+  el.innerHTML='<div style="background:#E8EAF6;border:1px solid #C5CAE9;border-radius:12px;padding:10px 14px;margin-bottom:10px;">'+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+
+        '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">TOTAL BOQ VALUE</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(grandBoq)+'</div></div>'+
+        '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">TOTAL JM VALUE</div><div style="font-size:15px;font-weight:900;color:#283593;">'+fmtINR(grandJM)+'</div></div>'+
+        '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">BALANCE</div><div style="font-size:15px;font-weight:900;color:'+((grandBoq-grandJM)<0?'#C62828':'#2E7D32')+';">'+fmtINR(grandBoq-grandJM)+'</div></div>'+
+      '</div>'+
+      '<div style="height:5px;background:#C5CAE9;border-radius:3px;margin-top:8px;overflow:hidden;"><div style="height:100%;width:'+Math.min(100,grandPct)+'%;background:#283593;"></div></div>'+
+      '<div style="font-size:9.5px;color:var(--text3);margin-top:4px;text-align:right;">'+grandPct+'% of BOQ value measured</div>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'+
     (pendingCount?'<button onclick="jmCompleteAllPrompt()" style="background:#F57F17;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Complete All ('+pendingCount+')</button>':'')+
     '<button onclick="jmDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="jmDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
     JM_ITEMS.map(function(item){
     var boqQty=parseFloat(item.boq_qty)||0;var iJMs=JM_JMS.filter(function(j){return j.boq_item_id===item.id;});
     var totalJM=iJMs.reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
     var balance=boqQty-totalJM;var pct=boqQty>0?Math.min(100,Math.round(totalJM/boqQty*100)):0;
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;">'+(item.short_name||item.description)+'</div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:var(--text3);background:#F3F4F6;display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+'</div><div style="font-size:10px;color:var(--text3);">'+jm.date+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
+    var rate=parseFloat(item.rate)||0;
+    var jmAmt=totalJM*rate, boqAmt=boqQty*rate;
+    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;">'+(item.short_name||item.description)+'</div><div style=\"text-align:right;flex-shrink:0;margin-right:6px;\"><div style=\"font-size:13px;font-weight:900;color:#283593;\">'+fmtINR(jmAmt)+'</div><div style=\"font-size:9.5px;color:var(--text3);\">of '+fmtINR(boqAmt)+'</div></div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:var(--text3);background:#F3F4F6;display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' &#215; &#8377;'+rate+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+' <span style=\"color:#283593;\">= '+fmtINR((parseFloat(jm.jm_qty)||0)*rate)+'</span></div><div style="font-size:10px;color:var(--text3);">'+jmDate(jm.date)+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
   }).join('');
 }
 function jmProjName(){var projId=(document.getElementById('jm-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -940,7 +966,7 @@ function jmDownloadExcel(){
     var balance=boqQty-totalJM;
     if(iJMs.length){
       iJMs.forEach(function(jm){
-        lines.push([item.item_code,item.short_name||item.description,item.unit,boqQty,'JM-'+jm.jm_number,jm.date,parseFloat(jm.jm_qty)||0,jm.reference||'',balance]);
+        lines.push([item.item_code,item.short_name||item.description,item.unit,boqQty,'JM-'+jm.jm_number,jmDate(jm.date),parseFloat(jm.jm_qty)||0,jm.reference||'',balance]);
       });
     } else {
       lines.push([item.item_code,item.short_name||item.description,item.unit,boqQty,'','','','',balance]);
@@ -996,7 +1022,7 @@ function jmDownloadPDF(){
           '<td style="padding:5px 8px;font-size:9px;text-align:right;" rowspan="'+rows.length+'">'+boqQty+'</td>':'')+
         (jm?
           '<td style="padding:5px 8px;font-size:9px;text-align:center;">JM-'+jm.jm_number+'</td>'+
-          '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+jm.date+'</td>'+
+          '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+jmDate(jm.date)+'</td>'+
           '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">'+(parseFloat(jm.jm_qty)||0)+'</td>'+
           '<td style="padding:5px 8px;font-size:9px;">'+(jm.reference||'')+'</td>'
           :'<td colspan="3" style="padding:5px 8px;font-size:9px;color:var(--text3);text-align:center;">No JMs yet</td>'+'<td></td>')+
