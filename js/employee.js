@@ -128,7 +128,7 @@ function empAdvancesHTML(){
           '<td style="text-align:right;font-weight:700;">'+fmtINR(parseFloat(a.amount)||0)+'</td>'+
           '<td style="text-align:right;color:#2E7D32;">'+fmtINR(rec)+'</td>'+
           '<td style="text-align:right;font-weight:800;color:'+(done?'#2E7D32':'#C62828')+';">'+(done?'CLEARED':fmtINR(bal))+'</td>'+
-          '<td>'+(canEdit&&!done?'<button class="btn btn-sm btn-red" onclick="advDelete(\''+a.id+'\')">&#128465;</button>':'')+'</td></tr>';
+          '<td>'+(canEdit?'<button class="btn btn-sm btn-red" onclick="advDelete(\''+a.id+'\')" title="Delete this advance">&#128465;</button>':'')+'</td></tr>';
       }).join('')+
       '<tr style="background:#E8EAF6;font-weight:900;"><td colspan="4">TOTAL</td>'+
         '<td style="text-align:right;">'+fmtINR(totAdv)+'</td>'+
@@ -236,13 +236,36 @@ async function advSave(){
 
 async function advDelete(id){
   var a=EMP_ADVANCES.find(function(x){return x.id===id;});
-  if(advRecovered(id)>0.5){ toast('Cannot delete \u2014 recovery has already started','warning'); return; }
-  if(!confirm('Delete this advance of '+fmtINR(a?a.amount:0)+'? Its accounting entry will also be removed.')) return;
+  if(!a){ toast('Advance not found','warning'); return; }
+  var recs=EMP_ADV_RECOV.filter(function(x){return x.advance_id===id;});
+  var rec=advRecovered(id);
+  var msg='Delete this advance?\n\n'+
+    advEmpName(a.employee_id)+' \u00b7 '+fmtINR(parseFloat(a.amount)||0)+' dated '+fmtDate(a.date)+
+    (a.reference?' ('+a.reference+')':'')+'\n\n';
+
+  if(recs.length){
+    // Deleting an advance that has been recovered leaves those salaries
+    // showing a deduction with nothing behind it, so say so plainly.
+    msg+='\u26a0 '+recs.length+' recovery entr'+(recs.length!==1?'ies':'y')+' totalling '+fmtINR(rec)+
+      ' will also be deleted.\n'+
+      'Salaries already finalised keep their deduction, but it will no longer\n'+
+      'be linked to any advance. Correct those salary records if needed.\n\n';
+  }
+  msg+='The accounting entry will be removed. This cannot be undone.';
+  if(!confirm(msg)) return;
+
   try{
+    for(var i=0;i<recs.length;i++){
+      try{
+        await sbDelete('advance_recoveries',recs[i].id);
+        EMP_ADV_RECOV=EMP_ADV_RECOV.filter(function(x){return x.id!==recs[i].id;});
+      }catch(re){ console.warn('recovery not deleted', re); }
+    }
     await sbDelete('employee_advances',id);
     if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(id);
     EMP_ADVANCES=EMP_ADVANCES.filter(function(x){return x.id!==id;});
-    empRender(); toast('Deleted','success');
+    empRender();
+    toast('Advance deleted'+(recs.length?' \u00b7 '+recs.length+' recovery entr'+(recs.length!==1?'ies':'y')+' removed':''),'success');
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
