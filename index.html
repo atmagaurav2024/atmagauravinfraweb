@@ -16679,7 +16679,9 @@ function lnRender(){
     '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;">'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL '+(isTaken?'BORROWED':'LENT')+'</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(totPrin)+'</div></div>'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTSTANDING</div><div style="font-size:15px;font-weight:900;color:'+accent+';">'+fmtINR(totOut)+'</div></div>'+
-      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST ACCRUED</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+fmtINR(totAccr)+'</div><div style="font-size:9px;color:var(--text3);">'+fmtINR(totInt)+' '+(isTaken?'paid':'received')+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST ACCRUED</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+fmtINR(totAccr)+'</div>'+
+        '<div style="font-size:9px;color:var(--text3);">'+fmtINR(totInt)+' '+(isTaken?'paid':'received')+'</div>'+
+        '<div style="font-size:10px;font-weight:800;color:'+(totDue>0.5?'#C62828':'#2E7D32')+';">'+(totDue>0.5?('balance '+fmtINR(totDue)):'fully settled')+'</div></div>'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL '+(isTaken?'PAYABLE':'RECEIVABLE')+'</div><div style="font-size:15px;font-weight:900;color:'+(totOut+totDue>0.5?accent:'#2E7D32')+';">'+fmtINR(totOut+totDue)+'</div><div style="font-size:9px;color:var(--text3);">incl. '+fmtINR(totDue)+' interest due</div></div>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
