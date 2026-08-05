@@ -47,7 +47,10 @@ function advEmpName(id){
 }
 
 function empAdvancesHTML(){
-  var canEdit = typeof canAccess==='function'?canAccess('employees','edit'):(currentUser&&currentUser.role==='admin');
+  // Module key is 'emp-advances' — 'employees' is not a registered module,
+  // so the old check always failed and hid the entry button entirely.
+  var canEdit = (currentUser&&currentUser.role==='admin') ? true
+    : (typeof canAccess==='function' ? canAccess('emp-advances','edit') : false);
   var totAdv=EMP_ADVANCES.reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
   var totRec=EMP_ADVANCES.reduce(function(a,x){return a+advRecovered(x.id);},0);
   var totBal=totAdv-totRec;
@@ -405,7 +408,7 @@ function empTab(tab,btn){
   if(tb)Array.from(tb.children).forEach(function(b){b.style.background='transparent';b.style.color='rgba(255,255,255,.6)';});
   if(btn){btn.style.background='rgba(255,255,255,.2)';btn.style.color='white';}
   var addBtn=document.getElementById('emp-add-btn');
-  if(addBtn)addBtn.style.display=(tab==='active'||tab==='pending')?'':'none';
+  if(addBtn) addBtn.style.display=(tab==='active'||tab==='pending'||tab==='advances')?'':'none';
   empRender();
 }
 

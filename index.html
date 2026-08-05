@@ -6894,7 +6894,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128101; Employee Management</div>
     <button class="tb-btn" id="emp-refresh-btn" title="Refresh" onclick="EMP_LIST=[];EMP_PAY=[];EMP_LEAVEFIX=[];EMP_ORDERS=[];SALARY_RECORDS=[];initEmpMgmt();" style="font-size:16px;">&#8635;</button>
-    <button class="tb-btn" id="emp-add-btn" onclick="empOpenForm(null)" style="font-size:20px;">&#43;</button>
+    <button class="tb-btn" id="emp-add-btn" onclick="EMP_TAB==='advances'?advOpenNew():empOpenForm(null)" style="font-size:20px;">&#43;</button>
   </div>
   <!-- Tab Bar -->
   <div id="emp-tab-bar" style="display:flex;overflow-x:auto;background:#1B5E20;padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;">
@@ -22454,8 +22454,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260802m"></script>
-<script src="js/employee.js?v=20260802m"></script>
-<script src="js/projects.js?v=20260802m"></script>
-<script src="js/finance.js?v=20260802m"></script>
+<script src="js/registry.js?v=20260802n"></script>
+<script src="js/employee.js?v=20260802n"></script>
+<script src="js/projects.js?v=20260802n"></script>
+<script src="js/finance.js?v=20260802n"></script>
 </html>
