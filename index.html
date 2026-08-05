@@ -7433,7 +7433,10 @@ function empSalaryHTML(){
       var g  = pay.gross||0;
       var pf = pay.pf_employee||0;
       var es = pay.esic_employee||0;
-      var td = pay.tds||0;
+      // TDS recomputed on this month's gross so a changed salary, or a
+      // mid-year revision, is reflected rather than carrying the figure
+      // fixed when the pay structure was created.
+      var td = (typeof tdsMonthly==='function') ? tdsMonthly(g) : (pay.tds||0);
       // February carries the higher profession tax, so the standing rate on
       // the pay structure is topped up for that month only.
       var salMonthNo = selM;
@@ -7442,7 +7445,9 @@ function empSalaryHTML(){
         ? ptForMonth(g, e.gender, salMonthNo)
         : basePt;
       // Net moves by the difference, so February's extra ₹100 reduces it
-      var net= (pay.net_salary||0) - (pt - basePt);
+      // Net moves by the change in both month-dependent deductions
+      var baseTds = pay.tds||0;
+      var net= (pay.net_salary||0) - (pt - basePt) - (td - baseTds);
 
       return (
         '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" id="sal-row-'+e.id+'">'+
@@ -9673,8 +9678,8 @@ function empOpenPay(empId, empName){
 
           // TDS
           '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #F5F5F5;">'+
-            '<div style="flex:1;font-size:11px;font-weight:800;color:#E65100;">TDS</div>'+
-            '<input id="pf-tds" type="number" step="1" value="'+(v.tds||0)+'" oninput="payCalc()" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;">'+
+            '<div style="flex:1;"><div style="font-size:11px;font-weight:800;color:#E65100;">TDS</div><div id="pf-tds-note" style="font-size:9px;color:var(--text3);">New regime</div></div>'+
+            '<input id="pf-tds" type="number" step="1" value="'+(v.tds!=null?v.tds:'')+'" oninput="this.dataset.manual=1;payCalc()" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;">'+
           '</div>'+
 
           // Profession Tax
@@ -9886,6 +9891,71 @@ function gn(id){var el=document.getElementById(id);return parseFloat(el?el.value
 // Female: up to 25,000 nil | above 25,000 = 200 (February 300)
 // The February loading exists so the annual total reaches the 2,500 ceiling.
 var PAY_EMP_GENDER='';
+
+// ── TDS on salary — NEW TAX REGIME (section 115BAC) ──────────────────────
+// Slabs below are FY 2025-26. Verify against the current Finance Act before
+// relying on them for a later year; edit TDS_SLABS and TDS_STD_DEDUCTION.
+var TDS_STD_DEDUCTION = 75000;
+var TDS_SLABS = [
+  {upto:  400000, rate:0.00},
+  {upto:  800000, rate:0.05},
+  {upto: 1200000, rate:0.10},
+  {upto: 1600000, rate:0.15},
+  {upto: 2000000, rate:0.20},
+  {upto: 2400000, rate:0.25},
+  {upto: Infinity, rate:0.30}
+];
+var TDS_REBATE_LIMIT = 1200000;   // 87A: no tax up to this taxable income
+var TDS_REBATE_MAX   = 60000;
+var TDS_CESS         = 0.04;      // health & education cess
+
+// Slab tax before rebate, surcharge and cess
+function tdsSlabTax(taxable){
+  var tax=0, prev=0;
+  for(var i=0;i<TDS_SLABS.length;i++){
+    var sl=TDS_SLABS[i];
+    if(taxable>prev) tax += (Math.min(taxable, sl.upto) - prev) * sl.rate;
+    prev = sl.upto;
+    if(taxable<=prev) break;
+  }
+  return tax;
+}
+
+function tdsSurcharge(taxable, tax){
+  // New regime caps surcharge at 25%
+  var r = taxable>50000000 ? 0.25
+        : taxable>20000000 ? 0.25
+        : taxable>10000000 ? 0.15
+        : taxable> 5000000 ? 0.10 : 0;
+  return tax*r;
+}
+
+// Annual tax on a gross salary, new regime. Returns 0 where the 87A rebate
+// wipes it out, and applies marginal relief just above the rebate limit so
+// a small rise in salary cannot cost more in tax than the rise itself.
+function tdsAnnualNewRegime(annualGross){
+  annualGross = parseFloat(annualGross)||0;
+  var taxable = Math.max(0, annualGross - TDS_STD_DEDUCTION);
+  if(taxable<=0) return 0;
+
+  var tax = tdsSlabTax(taxable);
+  if(taxable<=TDS_REBATE_LIMIT) tax = Math.max(0, tax - Math.min(TDS_REBATE_MAX, tax));
+  else {
+    // Marginal relief: tax cannot exceed the income above the rebate limit
+    var excess = taxable - TDS_REBATE_LIMIT;
+    if(tax > excess) tax = excess;
+  }
+  if(tax<=0) return 0;
+  tax += tdsSurcharge(taxable, tax);
+  tax += tax * TDS_CESS;
+  return Math.round(tax);
+}
+
+// Monthly TDS to deduct from a monthly gross
+function tdsMonthly(monthlyGross){
+  var annual = (parseFloat(monthlyGross)||0) * 12;
+  return Math.round(tdsAnnualNewRegime(annual)/12);
+}
 function ptForMonth(gross, gender, month){
   gross=parseFloat(gross)||0;
   var g=String(gender||'').toLowerCase();
@@ -9913,6 +9983,19 @@ function payCalc(){
     return s+amt;
   },0);
   var gross=basic+extraTotal;
+
+  // TDS on the annualised gross, new regime, unless typed over
+  var tdsEl=document.getElementById('pf-tds');
+  if(tdsEl && !tdsEl.dataset.manual){
+    tdsEl.value=tdsMonthly(gross);
+    var tdsNote=document.getElementById('pf-tds-note');
+    if(tdsNote){
+      var annual=gross*12, annualTax=tdsAnnualNewRegime(annual);
+      tdsNote.innerHTML = annualTax>0
+        ? 'New regime \u00b7 annual '+fmtINR(annual)+' \u2212 '+fmtINR(TDS_STD_DEDUCTION)+' std ded \u2192 tax '+fmtINR(annualTax)+'/yr'
+        : 'New regime \u00b7 nil after \u20b975,000 standard deduction and 87A rebate';
+    }
+  }
 
   // Profession tax follows the slab unless the user has typed over it
   var ptEl=document.getElementById('pf-pt');
