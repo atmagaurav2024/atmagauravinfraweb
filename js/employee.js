@@ -36,7 +36,13 @@ function advDueForMonth(empId, month, year){
     var already=EMP_ADV_RECOV.some(function(x){return x.advance_id===a.id && x.month===month && x.year===year;});
     if(already) return;
     var amt=(a.recovery_type==='full') ? bal : Math.min(bal, parseFloat(a.emi_amount)||bal);
-    if(amt>0.5){ due+=amt; items.push({adv:a, amount:amt, balance:bal}); }
+    if(amt>0.5){
+      // Which instalment this is: one more than those already recovered
+      var doneCount=EMP_ADV_RECOV.filter(function(x){return x.advance_id===a.id;}).length;
+      var total=(a.recovery_type==='full')?1:(parseInt(a.emi_months,10)||1);
+      due+=amt;
+      items.push({adv:a, amount:amt, balance:bal, instNo:doneCount+1, instTotal:total});
+    }
   });
   return {total:Math.round(due), items:items};
 }
@@ -77,9 +83,11 @@ function empAdvancesHTML(){
       EMP_ADVANCES.map(function(a){
         var rec=advRecovered(a.id), bal=advBalance(a);
         var done=bal<=0.5;
+        var doneN=EMP_ADV_RECOV.filter(function(x){return x.advance_id===a.id;}).length;
         var plan=(a.recovery_type==='full')
           ? 'Full \u00b7 next salary'
-          : (a.emi_months||0)+' months \u00d7 '+fmtINR(parseFloat(a.emi_amount)||0);
+          : (a.emi_months||0)+' months \u00d7 '+fmtINR(parseFloat(a.emi_amount)||0)+
+            '<div style="font-size:9.5px;color:'+(done?'#2E7D32':'#1565C0')+';font-weight:700;">'+doneN+' of '+(a.emi_months||0)+' recovered</div>';
         var startTxt=(a.start_month?['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][a.start_month]+' '+a.start_year:'');
         return '<tr'+(done?' style="opacity:.6;"':'')+'>'+
           '<td style="white-space:nowrap;">'+fmtDate(a.date)+'</td>'+
@@ -989,6 +997,19 @@ function empSalaryHTML(){
                 '<span style="color:#444;">Advance'+(advDue.total>0?' <span style="font-size:8.5px;color:#C62828;font-weight:800;">DUE</span>':'')+'</span>'+
                 '<input data-sal="ded-adv" data-eid="'+e.id+'" id="sal-ded-adv-'+e.id+'" type="number" value="'+(advDue.total||0)+'" style="width:65px;border:1px solid #DDD;border-radius:4px;padding:2px 4px;font-size:10px;text-align:right;font-family:Nunito,sans-serif;">'+
               '</div>'+
+              // Which advance(s) this recovery settles, and where each is in
+              // its instalment run — so the deduction can be explained to the
+              // employee without opening the register.
+              (advDue.items.length?advDue.items.map(function(it){
+                var a=it.adv;
+                return '<div style="font-size:9px;color:var(--text3);padding:1px 0 3px 8px;border-bottom:1px solid #F7F7F7;">'+
+                  '<b style="color:#C62828;">'+(a.recovery_type==='full'?'Full recovery':(it.instNo+' of '+it.instTotal))+'</b>'+
+                  ' \u00b7 '+fmtINR(it.amount)+
+                  ' \u00b7 advance '+fmtINR(parseFloat(a.amount)||0)+' dated '+fmtDate(a.date)+
+                  (a.reference?' ('+a.reference+')':'')+
+                  ' \u00b7 balance after '+fmtINR(Math.max(0,it.balance-it.amount))+
+                '</div>';
+              }).join(''):'')+
               '<div id="sal-extra-ded-'+e.id+'"></div>'+
               '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:10px;font-weight:800;border-top:1.5px solid #333;margin-top:4px;">'+
                 '<span>Total Deducted</span><span id="sal-deducted-'+e.id+'">&#8377;'+Number(pf+es+td+pt).toLocaleString('en-IN')+'</span>'+
