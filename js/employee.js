@@ -1,3 +1,76 @@
+// ── Statutory deduction engines ─────────────────────────────────────────
+// Maharashtra Profession Tax:
+//   Male   up to 7,500 nil | 7,501-10,000 = 175 | above 10,000 = 200
+//   Female up to 25,000 nil | above 25,000 = 200
+//   February = 300 wherever 200 applies, so the annual total reaches 2,500
+function ptForMonth(gross, gender, month){
+  gross=parseFloat(gross)||0;
+  var g=String(gender||'').toLowerCase();
+  var feb=(parseInt(month,10)===2);
+  if(g.indexOf('f')===0){
+    if(gross<=25000) return 0;
+    return feb?300:200;
+  }
+  // male, and anything unrecorded — the stricter slab, so statutory tax is
+  // never under-deducted for an employee whose gender is not on file
+  if(gross<=7500) return 0;
+  if(gross<=10000) return 175;
+  return feb?300:200;
+}
+function ptStandard(gross, gender){ return ptForMonth(gross, gender, 1); }
+
+// ── TDS on salary — NEW TAX REGIME (section 115BAC) ─────────────────────
+// FY 2025-26 rates. Verify against the current Finance Act before relying
+// on these for a later year; edit the constants below.
+var TDS_STD_DEDUCTION = 75000;
+var TDS_SLABS = [
+  {upto:  400000, rate:0.00},
+  {upto:  800000, rate:0.05},
+  {upto: 1200000, rate:0.10},
+  {upto: 1600000, rate:0.15},
+  {upto: 2000000, rate:0.20},
+  {upto: 2400000, rate:0.25},
+  {upto: Infinity, rate:0.30}
+];
+var TDS_REBATE_LIMIT = 1200000;
+var TDS_REBATE_MAX   = 60000;
+var TDS_CESS         = 0.04;
+
+function tdsSlabTax(taxable){
+  var tax=0, prev=0;
+  for(var i=0;i<TDS_SLABS.length;i++){
+    var sl=TDS_SLABS[i];
+    if(taxable>prev) tax += (Math.min(taxable, sl.upto) - prev) * sl.rate;
+    prev = sl.upto;
+    if(taxable<=prev) break;
+  }
+  return tax;
+}
+function tdsSurcharge(taxable, tax){
+  var r = taxable>20000000 ? 0.25
+        : taxable>10000000 ? 0.15
+        : taxable> 5000000 ? 0.10 : 0;
+  return tax*r;
+}
+function tdsAnnualNewRegime(annualGross){
+  annualGross = parseFloat(annualGross)||0;
+  var taxable = Math.max(0, annualGross - TDS_STD_DEDUCTION);
+  if(taxable<=0) return 0;
+  var tax = tdsSlabTax(taxable);
+  if(taxable<=TDS_REBATE_LIMIT) tax = Math.max(0, tax - Math.min(TDS_REBATE_MAX, tax));
+  else { var excess = taxable - TDS_REBATE_LIMIT; if(tax > excess) tax = excess; }
+  if(tax<=0) return 0;
+  tax += tdsSurcharge(taxable, tax);
+  tax += tax * TDS_CESS;
+  return Math.round(tax);
+}
+function tdsMonthly(monthlyGross){
+  return Math.round(tdsAnnualNewRegime((parseFloat(monthlyGross)||0)*12)/12);
+}
+
+var PAY_EMP_GENDER='';
+var SAL_PERIOD={m:null,y:null};
+
 // 🔒 EMPLOYEE MANAGEMENT MODULE — LOCKED
 // Do NOT modify any code in this section without explicit user approval.
 // Any changes require user confirmation before implementation.
@@ -487,6 +560,21 @@ function salAddExtraRow(empId, type){
   container.appendChild(row);
 }
 
+// Month and year drive month-dependent deductions, which are computed while
+// the rows are built — so changing either must rebuild them.
+function salPeriodChange(){
+  SAL_PERIOD.m=parseInt((document.getElementById('sal-month')||{}).value)||null;
+  SAL_PERIOD.y=parseInt((document.getElementById('sal-year')||{}).value)||null;
+  var el=document.getElementById('emp-content');
+  if(!el) return;
+  el.innerHTML=empSalaryHTML();
+  if(typeof salWireLogButtons==='function') salWireLogButtons();
+  setTimeout(function(){
+    if(typeof salWireInputs==='function') salWireInputs();
+    if(typeof salLoadLOPDays==='function') salLoadLOPDays();
+  },100);
+}
+
 function empSalaryHTML(){
   var active = EMP_LIST.filter(function(e){return e.status==='active';});
   window._salRows=[]; window._salMonth='';
@@ -494,15 +582,16 @@ function empSalaryHTML(){
 
   var now=new Date();
   var MONTHS=['','January','February','March','April','May','June','July','August','September','October','November','December'];
-  var monthOpts=MONTHS.slice(1).map(function(m,i){return '<option value="'+(i+1)+'"'+((i+1)===now.getMonth()+1?' selected':'')+'>'+m+'</option>';}).join('');
-  var yearOpts=[now.getFullYear()-1,now.getFullYear(),now.getFullYear()+1].map(function(y){return '<option value="'+y+'"'+(y===now.getFullYear()?' selected':'')+'>'+y+'</option>';}).join('');
+  var selM=SAL_PERIOD.m||(now.getMonth()+1), selY=SAL_PERIOD.y||now.getFullYear();
+  var monthOpts=MONTHS.slice(1).map(function(m,i){return '<option value="'+(i+1)+'"'+((i+1)===selM?' selected':'')+'>'+m+'</option>';}).join('');
+  var yearOpts=[now.getFullYear()-1,now.getFullYear(),now.getFullYear()+1,now.getFullYear()+2].map(function(y){return '<option value="'+y+'"'+(y===selY?' selected':'')+'>'+y+'</option>';}).join('');
 
   var header =
     '<div style="background:white;border-radius:14px;padding:14px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#1B5E20;margin-bottom:4px;">&#128200; Monthly Salary Finalisation</div>'+
       '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Select employees, edit earnings/deductions, then click <b>Finalise Selected</b>. <b>LWP Days</b> are auto-filled from Attendance (Absent + ½×Half-day) and any leave <b>Approved without Pay</b> for the selected month — you can still edit them manually.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
-        '<div><label class="flbl">Month</label><select id="sal-month" class="fsel" onchange="salLoadLOPDays()">'+monthOpts+'</select></div>'+
+        '<div><label class="flbl">Month</label><select id="sal-month" class="fsel" onchange="salPeriodChange()">'+monthOpts+'</select></div>'+
         '<div><label class="flbl">Year</label><select id="sal-year" class="fsel" onchange="salLoadLOPDays()">'+yearOpts+'</select></div>'+
       '</div>'+
       '<div style="display:flex;gap:8px;">'+
@@ -533,9 +622,13 @@ function empSalaryHTML(){
       var g  = pay.gross||0;
       var pf = pay.pf_employee||0;
       var es = pay.esic_employee||0;
-      var td = pay.tds||0;
-      var pt = pay.profession_tax||0;
-      var net= pay.net_salary||0;
+      // Recomputed for the selected month: profession tax is 300 in
+      // February, and TDS follows this month's actual gross rather than the
+      // figure fixed when the pay structure was created.
+      var baseTds = pay.tds||0, basePt = pay.profession_tax||0;
+      var td = tdsMonthly(g);
+      var pt = basePt>0 ? ptForMonth(g, e.gender, selM) : ptStandard(g, e.gender);
+      var net= (pay.net_salary||0) - (pt - basePt) - (td - baseTds);
 
       return (
         '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" id="sal-row-'+e.id+'">'+
@@ -2692,6 +2785,7 @@ function empOpenPay(empId, empName){
   var existing=EMP_PAY.filter(function(p){return p.employee_id===empId;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
   var v=existing[0]||{};
   var emp=EMP_LIST.find(function(e){return e.id===empId;})||{};
+  PAY_EMP_GENDER=emp.gender||'';   // payCalc() needs it for the PT slab
 
   // Load extra_earnings and extra_deductions from previous record if any
   var extraEarnings=v.extra_earnings?JSON.parse(v.extra_earnings):[];
@@ -2783,14 +2877,14 @@ function empOpenPay(empId, empName){
 
           // TDS
           '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #F5F5F5;">'+
-            '<div style="flex:1;font-size:11px;font-weight:800;color:#E65100;">TDS</div>'+
-            '<input id="pf-tds" type="number" step="1" value="'+(v.tds||0)+'" oninput="payCalc()" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;">'+
+            '<div style="flex:1;"><div style="font-size:11px;font-weight:800;color:#E65100;">TDS</div><div id="pf-tds-note" style="font-size:9px;color:var(--text3);">New regime</div></div>'+
+            '<input id="pf-tds" type="number" step="1" value="'+(v.tds!=null?v.tds:'')+'" oninput="this.dataset.manual=1;payCalc()" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;">'+
           '</div>'+
 
           // Profession Tax
           '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #F5F5F5;">'+
-            '<div style="flex:1;"><div style="font-size:11px;font-weight:800;color:#880E4F;">Prof. Tax</div><div style="font-size:9px;color:var(--text3);">Compulsory</div></div>'+
-            '<input id="pf-pt" type="number" step="1" value="'+(v.profession_tax||200)+'" oninput="payCalc()" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;">'+
+            '<div style="flex:1;"><div style="font-size:11px;font-weight:800;color:#880E4F;">Prof. Tax</div><div id="pf-pt-note" style="font-size:9px;color:var(--text3);">Maharashtra slab</div></div>'+
+            '<input id="pf-pt" type="number" step="1" value="'+(v.profession_tax!=null?v.profession_tax:'')+'" oninput="this.dataset.manual=1;payCalc()" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;">'+
           '</div>'+
 
           // Dynamic deductions
@@ -2998,6 +3092,26 @@ function payCalc(){
     return s+amt;
   },0);
   var gross=basic+extraTotal;
+
+  // Statutory deductions computed from gross unless typed over
+  var tdsEl=document.getElementById('pf-tds');
+  if(tdsEl && !tdsEl.dataset.manual){
+    tdsEl.value=tdsMonthly(gross);
+    var tdsNote=document.getElementById('pf-tds-note');
+    if(tdsNote){
+      var annual=gross*12, annualTax=tdsAnnualNewRegime(annual);
+      tdsNote.innerHTML = annualTax>0
+        ? 'New regime \u00b7 tax '+Math.round(annualTax).toLocaleString('en-IN')+'/yr'
+        : 'New regime \u00b7 nil after std deduction & 87A rebate';
+    }
+  }
+  var ptEl=document.getElementById('pf-pt');
+  if(ptEl && !ptEl.dataset.manual){
+    ptEl.value=ptStandard(gross, PAY_EMP_GENDER);
+    var ptNote=document.getElementById('pf-pt-note');
+    if(ptNote) ptNote.innerHTML='Maharashtra slab \u00b7 '+(PAY_EMP_GENDER||'gender not set, male slab')+
+      (parseFloat(ptEl.value)>0?' \u00b7 \u20b9300 in Feb':'');
+  }
 
   var pfOn=document.getElementById('pf-applicable')&&document.getElementById('pf-applicable').checked;
   var esicOn=document.getElementById('esic-applicable')&&document.getElementById('esic-applicable').checked;
