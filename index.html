@@ -6901,6 +6901,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
     <button onclick="empTab('active',this)"   id="emp-t-active"   style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:rgba(255,255,255,.2);color:white;">&#9989; Active</button>
     <button onclick="empTab('pending',this)"  id="emp-t-pending"  style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#9203; Pending</button>
     <button onclick="empTab('pay',this)"      id="emp-t-pay"      style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128178; Pay Fixation</button>
+    <button onclick="empTab('advances',this)" id="emp-t-advances" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128176; Advances</button>
     <button onclick="empTab('leavefix',this)" id="emp-t-leavefix" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#127796; Leave Fixation</button>
     <button onclick="empTab('salary',this)" id="emp-t-salary" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128200; Monthly Salary</button>
     <button onclick="empTab('increment',this)" id="emp-t-increment" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128640; Increment</button>
@@ -7011,7 +7012,7 @@ async function initEmpMgmt(){
   // Hide tabs user cannot access
   empHideForbiddenTabs();
   // Open first accessible tab
-  var allTabs = ['active','pending','pay','leavefix','salary','increment','transfer','annual','downloads','resigned'];
+  var allTabs = ['active','pending','pay','advances','leavefix','salary','increment','transfer','annual','downloads','resigned'];
   var firstTab = allTabs.find(function(t){ return empTabAllowed(t); }) || 'active';
   empTab(firstTab, document.getElementById('emp-t-'+firstTab));
 }
@@ -18363,6 +18364,7 @@ var ACC_DEFAULT_COA=[
   {code:'1301', name:'GST Input Credit (ITC)',   type:'Asset',     group:'Current Assets'},
   {code:'1401', name:'Loans & Advances Receivable',type:'Asset',    group:'Loans & Advances'},
   {code:'1402', name:'Interest Receivable (Accrued)',type:'Asset',  group:'Loans & Advances'},
+  {code:'1403', name:'Salary Advances to Staff', type:'Asset',      group:'Loans & Advances'},
   {code:'2001', name:'Sundry Creditors (Vendors)',type:'Liability',group:'Current Liabilities'},
   {code:'2101', name:'GST Payable',              type:'Liability', group:'Duties & Taxes'},
   {code:'2201', name:'Loans Payable (Borrowings)',type:'Liability', group:'Loans (Liability)'},
@@ -22451,8 +22453,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260802k"></script>
-<script src="js/employee.js?v=20260802k"></script>
-<script src="js/projects.js?v=20260802k"></script>
-<script src="js/finance.js?v=20260802k"></script>
+<script src="js/registry.js?v=20260802l"></script>
+<script src="js/employee.js?v=20260802l"></script>
+<script src="js/projects.js?v=20260802l"></script>
+<script src="js/finance.js?v=20260802l"></script>
 </html>

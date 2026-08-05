@@ -1,3 +1,233 @@
+// ════════════════════════════════════════════════════════════════════════
+// SALARY ADVANCES — money advanced to an employee, recovered from salary
+// either in equal instalments or in full from the next salary.
+// ════════════════════════════════════════════════════════════════════════
+var EMP_ADVANCES=[], EMP_ADV_RECOV=[];
+
+async function advLoad(){
+  try{
+    var r=await Promise.all([
+      sbFetch('employee_advances',{select:'*',order:'date.desc'}).catch(function(){return [];}),
+      sbFetch('advance_recoveries',{select:'*'}).catch(function(){return [];})
+    ]);
+    EMP_ADVANCES=r[0]||[]; EMP_ADV_RECOV=r[1]||[];
+  }catch(e){ console.error('advLoad',e); EMP_ADVANCES=[]; EMP_ADV_RECOV=[]; }
+}
+
+function advRecovered(advId){
+  return EMP_ADV_RECOV.filter(function(x){return x.advance_id===advId;})
+    .reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
+}
+function advBalance(a){ return Math.max(0,(parseFloat(a.amount)||0)-advRecovered(a.id)); }
+
+// Amount due from an employee for a given month. Full-recovery advances take
+// the whole balance; instalment advances take the EMI, capped at the balance
+// so the final instalment never overshoots.
+function advDueForMonth(empId, month, year){
+  var due=0, items=[];
+  EMP_ADVANCES.filter(function(a){return a.employee_id===empId;}).forEach(function(a){
+    var bal=advBalance(a);
+    if(bal<=0.5) return;
+    // Not yet started
+    var startKey=(a.start_year||0)*100+(a.start_month||0);
+    var thisKey=(year||0)*100+(month||0);
+    if(startKey && thisKey < startKey) return;
+    // Already recovered this month
+    var already=EMP_ADV_RECOV.some(function(x){return x.advance_id===a.id && x.month===month && x.year===year;});
+    if(already) return;
+    var amt=(a.recovery_type==='full') ? bal : Math.min(bal, parseFloat(a.emi_amount)||bal);
+    if(amt>0.5){ due+=amt; items.push({adv:a, amount:amt, balance:bal}); }
+  });
+  return {total:Math.round(due), items:items};
+}
+
+function advEmpName(id){
+  var e=EMP_LIST.find(function(x){return x.id===id;});
+  return e?((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim():'\u2014';
+}
+
+function empAdvancesHTML(){
+  var canEdit = typeof canAccess==='function'?canAccess('employees','edit'):(currentUser&&currentUser.role==='admin');
+  var totAdv=EMP_ADVANCES.reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
+  var totRec=EMP_ADVANCES.reduce(function(a,x){return a+advRecovered(x.id);},0);
+  var totBal=totAdv-totRec;
+  var pending=EMP_ADVANCES.filter(function(a){return advBalance(a)>0.5;});
+
+  return '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ADVANCED</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(totAdv)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">RECOVERED</div><div style="font-size:15px;font-weight:900;color:#2E7D32;">'+fmtINR(totRec)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTSTANDING</div><div style="font-size:15px;font-weight:900;color:'+(totBal>0.5?'#C62828':'#2E7D32')+';">'+fmtINR(totBal)+'</div><div style="font-size:9px;color:var(--text3);">'+pending.length+' open</div></div>'+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
+      '<div style="font-size:14px;font-weight:800;">Advance Register</div>'+
+      '<div style="display:flex;gap:0;">'+
+        '<button onclick="advExportExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
+        '<button onclick="advExportPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
+        (canEdit?'<button onclick="advOpenNew()" style="background:var(--navy);color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Advance</button>':'')+
+      '</div>'+
+    '</div>'+
+    (EMP_ADVANCES.length?
+      '<div class="table-card"><table class="att-table"><thead><tr>'+
+        '<th>Date</th><th>Employee</th><th>Payment</th><th>Recovery Plan</th>'+
+        '<th style="text-align:right;">Amount</th><th style="text-align:right;">Recovered</th><th style="text-align:right;">Balance</th><th></th>'+
+      '</tr></thead><tbody>'+
+      EMP_ADVANCES.map(function(a){
+        var rec=advRecovered(a.id), bal=advBalance(a);
+        var done=bal<=0.5;
+        var plan=(a.recovery_type==='full')
+          ? 'Full \u00b7 next salary'
+          : (a.emi_months||0)+' months \u00d7 '+fmtINR(parseFloat(a.emi_amount)||0);
+        var startTxt=(a.start_month?['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][a.start_month]+' '+a.start_year:'');
+        return '<tr'+(done?' style="opacity:.6;"':'')+'>'+
+          '<td style="white-space:nowrap;">'+fmtDate(a.date)+'</td>'+
+          '<td><strong>'+advEmpName(a.employee_id)+'</strong>'+(a.remarks?'<div style="font-size:10px;color:var(--text3);">'+a.remarks+'</div>':'')+'</td>'+
+          '<td style="font-size:10.5px;">'+(a.mode||'\u2014')+(a.reference?'<div style="font-size:9.5px;color:var(--text3);">'+a.reference+'</div>':'')+'</td>'+
+          '<td style="font-size:10.5px;">'+plan+(startTxt?'<div style="font-size:9.5px;color:var(--text3);">from '+startTxt+'</div>':'')+'</td>'+
+          '<td style="text-align:right;font-weight:700;">'+fmtINR(parseFloat(a.amount)||0)+'</td>'+
+          '<td style="text-align:right;color:#2E7D32;">'+fmtINR(rec)+'</td>'+
+          '<td style="text-align:right;font-weight:800;color:'+(done?'#2E7D32':'#C62828')+';">'+(done?'CLEARED':fmtINR(bal))+'</td>'+
+          '<td>'+(canEdit&&!done?'<button class="btn btn-sm btn-red" onclick="advDelete(\''+a.id+'\')">&#128465;</button>':'')+'</td></tr>';
+      }).join('')+
+      '<tr style="background:#E8EAF6;font-weight:900;"><td colspan="4">TOTAL</td>'+
+        '<td style="text-align:right;">'+fmtINR(totAdv)+'</td>'+
+        '<td style="text-align:right;">'+fmtINR(totRec)+'</td>'+
+        '<td style="text-align:right;">'+fmtINR(totBal)+'</td><td></td></tr>'+
+      '</tbody></table></div>'
+      :'<div style="text-align:center;padding:30px;color:var(--text3);">No advances recorded yet.</div>');
+}
+
+function advOpenNew(){
+  var emps=EMP_LIST.filter(function(e){return e.status==='active';});
+  if(!emps.length){ toast('No active employees','warning'); return; }
+  var now=new Date();
+  document.getElementById('emp-sheet-title').textContent='Give Salary Advance';
+  document.getElementById('emp-sheet-body').innerHTML=
+    '<label class="flbl">Employee *</label><select class="fsel" id="adv-emp">'+
+      emps.map(function(e){return '<option value="'+e.id+'">'+((e.first_name||'')+' '+(e.last_name||'')).trim()+'</option>';}).join('')+'</select>'+
+    '<label class="flbl">Advance Amount (&#8377;) *</label><input class="finp" id="adv-amt" type="number" step="1" placeholder="0" oninput="advCalcEmi()">'+
+    '<label class="flbl">Date *</label><input class="finp" id="adv-date" type="date" value="'+now.toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Paid By *</label><select class="fsel" id="adv-mode"><option>Bank</option><option>Cash</option></select>'+
+    '<label class="flbl">Reference / Cheque / UTR</label><input class="finp" id="adv-ref">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="adv-remarks" placeholder="Reason for advance">'+
+    '<div style="background:#E8EAF6;border-radius:8px;padding:10px;margin:10px 0;">'+
+      '<div style="font-size:11px;font-weight:900;color:var(--navy);margin-bottom:6px;">RECOVERY</div>'+
+      '<label class="flbl" style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:0 0 4px;">'+
+        '<input type="radio" name="adv-rt" id="adv-rt-emi" value="emi" checked style="width:auto;margin:0;" onchange="advCalcEmi()"> Split into monthly instalments</label>'+
+      '<div id="adv-emi-box" style="padding-left:20px;margin-bottom:6px;">'+
+        '<div style="display:flex;gap:6px;align-items:center;">'+
+          '<input class="finp" id="adv-months" type="number" min="1" step="1" value="3" style="width:70px;margin:0;" oninput="advCalcEmi()">'+
+          '<span style="font-size:11px;color:var(--text3);">months &#215;</span>'+
+          '<input class="finp" id="adv-emi" type="number" step="1" style="width:100px;margin:0;" oninput="this.dataset.manual=1;">'+
+          '<span style="font-size:11px;color:var(--text3);">per month</span>'+
+        '</div>'+
+        '<div id="adv-emi-note" style="font-size:10px;color:var(--text3);margin-top:4px;"></div>'+
+      '</div>'+
+      '<label class="flbl" style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:0;">'+
+        '<input type="radio" name="adv-rt" id="adv-rt-full" value="full" style="width:auto;margin:0;" onchange="advCalcEmi()"> Recover in full from the next salary</label>'+
+      '<div style="display:flex;gap:6px;margin-top:8px;">'+
+        '<div style="flex:1;"><label class="flbl" style="font-size:10px;">Start month</label>'+
+          '<select class="fsel" id="adv-start-m" style="margin:0;">'+
+            ['','January','February','March','April','May','June','July','August','September','October','November','December']
+              .map(function(m,i){ return i?'<option value="'+i+'"'+(i===(now.getMonth()+2>12?1:now.getMonth()+2)?' selected':'')+'>'+m+'</option>':''; }).join('')+
+          '</select></div>'+
+        '<div style="flex:1;"><label class="flbl" style="font-size:10px;">Year</label>'+
+          '<select class="fsel" id="adv-start-y" style="margin:0;">'+
+            [now.getFullYear(),now.getFullYear()+1].map(function(y){return '<option value="'+y+'">'+y+'</option>';}).join('')+
+          '</select></div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:10.5px;color:var(--text3);">Recovery is deducted automatically during salary finalisation, and flagged there if it has not been recovered.</div>';
+  document.getElementById('emp-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeEmpSheet()">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="advSave()">Save Advance</button>';
+  openSheet('ov-emp','sh-emp');
+  advCalcEmi();
+}
+
+function advCalcEmi(){
+  var full=(document.getElementById('adv-rt-full')||{}).checked;
+  var box=document.getElementById('adv-emi-box');
+  if(box) box.style.display=full?'none':'';
+  var amt=parseFloat((document.getElementById('adv-amt')||{}).value)||0;
+  var m=parseInt((document.getElementById('adv-months')||{}).value)||1;
+  var emiEl=document.getElementById('adv-emi');
+  if(emiEl && !emiEl.dataset.manual && !full) emiEl.value = m>0?Math.ceil(amt/m):0;
+  var note=document.getElementById('adv-emi-note');
+  if(note && !full){
+    var emi=parseFloat(emiEl?emiEl.value:0)||0;
+    var covered=emi*m;
+    note.innerHTML = amt>0
+      ? fmtINR(emi)+' \u00d7 '+m+' = '+fmtINR(covered)+(covered<amt?' \u00b7 <b style="color:#C62828;">'+fmtINR(amt-covered)+' would remain</b>':(covered>amt?' \u00b7 last instalment reduced to '+fmtINR(amt-emi*(m-1)):''))
+      : '';
+  }
+}
+
+async function advSave(){
+  var gvv=function(id){var el=document.getElementById(id);return el?el.value:'';};
+  var amt=parseFloat(gvv('adv-amt'))||0;
+  if(amt<=0){toast('Enter a valid amount','warning');return;}
+  var full=(document.getElementById('adv-rt-full')||{}).checked;
+  var months=full?null:(parseInt(gvv('adv-months'))||1);
+  var emi=full?null:(parseFloat(gvv('adv-emi'))||Math.ceil(amt/(months||1)));
+  var rec={
+    employee_id:gvv('adv-emp'), amount:amt, date:gvv('adv-date'),
+    mode:gvv('adv-mode')||'Bank', reference:gvv('adv-ref')||null, remarks:gvv('adv-remarks')||null,
+    recovery_type:full?'full':'emi', emi_months:months, emi_amount:emi,
+    start_month:parseInt(gvv('adv-start-m'))||null, start_year:parseInt(gvv('adv-start-y'))||null,
+    status:'open', created_by:(currentUser&&currentUser.id)||null
+  };
+  try{
+    var res=await sbInsert('employee_advances',rec);
+    if(res&&res[0]){
+      EMP_ADVANCES.unshift(res[0]);
+      // Advance to staff is a receivable, not an expense
+      if(typeof accAutoPost==='function'){
+        accAutoPost({type:'Payment', date:rec.date, partyName:advEmpName(rec.employee_id),
+          debitCode:'1403', creditCode:(rec.mode==='Cash'?'1001':'1002'), amount:amt,
+          narration:'Salary advance to '+advEmpName(rec.employee_id)+(rec.remarks?' \u2014 '+rec.remarks:''),
+          sourceType:'employee_advance', sourceId:res[0].id});
+      }
+    }
+    closeEmpSheet(); empRender(); toast('Advance recorded','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function advDelete(id){
+  var a=EMP_ADVANCES.find(function(x){return x.id===id;});
+  if(advRecovered(id)>0.5){ toast('Cannot delete \u2014 recovery has already started','warning'); return; }
+  if(!confirm('Delete this advance of '+fmtINR(a?a.amount:0)+'? Its accounting entry will also be removed.')) return;
+  try{
+    await sbDelete('employee_advances',id);
+    if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(id);
+    EMP_ADVANCES=EMP_ADVANCES.filter(function(x){return x.id!==id;});
+    empRender(); toast('Deleted','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function advExportData(){
+  var rows=EMP_ADVANCES.map(function(a){
+    var rec=advRecovered(a.id);
+    return [fmtDate(a.date), advEmpName(a.employee_id), a.mode||'', a.reference||'',
+      (a.recovery_type==='full'?'Full next salary':((a.emi_months||0)+'m x '+Math.round(a.emi_amount||0))),
+      Math.round(parseFloat(a.amount)||0), Math.round(rec), Math.round(advBalance(a)), a.remarks||''];
+  });
+  var t=function(f){return EMP_ADVANCES.reduce(function(x,a){return x+f(a);},0);};
+  rows.push(['TOTAL','','','','',Math.round(t(function(a){return parseFloat(a.amount)||0;})),
+    Math.round(t(function(a){return advRecovered(a.id);})), Math.round(t(function(a){return advBalance(a);})),'']);
+  return {title:'Salary Advance Register', header:['Date','Employee','Mode','Reference','Recovery Plan','Amount','Recovered','Balance','Remarks'], rows:rows};
+}
+function advExportExcel(){
+  if(!EMP_ADVANCES.length){toast('Nothing to export','warning');return;}
+  var d=advExportData();
+  accExportCSV('Salary_Advances_'+new Date().toISOString().slice(0,10)+'.csv',[[d.title],[''],d.header].concat(d.rows));
+}
+function advExportPDF(){
+  if(!EMP_ADVANCES.length){toast('Nothing to export','warning');return;}
+  var d=advExportData();
+  d.rows=d.rows.map(function(r){ [5,6,7].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
+  accExportPDF(d.title, d.header, d.rows);
+}
+
 // ── Statutory deduction engines ─────────────────────────────────────────
 // Maharashtra Profession Tax:
 //   Male   up to 7,500 nil | 7,501-10,000 = 175 | above 10,000 = 200
@@ -102,6 +332,7 @@ function fmtDate(d){
 }
 
 async function initEmpMgmt(){
+  advLoad();   // salary advances, used by the Advances tab and salary rows
   var el=document.getElementById('emp-content');
   if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
 
@@ -186,6 +417,7 @@ function empRender(){
   else if(EMP_TAB==='leavefix')  el.innerHTML=empLeaveFixHTML();
   else if(EMP_TAB==='resigned')  el.innerHTML=empListHTML('resigned');
   else if(EMP_TAB==='salary'){el.innerHTML=empSalaryHTML();salWireLogButtons();setTimeout(function(){salWireInputs();salLoadLOPDays();},100);}
+  else if(EMP_TAB==='advances'){ el.innerHTML=empAdvancesHTML(); }
   else if(EMP_TAB==='increment') el.innerHTML=empIncrementHTML();
   else if(EMP_TAB==='transfer'){el.innerHTML=empTransferHTML();hrWireOrderButtons();}
   // Wire pay fixation delete buttons
@@ -302,6 +534,7 @@ async function salLoadRecords(){
 // ── Finalise salary: save all employee records for the month ─────────────
 
 async function salFinalise(){
+  var _advToRecord=[];
   var month = parseInt((document.getElementById('sal-month')||{}).value)||0;
   var year  = parseInt((document.getElementById('sal-year')||{}).value)||0;
   if(!month||!year){toast('Select month and year','warning');return;}
@@ -400,6 +633,12 @@ async function salFinalise(){
       finalised_by:currentUser?currentUser.name:null,
       finalised_at:new Date().toISOString()
     });
+    // Remember which advances this deduction covers, so recovery can be
+    // written against them once the records are saved
+    if(adv>0 && typeof advDueForMonth==='function'){
+      var plan=advDueForMonth(e.id, month, year);
+      _advToRecord.push({empId:e.id, month:month, year:year, deducted:adv, items:plan.items});
+    }
   });
 
   if(!toSave.length){toast('No employees with pay structure selected','warning');return;}
@@ -411,6 +650,30 @@ async function salFinalise(){
       if(res&&res[0]) inserted.push(res[0]);
     }
     SALARY_RECORDS=inserted.concat(SALARY_RECORDS);
+
+    // Write advance recoveries against the specific advances they settle,
+    // oldest first, capped at each one's remaining balance so an over-large
+    // deduction cannot recover more than is owed.
+    for(var k=0;k<_advToRecord.length;k++){
+      var pl=_advToRecord[k], left=pl.deducted;
+      var srec=inserted.find(function(x){return x.employee_id===pl.empId;});
+      for(var q=0;q<pl.items.length && left>0.5;q++){
+        var it=pl.items[q];
+        var take=Math.min(left, it.balance);
+        try{
+          var rr=await sbInsert('advance_recoveries',{advance_id:it.adv.id, employee_id:pl.empId,
+            month:pl.month, year:pl.year, amount:take, salary_record_id:srec?srec.id:null,
+            date:new Date().toISOString().slice(0,10)});
+          if(rr&&rr[0]) EMP_ADV_RECOV.push(rr[0]);
+          // Close the advance once nothing is left on it
+          if(advBalance(it.adv)<=0.5){
+            try{ await sbUpdate('employee_advances', it.adv.id, {status:'closed'}); it.adv.status='closed'; }catch(ue){}
+          }
+        }catch(re){ console.warn('advance recovery not recorded', re); }
+        left-=take;
+      }
+    }
+
     toast('Salary finalised for '+monthLabel+' — '+inserted.length+' employees','success');
     window._salRows=[]; window._salMonth='';
     empRender();
@@ -625,6 +888,8 @@ function empSalaryHTML(){
       // Recomputed for the selected month: profession tax is 300 in
       // February, and TDS follows this month's actual gross rather than the
       // figure fixed when the pay structure was created.
+      // Advance instalment due from this employee for the selected month
+      var advDue = (typeof advDueForMonth==='function') ? advDueForMonth(e.id, selM, selY) : {total:0,items:[]};
       var baseTds = pay.tds||0, basePt = pay.profession_tax||0;
       var td = tdsMonthly(g);
       var pt = basePt>0 ? ptForMonth(g, e.gender, selM) : ptStandard(g, e.gender);
@@ -718,8 +983,8 @@ function empSalaryHTML(){
                 '<input data-sal="ded-pt" data-eid="'+e.id+'" id="sal-ded-pt-'+e.id+'" type="number" value="'+pt+'" style="width:65px;border:1px solid #DDD;border-radius:4px;padding:2px 4px;font-size:10px;text-align:right;font-family:Nunito,sans-serif;">'+
               '</div>'+
               '<div style="font-size:10px;display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #F0F0F0;">'+
-                '<span style="color:#444;">Advance</span>'+
-                '<input data-sal="ded-adv" data-eid="'+e.id+'" id="sal-ded-adv-'+e.id+'" type="number" value="0" style="width:65px;border:1px solid #DDD;border-radius:4px;padding:2px 4px;font-size:10px;text-align:right;font-family:Nunito,sans-serif;">'+
+                '<span style="color:#444;">Advance'+(advDue.total>0?' <span style="font-size:8.5px;color:#C62828;font-weight:800;">DUE</span>':'')+'</span>'+
+                '<input data-sal="ded-adv" data-eid="'+e.id+'" id="sal-ded-adv-'+e.id+'" type="number" value="'+(advDue.total||0)+'" style="width:65px;border:1px solid #DDD;border-radius:4px;padding:2px 4px;font-size:10px;text-align:right;font-family:Nunito,sans-serif;">'+
               '</div>'+
               '<div id="sal-extra-ded-'+e.id+'"></div>'+
               '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:10px;font-weight:800;border-top:1.5px solid #333;margin-top:4px;">'+
