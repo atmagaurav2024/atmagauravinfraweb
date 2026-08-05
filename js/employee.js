@@ -14,6 +14,37 @@ async function advLoad(){
   }catch(e){ console.error('advLoad',e); EMP_ADVANCES=[]; EMP_ADV_RECOV=[]; }
 }
 
+// Deleting a salary record must also undo any advance recovery it made —
+// otherwise the advance stays partly recovered against a salary that no
+// longer exists, and its balance is understated. Reopens an advance that
+// had been closed by that recovery.
+async function advUndoRecoveryFor(salaryRecordId){
+  if(!salaryRecordId) return 0;
+  var rows=EMP_ADV_RECOV.filter(function(x){return x.salary_record_id===salaryRecordId;});
+  if(!rows.length){
+    // Fall back to a lookup in case the local cache is stale
+    try{ rows=await sbFetch('advance_recoveries',{select:'*',filter:'salary_record_id=eq.'+salaryRecordId}); }
+    catch(e){ return 0; }
+    if(!Array.isArray(rows)||!rows.length) return 0;
+  }
+  var n=0, touched={};
+  for(var i=0;i<rows.length;i++){
+    try{
+      await sbDelete('advance_recoveries', rows[i].id);
+      EMP_ADV_RECOV=EMP_ADV_RECOV.filter(function(x){return x.id!==rows[i].id;});
+      touched[rows[i].advance_id]=1; n++;
+    }catch(e){ console.warn('could not undo advance recovery', e); }
+  }
+  // Anything now carrying a balance again must be reopened
+  for(var id in touched){
+    var a=EMP_ADVANCES.find(function(x){return x.id===id;});
+    if(a && a.status==='closed' && advBalance(a)>0.5){
+      try{ await sbUpdate('employee_advances', id, {status:'open'}); a.status='open'; }catch(e){}
+    }
+  }
+  return n;
+}
+
 function advRecovered(advId){
   return EMP_ADV_RECOV.filter(function(x){return x.advance_id===advId;})
     .reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
@@ -569,7 +600,10 @@ async function salFinalise(){
   if(already.length){
     if(!confirm('Salary for '+already.length+' of these employees already finalised for '+monthLabel+'.\n\nOverwrite?')) return;
     try{
-      for(var i=0;i<already.length;i++) await sbDelete('salary_records',already[i].id);
+      for(var i=0;i<already.length;i++){
+        await advUndoRecoveryFor(already[i].id);   // re-finalising re-applies it
+        await sbDelete('salary_records',already[i].id);
+      }
       SALARY_RECORDS = SALARY_RECORDS.filter(function(r){
         return !(r.month===month&&r.year===year&&selected.some(function(e){return e.id===r.employee_id;}));
       });
@@ -1087,9 +1121,10 @@ function salToggleLog(divId){
 async function salDeleteEmpRecord(recordId, empName, monthLabel){
   if(!confirm('Delete salary record for '+empName+' ('+monthLabel+')?\n\nThis cannot be undone.')) return;
   try{
+    var undone=await advUndoRecoveryFor(recordId);
     await sbDelete('salary_records', recordId);
     SALARY_RECORDS = SALARY_RECORDS.filter(function(r){return r.id!==recordId;});
-    toast(empName+"'s "+monthLabel+' record deleted','success');
+    toast(empName+"'s "+monthLabel+' record deleted'+(undone?' \u00b7 advance recovery reversed':''),'success');
     empRender();
   }catch(e){toast('Error: '+e.message,'error');}
 }
@@ -1166,11 +1201,13 @@ async function salDeleteMonth(month, year, label){
   var toDelete = SALARY_RECORDS.filter(function(r){return r.month===month&&r.year===year;});
   try{
     toast('Deleting...','info');
+    var undoneAll=0;
     for(var i=0;i<toDelete.length;i++){
+      undoneAll += await advUndoRecoveryFor(toDelete[i].id);
       await sbDelete('salary_records', toDelete[i].id);
     }
     SALARY_RECORDS = SALARY_RECORDS.filter(function(r){return !(r.month===month&&r.year===year);});
-    toast(label+' salary records deleted','info');
+    toast(label+' salary records deleted'+(undoneAll?' \u00b7 '+undoneAll+' advance recover'+(undoneAll!==1?'ies':'y')+' reversed':''),'info');
     empRender();
   }catch(e){toast('Error: '+e.message,'error');}
 }
