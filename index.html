@@ -17062,6 +17062,26 @@ function lgPDF(){
 // so the balance sheet shows the full obligation rather than only settled
 // interest. Taken: Dr Interest Expense / Cr Interest Payable. Given:
 // Dr Interest Receivable / Cr Interest Income. Idempotent per loan+date.
+// Interest provided for a loan but not yet cleared by an actual payment.
+// Once provided (Dr 4201 / Cr 2202), paying that interest must clear the
+// liability (Dr 2202 / Cr Bank) — debiting 4201 again would charge the same
+// interest to the P&L twice and leave 2202 permanently overstated.
+function lnProvisionOutstanding(loanId){
+  var acct=function(code){ var a=ACC_ACCOUNTS.find(function(x){return String(x.code)===code;}); return a?a.id:null; };
+  var id2202=acct('2202'), id1402=acct('1402');
+  var provided=ACC_VOUCHERS.filter(function(v){
+    return v.source_type==='loan_interest_accrual' && v.source_id===loanId;
+  }).reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);
+  if(provided<=0) return 0;
+  var txnIds={};
+  LN_TXNS.forEach(function(t){ if(t.loan_id===loanId && t.txn_type==='interest') txnIds[t.id]=1; });
+  var cleared=ACC_VOUCHERS.filter(function(v){
+    return v.source_type==='loan_txn' && txnIds[v.source_id] &&
+      (v.debit_account===id2202 || v.credit_account===id1402);
+  }).reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);
+  return Math.max(0, provided-cleared);
+}
+
 async function lnProvideInterest(){
   if(!lnCanEdit()){toast('No permission','warning');return;}
   var asOn=new Date().toISOString().slice(0,10);
@@ -17080,7 +17100,8 @@ async function lnProvideInterest(){
     items.length+' loan'+(items.length!==1?'s':'')+' \u00b7 '+fmtINR(tot)+'\n\n'+
     'Loans taken:  Dr Interest Expense / Cr Interest Payable\n'+
     'Loans given:  Dr Interest Receivable / Cr Interest Income\n\n'+
-    'Already-provided amounts are excluded, so this can be run again later.')) return;
+    'Already-provided amounts are excluded, so this can be run again later.\n'+
+    'When this interest is paid it will clear the provision rather than being charged again.')) return;
 
   var ok=0, bad=0;
   for(var i=0;i<items.length;i++){
@@ -17543,8 +17564,16 @@ async function lnSavePartyTxn(pid,dir){
             var pnv=pn+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
             var o;
             if(p.type==='interest'){
-              o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
-                       :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
+              // Clear any provision first; only unprovided interest is a
+              // fresh expense (or income) at the time of payment.
+              var outstanding=lnProvisionOutstanding(r.loan.id);
+              if(outstanding>0.005){
+                o=isTaken?{type:'Payment',debitCode:'2202',creditCode:cashCode,narration:'Interest paid to '+pnv+' (against provision)'}
+                         :{type:'Receipt',debitCode:cashCode,creditCode:'1402',narration:'Interest received from '+pnv+' (against accrual)'};
+              } else {
+                o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
+                         :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
+              }
             } else {
               o=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Loan repaid to '+pnv}
                        :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Loan recovered from '+pnv};
