@@ -16819,17 +16819,12 @@ function lnRender(){
     return lb.localeCompare(la);
   });
 
-  var totPrin=0,totOut=0,totInt=0,totAccr=0,totDue=0,totBooked=0,totRepaid=0;
+  var totPrin=0,totOut=0,totInt=0,totAccr=0,totDue=0,totRepaid=0;
   loans.forEach(function(l){
     var st=lnLoanStats(l.id);
     totPrin+=st.principal; totOut+=st.outstanding; totInt+=st.interest; totAccr+=st.accrued; totDue+=st.intDue;
-    totBooked+=lnProvisionOutstanding(l.id);
     totRepaid+=st.repaid;
   });
-  // Interest that has accrued since the last time it was booked to the
-  // ledger. Until it is booked, the Balance Sheet legitimately shows less
-  // than the figure calculated here, which is live to today.
-  var totUnbooked=Math.max(0, totDue-totBooked);
 
   c.innerHTML=
     '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;">'+
@@ -16839,17 +16834,14 @@ function lnRender(){
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST ACCRUED</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+fmtINR(totAccr)+'</div>'+
         '<div style="font-size:9px;color:var(--text3);">'+fmtINR(totInt)+' '+(isTaken?'paid':'received')+'</div>'+
         '<div style="font-size:10px;font-weight:800;color:'+(totDue>0.5?'#C62828':'#2E7D32')+';">'+(totDue>0.5?('balance '+fmtINR(totDue)):'fully settled')+'</div>'+
-        (totUnbooked>0.5?'<div style="font-size:8.5px;color:#E65100;">'+fmtINR(totUnbooked)+' not yet booked</div>':'')+'</div>'+
+        '</div>'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL '+(isTaken?'PAYABLE':'RECEIVABLE')+'</div><div style="font-size:15px;font-weight:900;color:'+(totOut+totDue>0.5?accent:'#2E7D32')+';">'+fmtINR(totOut+totDue)+'</div><div style="font-size:9px;color:var(--text3);">incl. '+fmtINR(totDue)+' interest due</div></div>'+
     '</div>'+
-    (totUnbooked>0.5?'<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#6D4C41;">'+
-      '&#9878; <b>'+fmtINR(totUnbooked)+'</b> of interest has accrued since it was last booked. Until you press <b>Book Interest</b>, the Balance Sheet will show '+fmtINR(totBooked)+' rather than the '+fmtINR(totDue)+' shown above \u2014 both are correct, one is live to today and the other is what is in the ledger.</div>':'')+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
       '<div style="font-size:14px;font-weight:800;white-space:nowrap;">'+(isTaken?'Loans Taken':'Loans Given')+'</div>'+
       '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;">'+
         '<button onclick="lnExportExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128202; Excel</button>'+
         '<button onclick="lnExportPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#128196; PDF</button>'+
-        (lnCanEdit()?'<button onclick="lnProvideInterest()" title="Book interest accrued but not yet paid, so it appears as a liability (or receivable) in the Balance Sheet" style="background:#E65100;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;">&#9878; Book Interest</button>':'')+
         (lnCanEdit()?'<button onclick="lnOpenLoan(\''+dir+'\')" style="background:#00695C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Loan</button>':'')+
       '</div>'+
     '</div>'+
@@ -17224,88 +17216,6 @@ function lgPDF(){
 // so the balance sheet shows the full obligation rather than only settled
 // interest. Taken: Dr Interest Expense / Cr Interest Payable. Given:
 // Dr Interest Receivable / Cr Interest Income. Idempotent per loan+date.
-// Interest provided for a loan but not yet cleared by an actual payment.
-// Once provided (Dr 4201 / Cr 2202), paying that interest must clear the
-// liability (Dr 2202 / Cr Bank) — debiting 4201 again would charge the same
-// interest to the P&L twice and leave 2202 permanently overstated.
-function lnProvisionOutstanding(loanId){
-  var acct=function(code){ var a=ACC_ACCOUNTS.find(function(x){return String(x.code)===code;}); return a?a.id:null; };
-  var id2202=acct('2202'), id1402=acct('1402');
-  var provided=ACC_VOUCHERS.filter(function(v){
-    return v.source_type==='loan_interest_accrual' && v.source_id===loanId;
-  }).reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);
-  if(provided<=0) return 0;
-  var txnIds={};
-  LN_TXNS.forEach(function(t){ if(t.loan_id===loanId && t.txn_type==='interest') txnIds[t.id]=1; });
-  var cleared=ACC_VOUCHERS.filter(function(v){
-    return v.source_type==='loan_txn' && txnIds[v.source_id] &&
-      (v.debit_account===id2202 || v.credit_account===id1402);
-  }).reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);
-  return Math.max(0, provided-cleared);
-}
-
-async function lnProvideInterest(){
-  if(!lnCanEdit()){toast('No permission','warning');return;}
-  var asOn=new Date().toISOString().slice(0,10);
-  var items=[];
-  LN_LOANS.forEach(function(l){
-    var st=lnLoanStats(l.id, asOn);
-    // Interest already provided for this loan, so a re-run tops up only
-    var prov=ACC_VOUCHERS.filter(function(v){return v.source_type==='loan_interest_accrual'&&v.source_id===l.id;})
-      .reduce(function(a,v){return a+(parseFloat(v.amount)||0);},0);
-    var net=st.intDue-prov;
-    if(net>0.5) items.push({loan:l, amount:net, prov:prov, due:st.intDue});
-  });
-  if(!items.length){ toast('No unprovided interest \u2014 the books are already up to date','info'); return; }
-  var tot=items.reduce(function(a,x){return a+x.amount;},0);
-  if(!confirm('Book interest accrued but not yet paid, as on '+fmtDate(asOn)+'?\n\n'+
-    items.length+' loan'+(items.length!==1?'s':'')+' \u00b7 '+fmtINR(tot)+'\n\n'+
-    'Loans taken:  Dr Interest Expense / Cr Interest Payable\n'+
-    'Loans given:  Dr Interest Receivable / Cr Interest Income\n\n'+
-    'Already-provided amounts are excluded, so this can be run again later.\n'+
-    'When this interest is paid it will clear the provision rather than being charged again.')) return;
-
-  var ok=0, bad=0;
-  for(var i=0;i<items.length;i++){
-    var x=items[i], taken=(x.loan.direction==='taken');
-    var pn=lnPartyName(x.loan.party_id);
-    var done=await accAutoPost({type:'Journal', date:asOn, partyName:pn,
-      debitCode:taken?'4201':'1402', creditCode:taken?'2202':'3005', amount:x.amount,
-      narration:'Interest accrued to '+fmtDate(asOn)+' on loan of '+fmtDate(x.loan.start_date)+' \u00b7 '+pn,
-      sourceType:'loan_interest_accrual', sourceId:x.loan.id});
-    if(done) ok++; else bad++;
-  }
-  if(bad) toast(ok+' provided, '+bad+' failed'+(ACC_AUTOPOST_LAST_ERROR?' \u2014 '+ACC_AUTOPOST_LAST_ERROR:''),'warning');
-  else toast('Interest provision booked \u00b7 '+fmtINR(tot),'success');
-}
-
-// State and helpers for the Party-wise tab. These were removed with the old
-// ledger block; lnRenderParties() referenced them and threw on every render,
-// which is why the tab appeared not to work.
-var LN_PARTY_OPEN=null, LN_PARTY_FILTER='all';
-function lnPartyFilter(f){ LN_PARTY_FILTER=f; lnRenderParties(); }
-function lnTogglePartyDetail(id){ LN_PARTY_OPEN=(LN_PARTY_OPEN===id)?null:id; lnRenderParties(); }
-
-// Totals for one party across both directions. Borrowed and lent are kept
-// apart rather than netted, since a party who is both owes and is owed
-// separately.
-function lnPartyStats(pid){
-  var out={borrowed:0,lent:0,owedByUs:0,owedToUs:0,intPayable:0,intReceivable:0,
-    intPaid:0,intRecd:0,intAccrTaken:0,intAccrGiven:0,count:0};
-  LN_LOANS.filter(function(l){return l.party_id===pid;}).forEach(function(l){
-    var st=lnLoanStats(l.id); out.count++;
-    if(l.direction==='taken'){
-      out.borrowed+=st.principal; out.owedByUs+=st.outstanding;
-      out.intPayable+=st.intDue; out.intPaid+=st.interest; out.intAccrTaken+=st.accrued;
-    } else {
-      out.lent+=st.principal; out.owedToUs+=st.outstanding;
-      out.intReceivable+=st.intDue; out.intRecd+=st.interest; out.intAccrGiven+=st.accrued;
-    }
-  });
-  out.totalPayable=out.owedByUs+out.intPayable;
-  out.totalReceivable=out.owedToUs+out.intReceivable;
-  return out;
-}
 
 function lnRenderParties(){
   var c=document.getElementById('ln-content'); if(!c)return;
@@ -17754,16 +17664,10 @@ async function lnSavePartyTxn(pid,dir){
             var pnv=pn+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
             var o;
             if(p.type==='interest'){
-              // Clear any provision first; only unprovided interest is a
-              // fresh expense (or income) at the time of payment.
-              var outstanding=lnProvisionOutstanding(r.loan.id);
-              if(outstanding>0.005){
-                o=isTaken?{type:'Payment',debitCode:'2202',creditCode:cashCode,narration:'Interest paid to '+pnv+' (against provision)'}
-                         :{type:'Receipt',debitCode:cashCode,creditCode:'1402',narration:'Interest received from '+pnv+' (against accrual)'};
-              } else {
-                o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
-                         :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
-              }
+              // Interest hits the books only when actually paid or received;
+              // accrued interest is calculated for display and never posted.
+              o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
+                       :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
             } else {
               o=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Loan repaid to '+pnv}
                        :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Loan recovered from '+pnv};
