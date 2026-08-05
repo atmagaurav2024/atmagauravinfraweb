@@ -355,7 +355,9 @@ async function pcSaveExpense(){
 
     // Auto-post to Accounts: Dr [Category Expense], Cr Petty Cash in Hand
     if(res&&res[0]&&typeof accAutoPost==='function'&&typeof ACC_PETTY_CAT_CODES!=='undefined'){
-      accAutoPost({type:'Journal', date:gv('pce-date'), partyName:desc,
+      // Payment, not Journal: cash genuinely leaves the petty cash float.
+      // Journal is for entries where no money moves, such as provisions.
+      accAutoPost({type:'Payment', date:gv('pce-date'), partyName:desc,
         debitCode:ACC_PETTY_CAT_CODES[cat]||'4110', creditCode:'1101', amount:amount,
         narration:'Petty cash — '+cat+' — '+desc, sourceType:'petty_cash_expense', sourceId:res[0].id});
     }
