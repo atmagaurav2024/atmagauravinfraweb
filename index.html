@@ -16672,8 +16672,16 @@ function lnRender(){
     return lb.localeCompare(la);
   });
 
-  var totPrin=0,totOut=0,totInt=0,totAccr=0,totDue=0;
-  loans.forEach(function(l){ var st=lnLoanStats(l.id); totPrin+=st.principal; totOut+=st.outstanding; totInt+=st.interest; totAccr+=st.accrued; totDue+=st.intDue; });
+  var totPrin=0,totOut=0,totInt=0,totAccr=0,totDue=0,totBooked=0;
+  loans.forEach(function(l){
+    var st=lnLoanStats(l.id);
+    totPrin+=st.principal; totOut+=st.outstanding; totInt+=st.interest; totAccr+=st.accrued; totDue+=st.intDue;
+    totBooked+=lnProvisionOutstanding(l.id);
+  });
+  // Interest that has accrued since the last time it was booked to the
+  // ledger. Until it is booked, the Balance Sheet legitimately shows less
+  // than the figure calculated here, which is live to today.
+  var totUnbooked=Math.max(0, totDue-totBooked);
 
   c.innerHTML=
     '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;">'+
@@ -16681,9 +16689,12 @@ function lnRender(){
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">OUTSTANDING</div><div style="font-size:15px;font-weight:900;color:'+accent+';">'+fmtINR(totOut)+'</div></div>'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">INTEREST ACCRUED</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+fmtINR(totAccr)+'</div>'+
         '<div style="font-size:9px;color:var(--text3);">'+fmtINR(totInt)+' '+(isTaken?'paid':'received')+'</div>'+
-        '<div style="font-size:10px;font-weight:800;color:'+(totDue>0.5?'#C62828':'#2E7D32')+';">'+(totDue>0.5?('balance '+fmtINR(totDue)):'fully settled')+'</div></div>'+
+        '<div style="font-size:10px;font-weight:800;color:'+(totDue>0.5?'#C62828':'#2E7D32')+';">'+(totDue>0.5?('balance '+fmtINR(totDue)):'fully settled')+'</div>'+
+        (totUnbooked>0.5?'<div style="font-size:8.5px;color:#E65100;">'+fmtINR(totUnbooked)+' not yet booked</div>':'')+'</div>'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL '+(isTaken?'PAYABLE':'RECEIVABLE')+'</div><div style="font-size:15px;font-weight:900;color:'+(totOut+totDue>0.5?accent:'#2E7D32')+';">'+fmtINR(totOut+totDue)+'</div><div style="font-size:9px;color:var(--text3);">incl. '+fmtINR(totDue)+' interest due</div></div>'+
     '</div>'+
+    (totUnbooked>0.5?'<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#6D4C41;">'+
+      '&#9878; <b>'+fmtINR(totUnbooked)+'</b> of interest has accrued since it was last booked. Until you press <b>Book Interest</b>, the Balance Sheet will show '+fmtINR(totBooked)+' rather than the '+fmtINR(totDue)+' shown above \u2014 both are correct, one is live to today and the other is what is in the ledger.</div>':'')+
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
       '<div style="font-size:14px;font-weight:800;white-space:nowrap;">'+(isTaken?'Loans Taken':'Loans Given')+'</div>'+
       '<div style="display:flex;gap:0;overflow-x:auto;scrollbar-width:none;">'+
