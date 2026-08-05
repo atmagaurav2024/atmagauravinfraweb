@@ -7419,8 +7419,14 @@ function empSalaryHTML(){
       var pf = pay.pf_employee||0;
       var es = pay.esic_employee||0;
       var td = pay.tds||0;
-      var pt = pay.profession_tax||0;
-      var net= pay.net_salary||0;
+      // February carries the higher profession tax, so the standing rate on
+      // the pay structure is topped up for that month only.
+      var salMonthNo = parseInt((document.getElementById('sal-month')||{}).value)||0;
+      var pt = (typeof ptForMonth==='function' && (pay.profession_tax||0)>0)
+        ? ptForMonth(g, e.gender, salMonthNo)
+        : (pay.profession_tax||0);
+      var net= (pay.net_salary||0) - ((pay.profession_tax||0) - pt) * -1;
+      net = (pay.net_salary||0) + ((pay.profession_tax||0) - pt);
 
       return (
         '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" id="sal-row-'+e.id+'">'+
@@ -9557,6 +9563,9 @@ function empOpenPay(empId, empName){
   var existing=EMP_PAY.filter(function(p){return p.employee_id===empId;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
   var v=existing[0]||{};
   var emp=EMP_LIST.find(function(e){return e.id===empId;})||{};
+  // payCalc() needs the gender for the profession tax slab, and runs outside
+  // this function's scope
+  PAY_EMP_GENDER=emp.gender||'';
 
   // Load extra_earnings and extra_deductions from previous record if any
   var extraEarnings=v.extra_earnings?JSON.parse(v.extra_earnings):[];
@@ -9654,8 +9663,8 @@ function empOpenPay(empId, empName){
 
           // Profession Tax
           '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #F5F5F5;">'+
-            '<div style="flex:1;"><div style="font-size:11px;font-weight:800;color:#880E4F;">Prof. Tax</div><div style="font-size:9px;color:var(--text3);">Compulsory</div></div>'+
-            '<input id="pf-pt" type="number" step="1" value="'+(v.profession_tax||200)+'" oninput="payCalc()" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;">'+
+            '<div style="flex:1;"><div style="font-size:11px;font-weight:800;color:#880E4F;">Prof. Tax</div><div id="pf-pt-note" style="font-size:9px;color:var(--text3);">Maharashtra slab</div></div>'+
+            '<input id="pf-pt" type="number" step="1" value="'+(v.profession_tax!=null?v.profession_tax:'')+'" oninput="this.dataset.manual=1;payCalc()" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;">'+
           '</div>'+
 
           // Dynamic deductions
@@ -9855,6 +9864,31 @@ function payUpdateDeduction(id,key,val){
 
 function gn(id){var el=document.getElementById(id);return parseFloat(el?el.value:0)||0;}
 
+// ── Maharashtra Profession Tax slabs ─────────────────────────────────────
+// Male:   up to 7,500 nil | 7,501–10,000 = 175 | above 10,000 = 200
+//         (February 300)
+// Female: up to 25,000 nil | above 25,000 = 200 (February 300)
+// The February loading exists so the annual total reaches the 2,500 ceiling.
+var PAY_EMP_GENDER='';
+function ptForMonth(gross, gender, month){
+  gross=parseFloat(gross)||0;
+  var g=String(gender||'').toLowerCase();
+  var feb=(month===2);
+  if(g.indexOf('f')===0){                       // female
+    if(gross<=25000) return 0;
+    return feb?300:200;
+  }
+  // male, and anything unspecified — the stricter slab, so PT is never
+  // under-deducted for an employee whose gender is not recorded
+  if(gross<=7500) return 0;
+  if(gross<=10000) return 175;
+  return feb?300:200;
+}
+// Monthly figure for the pay structure. Uses a non-February month, since a
+// fixation is the standing rate; February's extra 100 is applied when that
+// month's salary is actually processed.
+function ptStandard(gross, gender){ return ptForMonth(gross, gender, 1); }
+
 function payCalc(){
   var basic=gn('pf-basic');
   payUpdateAllPctEarnings();
@@ -9863,6 +9897,19 @@ function payCalc(){
     return s+amt;
   },0);
   var gross=basic+extraTotal;
+
+  // Profession tax follows the slab unless the user has typed over it
+  var ptEl=document.getElementById('pf-pt');
+  if(ptEl && !ptEl.dataset.manual){
+    var ptGender=PAY_EMP_GENDER;
+    ptEl.value=ptStandard(gross, ptGender);
+    var ptNote=document.getElementById('pf-pt-note');
+    if(ptNote){
+      var fem=String(ptGender||'').toLowerCase().indexOf('f')===0;
+      ptNote.innerHTML='Maharashtra slab \u00b7 '+(ptGender||'gender not set, male slab used')+
+        (parseFloat(ptEl.value)>0?' \u00b7 &#8377;300 in February':'');
+    }
+  }
 
   var pfOn=document.getElementById('pf-applicable')&&document.getElementById('pf-applicable').checked;
   var esicOn=document.getElementById('esic-applicable')&&document.getElementById('esic-applicable').checked;
