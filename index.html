@@ -7373,6 +7373,20 @@ function salAddExtraRow(empId, type){
   container.appendChild(row);
 }
 
+// Month/year drive month-dependent deductions — profession tax is ₹300 in
+// February — which are computed while the rows are built. Without this the
+// rows kept whatever the month was when the tab first opened.
+var SAL_PERIOD={m:null,y:null};
+function salPeriodChange(){
+  SAL_PERIOD.m=parseInt((document.getElementById('sal-month')||{}).value)||null;
+  SAL_PERIOD.y=parseInt((document.getElementById('sal-year')||{}).value)||null;
+  var el=document.getElementById('emp-content');
+  if(!el) return;
+  el.innerHTML=empSalaryHTML();
+  if(typeof salWireLogButtons==='function') salWireLogButtons();
+  setTimeout(function(){ if(typeof salWireInputs==='function') salWireInputs(); if(typeof salLoadLOPDays==='function') salLoadLOPDays(); },100);
+}
+
 function empSalaryHTML(){
   var active = EMP_LIST.filter(function(e){return e.status==='active';});
   window._salRows=[]; window._salMonth='';
@@ -7380,16 +7394,17 @@ function empSalaryHTML(){
 
   var now=new Date();
   var MONTHS=['','January','February','March','April','May','June','July','August','September','October','November','December'];
-  var monthOpts=MONTHS.slice(1).map(function(m,i){return '<option value="'+(i+1)+'"'+((i+1)===now.getMonth()+1?' selected':'')+'>'+m+'</option>';}).join('');
-  var yearOpts=[now.getFullYear()-1,now.getFullYear(),now.getFullYear()+1].map(function(y){return '<option value="'+y+'"'+(y===now.getFullYear()?' selected':'')+'>'+y+'</option>';}).join('');
+  var selM=SAL_PERIOD.m||(now.getMonth()+1), selY=SAL_PERIOD.y||now.getFullYear();
+  var monthOpts=MONTHS.slice(1).map(function(m,i){return '<option value="'+(i+1)+'"'+((i+1)===selM?' selected':'')+'>'+m+'</option>';}).join('');
+  var yearOpts=[now.getFullYear()-1,now.getFullYear(),now.getFullYear()+1,now.getFullYear()+2].map(function(y){return '<option value="'+y+'"'+(y===selY?' selected':'')+'>'+y+'</option>';}).join('');
 
   var header =
     '<div style="background:white;border-radius:14px;padding:14px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#1B5E20;margin-bottom:4px;">&#128200; Monthly Salary Finalisation</div>'+
       '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Select employees, edit earnings/deductions, then click <b>Finalise Selected</b>.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
-        '<div><label class="flbl">Month</label><select id="sal-month" class="fsel">'+monthOpts+'</select></div>'+
-        '<div><label class="flbl">Year</label><select id="sal-year" class="fsel">'+yearOpts+'</select></div>'+
+        '<div><label class="flbl">Month</label><select id="sal-month" class="fsel" onchange="salPeriodChange()">'+monthOpts+'</select></div>'+
+        '<div><label class="flbl">Year</label><select id="sal-year" class="fsel" onchange="salPeriodChange()">'+yearOpts+'</select></div>'+
       '</div>'+
       '<div style="display:flex;gap:8px;">'+
         '<button onclick="salSelectAll(true)" style="flex:1;padding:8px;background:#E8F5E9;color:#1B5E20;border:1px solid #A5D6A7;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;">&#9989; Select All</button>'+
@@ -7421,12 +7436,13 @@ function empSalaryHTML(){
       var td = pay.tds||0;
       // February carries the higher profession tax, so the standing rate on
       // the pay structure is topped up for that month only.
-      var salMonthNo = parseInt((document.getElementById('sal-month')||{}).value)||0;
-      var pt = (typeof ptForMonth==='function' && (pay.profession_tax||0)>0)
+      var salMonthNo = selM;
+      var basePt = pay.profession_tax||0;
+      var pt = (typeof ptForMonth==='function' && basePt>0)
         ? ptForMonth(g, e.gender, salMonthNo)
-        : (pay.profession_tax||0);
-      var net= (pay.net_salary||0) - ((pay.profession_tax||0) - pt) * -1;
-      net = (pay.net_salary||0) + ((pay.profession_tax||0) - pt);
+        : basePt;
+      // Net moves by the difference, so February's extra ₹100 reduces it
+      var net= (pay.net_salary||0) - (pt - basePt);
 
       return (
         '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" id="sal-row-'+e.id+'">'+
