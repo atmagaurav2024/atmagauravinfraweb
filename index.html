@@ -7019,7 +7019,7 @@ async function initEmpMgmt(){
 
 // Tab → AC_MODS key mapping
 var EMP_TAB_KEYS = {
-  active:'emp-active', pending:'emp-pending', pay:'emp-pay', leavefix:'emp-leavefix',
+  active:'emp-active', pending:'emp-pending', pay:'emp-pay', advances:'emp-advances', leavefix:'emp-leavefix',
   salary:'emp-salary', increment:'emp-increment', transfer:'emp-transfer',
   annual:'emp-annual', downloads:'emp-downloads', resigned:'emp-resigned'
 };
@@ -19907,6 +19907,7 @@ var AC_MODS=[
   {key:'emp-active',       label:'Active Employees',   icon:'&#128101;',group:'Employee',      params:['view','add','edit','delete']},
   {key:'emp-pending',      label:'Pending Approvals',  icon:'&#9203;',  group:'Employee',      params:['view','edit','delete']},
   {key:'emp-pay',          label:'Pay Fixation',       icon:'&#128178;',group:'Employee',      params:['view','add','edit','delete']},
+  {key:'emp-advances',     label:'Salary Advances',    icon:'&#128176;',group:'Employees',     params:['view','edit','delete']},
   {key:'emp-leavefix',     label:'Leave Fixation',     icon:'&#127796;',group:'Employee',      params:['view','add','edit','delete']},
   {key:'emp-salary',       label:'Monthly Salary',     icon:'&#128200;',group:'Employee',      params:['view','add','edit','delete']},
   {key:'emp-increment',    label:'Increment',          icon:'&#128308;',group:'Employee',      params:['view','add','edit','delete']},
@@ -22453,8 +22454,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260802l"></script>
-<script src="js/employee.js?v=20260802l"></script>
-<script src="js/projects.js?v=20260802l"></script>
-<script src="js/finance.js?v=20260802l"></script>
+<script src="js/registry.js?v=20260802m"></script>
+<script src="js/employee.js?v=20260802m"></script>
+<script src="js/projects.js?v=20260802m"></script>
+<script src="js/finance.js?v=20260802m"></script>
 </html>

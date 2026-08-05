@@ -376,7 +376,7 @@ async function initEmpMgmt(){
 
 // Tab → AC_MODS key mapping
 var EMP_TAB_KEYS = {
-  active:'emp-active', pending:'emp-pending', pay:'emp-pay', leavefix:'emp-leavefix',
+  active:'emp-active', pending:'emp-pending', pay:'emp-pay', advances:'emp-advances', leavefix:'emp-leavefix',
   salary:'emp-salary', increment:'emp-increment', transfer:'emp-transfer',
   annual:'emp-annual', downloads:'emp-downloads', resigned:'emp-resigned'
 };
