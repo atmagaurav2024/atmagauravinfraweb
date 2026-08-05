@@ -17279,6 +17279,34 @@ async function lnProvideInterest(){
   else toast('Interest provision booked \u00b7 '+fmtINR(tot),'success');
 }
 
+// State and helpers for the Party-wise tab. These were removed with the old
+// ledger block; lnRenderParties() referenced them and threw on every render,
+// which is why the tab appeared not to work.
+var LN_PARTY_OPEN=null, LN_PARTY_FILTER='all';
+function lnPartyFilter(f){ LN_PARTY_FILTER=f; lnRenderParties(); }
+function lnTogglePartyDetail(id){ LN_PARTY_OPEN=(LN_PARTY_OPEN===id)?null:id; lnRenderParties(); }
+
+// Totals for one party across both directions. Borrowed and lent are kept
+// apart rather than netted, since a party who is both owes and is owed
+// separately.
+function lnPartyStats(pid){
+  var out={borrowed:0,lent:0,owedByUs:0,owedToUs:0,intPayable:0,intReceivable:0,
+    intPaid:0,intRecd:0,intAccrTaken:0,intAccrGiven:0,count:0};
+  LN_LOANS.filter(function(l){return l.party_id===pid;}).forEach(function(l){
+    var st=lnLoanStats(l.id); out.count++;
+    if(l.direction==='taken'){
+      out.borrowed+=st.principal; out.owedByUs+=st.outstanding;
+      out.intPayable+=st.intDue; out.intPaid+=st.interest; out.intAccrTaken+=st.accrued;
+    } else {
+      out.lent+=st.principal; out.owedToUs+=st.outstanding;
+      out.intReceivable+=st.intDue; out.intRecd+=st.interest; out.intAccrGiven+=st.accrued;
+    }
+  });
+  out.totalPayable=out.owedByUs+out.intPayable;
+  out.totalReceivable=out.owedToUs+out.intReceivable;
+  return out;
+}
+
 function lnRenderParties(){
   var c=document.getElementById('ln-content'); if(!c)return;
   var list=LN_PARTIES.filter(function(p){
