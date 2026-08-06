@@ -16660,20 +16660,6 @@ function lnSwitchTab(t){ LN_TAB=t; lnRenderTabBar(); lnRender(); }
 // never booked twice.
 var LN_ACCRUAL_SRC='loan_interest_month';
 
-// What is currently sitting in Interest Payable (2202) or Interest
-// Receivable (1402). Accrual is consolidated, so this is a single pool
-// rather than a per-loan figure — an interest payment draws it down until
-// it is exhausted, after which the excess is a fresh expense.
-function lnAccrualPool(code){
-  var a=ACC_ACCOUNTS.find(function(x){return String(x.code)===code;});
-  if(!a) return 0;
-  var dr=0, cr=0;
-  ACC_VOUCHERS.forEach(function(v){
-    if(v.debit_account===a.id)  dr+=(parseFloat(v.amount)||0);
-    if(v.credit_account===a.id) cr+=(parseFloat(v.amount)||0);
-  });
-  return code==='2202' ? Math.max(0, cr-dr) : Math.max(0, dr-cr);
-}
 
 function lnMonthEnd(y,m){ // m is 1-12
   var d=new Date(y, m, 0);
@@ -16694,6 +16680,21 @@ function lnAccruedInMonth(dir, fromDate, toDate){
   return total;
 }
 
+// Interest settled during a month — those payments already hit Interest
+// Expense, so the month's accrual must be net of them or the same interest
+// is charged twice and the liability never comes down.
+function lnInterestPaidInMonth(dir, fromDate, toDate){
+  var byLoan={};
+  LN_LOANS.filter(function(l){return l.direction===dir;}).forEach(function(l){ byLoan[l.id]=1; });
+  return LN_TXNS.filter(function(t){
+    if(t.txn_type!=='interest' || !byLoan[t.loan_id]) return false;
+    var d=String(t.date||'');
+    if(!d) return false;
+    if(fromDate && d<=fromDate) return false;
+    return d<=toDate;
+  }).reduce(function(a,t){return a+(parseFloat(t.amount)||0);},0);
+}
+
 async function lnAutoBookMonthly(){
   if(!LN_LOANS.length){ console.log('Interest accrual: no loans loaded'); return; }
   if(typeof accAutoPost!=='function'){ console.warn('Interest accrual: accAutoPost unavailable'); return; }
@@ -16709,36 +16710,71 @@ async function lnAutoBookMonthly(){
     (done||[]).forEach(function(v){ booked[String(v.date)+'|'+((v.narration||'').indexOf('receivable')>-1?'given':'taken')]=1; });
   }catch(e){ console.warn('Interest accrual skipped — could not read vouchers', e); return; }
 
+  // The current month's entries are revised rather than duplicated
+  var curVouchers={};
+  try{
+    var curStart=new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
+    var cv=await sbFetch('vouchers',{select:'*',filter:'source_type=eq.'+LN_ACCRUAL_SRC+'&date=gte.'+curStart});
+    (cv||[]).forEach(function(v){
+      curVouchers[(v.narration||'').indexOf('receivable')>-1?'given':'taken']=v;
+      delete booked[String(v.date)+'|'+((v.narration||'').indexOf('receivable')>-1?'given':'taken')];
+    });
+  }catch(e){}
+
   var first=new Date(starts[0]+'T00:00:00');
   var today=new Date();
   var y=first.getFullYear(), m=first.getMonth()+1;
   var prevEnd=null, posted=0, failed=0;
+  var todayStr=today.toISOString().slice(0,10);
+  var curMonthStart=new Date(today.getFullYear(), today.getMonth(), 1);
 
-  // Only completed months — the current month is still accruing
   while(true){
+    var isCurrent=false;
     var end=lnMonthEnd(y,m);
     var endD=new Date(end+'T00:00:00');
-    var curMonthStart=new Date(today.getFullYear(), today.getMonth(), 1);
-    if(endD>=curMonthStart) break;
+    if(endD>=curMonthStart){
+      // The current month is still running: accrue to today so the ledger
+      // matches the live figure, and revise that entry as the month goes on
+      // rather than adding a new voucher each time.
+      if(y===today.getFullYear() && (m-1)===today.getMonth()){ end=todayStr; isCurrent=true; }
+      else break;
+    }
 
     for(var d=0; d<2; d++){
       var dir=d?'given':'taken';
-      if(booked[end+'|'+dir]){ continue; }
-      var amt=Math.round(lnAccruedInMonth(dir, prevEnd, end));
-      if(amt>0.5){
-        var monthName=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]+' '+y;
-        var ok=await accAutoPost({
-          type:'Journal', date:end, partyName:'Interest accrual',
-          debitCode: dir==='taken'?'4201':'1402',
-          creditCode: dir==='taken'?'2202':'3005',
-          amount:amt,
-          narration:'Interest accrued for '+monthName+(dir==='given'?' (receivable)':'')+' \u2014 all loans',
-          sourceType:LN_ACCRUAL_SRC, sourceId:null
-        });
-        if(ok) posted++; else failed++;
+      // Accrual net of interest settled in the same period — those payments
+      // already went to Interest Expense
+      var amt=Math.round(lnAccruedInMonth(dir, prevEnd, end) - lnInterestPaidInMonth(dir, prevEnd, end));
+      var monthName=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]+' '+y;
+      var narr='Interest accrued for '+monthName+(isCurrent?' (to '+fmtDate(todayStr)+')':'')+
+        (dir==='given'?' (receivable)':'')+' \u2014 all loans, net of interest paid';
+
+      var existing=curVouchers[dir];
+      if(isCurrent && existing){
+        // Revise the running entry in place
+        if(Math.abs((parseFloat(existing.amount)||0)-amt)>0.5 || amt<=0.5){
+          try{
+            if(amt<=0.5){ await sbDelete('vouchers',existing.id); }
+            else { await sbUpdate('vouchers',existing.id,{amount:amt, date:todayStr, narration:narr}); }
+            posted++;
+          }catch(e){ failed++; }
+        }
+        continue;
       }
+      if(booked[end+'|'+dir]) continue;
+      if(amt<=0.5) continue;
+
+      var ok=await accAutoPost({
+        type:'Journal', date:end, partyName:'Interest accrual',
+        debitCode: dir==='taken'?'4201':'1402',
+        creditCode: dir==='taken'?'2202':'3005',
+        amount:amt, narration:narr,
+        sourceType:LN_ACCRUAL_SRC, sourceId:null
+      });
+      if(ok) posted++; else failed++;
     }
 
+    if(isCurrent) break;
     prevEnd=end;
     m++; if(m>12){ m=1; y++; }
     if(y>today.getFullYear()+1) break;   // guard
@@ -17770,17 +17806,11 @@ async function lnSavePartyTxn(pid,dir){
             var pnv=pn+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
             var o;
             if(p.type==='interest'){
-              // Clear the accrued liability first — it was already charged to
-              // expense at month end, so charging it again on payment would
-              // double count. Anything beyond the accrued pool is new expense.
-              var pool=lnAccrualPool(isTaken?'2202':'1402');
-              if(pool>0.005){
-                o=isTaken?{type:'Payment',debitCode:'2202',creditCode:cashCode,narration:'Interest paid to '+pnv+' (against accrual)'}
-                         :{type:'Receipt',debitCode:cashCode,creditCode:'1402',narration:'Interest received from '+pnv+' (against accrual)'};
-              } else {
-                o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
-                         :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
-              }
+              // Straight to expense. The month-end accrual is booked net of
+              // interest settled in that period, so the liability reflects
+              // only what is genuinely unpaid — no pool to draw down here.
+              o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
+                       :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
             } else {
               o=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Loan repaid to '+pnv}
                        :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Loan recovered from '+pnv};
