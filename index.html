@@ -16695,24 +16695,24 @@ function lnAccruedInMonth(dir, fromDate, toDate){
 }
 
 async function lnAutoBookMonthly(){
-  if(!LN_LOANS.length) return;
-  if(typeof accAutoPost!=='function') return;
+  if(!LN_LOANS.length){ console.log('Interest accrual: no loans loaded'); return; }
+  if(typeof accAutoPost!=='function'){ console.warn('Interest accrual: accAutoPost unavailable'); return; }
 
   // Earliest loan start decides where accrual begins
   var starts=LN_LOANS.map(function(l){return l.start_date;}).filter(Boolean).sort();
-  if(!starts.length) return;
+  if(!starts.length){ console.log('Interest accrual: no loans with a start date'); return; }
 
   // Which month-ends are already booked
   var booked={};
   try{
     var done=await sbFetch('vouchers',{select:'date,narration',filter:'source_type=eq.'+LN_ACCRUAL_SRC});
     (done||[]).forEach(function(v){ booked[String(v.date)+'|'+((v.narration||'').indexOf('receivable')>-1?'given':'taken')]=1; });
-  }catch(e){ return; }   // cannot verify, so do not risk duplicates
+  }catch(e){ console.warn('Interest accrual skipped — could not read vouchers', e); return; }
 
   var first=new Date(starts[0]+'T00:00:00');
   var today=new Date();
   var y=first.getFullYear(), m=first.getMonth()+1;
-  var prevEnd=null, posted=0;
+  var prevEnd=null, posted=0, failed=0;
 
   // Only completed months — the current month is still accruing
   while(true){
@@ -16735,7 +16735,7 @@ async function lnAutoBookMonthly(){
           narration:'Interest accrued for '+monthName+(dir==='given'?' (receivable)':'')+' \u2014 all loans',
           sourceType:LN_ACCRUAL_SRC, sourceId:null
         });
-        if(ok) posted++;
+        if(ok) posted++; else failed++;
       }
     }
 
@@ -16743,7 +16743,17 @@ async function lnAutoBookMonthly(){
     m++; if(m>12){ m=1; y++; }
     if(y>today.getFullYear()+1) break;   // guard
   }
-  if(posted) console.log('Month-end interest accrual: '+posted+' voucher(s) posted');
+  if(posted){
+    console.log('Month-end interest accrual: '+posted+' voucher(s) posted');
+    if(typeof toast==='function') toast('Interest accrued for '+posted+' month'+(posted!==1?'s':'')+' booked to the ledger','success');
+    // Keep the in-memory voucher list current so Accounts reflects it
+    try{
+      var fresh=await sbFetch('vouchers',{select:'*',order:'created_at.desc'});
+      if(Array.isArray(fresh)) ACC_VOUCHERS=fresh;
+    }catch(e){}
+  } else if(failed){
+    if(typeof toast==='function') toast('Could not book interest accrual'+(ACC_AUTOPOST_LAST_ERROR?': '+ACC_AUTOPOST_LAST_ERROR:''),'warning');
+  }
   return posted;
 }
 
@@ -18498,6 +18508,21 @@ async function initAccounts(){
     ACC_ACCOUNTS=Array.isArray(accounts)?accounts:[];
     ACC_VOUCHERS=Array.isArray(vouchers)?vouchers:[];
     avLoadPartyNames();
+
+    // Month-end interest accrual also catches up here, so it does not
+    // depend on the user happening to open the Loans module first.
+    if(typeof lnAutoBookMonthly==='function'){
+      if(!LN_LOANS.length){
+        try{
+          var lr=await Promise.all([
+            sbFetch('loans',{select:'*'}).catch(function(){return [];}),
+            sbFetch('loan_transactions',{select:'*'}).catch(function(){return [];})
+          ]);
+          LN_LOANS=lr[0]||[]; LN_TXNS=lr[1]||[];
+        }catch(e){}
+      }
+      await lnAutoBookMonthly();
+    }
     accSwitchTab(ACC_TAB||'dashboard');
   }catch(e){console.error('initAccounts:',e);if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading accounts</div>';}
 }
