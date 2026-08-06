@@ -2299,6 +2299,17 @@ input,select,textarea{font-size:16px !important;}
       <div id="leave-cats"></div>
     </div>
 
+    <div class="card" style="padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div>
+          <div style="font-size:14px;font-weight:800;">&#128181; Petty Cash Categories</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Expense heads in the Petty Cash module</div>
+        </div>
+        <button class="btn btn-navy btn-sm" onclick="addCategory('pettycash')">+ Add</button>
+      </div>
+      <div id="pettycash-cats"></div>
+    </div>
+
     <div style="height:10px"></div>
   </div>
 
@@ -6029,6 +6040,7 @@ renderCatSection('uom','uom-cats');
 renderCatSection('role','role-cats');
 renderCatSection('dept','dept-cats');
 renderCatSection('leave','leave-cats');
+  renderCatSection('pettycash','pettycash-cats');
 renderVendors();
 renderMaterials();
 renderSC();
@@ -6469,7 +6481,7 @@ async function getNextAIPLId(){
 
 
 // ── CATEGORY SYNC ──
-var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats'};
+var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats'};
 
 async function loadCategories(){
   try{
@@ -16327,7 +16339,16 @@ var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
 var PC_EMP_FILTER='all'; // 'all' or empId
 
+// Seed list only — the live categories come from the Master Registry via
+// pcCats(), so a new head can be added without touching code.
 var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
+function pcCats(){
+  if(typeof CAT_DATA!=='undefined' && CAT_DATA && Array.isArray(CAT_DATA.pettycash)){
+    var live=CAT_DATA.pettycash.filter(function(c){return c.active;}).map(function(c){return c.name;});
+    if(live.length) return live;
+  }
+  return PC_CATS;   // registry not loaded yet
+}
 
 
 // ═══════════════════════════════════════════
@@ -16339,7 +16360,16 @@ var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
 var PC_EMP_FILTER='all'; // 'all' or empId
 
+// Seed list only — the live categories come from the Master Registry via
+// pcCats(), so a new head can be added without touching code.
 var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
+function pcCats(){
+  if(typeof CAT_DATA!=='undefined' && CAT_DATA && Array.isArray(CAT_DATA.pettycash)){
+    var live=CAT_DATA.pettycash.filter(function(c){return c.active;}).map(function(c){return c.name;});
+    if(live.length) return live;
+  }
+  return PC_CATS;   // registry not loaded yet
+}
 
 
 
@@ -16535,7 +16565,7 @@ function pcOpenExpense(){
     '<label class="flbl">Employee *</label><select class="fsel" id="pce-emp"><option value="">Select employee...</option>'+
       PC_EMPS.map(function(e){return '<option value="'+e.empId+'">'+e.name+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Category *</label><select class="fsel" id="pce-cat"><option value="">Select...</option>'+
-      PC_CATS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
+      pcCats().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0" oninput="pcUpdateAllocPreview()">'+
     '<label class="flbl">Date</label><input class="finp" id="pce-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Project(s) *</label>'+
@@ -18491,6 +18521,9 @@ async function accCleanupVouchersForSource(sourceId){
   }catch(e){ console.warn('accCleanupVouchersForSource failed for '+sourceId, e); }
 }
 // Petty cash expense category -> GL account code
+// Categories added in the Master Registry have no GL code until one is
+// added here; they post to 4110 Miscellaneous Site Expenses, which keeps
+// the books balanced while making the gap visible in the ledger.
 var ACC_PETTY_CAT_CODES={
   'Fuel & Transport':'4101','Site Materials':'4102','Labour Wages':'4103',
   'Food & Refreshment':'4104','Office Expenses':'4105','Equipment Repair':'4106',
@@ -22652,8 +22685,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260802r"></script>
-<script src="js/employee.js?v=20260802r"></script>
-<script src="js/projects.js?v=20260802r"></script>
-<script src="js/finance.js?v=20260802r"></script>
+<script src="js/registry.js?v=20260802s"></script>
+<script src="js/employee.js?v=20260802s"></script>
+<script src="js/projects.js?v=20260802s"></script>
+<script src="js/finance.js?v=20260802s"></script>
 </html>

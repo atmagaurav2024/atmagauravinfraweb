@@ -76,10 +76,25 @@ var CAT_DATA={
     {id:'lv-3',icon:'&#127796;',name:'Earned Leave (EL)',desc:'Accrued/annual leave',color:'#2E7D32',count:0,active:true},
     {id:'lv-4',icon:'&#128337;',name:'Comp Off',desc:'Compensatory off for extra work',color:'#F57F17',count:0,active:true},
     {id:'lv-5',icon:'&#128176;',name:'Loss of Pay (LOP)',desc:'Unpaid leave',color:'#795548',count:0,active:true},
+  ],
+  // Petty cash expense heads. Editable here rather than hardcoded, so a new
+  // head can be added without a code change. Each maps to a GL account via
+  // ACC_PETTY_CAT_CODES; anything unmapped posts to Miscellaneous.
+  pettycash:[
+    {id:'pc-1',icon:'&#9981;',name:'Fuel & Transport',desc:'Vehicle fuel, hire, travel',color:'#E65100',count:0,active:true},
+    {id:'pc-2',icon:'&#129521;',name:'Site Materials',desc:'Small material purchases',color:'#2E7D32',count:0,active:true},
+    {id:'pc-3',icon:'&#128119;',name:'Labour Wages',desc:'Casual labour paid in cash',color:'#1565C0',count:0,active:true},
+    {id:'pc-4',icon:'&#127859;',name:'Food & Refreshment',desc:'Site food and refreshments',color:'#6A1B9A',count:0,active:true},
+    {id:'pc-5',icon:'&#128196;',name:'Office Expenses',desc:'Stationery, printing, sundries',color:'#00695C',count:0,active:true},
+    {id:'pc-6',icon:'&#128295;',name:'Equipment Repair',desc:'Tool and plant repairs',color:'#795548',count:0,active:true},
+    {id:'pc-7',icon:'&#129686;',name:'Safety Items',desc:'PPE and site safety',color:'#F57F17',count:0,active:true},
+    {id:'pc-8',icon:'&#128161;',name:'Utilities',desc:'Electricity, water, connections',color:'#0277BD',count:0,active:true},
+    {id:'pc-9',icon:'&#127973;',name:'Medical',desc:'First aid and medical costs',color:'#C62828',count:0,active:true},
+    {id:'pc-10',icon:'&#128230;',name:'Miscellaneous',desc:'Anything not covered above',color:'#546E7A',count:0,active:true},
   ]
 };
 
-var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats'};
+var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats'};
 
 function catKey(name){ return (name||'').toLowerCase().trim(); }
 
@@ -96,6 +111,7 @@ async function initRegistry(){
   renderCatSection('role','role-cats');
   renderCatSection('dept','dept-cats');
   renderCatSection('leave','leave-cats');
+  renderCatSection('pettycash','pettycash-cats');
   loadAllData();
 }
 

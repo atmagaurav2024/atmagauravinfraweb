@@ -7,7 +7,16 @@ var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
 var PC_EMP_FILTER='all'; // 'all' or empId
 
+// Seed list only — live categories come from the Master Registry via
+// pcCats(), so a new head can be added without a code change.
 var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
+function pcCats(){
+  if(typeof CAT_DATA!=='undefined' && CAT_DATA && Array.isArray(CAT_DATA.pettycash)){
+    var live=CAT_DATA.pettycash.filter(function(c){return c.active;}).map(function(c){return c.name;});
+    if(live.length) return live;
+  }
+  return PC_CATS;
+}
 
 async function initPettyCash(){
   var cont=document.getElementById('pc-main');if(!cont)return;
@@ -272,7 +281,7 @@ function pcOpenExpense(){
     '<label class="flbl">Employee *</label><select class="fsel" id="pce-emp"><option value="">Select employee...</option>'+
       PC_EMPS.map(function(e){return '<option value="'+e.empId+'">'+e.name+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Category *</label><select class="fsel" id="pce-cat"><option value="">Select...</option>'+
-      PC_CATS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
+      pcCats().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0" oninput="pcUpdateAllocPreview()">'+
     '<label class="flbl">Date</label><input class="finp" id="pce-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Project(s) *</label>'+
