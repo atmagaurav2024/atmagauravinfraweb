@@ -16652,6 +16652,101 @@ function lnRenderTabBar(){
 }
 function lnSwitchTab(t){ LN_TAB=t; lnRenderTabBar(); lnRender(); }
 
+// ── Automatic month-end interest accrual ────────────────────────────────
+// One consolidated voucher per completed month, not one per loan, so the
+// Balance Sheet carries the interest liability without filling the register
+// with a voucher per loan per run. Runs silently when the Loans module
+// opens; identified by source_type + the month-end date, so a month is
+// never booked twice.
+var LN_ACCRUAL_SRC='loan_interest_month';
+
+// What is currently sitting in Interest Payable (2202) or Interest
+// Receivable (1402). Accrual is consolidated, so this is a single pool
+// rather than a per-loan figure — an interest payment draws it down until
+// it is exhausted, after which the excess is a fresh expense.
+function lnAccrualPool(code){
+  var a=ACC_ACCOUNTS.find(function(x){return String(x.code)===code;});
+  if(!a) return 0;
+  var dr=0, cr=0;
+  ACC_VOUCHERS.forEach(function(v){
+    if(v.debit_account===a.id)  dr+=(parseFloat(v.amount)||0);
+    if(v.credit_account===a.id) cr+=(parseFloat(v.amount)||0);
+  });
+  return code==='2202' ? Math.max(0, cr-dr) : Math.max(0, dr-cr);
+}
+
+function lnMonthEnd(y,m){ // m is 1-12
+  var d=new Date(y, m, 0);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// Interest accrued during one month, across loans of one direction
+function lnAccruedInMonth(dir, fromDate, toDate){
+  var total=0;
+  LN_LOANS.filter(function(l){return l.direction===dir;}).forEach(function(l){
+    if(!l.start_date || (parseFloat(l.interest_rate)||0)<=0) return;
+    if(l.start_date>toDate) return;
+    var upto=lnAccruedInterest(l, toDate);
+    var prior=fromDate?lnAccruedInterest(l, fromDate):0;
+    var diff=upto-prior;
+    if(diff>0) total+=diff;
+  });
+  return total;
+}
+
+async function lnAutoBookMonthly(){
+  if(!LN_LOANS.length) return;
+  if(typeof accAutoPost!=='function') return;
+
+  // Earliest loan start decides where accrual begins
+  var starts=LN_LOANS.map(function(l){return l.start_date;}).filter(Boolean).sort();
+  if(!starts.length) return;
+
+  // Which month-ends are already booked
+  var booked={};
+  try{
+    var done=await sbFetch('vouchers',{select:'date,narration',filter:'source_type=eq.'+LN_ACCRUAL_SRC});
+    (done||[]).forEach(function(v){ booked[String(v.date)+'|'+((v.narration||'').indexOf('receivable')>-1?'given':'taken')]=1; });
+  }catch(e){ return; }   // cannot verify, so do not risk duplicates
+
+  var first=new Date(starts[0]+'T00:00:00');
+  var today=new Date();
+  var y=first.getFullYear(), m=first.getMonth()+1;
+  var prevEnd=null, posted=0;
+
+  // Only completed months — the current month is still accruing
+  while(true){
+    var end=lnMonthEnd(y,m);
+    var endD=new Date(end+'T00:00:00');
+    var curMonthStart=new Date(today.getFullYear(), today.getMonth(), 1);
+    if(endD>=curMonthStart) break;
+
+    for(var d=0; d<2; d++){
+      var dir=d?'given':'taken';
+      if(booked[end+'|'+dir]){ continue; }
+      var amt=Math.round(lnAccruedInMonth(dir, prevEnd, end));
+      if(amt>0.5){
+        var monthName=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]+' '+y;
+        var ok=await accAutoPost({
+          type:'Journal', date:end, partyName:'Interest accrual',
+          debitCode: dir==='taken'?'4201':'1402',
+          creditCode: dir==='taken'?'2202':'3005',
+          amount:amt,
+          narration:'Interest accrued for '+monthName+(dir==='given'?' (receivable)':'')+' \u2014 all loans',
+          sourceType:LN_ACCRUAL_SRC, sourceId:null
+        });
+        if(ok) posted++;
+      }
+    }
+
+    prevEnd=end;
+    m++; if(m>12){ m=1; y++; }
+    if(y>today.getFullYear()+1) break;   // guard
+  }
+  if(posted) console.log('Month-end interest accrual: '+posted+' voucher(s) posted');
+  return posted;
+}
+
 async function initLoans(){
   var c=document.getElementById('ln-content'); if(!c)return;
   lnRenderTabBar();
@@ -16664,6 +16759,7 @@ async function initLoans(){
       sbFetch('employees',{select:'id,emp_id,first_name,last_name,employee_code,status',filter:'status=eq.active'}).catch(function(){return [];})
     ]);
     LN_PARTIES=r[0]||[]; LN_LOANS=r[1]||[]; LN_TXNS=r[2]||[];
+    lnAutoBookMonthly();   // silent catch-up for any completed month not yet booked
     LN_EMPS=(r[3]||[]).map(function(e){return {id:e.id,code:e.emp_id||e.employee_code,name:((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim()||e.employee_code||'Employee'};})
       .sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
     lnRender();
@@ -17664,10 +17760,17 @@ async function lnSavePartyTxn(pid,dir){
             var pnv=pn+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
             var o;
             if(p.type==='interest'){
-              // Interest hits the books only when actually paid or received;
-              // accrued interest is calculated for display and never posted.
-              o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
-                       :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
+              // Clear the accrued liability first — it was already charged to
+              // expense at month end, so charging it again on payment would
+              // double count. Anything beyond the accrued pool is new expense.
+              var pool=lnAccrualPool(isTaken?'2202':'1402');
+              if(pool>0.005){
+                o=isTaken?{type:'Payment',debitCode:'2202',creditCode:cashCode,narration:'Interest paid to '+pnv+' (against accrual)'}
+                         :{type:'Receipt',debitCode:cashCode,creditCode:'1402',narration:'Interest received from '+pnv+' (against accrual)'};
+              } else {
+                o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
+                         :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
+              }
             } else {
               o=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Loan repaid to '+pnv}
                        :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Loan recovered from '+pnv};
