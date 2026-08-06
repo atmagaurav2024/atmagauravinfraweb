@@ -465,7 +465,10 @@ async function loadCategories(){
   try{
     var data=await sbFetch('categories',{select:'*',order:'created_at.asc'});
     if(!data||!data.length)return;
-    ['vendor','material','sc','uom','role','dept','labour','resource','leave'].forEach(function(type){
+    // Derived from catSectionMap rather than a second hardcoded list — the
+    // two had already drifted, so a new type saved to the database but was
+    // dropped on reload.
+    Object.keys(catSectionMap).forEach(function(type){
       var dbCats=data.filter(function(c){return c.type===type;});
       if(dbCats.length){
         CAT_DATA[type]=dbCats.map(function(c){

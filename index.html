@@ -6488,7 +6488,9 @@ async function loadCategories(){
     var data = await sbFetch('categories',{select:'*',order:'created_at.asc'});
     if(!data||!data.length) return; // keep defaults if no DB cats yet
     // Merge DB categories into CAT_DATA
-    var types=['vendor','material','sc','uom','role','dept','labour','resource','leave'];
+    // Derived from catSectionMap so a new category type cannot be saved to
+    // the database and then dropped on reload
+    var types=Object.keys(catSectionMap);
     types.forEach(function(type){
       var dbCats = data.filter(function(c){return c.type===type;});
       if(dbCats.length){
