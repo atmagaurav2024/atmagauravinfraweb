@@ -16748,7 +16748,7 @@ async function lnAutoBookMonthly(){
     if(typeof toast==='function') toast('Interest accrued for '+posted+' month'+(posted!==1?'s':'')+' booked to the ledger','success');
     // Keep the in-memory voucher list current so Accounts reflects it
     try{
-      var fresh=await sbFetch('vouchers',{select:'*',order:'created_at.desc'});
+      var fresh=await sbFetch('vouchers',{select:'*',order:'date.desc,created_at.desc'});
       if(Array.isArray(fresh)) ACC_VOUCHERS=fresh;
     }catch(e){}
   } else if(failed){
@@ -18503,7 +18503,7 @@ async function initAccounts(){
   try{
     var[accounts,vouchers]=await Promise.all([
       sbFetch('chart_of_accounts',{select:'*',order:'code.asc'}),
-      sbFetch('vouchers',{select:'*',order:'created_at.desc'}),
+      sbFetch('vouchers',{select:'*',order:'date.desc,created_at.desc'}),
     ]);
     ACC_ACCOUNTS=Array.isArray(accounts)?accounts:[];
     ACC_VOUCHERS=Array.isArray(vouchers)?vouchers:[];
@@ -18855,7 +18855,7 @@ function accDash(){
   var cont=document.getElementById('acc-content');if(!cont)return;
   // Personal Sales are excluded from the business dashboard entirely —
   // they live only on the Personal tab.
-  var BIZ=ACC_VOUCHERS.filter(function(v){return !accIsPersonal(v);});
+  var BIZ=accSortByDate(ACC_VOUCHERS.filter(function(v){return !accIsPersonal(v);}));
   var totalVouchers=BIZ.length;
   var totalPayments=BIZ.filter(function(v){return v.type==='Payment';}).reduce(function(s,v){return s+(v.amount||0);},0);
   var totalReceipts=BIZ.filter(function(v){return v.type==='Receipt';}).reduce(function(s,v){return s+(v.amount||0);},0);
@@ -19005,6 +19005,17 @@ function accHasActivity(a, asOn){
 // so double-entry integrity is preserved and the Trial Balance still ties.
 function accIsPersonal(v){ return String(v&&v.type||'')==='Personal Sales'; }
 
+// Newest voucher date first; created_at breaks ties so same-day entries keep
+// a stable order. Sorting on read rather than relying on fetch order means a
+// voucher added mid-session lands in the right place immediately.
+function accSortByDate(list){
+  return (list||[]).slice().sort(function(a,b){
+    var d=String(b.date||'').localeCompare(String(a.date||''));
+    if(d!==0) return d;
+    return String(b.created_at||'').localeCompare(String(a.created_at||''));
+  });
+}
+
 function accMovements(accountId, asOn){
   var dr=0, cr=0;
   ACC_VOUCHERS.forEach(function(v){
@@ -19128,7 +19139,7 @@ function accAcctName(id){ var a=ACC_ACCOUNTS.find(function(x){return x.id===id;}
 
 function accVouchersExportData(){
   var header=['Vou No','Date','Type','Party','Debit Account','Credit Account','Amount','Narration'];
-  var biz=ACC_VOUCHERS.filter(function(v){return !accIsPersonal(v);});
+  var biz=accSortByDate(ACC_VOUCHERS.filter(function(v){return !accIsPersonal(v);}));
   var rows=biz.map(function(v){
     return [v.vou_no||v.voucher_no||'', fmtDate(v.date), v.type||'', v.party_name||'',
       accAcctName(v.debit_account), accAcctName(v.credit_account),
@@ -19460,8 +19471,7 @@ function gstShowDetail(which){
 // touches business figures.
 function accPersonalTab(){
   var cont=document.getElementById('acc-content');if(!cont)return;
-  var rows=ACC_VOUCHERS.filter(accIsPersonal)
-    .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+  var rows=accSortByDate(ACC_VOUCHERS.filter(accIsPersonal));
   var total=rows.reduce(function(s,v){return s+(parseFloat(v.amount)||0);},0);
 
   var thisYear=String(new Date().getFullYear());
@@ -19558,8 +19568,7 @@ async function accDelPersonal(id){
 }
 
 function accPersonalExportData(){
-  var rows=ACC_VOUCHERS.filter(accIsPersonal)
-    .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));})
+  var rows=accSortByDate(ACC_VOUCHERS.filter(accIsPersonal))
     .map(function(v){return [(v.vou_no||v.voucher_no||''), fmtDate(v.date), v.party_name||'', v.narration||'', Math.round(parseFloat(v.amount)||0)];});
   var total=rows.reduce(function(s,r){return s+r[4];},0);
   rows.push(['TOTAL','','','',Math.round(total)]);
