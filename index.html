@@ -17819,26 +17819,33 @@ async function lnSavePartyTxn(pid,dir){
         var saved=(res&&res[0])?res[0]:null;
         if(saved){
           LN_TXNS.unshift(saved); savedCount++;
-          if(typeof accAutoPost==='function'){
-            var pnv=pn+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
-            var o;
-            if(p.type==='interest'){
-              // Straight to expense. The month-end accrual is booked net of
-              // interest settled in that period, so the liability reflects
-              // only what is genuinely unpaid — no pool to draw down here.
-              o=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
-                       :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
-            } else {
-              o=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Loan repaid to '+pnv}
-                       :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Loan recovered from '+pnv};
-            }
-            accAutoPost({type:o.type,date:date,partyName:pnv,debitCode:o.debitCode,creditCode:o.creditCode,
-              amount:p.amount,narration:o.narration+' \u00b7 '+receiptNo,sourceType:'loan_txn',sourceId:saved.id});
-          }
         }
       }catch(e){ console.error('payment row failed',e); failCount++; lastErr=e.message||String(e); }
     }
     lines.push({loan:r.loan, interest:r.interest, principal:r.principal});
+  }
+
+  // One voucher for the interest total and one for the principal total,
+  // rather than a pair per loan. The Loans module already holds the per-loan
+  // split; the ledger only needs what actually moved.
+  if(savedCount && typeof accAutoPost==='function'){
+    var pnv=pn+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+    if(a.totalInterest>0.5){
+      var oi=isTaken
+        ? {type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
+        : {type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Interest received from '+pnv};
+      await accAutoPost({type:oi.type,date:date,partyName:pnv,debitCode:oi.debitCode,creditCode:oi.creditCode,
+        amount:Math.round(a.totalInterest),narration:oi.narration+' \u00b7 '+receiptNo,
+        sourceType:'loan_pay_interest',sourceId:null});
+    }
+    if(a.totalPrincipal>0.5){
+      var op=isTaken
+        ? {type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Loan repaid to '+pnv}
+        : {type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Loan recovered from '+pnv};
+      await accAutoPost({type:op.type,date:date,partyName:pnv,debitCode:op.debitCode,creditCode:op.creditCode,
+        amount:Math.round(a.totalPrincipal),narration:op.narration+' \u00b7 '+receiptNo,
+        sourceType:'loan_pay_principal',sourceId:null});
+    }
   }
 
   closeSheet('ov-ln','sh-ln'); lnRender();
@@ -18021,12 +18028,33 @@ async function lnSaveTxn(loanId,type){
     closeSheet('ov-ln','sh-ln'); lnRender(); toast('Saved','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
+// Payment vouchers are consolidated per receipt, not per transaction, so
+// they are found by the receipt number in their narration rather than by
+// source_id.
+async function lnCleanupReceiptVouchers(receiptNo){
+  if(!receiptNo) return;
+  try{
+    var vs=await sbFetch('vouchers',{select:'id,narration,source_type',
+      filter:'source_type=in.(loan_pay_interest,loan_pay_principal)'});
+    var hit=(vs||[]).filter(function(v){ return String(v.narration||'').indexOf(receiptNo)>-1; });
+    for(var i=0;i<hit.length;i++){
+      try{ await sbDelete('vouchers',hit[i].id);
+        ACC_VOUCHERS=ACC_VOUCHERS.filter(function(x){return x.id!==hit[i].id;});
+      }catch(e){}
+    }
+  }catch(e){ console.warn('receipt voucher cleanup failed', e); }
+}
+
 async function lnDelTxn(id){
   if(!lnCanDelete()){toast('No permission','warning');return;}
-  if(!confirm('Delete this entry? Its accounting entry will also be removed.'))return;
+  var t=LN_TXNS.find(function(x){return x.id===id;});
+  var rno=t?t.receipt_no:null;
+  var siblings=rno?LN_TXNS.filter(function(x){return x.receipt_no===rno && x.id!==id;}).length:0;
+  if(!confirm('Delete this entry?'+(rno&&siblings?'\n\nIts payment voucher covers '+(siblings+1)+' entries and will be removed in full — re-record the remainder if needed.':'\n\nIts accounting entry will also be removed.')))return;
   try{
     await sbDelete('loan_transactions',id);
     if(typeof accCleanupVouchersForSource==='function') accCleanupVouchersForSource(id);
+    await lnCleanupReceiptVouchers(rno);
     LN_TXNS=LN_TXNS.filter(function(t){return t.id!==id;});
     lnRender(); toast('Deleted','success');
   }catch(e){toast('Error: '+e.message,'error');}
@@ -18615,6 +18643,11 @@ async function accReconcile(){
   try{
     var posted=await sbFetch('vouchers',{select:'source_type,source_id',filter:'source_id=not.is.null'});
     var done={}; (posted||[]).forEach(function(v){ done[v.source_type+':'+v.source_id]=1; });
+    var postedNarr=[];
+    try{
+      var pn2=await sbFetch('vouchers',{select:'narration',filter:'source_type=in.(loan_pay_interest,loan_pay_principal)'});
+      postedNarr=(pn2||[]).map(function(v){return String(v.narration||'');});
+    }catch(e){}
     var isDone=function(t,id){ return !!done[t+':'+id]; };
 
     var r=await Promise.all([
@@ -18741,18 +18774,39 @@ async function accReconcile(){
         debitCode:taken?cc:'1401',creditCode:taken?'2201':cc,amount:parseFloat(l.principal)||0,
         narration:(taken?'Loan taken from ':'Loan given to ')+pn});
     });
+    // Loan payments post as two consolidated vouchers per receipt — one for
+    // interest, one for principal — matching how they are recorded live.
+    // Grouped by receipt, or by party+date+mode where no receipt number was
+    // stored, so older entries still reconcile.
+    var payGroups={};
     loanTxns.forEach(function(t){
-      if(isDone('loan_txn',t.id)) return;
       var l=loanById[t.loan_id]; if(!l) return;
+      var key=t.receipt_no || ('legacy:'+l.party_id+':'+t.date+':'+(t.mode||''));
+      if(!payGroups[key]) payGroups[key]={key:key, loan:l, date:t.date, mode:t.mode,
+        receipt:t.receipt_no||null, interest:0, principal:0, ids:[]};
+      var g=payGroups[key];
+      if(t.txn_type==='interest') g.interest+=(parseFloat(t.amount)||0);
+      else g.principal+=(parseFloat(t.amount)||0);
+      g.ids.push(t.id);
+    });
+    Object.keys(payGroups).forEach(function(k){
+      var g=payGroups[k], l=g.loan;
       var taken=(l.direction==='taken'), pn=partyName[l.party_id]||'Party';
-      var cc=(t.mode==='Cash'?'1001':(t.mode==='EmpBank'?'1102':'1002'));
-      var o=(t.txn_type==='interest')
-        ? (taken?{type:'Payment',debitCode:'4201',creditCode:cc,narration:'Interest paid to '+pn}
-                :{type:'Receipt',debitCode:cc,creditCode:'3005',narration:'Interest received from '+pn})
-        : (taken?{type:'Payment',debitCode:'2201',creditCode:cc,narration:'Loan repaid to '+pn}
-                :{type:'Receipt',debitCode:cc,creditCode:'1401',narration:'Loan recovered from '+pn});
-      add('Loan repayments/interest','loan_txn',t.id,{type:o.type,date:t.date,partyName:pn,
-        debitCode:o.debitCode,creditCode:o.creditCode,amount:parseFloat(t.amount)||0,narration:o.narration});
+      var cc=(g.mode==='Cash'?'1001':(g.mode==='EmpBank'?'1102':'1002'));
+      var tag=g.receipt?(' \u00b7 '+g.receipt):'';
+      // Already posted if a voucher carries this receipt number
+      var seen=(postedNarr||[]).some(function(n){ return g.receipt && n.indexOf(g.receipt)>-1; });
+      if(seen) return;
+      if(g.interest>0.5){
+        add('Loan repayments/interest','loan_pay_interest',null,
+          taken?{type:'Payment',date:g.date,partyName:pn,debitCode:'4201',creditCode:cc,amount:Math.round(g.interest),narration:'Interest paid to '+pn+tag}
+               :{type:'Receipt',date:g.date,partyName:pn,debitCode:cc,creditCode:'3005',amount:Math.round(g.interest),narration:'Interest received from '+pn+tag});
+      }
+      if(g.principal>0.5){
+        add('Loan repayments/interest','loan_pay_principal',null,
+          taken?{type:'Payment',date:g.date,partyName:pn,debitCode:'2201',creditCode:cc,amount:Math.round(g.principal),narration:'Loan repaid to '+pn+tag}
+               :{type:'Receipt',date:g.date,partyName:pn,debitCode:cc,creditCode:'1401',amount:Math.round(g.principal),narration:'Loan recovered from '+pn+tag});
+      }
     });
 
     // Vouchers whose source no longer exists — reported only, never removed
