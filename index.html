@@ -16744,17 +16744,33 @@ async function lnAutoBookMonthly(){
       var dir=d?'given':'taken';
       // Accrual net of interest settled in the same period — those payments
       // already went to Interest Expense
-      var amt=Math.round(lnAccruedInMonth(dir, prevEnd, end) - lnInterestPaidInMonth(dir, prevEnd, end));
+      // A month where interest paid exceeds interest accrued posts a
+      // reversing entry, drawing down the liability built up in earlier
+      // months. Carrying the excess forward instead cannot correct months
+      // already booked, and would leave the liability overstated.
+      var net=lnAccruedInMonth(dir, prevEnd, end) - lnInterestPaidInMonth(dir, prevEnd, end);
+      var amt=Math.round(Math.abs(net));
+      var reversing=(net<0);
       var monthName=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]+' '+y;
-      var narr='Interest accrued for '+monthName+(isCurrent?' (to '+fmtDate(todayStr)+')':'')+
+      var narr=(reversing?'Interest paid above accrual for ':'Interest accrued for ')+monthName+
+        (isCurrent?' (to '+fmtDate(todayStr)+')':'')+
         (dir==='given'?' (receivable)':'')+' \u2014 all loans, net of interest paid';
 
       var existing=curVouchers[dir];
       if(isCurrent && existing){
         // Revise the running entry in place
-        if(Math.abs((parseFloat(existing.amount)||0)-amt)>0.5 || amt<=0.5){
+        var exDr=(ACC_ACCOUNTS.find(function(x){return x.id===existing.debit_account;})||{}).code;
+        var sideChanged=(exDr!==drCode);
+        if(Math.abs((parseFloat(existing.amount)||0)-amt)>0.5 || amt<=0.5 || sideChanged){
           try{
             if(amt<=0.5){ await sbDelete('vouchers',existing.id); }
+            else if(sideChanged){
+              // Direction flipped this month — replace rather than edit
+              await sbDelete('vouchers',existing.id);
+              await accAutoPost({type:'Journal', date:todayStr, partyName:'Interest accrual',
+                debitCode:drCode, creditCode:crCode, amount:amt, narration:narr,
+                sourceType:LN_ACCRUAL_SRC, sourceId:null});
+            }
             else { await sbUpdate('vouchers',existing.id,{amount:amt, date:todayStr, narration:narr}); }
             posted++;
           }catch(e){ failed++; }
@@ -16764,10 +16780,11 @@ async function lnAutoBookMonthly(){
       if(booked[end+'|'+dir]) continue;
       if(amt<=0.5) continue;
 
+      var drCode = dir==='taken' ? (reversing?'2202':'4201') : (reversing?'3005':'1402');
+      var crCode = dir==='taken' ? (reversing?'4201':'2202') : (reversing?'1402':'3005');
       var ok=await accAutoPost({
         type:'Journal', date:end, partyName:'Interest accrual',
-        debitCode: dir==='taken'?'4201':'1402',
-        creditCode: dir==='taken'?'2202':'3005',
+        debitCode:drCode, creditCode:crCode,
         amount:amt, narration:narr,
         sourceType:LN_ACCRUAL_SRC, sourceId:null
       });
