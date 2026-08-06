@@ -17215,7 +17215,7 @@ async function lnDiagnose(){
 // ── Loan Ledger ──────────────────────────────────────────────────────────
 // Convention as specified: loan amount Cr, repayment Dr, interest Cr.
 // Balance = credits less debits = amount still outstanding.
-var LG_PARTY='', LG_DIR='taken';
+var LG_PARTY='all', LG_DIR='taken';   // 'all' shows every party combined
 function lgSet(k,v){
   if(k==='party') LG_PARTY=v; else if(k==='dir') LG_DIR=v;
   lnRenderLedger();
@@ -17229,14 +17229,17 @@ function lgLoanInterval(l){
 }
 
 function lgBuild(pid, dir){
-  var loans=LN_LOANS.filter(function(l){return l.party_id===pid && l.direction===dir;});
+  var loans=LN_LOANS.filter(function(l){
+    return l.direction===dir && (pid==='all' || l.party_id===pid);
+  });
   if(!loans.length) return {rows:[], loans:[]};
   var todayStr=new Date().toISOString().slice(0,10);
   var ev=[];
 
   loans.forEach(function(l){
     // 1) Loan amount — Credit
-    ev.push({date:l.start_date, sort:0, particulars:'Loan '+(dir==='taken'?'taken':'given')+
+    var who=(pid==='all')?(lnPartyName(l.party_id)+' \u00b7 '):'';
+    ev.push({date:l.start_date, sort:0, particulars:who+'Loan '+(dir==='taken'?'taken':'given')+
       (l.purpose?' \u2014 '+l.purpose:'')+(l.interest_rate?' @'+l.interest_rate+'% p.a.':' (interest-free)'),
       ref:l.reference||'', cr:parseFloat(l.principal)||0, dr:0, kind:'loan'});
 
@@ -17254,12 +17257,12 @@ function lgBuild(pid, dir){
           var ymd=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
           if(ymd>todayStr) break;
           var upto=lnAccruedInterest(l, ymd), amt=upto-prev; prev=upto;
-          if(amt>0.005) ev.push({date:ymd, sort:1, particulars:'Interest @'+rate+'% \u00b7 loan of '+fmtDate(l.start_date),
+          if(amt>0.005) ev.push({date:ymd, sort:1, particulars:who+'Interest @'+rate+'% \u00b7 loan of '+fmtDate(l.start_date),
             ref:'', cr:amt, dr:0, kind:'interest'});
           cur=new Date(cur.getFullYear(), cur.getMonth()+months, cur.getDate());
         }
         var tail=lnAccruedInterest(l, todayStr)-prev;
-        if(tail>0.005) ev.push({date:todayStr, sort:1, particulars:'Interest @'+rate+'% (up to date) \u00b7 loan of '+fmtDate(l.start_date),
+        if(tail>0.005) ev.push({date:todayStr, sort:1, particulars:who+'Interest @'+rate+'% (up to date) \u00b7 loan of '+fmtDate(l.start_date),
           ref:'', cr:tail, dr:0, kind:'interest'});
       }
     }
@@ -17267,7 +17270,7 @@ function lgBuild(pid, dir){
     // 2) Repayments and interest settled — Debit
     LN_TXNS.filter(function(t){return t.loan_id===l.id;}).forEach(function(t){
       ev.push({date:t.date||l.start_date, sort:2,
-        particulars:(t.txn_type==='interest'?'Interest paid':'Repayment')+' \u00b7 loan of '+fmtDate(l.start_date),
+        particulars:who+(t.txn_type==='interest'?'Interest paid':'Repayment')+' \u00b7 loan of '+fmtDate(l.start_date),
         ref:(t.receipt_no||'')+(t.reference?(t.receipt_no?' / ':'')+t.reference:''),
         cr:0, dr:parseFloat(t.amount)||0, kind:'repayment', mode:t.mode, modeEmp:t.mode_emp_id});
     });
@@ -17286,7 +17289,9 @@ function lnRenderLedger(){
   var c=document.getElementById('ln-content'); if(!c)return;
   var has={}; LN_LOANS.forEach(function(l){ if(l.direction===LG_DIR) has[l.party_id]=1; });
   var parties=LN_PARTIES.filter(function(p){return has[p.id];});
-  if(parties.length && !parties.some(function(p){return p.id===LG_PARTY;})) LG_PARTY=parties[0].id;
+  // Fall back to All rather than an arbitrary first party — including when
+  // the selected party has no loans in the chosen direction
+  if(LG_PARTY!=='all' && !parties.some(function(p){return p.id===LG_PARTY;})) LG_PARTY='all';
 
   var sel=function(id,val,opts,onch){
     return '<select class="fsel" style="margin:0;" onchange="lgSet(\''+onch+'\',this.value)">'+
@@ -17303,7 +17308,7 @@ function lnRenderLedger(){
       '<div style="margin-bottom:6px;">'+
         sel('lg-dir',LG_DIR,[['taken','Loans Taken'],['given','Loans Given']],'dir')+
       '</div>'+
-      (parties.length?sel('lg-party',LG_PARTY,parties.map(function(p){return [p.id,p.name];}),'party')
+      (parties.length?sel('lg-party',LG_PARTY,[['all','All parties']].concat(parties.map(function(p){return [p.id,p.name];})),'party')
         :'<div style="font-size:11px;color:var(--text3);">No parties with '+(LG_DIR==='taken'?'loans taken':'loans given')+'</div>')+
     '</div>';
 
@@ -17353,14 +17358,14 @@ function lgExportData(){
   var totCr=L.rows.reduce(function(a,r){return a+r.cr;},0);
   var totDr=L.rows.reduce(function(a,r){return a+r.dr;},0);
   rows.push(['TOTAL','','',Math.round(totDr),Math.round(totCr),Math.round(Math.abs(totCr-totDr))]);
-  return {title:'Loan Ledger \u2014 '+lnPartyName(LG_PARTY)+' ('+(LG_DIR==='taken'?'Loans Taken':'Loans Given')+')',
+  return {title:'Loan Ledger \u2014 '+(LG_PARTY==='all'?'All Parties':lnPartyName(LG_PARTY))+' ('+(LG_DIR==='taken'?'Loans Taken':'Loans Given')+')',
     header:['Date','Particulars','Ref','Debit','Credit','Balance'], rows:rows};
 }
 function lgExcel(){
   if(!LG_PARTY){toast('Select a party','warning');return;}
   var d=lgExportData();
   if(d.rows.length<=1){toast('Nothing to export','warning');return;}
-  accExportCSV('Loan_Ledger_'+lnPartyName(LG_PARTY).replace(/[^a-z0-9]/gi,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv',
+  accExportCSV('Loan_Ledger_'+(LG_PARTY==='all'?'All_Parties':lnPartyName(LG_PARTY).replace(/[^a-z0-9]/gi,'_'))+'_'+new Date().toISOString().slice(0,10)+'.csv',
     [[d.title],[''],d.header].concat(d.rows));
 }
 function lgPDF(){
