@@ -2797,7 +2797,8 @@ function empOpenForm(emp){
     '<div style="font-size:10px;color:var(--text3);margin:-6px 0 10px;">Tick every project this employee works on. Leave all unticked for company-wide access to all projects.</div>'+
     '<div class="g2">'+
       '<div><label class="flbl">Employment Type</label><select id="f-uemptype" class="fsel"><option value="">-- Select --</option>'+sel(empType,['Full Time','Part Time','Contract','Daily Wage'])+'</select></div>'+
-      '<div><label class="flbl">Work Location / Project</label><select id="f-ulocation" class="fsel"><option value="">&#9203; Loading...</option></select></div>'+
+      '<div><label class="flbl">Work Location / Project</label><select id="f-ulocation" class="fsel"><option value="">&#9203; Loading...</option></select>'+
+        '<div id="f-uloc-note" style="font-size:10px;color:var(--text3);margin-top:-6px;"></div></div>'+
     '</div>'+
     hdr('📞','Contact Details','#E65100')+
     '<div class="g2">'+
@@ -2946,13 +2947,14 @@ function empOpenForm(emp){
           }).join('')
         : '<div style="font-size:11px;color:var(--text3);">No projects found</div>';
     }
-    // Also populate work location from projects + Head Office
-    var ls=document.getElementById('f-ulocation');
-    if(ls){
-      var locOpts=['Head Office'].concat(projs.map(function(p){return p.name;}));
-      ls.innerHTML='<option value="">-- Select --</option>'+
-        locOpts.map(function(l){return '<option value="'+l+'"'+(l===workLoc?' selected':'')+'>'+l+'</option>';}).join('');
-    }
+    // Work location offers Head Office plus the sites this employee is
+    // actually assigned to, rather than every project in the company.
+    EMP_FORM_PROJECTS=projs;
+    empSyncLocationOptions(workLoc);
+    // Ticking or unticking a project updates the list immediately
+    document.querySelectorAll('.f-uproj-chk').forEach(function(c){
+      c.addEventListener('change', function(){ empSyncLocationOptions(); });
+    });
   }).catch(function(err){
     var rs=document.getElementById('f-urole');
     if(rs) rs.innerHTML='<option value="">-- Select Role --</option>'+catOptions('role');
@@ -2962,6 +2964,33 @@ function empOpenForm(emp){
     if(ls) ls.innerHTML='<option value="">Head Office</option>';
     console.warn('Dropdown load error:',err);
   });
+}
+
+var EMP_FORM_PROJECTS=[];
+// Rebuilds Work Location from the currently ticked projects. Keeps the
+// existing choice selected where it is still valid, so editing an employee
+// does not silently clear their location.
+function empSyncLocationOptions(preferred){
+  var ls=document.getElementById('f-ulocation');
+  if(!ls) return;
+  var current=preferred!==undefined?preferred:(ls.value||'');
+  var chosen=[];
+  document.querySelectorAll('.f-uproj-chk').forEach(function(c){
+    if(c.checked) chosen.push(c.getAttribute('data-name'));
+  });
+  // No project ticked means unrestricted, so offer every site
+  var sites=chosen.length?chosen:EMP_FORM_PROJECTS.map(function(p){return p.name;});
+  var opts=['Head Office'].concat(sites);
+  var stillValid=opts.indexOf(current)>-1;
+  ls.innerHTML='<option value="">-- Select --</option>'+
+    opts.map(function(l){return '<option value="'+l+'"'+((stillValid&&l===current)?' selected':'')+'>'+l+'</option>';}).join('')+
+    ((current && !stillValid)
+      ? '<option value="'+current+'" selected>'+current+' (no longer assigned)</option>'
+      : '');
+  var note=document.getElementById('f-uloc-note');
+  if(note) note.textContent = chosen.length
+    ? 'Head Office, or one of the '+chosen.length+' assigned site'+(chosen.length!==1?'s':'')
+    : 'No project ticked, so all sites are listed';
 }
 
 async function empDeleteEmployee(id,name){
