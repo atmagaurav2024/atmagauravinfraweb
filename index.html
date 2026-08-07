@@ -20197,20 +20197,34 @@ function acRenderMods(){
 }
 
 async function acEmpLoad(){
-  // Fetch active employees directly from DB and populate dropdown
+  // Rebuild the selector if it is missing — switching to the role tab
+  // replaces it, and returning without it left nothing to populate.
   var sel = document.getElementById('ac-emp-sel');
-  if(!sel) return;
+  if(!sel){
+    var sd0=document.getElementById('ac-selector');
+    if(!sd0) return;
+    sd0.innerHTML='<select id="ac-emp-sel" class="fsel" style="width:100%;" onchange="acLoadPerms()"></select>';
+    sel=document.getElementById('ac-emp-sel');
+    if(!sel) return;
+  }
   sel.innerHTML = '<option value="">&#9203; Loading employees...</option>';
   try{
-    var rows = await sbFetch('employees',{
-      select:'id,first_name,middle_name,last_name,emp_id,employee_code',
-      filter:'status=eq.active',
-      order:'first_name.asc'
-    });
+    // Time-box the fetch. A request that never settles left the dropdown
+    // stuck on "Loading employees..." with no error and no way forward,
+    // which is what made switching tabs and back appear to fix it.
+    var rows = await Promise.race([
+      sbFetch('employees',{
+        select:'id,first_name,middle_name,last_name,emp_id,employee_code',
+        filter:'status=eq.active',
+        order:'first_name.asc'
+      }),
+      new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timed out')); }, 12000); })
+    ]);
     if(!Array.isArray(rows)||!rows.length){
       sel.innerHTML='<option value="">— No active employees found —</option>';
       return;
     }
+    var oldBtn=document.getElementById('ac-emp-retry'); if(oldBtn) oldBtn.remove();
     sel.innerHTML='<option value="">— Select Employee —</option>'+
       rows.map(function(e){
         var n=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim()||'Unknown';
@@ -20219,13 +20233,27 @@ async function acEmpLoad(){
       }).join('');
   }catch(err){
     console.error('acEmpLoad:',err);
-    sel.innerHTML='<option value="">— Error: '+err.message+'—</option>';
+    sel.innerHTML='<option value="">\u26a0 Could not load ('+err.message+') \u2014 tap Retry</option>';
+    var sd1=document.getElementById('ac-selector');
+    if(sd1 && !document.getElementById('ac-emp-retry')){
+      var b=document.createElement('button');
+      b.id='ac-emp-retry'; b.textContent='\u21bb Retry';
+      b.style.cssText='margin-top:6px;background:var(--navy);color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;';
+      b.onclick=function(){ b.remove(); acEmpLoad(); };
+      sd1.appendChild(b);
+    }
   }
 }
 
 async function acRoleLoad(){
   var sel = document.getElementById('ac-role-sel');
-  if(!sel) return;
+  if(!sel){
+    var sd0=document.getElementById('ac-selector');
+    if(!sd0) return;
+    sd0.innerHTML='<select id="ac-role-sel" class="fsel" style="width:100%;" onchange="acLoadPerms()"></select>';
+    sel=document.getElementById('ac-role-sel');
+    if(!sel) return;
+  }
   sel.innerHTML='<option value="">&#9203; Loading roles...</option>';
   try{
     var rows = await sbFetch('categories',{select:'name',filter:'type=eq.role&active=eq.true',order:'name.asc'});
@@ -20262,8 +20290,10 @@ async function acInitModule(){
   }
   var ml=document.getElementById('ac-modules-list');
   if(ml) ml.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select an employee to manage permissions</div>';
-  // Always load fresh employee list
-  await acEmpLoad();
+  // Deferred a tick so the screen is painted and the auth session settled
+  // before fetching — opening the module immediately after login could
+  // otherwise leave the dropdown hanging on "Loading employees...".
+  setTimeout(function(){ acEmpLoad(); }, 0);
 }
 
 function initAccess(){ acInitModule(); }
