@@ -20272,22 +20272,30 @@ async function acRoleLoad(){
 }
 
 async function acInitModule(){
-  // Role comparison is case-insensitive and trims stray whitespace: a role
-  // stored as 'Admin' failed the check, and because the early return left
-  // the selector's static placeholder untouched, the screen showed
-  // 'Loading employees...' for ever instead of saying access was denied.
-  var role=String((currentUser&&currentUser.role)||'').trim().toLowerCase();
-  if(!currentUser || role!=='admin'){
+  // Permission is already enforced by showApp() via canAccess('access',
+  // 'view') and the drawer hides the item without it. The hardcoded
+  // role!=='admin' check here was a second, stricter gate that rejected any
+  // role not spelled exactly 'admin' — and it was ineffective anyway, since
+  // acSwitchTab carries no such check and loads regardless. Use the same
+  // permission system as the rest of the app.
+  var allowed = (typeof canAccess==='function')
+    ? canAccess('access','view')
+    : (String((currentUser&&currentUser.role)||'').trim().toLowerCase()==='admin');
+  if(!currentUser || !allowed){
     var ml=document.getElementById('ac-modules-list');
     if(ml)ml.innerHTML='<div style="text-align:center;padding:40px;"><div style="font-size:40px;">&#128274;</div>'+
-      '<div style="font-weight:800;color:var(--navy);margin-top:10px;">Admin Only</div>'+
-      '<div style="font-size:11.5px;color:var(--text3);margin-top:6px;">Access Control can only be managed by an admin.<br>'+
-      'You are signed in as <b>'+((currentUser&&currentUser.name)||'unknown')+'</b>'+
-      (role?' with role <b>'+role+'</b>':' with no role set')+'.</div></div>';
+      '<div style="font-weight:800;color:var(--navy);margin-top:10px;">No Access</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:6px;">You do not have permission to manage Access Control.</div></div>';
     var sd=document.getElementById('ac-selector');
     if(sd) sd.innerHTML='<div style="font-size:11.5px;color:var(--text3);text-align:center;padding:8px;">\u2014 Not available \u2014</div>';
     return;
   }
+
+  // Rebuild the selector every time the module opens. It may have been left
+  // showing the role dropdown, or the 'Not available' notice from a previous
+  // session, and By Employee is the default tab.
+  var sdInit=document.getElementById('ac-selector');
+  if(sdInit) sdInit.innerHTML='<select id="ac-emp-sel" class="fsel" style="width:100%;" onchange="acLoadPerms()"><option value="">&#9203; Loading employees...</option></select>';
   AC_TAB='emp'; AC_TARGET=null; AC_PERMISSIONS={};
   var eb=document.getElementById('ac-tab-emp'),rb=document.getElementById('ac-tab-role');
   if(eb){eb.style.background='var(--navy)';eb.style.color='white';eb.style.border='none';}
