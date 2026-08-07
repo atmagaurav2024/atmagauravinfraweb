@@ -2816,12 +2816,12 @@ function empOpenForm(emp){
       '</div>'+
       '<label class="flbl">Login Password *</label>'+
       '<div class="inp-wrap">'+
-        '<input id="f-upassword" class="finp" type="password" placeholder="Min 6 characters" style="margin-bottom:0;padding-right:44px;">'+
+        '<input id="f-upassword" class="finp" type="password" autocomplete="new-password" placeholder="Min 6 characters" style="margin-bottom:0;padding-right:44px;">'+
         '<span class="inp-ic" onclick="var el=document.getElementById(\'f-upassword\');el.type=el.type===\'password\'?\'text\':\'password\';" style="cursor:pointer;">&#128065;</span>'+
       '</div>'+
       '<label class="flbl" style="margin-top:8px;">Confirm Password *</label>'+
       '<div class="inp-wrap">'+
-        '<input id="f-upassword2" class="finp" type="password" placeholder="Re-enter password" style="margin-bottom:0;padding-right:44px;">'+
+        '<input id="f-upassword2" class="finp" type="password" autocomplete="new-password" placeholder="Re-enter password" style="margin-bottom:0;padding-right:44px;">'+
         '<span class="inp-ic" onclick="var el=document.getElementById(\'f-upassword2\');el.type=el.type===\'password\'?\'text\':\'password\';" style="cursor:pointer;">&#128065;</span>'+
       '</div>'
     :'')+
@@ -2880,12 +2880,12 @@ function empOpenForm(emp){
       '</div>'+
       '<label class="flbl">New Password</label>'+
       '<div class="inp-wrap">'+
-        '<input id="f-upassword" class="finp" type="password" placeholder="Leave blank to keep current" style="margin-bottom:0;padding-right:44px;">'+
+        '<input id="f-upassword" class="finp" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" style="margin-bottom:0;padding-right:44px;">'+
         '<span class="inp-ic" onclick="var el=document.getElementById(\'f-upassword\');el.type=el.type===\'password\'?\'text\':\'password\';" style="cursor:pointer;">&#128065;</span>'+
       '</div>'+
       '<label class="flbl" style="margin-top:8px;">Confirm New Password</label>'+
       '<div class="inp-wrap">'+
-        '<input id="f-upassword2" class="finp" type="password" placeholder="Re-enter new password" style="margin-bottom:0;padding-right:44px;">'+
+        '<input id="f-upassword2" class="finp" type="password" autocomplete="new-password" placeholder="Re-enter new password" style="margin-bottom:0;padding-right:44px;">'+
         '<span class="inp-ic" onclick="var el=document.getElementById(\'f-upassword2\');el.type=el.type===\'password\'?\'text\':\'password\';" style="cursor:pointer;">&#128065;</span>'+
       '</div>'
     :'');
@@ -2991,6 +2991,17 @@ function empSyncLocationOptions(preferred){
                 : 'No project ticked yet — tick the sites above')
       : '';
   }
+}
+
+// Browsers autofill saved credentials into password fields regardless of
+// the markup, which made the edit form look like it was carrying the
+// employee's existing password. Clear both fields once the form is shown
+// and again shortly after, since autofill can run asynchronously.
+function empClearPasswordFields(){
+  ['f-upassword','f-upassword2'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el){ el.value=''; el.defaultValue=''; }
+  });
 }
 
 async function empDeleteEmployee(id,name){
