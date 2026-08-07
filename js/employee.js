@@ -2797,7 +2797,7 @@ function empOpenForm(emp){
     '<div style="font-size:10px;color:var(--text3);margin:-6px 0 10px;">Tick every project this employee works on. Leave all unticked for company-wide access to all projects.</div>'+
     '<div class="g2">'+
       '<div><label class="flbl">Employment Type</label><select id="f-uemptype" class="fsel"><option value="">-- Select --</option>'+sel(empType,['Full Time','Part Time','Contract','Daily Wage'])+'</select></div>'+
-      '<div><label class="flbl">Work Location / Project</label><select id="f-ulocation" class="fsel"><option value="">&#9203; Loading...</option></select>'+
+      '<div><label class="flbl">Work Location</label><select id="f-ulocation" class="fsel" onchange="empSyncLocationOptions(this.value)"><option value="">&#9203; Loading...</option></select>'+
         '<div id="f-uloc-note" style="font-size:10px;color:var(--text3);margin-top:-6px;"></div></div>'+
     '</div>'+
     hdr('📞','Contact Details','#E65100')+
@@ -2967,30 +2967,30 @@ function empOpenForm(emp){
 }
 
 var EMP_FORM_PROJECTS=[];
-// Rebuilds Work Location from the currently ticked projects. Keeps the
-// existing choice selected where it is still valid, so editing an employee
-// does not silently clear their location.
+// Work Location is a category, not a specific site: either the employee is
+// office-based, or they work at whichever projects they are assigned to.
+// Naming individual projects here duplicated Project Assignment and could
+// contradict it.
 function empSyncLocationOptions(preferred){
   var ls=document.getElementById('f-ulocation');
   if(!ls) return;
   var current=preferred!==undefined?preferred:(ls.value||'');
-  var chosen=[];
-  document.querySelectorAll('.f-uproj-chk').forEach(function(c){
-    if(c.checked) chosen.push(c.getAttribute('data-name'));
-  });
-  // No project ticked means unrestricted, so offer every site
-  var sites=chosen.length?chosen:EMP_FORM_PROJECTS.map(function(p){return p.name;});
-  var opts=['Head Office'].concat(sites);
-  var stillValid=opts.indexOf(current)>-1;
+  var opts=['Head Office','Assigned Project Locations'];
+  // Anything saved previously was a project name; treat it as site-based
+  var resolved = opts.indexOf(current)>-1 ? current
+    : (current ? 'Assigned Project Locations' : '');
   ls.innerHTML='<option value="">-- Select --</option>'+
-    opts.map(function(l){return '<option value="'+l+'"'+((stillValid&&l===current)?' selected':'')+'>'+l+'</option>';}).join('')+
-    ((current && !stillValid)
-      ? '<option value="'+current+'" selected>'+current+' (no longer assigned)</option>'
-      : '');
+    opts.map(function(l){return '<option value="'+l+'"'+(l===resolved?' selected':'')+'>'+l+'</option>';}).join('');
+
+  var chosen=0;
+  document.querySelectorAll('.f-uproj-chk').forEach(function(c){ if(c.checked) chosen++; });
   var note=document.getElementById('f-uloc-note');
-  if(note) note.textContent = chosen.length
-    ? 'Head Office, or one of the '+chosen.length+' assigned site'+(chosen.length!==1?'s':'')
-    : 'No project ticked, so all sites are listed';
+  if(note){
+    note.textContent = (resolved==='Assigned Project Locations')
+      ? (chosen ? 'Works at the '+chosen+' project'+(chosen!==1?'s':'')+' ticked above'
+                : 'No project ticked yet — tick the sites above')
+      : '';
+  }
 }
 
 async function empDeleteEmployee(id,name){
