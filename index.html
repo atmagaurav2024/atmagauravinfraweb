@@ -20272,9 +20272,20 @@ async function acRoleLoad(){
 }
 
 async function acInitModule(){
-  if(!currentUser||currentUser.role!=='admin'){
+  // Role comparison is case-insensitive and trims stray whitespace: a role
+  // stored as 'Admin' failed the check, and because the early return left
+  // the selector's static placeholder untouched, the screen showed
+  // 'Loading employees...' for ever instead of saying access was denied.
+  var role=String((currentUser&&currentUser.role)||'').trim().toLowerCase();
+  if(!currentUser || role!=='admin'){
     var ml=document.getElementById('ac-modules-list');
-    if(ml)ml.innerHTML='<div style="text-align:center;padding:40px;"><div style="font-size:40px;">&#128274;</div><div style="font-weight:800;color:var(--navy);margin-top:10px;">Admin Only</div></div>';
+    if(ml)ml.innerHTML='<div style="text-align:center;padding:40px;"><div style="font-size:40px;">&#128274;</div>'+
+      '<div style="font-weight:800;color:var(--navy);margin-top:10px;">Admin Only</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:6px;">Access Control can only be managed by an admin.<br>'+
+      'You are signed in as <b>'+((currentUser&&currentUser.name)||'unknown')+'</b>'+
+      (role?' with role <b>'+role+'</b>':' with no role set')+'.</div></div>';
+    var sd=document.getElementById('ac-selector');
+    if(sd) sd.innerHTML='<div style="font-size:11.5px;color:var(--text3);text-align:center;padding:8px;">\u2014 Not available \u2014</div>';
     return;
   }
   AC_TAB='emp'; AC_TARGET=null; AC_PERMISSIONS={};
