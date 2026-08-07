@@ -2932,7 +2932,30 @@ async function loadDashboardInsights(filterProjId){
 }
 
 function canAccess(m,p){if(!currentUser)return false;if(currentUser.role==='admin')return true;if(!Object.keys(USER_PERMISSIONS).length)return true;var mp=USER_PERMISSIONS[m];return mp?mp[p]!==false:false;}
-async function loadUserPermissions(){try{if(!currentUser)return;var r=await sbFetch('access_permissions',{select:'*',filter:'employee_id=eq.'+currentUser.id});if(Array.isArray(r)){var perms={};r.forEach(function(row){if(!perms[row.module])perms[row.module]={};perms[row.module][row.permission]=row.granted;});USER_PERMISSIONS=perms;}}catch(e){}}
+// Permissions resolve in two layers: whatever is granted to the user's role
+// applies to everyone holding that role, and anything set against the
+// individual overrides it. Previously only the employee's own rows were
+// read, so role permissions were saved but never took effect for anybody.
+async function loadUserPermissions(){
+  try{
+    if(!currentUser) return;
+    var perms={};
+    var apply=function(rows){
+      (rows||[]).forEach(function(row){
+        if(!perms[row.module]) perms[row.module]={};
+        perms[row.module][row.permission]=row.granted;
+      });
+    };
+    var role=(currentUser.role||currentUser.designation||'').trim();
+    if(role){
+      try{ apply(await sbFetch('access_permissions',{select:'*',filter:'role=eq.'+encodeURIComponent(role)})); }
+      catch(e){ console.warn('role permissions not loaded', e); }
+    }
+    // Applied second so an individual setting wins over the role default
+    apply(await sbFetch('access_permissions',{select:'*',filter:'employee_id=eq.'+currentUser.id}));
+    USER_PERMISSIONS=perms;
+  }catch(e){ console.warn('loadUserPermissions', e); }
+}
 function initProjects(){if(typeof projModRenderNav==='function'){projModRenderNav();projModLoadTab();}}
 async function initPettyCash(){var el=document.getElementById('pc-main');if(el)el.innerHTML='<div style="text-align:center;padding:40px;">&#9203; Loading...</div>';try{var r=await Promise.all([sbFetch('petty_cash_in',{select:'*',order:'created_at.desc'}),sbFetch('petty_cash_expenses',{select:'*',order:'date.desc'}),sbFetch('employees',{select:'id,first_name,last_name,emp_id',filter:'status=eq.active',order:'first_name.asc'}),sbFetch('projects',{select:'id,name',order:'name.asc'})]);PC_IN=Array.isArray(r[0])?r[0]:[];PC_EXP=Array.isArray(r[1])?r[1]:[];PC_EMPS=Array.isArray(r[2])?r[2].map(function(e){return{id:e.id,empId:e.emp_id,name:(e.first_name+' '+(e.last_name||'')).trim()};}):[]; PC_PROJS=Array.isArray(r[3])?r[3]:[];if(!PC_ACTIVE&&PC_PROJS.length)PC_ACTIVE=PC_PROJS[0];if(document.getElementById('pc-fab'))document.getElementById('pc-fab').style.display='';if(typeof pcRefresh==='function')pcRefresh();}catch(e){console.error(e);}}
 async function initRegistry(){if(typeof loadCategories==='function'){await loadCategories();if(typeof rebuildPills==='function'){rebuildPills('vendor','vendor-cat-pills','var(--teal)',filterVendors);rebuildPills('material','mat-cat-pills','var(--green)',filterMaterials);rebuildPills('sc','sc-cat-pills','var(--purple)',filterSC);rebuildPills('labour','lab-cat-pills','#E65100',filterLabour);}if(typeof loadAllData==='function')loadAllData();}}
@@ -20121,6 +20144,7 @@ var ACC_PARTY_CACHE={};
 
 
 // ════ ACCESS CONTROL ════════════════════════════════════
+var AC_INHERITED={}, AC_ROLE_OF_TARGET='', AC_EMP_CACHE=[];
 var AC_TAB='emp',AC_TARGET=null,AC_PERMISSIONS={};
 var AC_PCOL={view:'#1565C0',add:'#2E7D32',edit:'#E65100',delete:'#C62828',cash_in:'#2E7D32',expense:'#E07820',mark:'#00838F',approve_leave:'#00838F'};
 var AC_PLBL={view:'View',add:'Add',edit:'Edit',delete:'Delete',cash_in:'Cash In',expense:'Expense',mark:'Mark Att.',approve_leave:'Approve Leave'};
@@ -20214,7 +20238,7 @@ async function acEmpLoad(){
     // which is what made switching tabs and back appear to fix it.
     var rows = await Promise.race([
       sbFetch('employees',{
-        select:'id,first_name,middle_name,last_name,emp_id,employee_code',
+        select:'id,first_name,middle_name,last_name,emp_id,employee_code,designation,role',
         filter:'status=eq.active',
         order:'first_name.asc'
       }),
@@ -20225,6 +20249,7 @@ async function acEmpLoad(){
       return;
     }
     var oldBtn=document.getElementById('ac-emp-retry'); if(oldBtn) oldBtn.remove();
+    AC_EMP_CACHE=rows;   // designation is needed to resolve inherited role grants
     sel.innerHTML='<option value="">— Select Employee —</option>'+
       rows.map(function(e){
         var n=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim()||'Unknown';
@@ -20336,6 +20361,26 @@ async function acSwitchTab(tab){
   }
 }
 
+// Banner explaining where an employee's permissions come from
+function acInheritNote(){
+  var el=document.getElementById('ac-inherit-note');
+  if(!el){
+    var ml=document.getElementById('ac-modules-list');
+    if(!ml||!ml.parentNode) return;
+    el=document.createElement('div'); el.id='ac-inherit-note';
+    ml.parentNode.insertBefore(el, ml);
+  }
+  var n=0; Object.keys(AC_INHERITED).forEach(function(m){ n+=Object.keys(AC_INHERITED[m]||{}).filter(function(k){return AC_INHERITED[m][k];}).length; });
+  if(AC_TAB==='emp' && AC_ROLE_OF_TARGET){
+    el.innerHTML='<div style="background:#E3F2FD;border:1px solid #BBDEFB;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#0D47A1;">'+
+      'Role <b>'+AC_ROLE_OF_TARGET+'</b>'+(n?' grants '+n+' permission'+(n!==1?'s':'')+' shown ticked below':' has no permissions set')+
+      '. Changing a switch here overrides the role for this employee only.</div>';
+  } else if(AC_TAB==='role'){
+    el.innerHTML='<div style="background:#E8F5E9;border:1px solid #C8E6C9;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#1B5E20;">'+
+      'Applies to every active employee holding this role, unless overridden for an individual.</div>';
+  } else { el.innerHTML=''; }
+}
+
 async function acLoadPerms(){
   var selId=AC_TAB==='emp'?'ac-emp-sel':'ac-role-sel';var sel=document.getElementById(selId);
   if(!sel||!sel.value){
@@ -20347,10 +20392,33 @@ async function acLoadPerms(){
   }
   AC_TARGET=sel.value;
   try{
-    var filter=AC_TAB==='emp'?'employee_id=eq.'+AC_TARGET:'role=eq.'+AC_TARGET;
-    var rows=await sbFetch('access_permissions',{select:'*',filter:filter});
-    AC_PERMISSIONS={};
+    AC_PERMISSIONS={}; AC_INHERITED={};
+    var rows;
+    if(AC_TAB==='emp'){
+      // Show what the employee actually gets: their role's grants first,
+      // then their own settings on top. Without this, permissions given to
+      // a role appeared nowhere when viewing someone who holds it.
+      var emp=(AC_EMP_CACHE||[]).find(function(e){return e.id===AC_TARGET;});
+      var eRole=(emp&&(emp.designation||emp.role)||'').trim();
+      if(eRole){
+        try{
+          var rr=await sbFetch('access_permissions',{select:'*',filter:'role=eq.'+encodeURIComponent(eRole)});
+          (rr||[]).forEach(function(r){
+            if(!AC_PERMISSIONS[r.module])AC_PERMISSIONS[r.module]={};
+            AC_PERMISSIONS[r.module][r.permission]=r.granted;
+            if(!AC_INHERITED[r.module])AC_INHERITED[r.module]={};
+            AC_INHERITED[r.module][r.permission]=true;   // mark as coming from the role
+          });
+          AC_ROLE_OF_TARGET=eRole;
+        }catch(e){ AC_ROLE_OF_TARGET=''; }
+      } else { AC_ROLE_OF_TARGET=''; }
+      rows=await sbFetch('access_permissions',{select:'*',filter:'employee_id=eq.'+AC_TARGET});
+    } else {
+      AC_ROLE_OF_TARGET='';
+      rows=await sbFetch('access_permissions',{select:'*',filter:'role=eq.'+encodeURIComponent(AC_TARGET)});
+    }
     if(Array.isArray(rows)) rows.forEach(function(r){
+      if(AC_INHERITED[r.module]) delete AC_INHERITED[r.module][r.permission];
       if(!AC_PERMISSIONS[r.module])AC_PERMISSIONS[r.module]={};
       AC_PERMISSIONS[r.module][r.permission]=r.granted;
       // Load data scope
@@ -20365,6 +20433,7 @@ async function acLoadPerms(){
       if(defRadio) defRadio.checked=true;
     }
   }catch(e){AC_PERMISSIONS={};}
+  acInheritNote();
   acRenderMods();
 }
 
