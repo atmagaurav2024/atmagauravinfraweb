@@ -2420,6 +2420,24 @@ async function loadDashboardInsights(filterProjId){
         pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
         boqJmRows=r[10]||[], plannedResRows=r[11]||[], presentTodayRows=r[12]||[], pettyExpenseRows=r[13]||[];
 
+    // Restrict every project-linked source to the user's assigned projects,
+    // so the KPI figures reflect only what they are entitled to see rather
+    // than company-wide totals.
+    if(typeof userProjectIds==='function' && userProjectIds()){
+      projects       = scopeProjects(projects);
+      boqItems       = scopeRows(boqItems);
+      execResources  = scopeRows(execResources);
+      dailyProgress  = scopeRows(dailyProgress);
+      pendingRRs     = scopeRows(pendingRRs);
+      storeItems     = scopeRows(storeItems);
+      workBills      = scopeRows(workBills);
+      workPayments   = scopeRows(workPayments);
+      salesBills     = scopeRows(salesBills);
+      boqJmRows      = scopeRows(boqJmRows);
+      plannedResRows = scopeRows(plannedResRows);
+      pettyExpenseRows = scopeRows(pettyExpenseRows, {nameField:'project'});
+    }
+
     // ── Populate / preserve the project filter dropdown ──
     var selectedProject=projects.find(function(p){return p.id===filterProjId;});
     if(filterEl){
@@ -3150,6 +3168,42 @@ function userProjectIds(){
   }catch(e){ return null; }
   ids=ids.map(function(x){return String(x).trim();}).filter(Boolean);
   return ids.length?ids:null;
+}
+
+// Filters any record list to the user's assigned projects. Records are
+// matched on project_id, project_ids (a JSON array, used by petty cash) or
+// a project name field, since the modules store the link differently.
+// Records with no project at all are kept: company-level entries such as
+// overheads and loans are not site-specific and hiding them would misstate
+// company totals.
+function scopeRows(list, opts){
+  var ids=userProjectIds();
+  if(!ids) return list||[];
+  opts=opts||{};
+  var idField=opts.idField||'project_id';
+  var nameField=opts.nameField||null;
+  var names=null;
+  if(nameField){
+    names=(PROJ_DATA||[]).filter(function(p){return ids.indexOf(String(p.id))>-1;})
+      .map(function(p){return String(p.name||'').toLowerCase();});
+  }
+  return (list||[]).filter(function(r){
+    // Multi-project records (petty cash allocations)
+    if(r.project_ids){
+      try{
+        var arr=typeof r.project_ids==='string'?JSON.parse(r.project_ids):r.project_ids;
+        if(Array.isArray(arr)&&arr.length) return arr.some(function(x){return ids.indexOf(String(x))>-1;});
+      }catch(e){}
+    }
+    var pid=r[idField];
+    if(pid) return ids.indexOf(String(pid))>-1;
+    if(names && r[nameField]){
+      var v=String(r[nameField]).toLowerCase();
+      if(v==='all projects') return true;
+      return names.some(function(n){ return n && v.indexOf(n)>-1; });
+    }
+    return true;   // not project-linked
+  });
 }
 
 // Filters a list of projects to those the user is assigned to
@@ -18699,6 +18753,13 @@ async function initAccounts(){
     ]);
     ACC_ACCOUNTS=Array.isArray(accounts)?accounts:[];
     ACC_VOUCHERS=Array.isArray(vouchers)?vouchers:[];
+    // Accounts follows the same scope. Vouchers with no project — loans,
+    // overheads, interest accruals — are company-level and stay visible, so
+    // the ledger still balances rather than showing only one side of an
+    // entry whose counterpart was filtered out.
+    if(typeof scopeRows==='function' && typeof userProjectIds==='function' && userProjectIds()){
+      ACC_VOUCHERS=scopeRows(ACC_VOUCHERS,{nameField:'project_name'});
+    }
     avLoadPartyNames();
 
     // Month-end interest accrual also catches up here, so it does not
@@ -22836,8 +22897,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260807b"></script>
-<script src="js/employee.js?v=20260807b"></script>
-<script src="js/projects.js?v=20260807b"></script>
-<script src="js/finance.js?v=20260807b"></script>
+<script src="js/registry.js?v=20260807c"></script>
+<script src="js/employee.js?v=20260807c"></script>
+<script src="js/projects.js?v=20260807c"></script>
+<script src="js/finance.js?v=20260807c"></script>
 </html>

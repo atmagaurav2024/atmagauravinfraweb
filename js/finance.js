@@ -32,8 +32,12 @@ async function initPettyCash(){
     PC_EXP=Array.isArray(expenses)?expenses:[];
     PC_EMPS=Array.isArray(emps)?emps.map(function(e){return {id:e.id,empId:e.emp_id,name:((e.first_name||'')+' '+(e.last_name||'')).trim(),dept:e.department||''};}):[]; 
     PC_PROJS=Array.isArray(projs)?projs:[];
-    // Petty cash sites follow the same project scope as everything else
+    // Petty cash follows the same project scope as everything else — both
+    // the site list and the expense rows, so totals match what is listed.
     if(typeof scopeProjects==='function') PC_PROJS=scopeProjects(PC_PROJS);
+    if(typeof scopeRows==='function' && typeof userProjectIds==='function' && userProjectIds()){
+      PC_EXP=scopeRows(PC_EXP,{nameField:'project'});
+    }
     pcRefresh();
   }catch(e){console.error('initPettyCash:',e);if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading petty cash data</div>';}
 }
