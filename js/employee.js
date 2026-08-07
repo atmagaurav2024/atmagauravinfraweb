@@ -2353,6 +2353,12 @@ function empViewDetail(id){
       row('Category',e.category||e.empType||null)+
       row('Employment Type',e.emp_type||null)+
       row('Work Location',e.work_location||e.location||null)+
+      row('Projects',(function(){
+        if(e.project_names) return e.project_names;
+        if(!e.project_ids) return 'All projects';
+        try{ var a=JSON.parse(e.project_ids); return a.length?(a.length+' assigned'):'All projects'; }
+        catch(x){ return 'All projects'; }
+      })())+
       row('Reporting To',e.reporting_to||null)+
     '</div>'+
     '<div style="background:white;border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
@@ -2784,7 +2790,11 @@ function empOpenForm(emp){
       '<div><label class="flbl">Role / Designation</label><select id="f-urole" class="fsel"><option value="">Loading...</option></select></div>'+
       '<div><label class="flbl">Department</label><select id="f-udept" class="fsel"><option value="">Loading...</option></select></div>'+
     '</div>'+
-    '<label class="flbl">Project Assignment</label><select id="f-uproject" class="fsel"><option value="">Loading...</option></select>'+
+    '<label class="flbl">Project Assignment</label>'+
+    '<div id="f-uproject-box" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 10px;max-height:180px;overflow-y:auto;margin-bottom:10px;background:white;">'+
+      '<div style="font-size:11px;color:var(--text3);">&#9203; Loading projects...</div>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 10px;">Tick every project this employee works on. Leave all unticked for company-wide access to all projects.</div>'+
     '<div class="g2">'+
       '<div><label class="flbl">Employment Type</label><select id="f-uemptype" class="fsel"><option value="">-- Select --</option>'+sel(empType,['Full Time','Part Time','Contract','Daily Wage'])+'</select></div>'+
       '<div><label class="flbl">Work Location / Project</label><select id="f-ulocation" class="fsel"><option value="">&#9203; Loading...</option></select></div>'+
@@ -2894,7 +2904,7 @@ function empOpenForm(emp){
   // Load Role, Dept, Project dropdowns from Supabase
   var roleVal=isEdit?(e.designation||e.role||''):'';
   var deptVal=isEdit?(e.department||e.dept||''):'';
-  var projVal=isEdit?(e.project_id||e.project||''):'';
+  var projVal=isEdit?(e.project_ids||e.project_id||e.project||''):'';
 
   Promise.all([
     sbFetch('categories',{select:'name,icon',filter:'type=eq.role&active=eq.true',order:'name.asc'}),
@@ -2915,10 +2925,26 @@ function empOpenForm(emp){
       ds.innerHTML='<option value="">-- Select Department --</option>'+
         depts.map(function(d){return '<option value="'+d.name+'"'+(d.name===deptVal?' selected':'')+'>'+d.name+'</option>';}).join('');
     }
-    var ps=document.getElementById('f-uproject');
+    var ps=document.getElementById('f-uproject-box');
     if(ps){
-      ps.innerHTML='<option value="">All Projects</option>'+
-        projs.map(function(p){return '<option value="'+p.id+'"'+(p.id===projVal||p.name===projVal?' selected':'')+'>'+p.name+'</option>';}).join('');
+      // Existing assignment may be a JSON array, a comma-joined string, or a
+      // single id from before multi-select — accept all three
+      var chosen=[];
+      try{
+        if(Array.isArray(projVal)) chosen=projVal;
+        else if(typeof projVal==='string' && projVal.trim().charAt(0)==='[') chosen=JSON.parse(projVal);
+        else if(projVal) chosen=String(projVal).split(',');
+      }catch(pe){ chosen=projVal?[String(projVal)]:[]; }
+      chosen=chosen.map(function(x){return String(x).trim();}).filter(Boolean);
+
+      ps.innerHTML = projs.length
+        ? projs.map(function(p){
+            var on=chosen.indexOf(p.id)>-1 || chosen.indexOf(p.name)>-1;
+            return '<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer;font-size:12px;">'+
+              '<input type="checkbox" class="f-uproj-chk" value="'+p.id+'" data-name="'+p.name.replace(/"/g,'&quot;')+'"'+(on?' checked':'')+' style="width:auto;margin:0;">'+
+              '<span>'+p.name+'</span></label>';
+          }).join('')
+        : '<div style="font-size:11px;color:var(--text3);">No projects found</div>';
     }
     // Also populate work location from projects + Head Office
     var ls=document.getElementById('f-ulocation');
@@ -3035,6 +3061,18 @@ async function empFormSave(){
     date_of_joining:gv('f-udoj')||null,
     role:role, designation:roleRaw, department:gv('f-udept')||null,
     emp_type:gv('f-uemptype')||null, work_location:gv('f-ulocation')||null,
+    // Project assignment was rendered but never saved. Stored as a JSON
+    // array of project ids; empty means no restriction (all projects).
+    project_ids:(function(){
+      var ids=[];
+      document.querySelectorAll('.f-uproj-chk').forEach(function(c){ if(c.checked) ids.push(c.value); });
+      return ids.length?JSON.stringify(ids):null;
+    })(),
+    project_names:(function(){
+      var ns=[];
+      document.querySelectorAll('.f-uproj-chk').forEach(function(c){ if(c.checked) ns.push(c.getAttribute('data-name')); });
+      return ns.length?ns.join(', '):null;
+    })(),
     address:gv('f-uaddress')||null, permanent_address:gv('f-upermanent')||null,
     aadhar:gv('f-uaadhar')||null, pan:gv('f-upan')||null,
     pf_no:gv('f-upf')||null, esic_no:gv('f-uesic')||null,
