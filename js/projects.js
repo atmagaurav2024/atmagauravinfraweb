@@ -40,6 +40,8 @@ async function projModLoadProjects(forceFetch){
   if(forceFetch){
     try{
       var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
+      // Restrict to the projects assigned to the signed-in user
+      if(typeof scopeProjects==='function') rows = scopeProjects(rows);
       PROJ_DATA = Array.isArray(rows) ? rows : [];
     }catch(e){}
   }
@@ -247,6 +249,8 @@ async function loadProjData(forceFetch){
   el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading projects...</div>';
   try{
     var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
+      // Restrict to the projects assigned to the signed-in user
+      if(typeof scopeProjects==='function') rows = scopeProjects(rows);
     PROJ_DATA = Array.isArray(rows) ? rows : [];
     // Re-get el in case DOM changed during async fetch
     var el2 = document.getElementById('proj-list');
@@ -734,7 +738,7 @@ async function deleteProjItem(id){
 
 function openBOQSheet(){openSheet('ov-boq','sh-boq');}
 function closeBOQSheet(){closeSheet('ov-boq','sh-boq');}
-async function boqLoadProjs(){var sel=document.getElementById('boq-proj-sel');if(!sel)return;try{var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}catch(e){}}
+async function boqLoadProjs(){var sel=document.getElementById('boq-proj-sel');if(!sel)return;try{var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});if(typeof scopeProjects==='function')d=scopeProjects(d);sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}catch(e){}}
 async function boqLoadItems(){
   var projId=(document.getElementById('boq-proj-sel')||{}).value||'';
   var el=document.getElementById('boq-content');
@@ -905,7 +909,7 @@ function jmDate(d){
   return m ? (m[3]+'-'+m[2]+'-'+m[1]) : String(d);
 }
 function initJM(){jmLoadProjs();}
-async function jmLoadProjs(){var sel=document.getElementById('jm-proj-sel');if(!sel)return;try{var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}catch(e){}}
+async function jmLoadProjs(){var sel=document.getElementById('jm-proj-sel');if(!sel)return;try{var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});if(typeof scopeProjects==='function')d=scopeProjects(d);sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}catch(e){}}
 async function jmLoadItems(){
   var projId=(document.getElementById('jm-proj-sel')||{}).value||'';var el=document.getElementById('jm-content');
   if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';return;}
@@ -1184,7 +1188,7 @@ async function jmDelete(id){if(!confirm('Delete?'))return;JM_JMS=JM_JMS.filter(f
 // ════ PLANNING ════════════════════════════════════════════
 var PLAN_ITEMS=[],PLAN_SUBS=[],PLAN_RES=[];
 function initPlanning(){planLoadProjs();}
-async function planLoadProjs(){var sel=document.getElementById('plan-proj-sel');if(!sel)return;try{var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}catch(e){}}
+async function planLoadProjs(){var sel=document.getElementById('plan-proj-sel');if(!sel)return;try{var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});if(typeof scopeProjects==='function')d=scopeProjects(d);sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}catch(e){}}
 async function planLoadItems(){
   var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var el=document.getElementById('plan-content');
   if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';return;}
@@ -1791,7 +1795,7 @@ async function execLoadProjs(){
   var sel=document.getElementById('exec-proj-sel');
   if(!sel)return;
   try{
-    var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});
+    var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});if(typeof scopeProjects==='function')d=scopeProjects(d);
     sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
   }catch(e){}
 }
