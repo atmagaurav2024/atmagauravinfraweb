@@ -22402,7 +22402,9 @@ async function annGenerate(){
     if(!fromDate||!toDate){toast('Select from and to dates','warning');return;}
     label = fromDate+' to '+toDate;
     var from = new Date(fromDate), to = new Date(toDate);
-    var filtered = SALARY_RECORDS.filter(function(r){
+    // Report must honour Employee Data Visibility — it was reading the full
+    // record set, so Self Only produced a company-wide statement
+    var filtered = salScoped(SALARY_RECORDS).filter(function(r){
       var d = new Date(r.year+'-'+String(r.month).padStart(2,'0')+'-01');
       return d >= from && d <= to;
     });
@@ -22410,7 +22412,7 @@ async function annGenerate(){
   } else {
     var fyYear = parseInt(fy);
     label = 'FY '+fyYear+'-'+(fyYear+1).toString().slice(-2)+' (Apr '+fyYear+' \u2013 Mar '+(fyYear+1)+')';
-    var filtered = SALARY_RECORDS.filter(function(r){
+    var filtered = salScoped(SALARY_RECORDS).filter(function(r){
       if(r.month >= 4 && r.year === fyYear) return true;
       if(r.month <= 3 && r.year === fyYear+1) return true;
       return false;
