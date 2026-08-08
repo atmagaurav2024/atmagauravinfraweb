@@ -1361,13 +1361,15 @@ input,select,textarea{font-size:16px !important;}
 
     <label class="flbl">Mobile Number</label>
     <div class="inp-wrap">
-      <input class="finp" type="tel" placeholder="+91 98765 43210" id="inp-phone" style="padding-right:44px;">
+      <input class="finp" type="tel" placeholder="+91 98765 43210" id="inp-phone" style="padding-right:44px;"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();var p=document.getElementById('inp-pass');if(p)p.focus();}">
       <span class="inp-ic">&#128241;</span>
     </div>
 
     <label class="flbl">Password</label>
     <div class="inp-wrap">
-      <input class="finp" type="password" placeholder="Enter your password" id="inp-pass" style="padding-right:44px;">
+      <input class="finp" type="password" placeholder="Enter your password" id="inp-pass" style="padding-right:44px;"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}">
       <span class="inp-ic" onclick="togglePass()" id="pass-ic">&#128065;</span>
     </div>
 
@@ -3232,11 +3234,20 @@ function toggleRemember(){
   b.style.borderColor=remembered?'var(--blue)':'var(--border)';
   b.textContent=remembered?'✓':'';
 }
+var LOGIN_BUSY=false;
 async function doLogin(){
+  // Enter makes it easy to fire this twice before the first attempt
+  // returns, which produces two auth requests and a confusing double toast
+  if(LOGIN_BUSY) return;
   var pw = document.getElementById('inp-pass').value;
   var ph = document.getElementById('inp-phone').value.trim();
   if(!ph){toast('Please enter your mobile number','warning');return;}
   if(!pw){toast('Please enter your password','warning');return;}
+  LOGIN_BUSY=true;
+  try{ await doLoginInner(ph,pw); } finally { LOGIN_BUSY=false; }
+}
+
+async function doLoginInner(ph,pw){
   try{
     // Show splash loading screen
     var splashMsg = document.getElementById('splash-msg');
