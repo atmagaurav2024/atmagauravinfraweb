@@ -547,7 +547,7 @@ function openEditForm(type,id){
       '</div>'+
       '<div class="g2">'+
         '<div><label class="flbl">Material Code</label><input id="ef-code" class="finp" value="'+(item?item.code||'':'')+'" placeholder="STL-001"></div>'+
-        '<div><label class="flbl">Unit of Measure</label><select id="ef-uom" class="fsel">'+catOptions('uom')+'</select></div>'+
+        '<div><label class="flbl">Unit of Measure</label><select id="ef-uom" class="fsel" onchange="if(!catSelectChanged(this,\'uom\'))catRememberValue(this);">'+catOptions('uom')+'</select></div>'+
       '</div>'+
       '<label class="flbl">Specification</label><textarea id="ef-spec" class="finp" rows="2" placeholder="Grade, size, standard...">'+(item?item.spec||'':'')+'</textarea>';
   } else if(type==='sc'){

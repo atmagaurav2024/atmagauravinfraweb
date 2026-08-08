@@ -5795,10 +5795,128 @@ function updateUser(id){
 }
 
 // ── DYNAMIC CATEGORY SELECT HELPERS ──
+// Every category dropdown ends with an entry that opens a small editor for
+// that one category type, so a missing option can be added without leaving
+// the form and losing what has been typed so far.
+var CAT_EDIT_SENTINEL='__cat_edit__';
+
 function catOptions(type){
   return (CAT_DATA[type]||[]).filter(function(c){return c.active;}).map(function(c){
     return '<option value="'+c.name+'">'+c.icon+' '+c.name+'</option>';
-  }).join('');
+  }).join('') +
+  '<option disabled>──────────</option>' +
+  '<option value="'+CAT_EDIT_SENTINEL+'">\u270e Add / Edit list\u2026</option>';
+}
+
+// Wired onto any select built with catOptions. Restores the previous value
+// first, so choosing the editor never leaves the field set to the sentinel.
+function catSelectChanged(sel, type){
+  if(!sel || sel.value!==CAT_EDIT_SENTINEL) return false;
+  sel.value = sel.dataset.prevValue || '';
+  catOpenQuickEdit(type, sel.id);
+  return true;
+}
+
+// Remembers the current value so it can be restored after the editor closes
+function catRememberValue(sel){ if(sel) sel.dataset.prevValue=sel.value; }
+
+var CAT_QUICK_TYPE=null, CAT_QUICK_TARGET=null;
+var CAT_TYPE_LABELS={vendor:'Vendor Categories',material:'Material Categories',
+  sc:'Subcontractor Trades',uom:'Units of Measurement',role:'Roles',
+  dept:'Departments',labour:'Labour Types',resource:'Resource Types',
+  leave:'Leave Types',pettycash:'Petty Cash Categories'};
+
+function catOpenQuickEdit(type, targetSelectId){
+  CAT_QUICK_TYPE=type; CAT_QUICK_TARGET=targetSelectId||null;
+  var ov=document.getElementById('cat-quick-ov');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='cat-quick-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.onclick=function(e){ if(e.target===ov) catCloseQuickEdit(); };
+    document.body.appendChild(ov);
+  }
+  ov.style.display='flex';
+  catRenderQuickEdit();
+}
+
+function catRenderQuickEdit(){
+  var ov=document.getElementById('cat-quick-ov'); if(!ov) return;
+  var type=CAT_QUICK_TYPE;
+  var list=(CAT_DATA[type]||[]);
+  ov.innerHTML='<div style="background:white;border-radius:16px;max-width:440px;width:100%;max-height:80vh;display:flex;flex-direction:column;font-family:Nunito,sans-serif;overflow:hidden;">'+
+    '<div style="padding:14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
+      '<div style="flex:1;"><div style="font-size:14px;font-weight:800;color:var(--navy);">'+(CAT_TYPE_LABELS[type]||type)+'</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);">Changes apply everywhere this list is used</div></div>'+
+      '<span onclick="catCloseQuickEdit()" style="font-size:20px;cursor:pointer;color:var(--text3);">&#10005;</span>'+
+    '</div>'+
+    '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:6px;">'+
+      '<input id="cat-quick-name" class="finp" placeholder="New '+(CAT_TYPE_LABELS[type]||'item').replace(/ies$/,'y').replace(/s$/,'')+' name" style="flex:1;margin:0;" '+
+        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();catQuickAdd();}">'+
+      '<button onclick="catQuickAdd()" style="background:var(--navy);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Add</button>'+
+    '</div>'+
+    '<div style="flex:1;overflow-y:auto;padding:4px 0;">'+
+      (list.length? list.map(function(c,i){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);">'+
+          '<div style="width:30px;height:30px;border-radius:8px;background:'+(c.color||'#37474F')+'20;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">'+(c.icon||'&#128278;')+'</div>'+
+          '<div style="flex:1;min-width:0;"><div style="font-size:12.5px;font-weight:700;'+(c.active?'':'text-decoration:line-through;opacity:.5;')+'">'+c.name+'</div>'+
+          (c.desc?'<div style="font-size:10px;color:var(--text3);">'+c.desc+'</div>':'')+'</div>'+
+          '<div onclick="catQuickToggle('+i+')" title="'+(c.active?'Active':'Inactive')+'" style="width:36px;height:20px;border-radius:10px;background:'+(c.active?'var(--green)':'#CBD5E1')+';position:relative;cursor:pointer;flex-shrink:0;">'+
+            '<div style="position:absolute;top:2px;'+(c.active?'right:2px':'left:2px')+';width:16px;height:16px;border-radius:50%;background:white;"></div></div>'+
+        '</div>';
+      }).join('') : '<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px;">Nothing in this list yet</div>')+
+    '</div>'+
+    '<div style="padding:12px 14px;border-top:1px solid var(--border);text-align:right;">'+
+      '<button onclick="catCloseQuickEdit()" style="background:var(--navy);color:white;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Done</button>'+
+    '</div></div>';
+  var inp=document.getElementById('cat-quick-name'); if(inp) inp.focus();
+}
+
+async function catQuickAdd(){
+  var el=document.getElementById('cat-quick-name');
+  var name=(el&&el.value||'').trim();
+  if(!name){ toast('Enter a name','warning'); return; }
+  var type=CAT_QUICK_TYPE;
+  if((CAT_DATA[type]||[]).some(function(c){return c.name.toLowerCase()===name.toLowerCase();})){
+    toast('Already in the list','warning'); return;
+  }
+  if(!CAT_DATA[type]) CAT_DATA[type]=[];
+  CAT_DATA[type].push({id:type+'-'+Date.now(),icon:'&#128278;',name:name,desc:'',color:'#37474F',count:0,active:true});
+  if(el) el.value='';
+  catRenderQuickEdit();
+  try{ await sbInsert('categories',{type:type,name:name,icon:'',description:'',color:'#37474F',active:true}); }
+  catch(e){ console.warn('category not saved', e); toast('Added, but could not save: '+e.message,'warning'); }
+}
+
+async function catQuickToggle(i){
+  var type=CAT_QUICK_TYPE, c=(CAT_DATA[type]||[])[i];
+  if(!c) return;
+  c.active=!c.active;
+  catRenderQuickEdit();
+  try{
+    var rows=await sbFetch('categories',{select:'id',filter:'type=eq.'+encodeURIComponent(type)+'&name=eq.'+encodeURIComponent(c.name)});
+    if(rows&&rows[0]) await sbUpdate('categories',rows[0].id,{active:c.active});
+  }catch(e){ console.warn('category toggle not saved', e); }
+}
+
+// Rebuilds the dropdown that opened the editor and restores its selection,
+// so the form is exactly as it was apart from the new option
+function catCloseQuickEdit(){
+  var ov=document.getElementById('cat-quick-ov');
+  if(ov) ov.style.display='none';
+  var sel=CAT_QUICK_TARGET?document.getElementById(CAT_QUICK_TARGET):null;
+  if(sel){
+    var keep=sel.dataset.prevValue||sel.value||'';
+    var first=sel.options.length?sel.options[0]:null;
+    var lead=(first && !first.value)?('<option value="">'+first.textContent+'</option>'):'';
+    sel.innerHTML=lead+catOptions(CAT_QUICK_TYPE);
+    sel.value=keep;
+    if(sel.value!==keep) sel.value='';   // the kept option was deactivated
+    catRememberValue(sel);
+  }
+  if(typeof renderCatSection==='function' && typeof catSectionMap!=='undefined' && catSectionMap[CAT_QUICK_TYPE]){
+    renderCatSection(CAT_QUICK_TYPE, catSectionMap[CAT_QUICK_TYPE]);   // keep the registry page in step
+  }
+  CAT_QUICK_TYPE=null; CAT_QUICK_TARGET=null;
 }
 function uomOptions(){
   return (CAT_DATA.uom||[]).filter(function(c){return c.active;}).map(function(c){
@@ -9510,9 +9628,11 @@ function empOpenForm(emp){
     }
   }).catch(function(err){
     var rs=document.getElementById('f-urole');
-    if(rs) rs.innerHTML='<option value="">-- Select Role --</option>'+catOptions('role');
+    if(rs){ rs.innerHTML='<option value="">-- Select Role --</option>'+catOptions('role');
+      rs.setAttribute('onchange',"if(!catSelectChanged(this,'role'))catRememberValue(this);"); catRememberValue(rs); }
     var ds=document.getElementById('f-udept');
-    if(ds) ds.innerHTML='<option value="">-- Select Dept --</option>'+catOptions('dept');
+    if(ds){ ds.innerHTML='<option value="">-- Select Dept --</option>'+catOptions('dept');
+      ds.setAttribute('onchange',"if(!catSelectChanged(this,'dept'))catRememberValue(this);"); catRememberValue(ds); }
     var ls=document.getElementById('f-ulocation');
     if(ls) ls.innerHTML='<option value="">Head Office</option>';
     console.warn('Dropdown load error:',err);

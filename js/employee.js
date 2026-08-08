@@ -3017,9 +3017,11 @@ function empOpenForm(emp){
     });
   }).catch(function(err){
     var rs=document.getElementById('f-urole');
-    if(rs) rs.innerHTML='<option value="">-- Select Role --</option>'+catOptions('role');
+    if(rs){ rs.innerHTML='<option value="">-- Select Role --</option>'+catOptions('role');
+      rs.setAttribute('onchange',"if(!catSelectChanged(this,'role'))catRememberValue(this);"); catRememberValue(rs); }
     var ds=document.getElementById('f-udept');
-    if(ds) ds.innerHTML='<option value="">-- Select Dept --</option>'+catOptions('dept');
+    if(ds){ ds.innerHTML='<option value="">-- Select Dept --</option>'+catOptions('dept');
+      ds.setAttribute('onchange',"if(!catSelectChanged(this,'dept'))catRememberValue(this);"); catRememberValue(ds); }
     var ls=document.getElementById('f-ulocation');
     if(ls) ls.innerHTML='<option value="">Head Office</option>';
     console.warn('Dropdown load error:',err);
