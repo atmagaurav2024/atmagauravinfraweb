@@ -63,6 +63,25 @@ function advScoped(list){
   return list||[];
 }
 
+// Salary and annual records are keyed to an employee, so the visibility
+// setting must be applied to the records themselves — scoping the employee
+// list does not reach them.
+function salScoped(list){
+  var scope=(typeof getEmpDataScope==='function')?getEmpDataScope():'all';
+  if(scope==='all' || !currentUser) return list||[];
+  if(scope==='self') return (list||[]).filter(function(r){ return r.employee_id===currentUser.id; });
+  if(scope==='department'){
+    var d=String(currentUser.dept||currentUser.department||'').trim().toLowerCase();
+    if(!d) return list||[];
+    var ids={};
+    (EMP_LIST||[]).forEach(function(e){
+      if(String(e.department||e.dept||'').trim().toLowerCase()===d) ids[e.id]=1;
+    });
+    return (list||[]).filter(function(r){ return ids[r.employee_id]; });
+  }
+  return list||[];
+}
+
 function advRecovered(advId){
   return EMP_ADV_RECOV.filter(function(x){return x.advance_id===advId;})
     .reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
@@ -1121,7 +1140,7 @@ function empSalaryHTML(){
   }
 
   var logMap={};
-  SALARY_RECORDS.forEach(function(r){
+  salScoped(SALARY_RECORDS).forEach(function(r){
     var key=r.year+'-'+String(r.month).padStart(2,'0');
     if(!logMap[key]) logMap[key]={label:r.month_label,month:r.month,year:r.year,records:[],total:0};
     logMap[key].records.push(r); logMap[key].total+=Number(r.net_payable||0);
@@ -1299,7 +1318,7 @@ function salShowRecordPayslip(recordId, empId){
 }
 
 function salDownloadExcel(month, year, label){
-  var records = SALARY_RECORDS.filter(function(r){return r.month===month&&r.year===year;});
+  var records = salScoped(SALARY_RECORDS).filter(function(r){return r.month===month&&r.year===year;});
   if(!records.length){toast('No records for '+label,'warning');return;}
 
   var lines = [
@@ -1341,7 +1360,7 @@ function salDownloadExcel(month, year, label){
 }
 
 function salDownloadPDF(month, year, label){
-  var records = SALARY_RECORDS.filter(function(r){return r.month===month&&r.year===year;});
+  var records = salScoped(SALARY_RECORDS).filter(function(r){return r.month===month&&r.year===year;});
   if(!records.length){toast('No records for '+label,'warning');return;}
 
   var total = records.reduce(function(s,r){return s+Number(r.net_payable||0);},0);
