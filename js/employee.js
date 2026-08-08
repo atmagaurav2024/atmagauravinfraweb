@@ -45,6 +45,24 @@ async function advUndoRecoveryFor(salaryRecordId){
   return n;
 }
 
+// Advances are keyed to an employee, so the visibility setting applies to
+// them directly — filtering the employee list does not reach these rows.
+function advScoped(list){
+  var scope=(typeof getEmpDataScope==='function')?getEmpDataScope():'all';
+  if(scope==='all' || !currentUser) return list||[];
+  if(scope==='self') return (list||[]).filter(function(a){ return a.employee_id===currentUser.id; });
+  if(scope==='department'){
+    var d=String(currentUser.dept||currentUser.department||'').trim().toLowerCase();
+    if(!d) return list||[];
+    var ids={};
+    (EMP_LIST||[]).forEach(function(e){
+      if(String(e.department||e.dept||'').trim().toLowerCase()===d) ids[e.id]=1;
+    });
+    return (list||[]).filter(function(a){ return ids[a.employee_id]; });
+  }
+  return list||[];
+}
+
 function advRecovered(advId){
   return EMP_ADV_RECOV.filter(function(x){return x.advance_id===advId;})
     .reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
@@ -88,10 +106,13 @@ function empAdvancesHTML(){
   // so the old check always failed and hid the entry button entirely.
   var canEdit = (currentUser&&currentUser.role==='admin') ? true
     : (typeof canAccess==='function' ? canAccess('emp-advances','edit') : false);
-  var totAdv=EMP_ADVANCES.reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
-  var totRec=EMP_ADVANCES.reduce(function(a,x){return a+advRecovered(x.id);},0);
+  // Totals and rows both come from the scoped set, so the figures match
+  // what is listed
+  var ADV=advScoped(EMP_ADVANCES);
+  var totAdv=ADV.reduce(function(a,x){return a+(parseFloat(x.amount)||0);},0);
+  var totRec=ADV.reduce(function(a,x){return a+advRecovered(x.id);},0);
   var totBal=totAdv-totRec;
-  var pending=EMP_ADVANCES.filter(function(a){return advBalance(a)>0.5;});
+  var pending=ADV.filter(function(a){return advBalance(a)>0.5;});
 
   return '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ADVANCED</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(totAdv)+'</div></div>'+
@@ -106,12 +127,12 @@ function empAdvancesHTML(){
         (canEdit?'<button onclick="advOpenNew()" style="background:var(--navy);color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Advance</button>':'')+
       '</div>'+
     '</div>'+
-    (EMP_ADVANCES.length?
+    (ADV.length?
       '<div class="table-card"><table class="att-table"><thead><tr>'+
         '<th>Date</th><th>Employee</th><th>Payment</th><th>Recovery Plan</th>'+
         '<th style="text-align:right;">Amount</th><th style="text-align:right;">Recovered</th><th style="text-align:right;">Balance</th><th></th>'+
       '</tr></thead><tbody>'+
-      EMP_ADVANCES.map(function(a){
+      ADV.map(function(a){
         var rec=advRecovered(a.id), bal=advBalance(a);
         var done=bal<=0.5;
         var doneN=EMP_ADV_RECOV.filter(function(x){return x.advance_id===a.id;}).length;
@@ -270,24 +291,25 @@ async function advDelete(id){
 }
 
 function advExportData(){
-  var rows=EMP_ADVANCES.map(function(a){
+  var ADV=advScoped(EMP_ADVANCES);
+  var rows=ADV.map(function(a){
     var rec=advRecovered(a.id);
     return [fmtDate(a.date), advEmpName(a.employee_id), a.mode||'', a.reference||'',
       (a.recovery_type==='full'?'Full next salary':((a.emi_months||0)+'m x '+Math.round(a.emi_amount||0))),
       Math.round(parseFloat(a.amount)||0), Math.round(rec), Math.round(advBalance(a)), a.remarks||''];
   });
-  var t=function(f){return EMP_ADVANCES.reduce(function(x,a){return x+f(a);},0);};
+  var t=function(f){return ADV.reduce(function(x,a){return x+f(a);},0);};
   rows.push(['TOTAL','','','','',Math.round(t(function(a){return parseFloat(a.amount)||0;})),
     Math.round(t(function(a){return advRecovered(a.id);})), Math.round(t(function(a){return advBalance(a);})),'']);
   return {title:'Salary Advance Register', header:['Date','Employee','Mode','Reference','Recovery Plan','Amount','Recovered','Balance','Remarks'], rows:rows};
 }
 function advExportExcel(){
-  if(!EMP_ADVANCES.length){toast('Nothing to export','warning');return;}
+  if(!advScoped(EMP_ADVANCES).length){toast('Nothing to export','warning');return;}
   var d=advExportData();
   accExportCSV('Salary_Advances_'+new Date().toISOString().slice(0,10)+'.csv',[[d.title],[''],d.header].concat(d.rows));
 }
 function advExportPDF(){
-  if(!EMP_ADVANCES.length){toast('Nothing to export','warning');return;}
+  if(!advScoped(EMP_ADVANCES).length){toast('Nothing to export','warning');return;}
   var d=advExportData();
   d.rows=d.rows.map(function(r){ [5,6,7].forEach(function(i){ if(r[i]!=='') r[i]=fmtINR(r[i]); }); return r; });
   accExportPDF(d.title, d.header, d.rows);
