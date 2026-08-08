@@ -2999,13 +2999,6 @@ function showApp(name){
       }
       checkKey = null; // already checked
     } else if(allProjTabs&&allProjTabs.indexOf(name)>-1){ checkKey=null; }
-    // Company-level modules are head-office only, whatever the permission
-    // grid says — otherwise a site employee could reach them by URL or a
-    // stale link even though the drawer hides them.
-    if(['accounts','overheads','loans'].indexOf(name)>-1 && typeof userIsHeadOffice==='function' && !userIsHeadOffice()){
-      toast('Available to head office staff only','warning');
-      return;
-    }
     if(checkKey && !canAccess(checkKey,'view')){
       toast('Access denied — you do not have permission to view this module','warning');
       return;
@@ -3159,29 +3152,12 @@ var showPass = false;
 var remembered = true;
 var currentUser = null;
 
-// Head-office staff see the whole company: every project, plus the
-// company-level data that belongs to no project — loans, overheads,
-// vouchers. Site-based staff see only their assigned projects and none of
-// the company-level data.
-function userIsHeadOffice(){
-  if(!currentUser) return false;
-  if(String(currentUser.role||'').trim().toLowerCase()==='admin') return true;
-  var loc=String(currentUser.location||currentUser.work_location||'').trim().toLowerCase();
-  if(loc==='head office') return true;
-  // No work location recorded means unrestricted, so existing staff are not
-  // locked out of data they could see before this rule existed
-  return loc==='';
-}
-
-// True when the user must not see company-level, non-project data
-function userIsSiteOnly(){ return !userIsHeadOffice(); }
-
 // Projects the signed-in user may see. Returns null for unrestricted —
 // admins, and anyone with no assignment — so callers can skip filtering
 // entirely rather than treating "no assignment" as "no access".
 function userProjectIds(){
   if(!currentUser) return null;
-  if(userIsHeadOffice()) return null;   // head office sees every project
+  if(String(currentUser.role||'').trim().toLowerCase()==='admin') return null;
   var raw=currentUser.projectIds;
   if(!raw) return null;
   var ids=[];
@@ -3226,9 +3202,7 @@ function scopeRows(list, opts){
       if(v==='all projects') return true;
       return names.some(function(n){ return n && v.indexOf(n)>-1; });
     }
-    // A row with no project is company-level. Head office keeps it; site
-    // staff must not see loans, overheads or other non-project data.
-    return !userIsSiteOnly();
+    return true;   // not project-linked
   });
 }
 
@@ -6843,13 +6817,10 @@ function applyDrawerPermissions(){
     'projects':     function(){ return ['projects','boq','jm','planning','execution'].some(function(t){return canAccess('proj-'+t,'view');}); },
     'employees':    function(){ return Object.keys(EMP_TAB_KEYS).some(function(t){return canAccess(EMP_TAB_KEYS[t],'view');}); },
     'attendance':   function(){ return canAccess('attendance','view'); },
-    // Company-level modules hold no project data at all, so a site-based
-    // employee would only ever see them empty. Hidden rather than shown
-    // blank, which reads as a fault.
-    'accounts':     function(){ return canAccess('accounts','view') && userIsHeadOffice(); },
+    'accounts':     function(){ return canAccess('accounts','view'); },
     'petty-cash':   function(){ return canAccess('petty-cash','view'); },
-    'overheads':    function(){ return canAccess('overheads','view') && userIsHeadOffice(); },
-    'loans':        function(){ return canAccess('loans','view') && userIsHeadOffice(); },
+    'overheads':    function(){ return canAccess('overheads','view'); },
+    'loans':        function(){ return canAccess('loans','view'); },
     'access':       function(){ return canAccess('access','view'); },
     'company':      function(){ return canAccess('company','view'); },
     'registry':     function(){ return canAccess('registry','view'); }
@@ -22926,8 +22897,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260807d"></script>
-<script src="js/employee.js?v=20260807d"></script>
-<script src="js/projects.js?v=20260807d"></script>
-<script src="js/finance.js?v=20260807d"></script>
+<script src="js/registry.js?v=20260807c"></script>
+<script src="js/employee.js?v=20260807c"></script>
+<script src="js/projects.js?v=20260807c"></script>
+<script src="js/finance.js?v=20260807c"></script>
 </html>
