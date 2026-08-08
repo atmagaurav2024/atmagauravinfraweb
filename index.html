@@ -7302,7 +7302,7 @@ async function salFinalise(){
   var monthLabel = MONTHS[month]+' '+year;
 
   // Collect only checked/selected employees
-  var active = EMP_LIST.filter(function(e){return e.status==='active';});
+  var active = empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   var selected = active.filter(function(e){
     var chk = document.getElementById('sal-sel-'+e.id);
     return chk && chk.checked;
@@ -7507,7 +7507,7 @@ function salPeriodChange(){
 }
 
 function empSalaryHTML(){
-  var active = EMP_LIST.filter(function(e){return e.status==='active';});
+  var active = empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   window._salRows=[]; window._salMonth='';
   if(!SALARY_RECORDS.length) salLoadRecords();
 
@@ -7694,7 +7694,7 @@ function salToggleRow(empId, event){
 }
 
 function salSelectAll(checked){
-  EMP_LIST.filter(function(e){return e.status==='active';}).forEach(function(e){
+  empScoped(EMP_LIST).filter(function(e){return e.status==='active';}).forEach(function(e){
     var chk=document.getElementById('sal-sel-'+e.id);
     if(chk) chk.checked=checked;
   });
@@ -8120,7 +8120,7 @@ function empFinaliseSalary(){
     var MONTHS=['','January','February','March','April','May','June','July','August','September','October','November','December'];
     monthLabel = MONTHS[month]+' '+year;
 
-    var active=EMP_LIST.filter(function(e){return e.status==='active';});
+    var active=empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
     rows=active.map(function(e){
       var name=(e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'');
       var pays=EMP_PAY.filter(function(p){return p.employee_id===e.id;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
@@ -8195,7 +8195,7 @@ function empFinaliseSalary(){
 
 // ════ INCREMENT ══════════════════════════════════════
 function empIncrementHTML(){
-  var active = EMP_LIST.filter(function(e){ return e.status==='active'; });
+  var active = empScoped(EMP_LIST).filter(function(e){ return e.status==='active'; });
   if(!active.length) return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees.</div>';
 
   return '<div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:12px;">'+
@@ -8492,7 +8492,7 @@ function hrOrdersForEmp(empId){
 
 // ─── HR History Tab in Transfer module ───────────────────────────────────
 function empTransferHTML(){
-  var active = EMP_LIST.filter(function(e){ return e.status==='active'; });
+  var active = empScoped(EMP_LIST).filter(function(e){ return e.status==='active'; });
   if(!active.length) return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees.</div>';
 
   // Ensure orders loaded
@@ -9023,8 +9023,9 @@ function empListHTML(status){
 
   // Stats
   var total=EMP_LIST.length;
-  var active=EMP_LIST.filter(function(e){return e.status==='active';}).length;
-  var pending=EMP_LIST.filter(function(e){return e.status==='pending'||!e.status;}).length;
+  var scopedAll=empScoped(EMP_LIST);
+  var active=scopedAll.filter(function(e){return e.status==='active';}).length;
+  var pending=scopedAll.filter(function(e){return e.status==='pending'||!e.status;}).length;
 
   var stats='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">'+
     '<div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ACTIVE</div><div style="font-size:20px;font-weight:900;color:#2E7D32;">'+active+'</div></div>'+
@@ -9084,7 +9085,7 @@ return '<div style="background:white;border-radius:14px;border:1px solid var(--b
 
 // ── PAY FIXATION LIST ─────────────────────────────────
 function empPayHTML(){
-  var active=EMP_LIST.filter(function(e){return e.status==='active';});
+  var active=empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   if(!active.length)return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees. Approve employees first.</div>';
 
   return active.map(function(e){
@@ -9193,7 +9194,7 @@ function payMini(lbl,val,col){
 var LEAVEFIX_PERIOD_LABEL={year:'per Year',month:'per Month',quarter:'per Quarter'};
 
 function empLeaveFixHTML(){
-  var active=EMP_LIST.filter(function(e){return e.status==='active';});
+  var active=empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   if(!active.length)return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees. Approve employees first.</div>';
 
   return active.map(function(e){
@@ -20597,6 +20598,24 @@ var USER_PERMISSIONS = {}; // loaded after login
 
 
 
+// Applies the Employee Data Visibility setting to any employee list.
+// Defined here as well as in js/employee.js, because several employee
+// screens — Downloads among them — are implemented in this file and were
+// therefore never covered by the copy in employee.js.
+function empScoped(list){
+  var scope=getEmpDataScope();
+  if(scope==='all' || !currentUser) return list||[];
+  if(scope==='self') return (list||[]).filter(function(e){ return e.id===currentUser.id; });
+  if(scope==='department'){
+    var d=String(currentUser.dept||currentUser.department||'').trim().toLowerCase();
+    if(!d) return list||[];   // no department recorded, so cannot narrow
+    return (list||[]).filter(function(e){
+      return String(e.department||e.dept||'').trim().toLowerCase()===d;
+    });
+  }
+  return list||[];
+}
+
 // Returns 'all', 'department', or 'self'
 function getEmpDataScope(){
   if(!currentUser || currentUser.role==='admin') return 'all';
@@ -21338,8 +21357,8 @@ async function downloadShowCauseNotice(empId, orderId){
 
 function empDownloadHTML(){
   // Only show employees who were actually employed (active or resigned)
-  var active   = EMP_LIST.filter(function(e){ return e.status==='active'; });
-  var resigned = EMP_LIST.filter(function(e){ return e.status==='resigned'; });
+  var active   = empScoped(EMP_LIST).filter(function(e){ return e.status==='active'; });
+  var resigned = empScoped(EMP_LIST).filter(function(e){ return e.status==='resigned'; });
 
   if(!active.length && !resigned.length)
     return '<div style="text-align:center;padding:40px;color:var(--text3);">No employees found.</div>';
