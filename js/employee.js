@@ -139,7 +139,7 @@ function empAdvancesHTML(){
 }
 
 function advOpenNew(){
-  var emps=EMP_LIST.filter(function(e){return e.status==='active';});
+  var emps=empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   if(!emps.length){ toast('No active employees','warning'); return; }
   var now=new Date();
   document.getElementById('emp-sheet-title').textContent='Give Salary Advance';
@@ -370,6 +370,24 @@ var SAL_PERIOD={m:null,y:null};
 // Do NOT modify any code in this section without explicit user approval.
 // Any changes require user confirmation before implementation.
 // ════════════════════════════════════════════════════════════════
+// Applies the Employee Data Visibility setting to any employee list. The
+// scope was only being enforced on the main directory, so Downloads,
+// Salary, Pay Fixation, Leave Fixation, Advances and Increments all showed
+// every employee regardless of the setting.
+function empScoped(list){
+  var scope=(typeof getEmpDataScope==='function')?getEmpDataScope():'all';
+  if(scope==='all' || !currentUser) return list||[];
+  if(scope==='self') return (list||[]).filter(function(e){ return e.id===currentUser.id; });
+  if(scope==='department'){
+    var d=String(currentUser.dept||currentUser.department||'').trim().toLowerCase();
+    if(!d) return list||[];   // no department recorded, so cannot narrow
+    return (list||[]).filter(function(e){
+      return String(e.department||e.dept||'').trim().toLowerCase()===d;
+    });
+  }
+  return list||[];
+}
+
 var EMP_LIST=[], EMP_PAY=[], EMP_LEAVEFIX=[], EMP_TAB='active', EMP_EDIT_ID=null;
 
 var EMP_DEPTS=['Site','Finance','HR/Admin','QC/Safety','Procurement','Planning','Management','Other'];
@@ -608,7 +626,7 @@ async function salFinalise(){
   var monthLabel = MONTHS[month]+' '+year;
 
   // Collect only checked/selected employees
-  var active = EMP_LIST.filter(function(e){return e.status==='active';});
+  var active = empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   var selected = active.filter(function(e){
     var chk = document.getElementById('sal-sel-'+e.id);
     return chk && chk.checked;
@@ -760,7 +778,7 @@ async function salLoadLOPDays(){
   var monthSel=document.getElementById('sal-month'), yearSel=document.getElementById('sal-year');
   var month=parseInt(monthSel?monthSel.value:0)||0, year=parseInt(yearSel?yearSel.value:0)||0;
   if(!month||!year) return;
-  var active=EMP_LIST.filter(function(e){return e.status==='active' && document.getElementById('sal-days-'+e.id);});
+  var active=empScoped(EMP_LIST).filter(function(e){return e.status==='active' && document.getElementById('sal-days-'+e.id);});
   if(!active.length) return;
 
   var pad=function(n){return String(n).padStart(2,'0');};
@@ -907,7 +925,7 @@ function salPeriodChange(){
 }
 
 function empSalaryHTML(){
-  var active = EMP_LIST.filter(function(e){return e.status==='active';});
+  var active = empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   window._salRows=[]; window._salMonth='';
   if(!SALARY_RECORDS.length) salLoadRecords();
 
@@ -1102,7 +1120,7 @@ function salToggleRow(empId, event){
 }
 
 function salSelectAll(checked){
-  EMP_LIST.filter(function(e){return e.status==='active';}).forEach(function(e){
+  empScoped(EMP_LIST).filter(function(e){return e.status==='active';}).forEach(function(e){
     var chk=document.getElementById('sal-sel-'+e.id);
     if(chk) chk.checked=checked;
   });
@@ -1551,7 +1569,7 @@ function empFinaliseSalary(){
     var MONTHS=['','January','February','March','April','May','June','July','August','September','October','November','December'];
     monthLabel = MONTHS[month]+' '+year;
 
-    var active=EMP_LIST.filter(function(e){return e.status==='active';});
+    var active=empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
     rows=active.map(function(e){
       var name=(e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'');
       var pays=EMP_PAY.filter(function(p){return p.employee_id===e.id;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
@@ -1626,7 +1644,7 @@ function empFinaliseSalary(){
 
 // ════ INCREMENT ══════════════════════════════════════
 function empIncrementHTML(){
-  var active = EMP_LIST.filter(function(e){ return e.status==='active'; });
+  var active = empScoped(EMP_LIST).filter(function(e){ return e.status==='active'; });
   if(!active.length) return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees.</div>';
 
   return '<div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:12px;">'+
@@ -1923,7 +1941,7 @@ function hrOrdersForEmp(empId){
 
 // ─── HR History Tab in Transfer module ───────────────────────────────────
 function empTransferHTML(){
-  var active = EMP_LIST.filter(function(e){ return e.status==='active'; });
+  var active = empScoped(EMP_LIST).filter(function(e){ return e.status==='active'; });
   if(!active.length) return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees.</div>';
 
   // Ensure orders loaded
@@ -2460,8 +2478,9 @@ function empListHTML(status){
 
   // Stats
   var total=EMP_LIST.length;
-  var active=EMP_LIST.filter(function(e){return e.status==='active';}).length;
-  var pending=EMP_LIST.filter(function(e){return e.status==='pending'||!e.status;}).length;
+  var scopedAll=empScoped(EMP_LIST);
+  var active=scopedAll.filter(function(e){return e.status==='active';}).length;
+  var pending=scopedAll.filter(function(e){return e.status==='pending'||!e.status;}).length;
 
   var stats='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">'+
     '<div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ACTIVE</div><div style="font-size:20px;font-weight:900;color:#2E7D32;">'+active+'</div></div>'+
@@ -2521,7 +2540,7 @@ return '<div style="background:white;border-radius:14px;border:1px solid var(--b
 
 // ── PAY FIXATION LIST ─────────────────────────────────
 function empPayHTML(){
-  var active=EMP_LIST.filter(function(e){return e.status==='active';});
+  var active=empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   if(!active.length)return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees. Approve employees first.</div>';
 
   return active.map(function(e){
@@ -2630,7 +2649,7 @@ function payMini(lbl,val,col){
 var LEAVEFIX_PERIOD_LABEL={year:'per Year',month:'per Month',quarter:'per Quarter'};
 
 function empLeaveFixHTML(){
-  var active=EMP_LIST.filter(function(e){return e.status==='active';});
+  var active=empScoped(EMP_LIST).filter(function(e){return e.status==='active';});
   if(!active.length)return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees. Approve employees first.</div>';
 
   return active.map(function(e){
