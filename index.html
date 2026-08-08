@@ -5908,7 +5908,13 @@ function catCloseQuickEdit(){
     var keep=sel.dataset.prevValue||sel.value||'';
     var first=sel.options.length?sel.options[0]:null;
     var lead=(first && !first.value)?('<option value="">'+first.textContent+'</option>'):'';
-    sel.innerHTML=lead+catOptions(CAT_QUICK_TYPE);
+    // Units are built by buildUomOpts in projects.js, which carries its own
+    // lead option and label — reuse it so the dropdown comes back unchanged
+    if(CAT_QUICK_TYPE==='uom' && typeof buildUomOpts==='function'){
+      sel.innerHTML=buildUomOpts(keep);
+    } else {
+      sel.innerHTML=lead+catOptions(CAT_QUICK_TYPE);
+    }
     sel.value=keep;
     if(sel.value!==keep) sel.value='';   // the kept option was deactivated
     catRememberValue(sel);
