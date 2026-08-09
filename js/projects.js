@@ -861,8 +861,22 @@ function boqDownloadPDF(){
 }
 async function boqOpenAddItem(editItem){
   var v=editItem||{};var uomOpts='';
-  try{var uoms=await sbFetch('categories',{select:'name',filter:'active=eq.true&type=eq.uom',order:'name.asc'});if(Array.isArray(uoms))uomOpts=uoms.map(function(u){return '<option value="'+u.name+'"'+(u.name===v.unit?' selected':'')+'>'+u.name+'</option>';}).join('');}catch(e){}
+  // Built from the registry so the list matches everywhere else and carries
+  // the Add / Edit entry. This form previously queried the categories table
+  // directly, which is why the entry never appeared here.
+  try{
+    var uoms=await sbFetch('categories',{select:'name',filter:'active=eq.true&type=eq.uom',order:'name.asc'});
+    if(Array.isArray(uoms)&&uoms.length){
+      uomOpts=uoms.map(function(u){return '<option value="'+u.name+'"'+(u.name===v.unit?' selected':'')+'>'+u.name+'</option>';}).join('');
+    }
+  }catch(e){}
+  if(!uomOpts && typeof CAT_DATA!=='undefined' && (CAT_DATA.uom||[]).length){
+    uomOpts=(CAT_DATA.uom||[]).filter(function(u){return u.active;})
+      .map(function(u){return '<option value="'+u.name+'"'+(u.name===v.unit?' selected':'')+'>'+u.name+'</option>';}).join('');
+  }
   if(!uomOpts)uomOpts='<option>Nos</option><option>Rmt</option><option>Sqm</option><option>Cum</option><option>MT</option><option>Kg</option><option>LS</option>';
+  uomOpts+='<option disabled>\u2014\u2014\u2014\u2014\u2014\u2014</option>'+
+           '<option value="__cat_edit__">\u270e Add / Edit units\u2026</option>';
   document.getElementById('boq-sheet-title').textContent=editItem?'Edit BOQ Item':'New BOQ Item';
   document.getElementById('boq-sheet-body').innerHTML='<label class="flbl">Item Code *</label><input id="bi-code" class="finp" value="'+(v.item_code||'')+'"><label class="flbl">Description *</label><input id="bi-desc" class="finp" value="'+(v.description||'')+'"><label class="flbl">Short Name</label><input id="bi-short" class="finp" value="'+(v.short_name||'')+'"><div class="g2"><div><label class="flbl">Unit</label><select id="bi-unit" class="fsel" onchange="if(!catSelectChanged(this,\'uom\'))catRememberValue(this);">'+uomOpts+'</select></div><div><label class="flbl">BOQ Qty *</label><input id="bi-qty" class="finp" type="number" step="0.001" value="'+(v.boq_qty||'')+'"></div></div><label class="flbl">Rate (\u20b9)</label><input id="bi-rate" class="finp" type="number" step="0.01" value="'+(v.rate||'')+'"><label class="flbl">Remarks</label><textarea id="bi-remarks" class="ftxt">'+(v.remarks||'')+'</textarea>';
   document.getElementById('boq-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeBOQSheet()">Cancel</button><button class="btn" style="background:#7B1FA2;color:white;" onclick="boqSaveItem(\''+(editItem?editItem.id:'')+'\')">&#10003; '+(editItem?'Save':'Add')+'</button>';
@@ -1416,7 +1430,9 @@ function buildResourceCatOpts(sel){
   return '<option value="">\u2014 Select Category \u2014</option>'+
     (CAT_DATA['resource']||[]).filter(function(u){return u.active;}).map(function(u){
       return '<option value="'+u.name+'"'+(u.name===sel?' selected':'')+'>'+u.name+'</option>';
-    }).join('');
+    }).join('')+
+    '<option disabled>\u2014\u2014\u2014\u2014\u2014\u2014</option>'+
+    '<option value="__cat_edit__">\u270e Add / Edit categories\u2026</option>';
 }
 
 function buildUomOpts(sel){
@@ -1634,7 +1650,7 @@ async function planEditRes(resId, subId, itemId){
     '<label class="flbl">Resource Name *</label>'+
     '<input id="pr-name" class="finp" value="'+esc(r.party_name||'')+'" placeholder="Resource name">'+
     '<label class="flbl">Resource Category</label>'+
-    '<select id="pr-cat" class="fsel">'+catOpts+'</select>'+
+    '<select id="pr-cat" class="fsel" onchange="if(!catSelectChanged(this,\'resource\'))catRememberValue(this);">'+catOpts+'</select>'+
     jmSection+
     '<div class="g2">'+
       '<div><label class="flbl">Resource Qty *</label><input id="pr-qty" class="finp" type="number" step="0.001" value="'+(r.qty||0)+'"></div>'+
