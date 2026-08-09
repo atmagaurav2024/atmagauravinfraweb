@@ -5912,6 +5912,8 @@ function catCloseQuickEdit(){
     // lead option and label — reuse it so the dropdown comes back unchanged
     if(CAT_QUICK_TYPE==='uom' && typeof buildUomOpts==='function'){
       sel.innerHTML=buildUomOpts(keep);
+    } else if(CAT_QUICK_TYPE==='resource' && typeof buildResourceCatOpts==='function'){
+      sel.innerHTML=buildResourceCatOpts(keep);
     } else {
       sel.innerHTML=lead+catOptions(CAT_QUICK_TYPE);
     }

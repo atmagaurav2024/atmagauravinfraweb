@@ -1527,7 +1527,7 @@ async function planAddRes(subId,itemId,unit){
     '<label class="flbl">Resource Name *</label>'+
     '<input id="pr-name" class="finp" placeholder="e.g. Cement, Steel, Labour...">'+
     '<label class="flbl">Resource Category</label>'+
-    '<select id="pr-cat" class="fsel">'+buildResourceCatOpts('')+'</select>'+
+    '<select id="pr-cat" class="fsel" onchange="if(!catSelectChanged(this,\'resource\'))catRememberValue(this);">'+buildResourceCatOpts('')+'</select>'+
     jmSection+
     '<div class="g2">'+
       '<div><label class="flbl">Resource Qty *</label>'+
