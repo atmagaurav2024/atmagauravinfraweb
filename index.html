@@ -4253,18 +4253,13 @@ function resetSelfieBox(){
 
 async function uploadSelfie(empId){
   if(!selfieBlob) return null;
-  var path = empId+'/'+Date.now()+'.jpg';
+  // Cloudinary, not Supabase Storage — reuses the same unsigned upload
+  // preset already configured for employee photos/KYC docs, so this
+  // doesn't depend on a Supabase Storage bucket existing at all.
   try{
-    var res = await fetch(SUPABASE_URL+'/storage/v1/object/selfies/'+path, {
-      method:'POST',
-      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'image/jpeg'},
-      body: selfieBlob
-    });
-    if(!res.ok){ var e=await res.json().catch(function(){return{};}); throw new Error(e.message||res.statusText); }
-    return SUPABASE_URL+'/storage/v1/object/public/selfies/'+path;
+    return await uploadToCloudinary(selfieBlob, 'selfies', null);
   }catch(err){
     console.warn('Selfie upload failed', err);
-    showToast('Selfie photo captured but failed to upload: '+err.message,'warning');
     return null;
   }
 }
