@@ -19290,7 +19290,8 @@ function accShowReconReport(){
       '<b style="color:#C62828;">'+R.dupes.length+' possible duplicate'+(R.dupes.length!==1?'s':'')+'</b> \u2014 the same source record appears to be posted more than once.'+
       '<button onclick="accReviewDupes()" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:6px;display:block;">Review one by one</button></div>':'')+
     (R.orphans.length?'<div style="background:#FFF3E0;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
-      '<b>'+R.orphans.length+' voucher'+(R.orphans.length!==1?'s':'')+'</b> reference a record that no longer exists. Review them in the voucher list before deleting \u2014 nothing is removed automatically.</div>':'')+
+      '<b>'+R.orphans.length+' voucher'+(R.orphans.length!==1?'s':'')+'</b> reference a record that no longer exists. Review them in the voucher list before deleting \u2014 nothing is removed automatically.'+
+      '<button onclick="accReviewOrphans()" style="background:#E65100;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:6px;display:block;">Review one by one</button></div>':'')+
     '<div style="font-size:10px;color:var(--text3);margin-top:10px;">New entries post to the ledger automatically as you save them. This check is only for catching anything that slipped through.</div>';
 
   document.getElementById('acc-sheet-title').textContent='Ledger Reconciliation';
@@ -19352,6 +19353,80 @@ async function accDeleteDupe(i){
     ACC_VOUCHERS=ACC_VOUCHERS.filter(function(v){return v.id!==d.dup.id;});
     var el=document.getElementById('dup-row-'+i);
     if(el) el.innerHTML='<div style="font-size:11px;color:#2E7D32;font-weight:700;padding:4px;">\u2713 Duplicate deleted.</div>';
+    toast('Deleted','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// Lists each voucher whose source record (bill/payment/expense/etc.) has
+// since been deleted elsewhere, so it can be checked and deleted one at a
+// time. The initial scan only pulls id/source_id/source_type for speed;
+// full voucher details are fetched here, only for the handful that need
+// reviewing.
+async function accReviewOrphans(){
+  var R=ACC_RECON; if(!R||!R.orphans||!R.orphans.length) return;
+  document.getElementById('acc-sheet-title').textContent='Review Orphaned Vouchers ('+R.orphans.length+')';
+  document.getElementById('acc-sheet-body').innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);font-size:12px;">Loading voucher details\u2026</div>';
+  document.getElementById('acc-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeAccSheet();initAccounts();">Done</button>';
+  openSheet('ov-acc','sh-acc');
+
+  var ids=R.orphans.map(function(o){return o.id;});
+  var full=[];
+  try{ full=await sbFetch('vouchers',{select:'*',filter:'id=in.('+ids.join(',')+')'}); }catch(e){}
+  var byId={};
+  (full||[]).forEach(function(v){ byId[v.id]=v; });
+  // Keep the source_type from the original scan even if the full fetch
+  // came back short a row (voucher deleted in the meantime).
+  R.orphanDetails=R.orphans.map(function(o){
+    var v=byId[o.id];
+    return v ? Object.assign({},v,{source_type:o.source_type}) : {id:o.id,source_type:o.source_type,_missing:true};
+  });
+
+  var srcLabel=function(t){
+    var m={sales_bill:'Sales bill',sales_payment:'Sales payment',work_bill:'Purchase bill',work_payment:'Purchase payment',
+      petty_in:'Petty cash funding',petty_expense:'Petty cash expense',other_expense:'Other expense',
+      company_expense:'Company overhead',loan:'Loan',loan_pay_interest:'Loan interest payment',loan_pay_principal:'Loan repayment'};
+    return m[t]||t||'\u2014';
+  };
+
+  document.getElementById('acc-sheet-body').innerHTML=
+    '<div style="font-size:10.5px;color:var(--text3);margin-bottom:10px;">Each voucher below points to a source record (a bill, payment, expense, etc.) that has since been deleted elsewhere in the app. The voucher itself was never removed. Check whether it still reflects something real before deleting it.</div>'+
+    R.orphanDetails.map(function(v,i){
+      if(v._missing){
+        return '<div id="orphan-row-'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:var(--text3);">Missing source: '+srcLabel(v.source_type)+' \u2014 this voucher could not be loaded, it may already be gone. <button onclick="closeAccSheet();initAccounts();" style="background:none;border:none;color:var(--blue);font-weight:800;cursor:pointer;text-decoration:underline;">Refresh</button></div>';
+      }
+      return '<div id="orphan-row-'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">'+
+        '<div style="font-size:9.5px;color:var(--text3);margin-bottom:4px;">Missing source: '+srcLabel(v.source_type)+'</div>'+
+        '<div style="background:#FFF3E0;border-radius:6px;padding:6px 8px;">'+
+          '<div style="font-size:11px;font-weight:800;">'+(v.vou_no||v.voucher_no||'\u2014')+'</div>'+
+          '<div style="font-size:10px;color:var(--text3);">'+fmtDate(v.date)+' \u00b7 '+(v.type||'')+'</div>'+
+          '<div style="font-size:11px;font-weight:800;">'+fmtINR(parseFloat(v.amount)||0)+'</div>'+
+          '<div style="font-size:9.5px;color:var(--text3);">Dr '+accAcctName(v.debit_account)+'</div>'+
+          '<div style="font-size:9.5px;color:var(--text3);">Cr '+accAcctName(v.credit_account)+'</div>'+
+          (v.narration?'<div style="font-size:9.5px;color:var(--text3);margin-top:2px;">'+v.narration+'</div>':'')+
+        '</div>'+
+        '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">'+
+          '<button onclick="accKeepOrphan('+i+')" style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Keep</button>'+
+          '<button onclick="accDeleteOrphan('+i+')" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Delete voucher</button>'+
+        '</div></div>';
+    }).join('');
+}
+
+function accKeepOrphan(i){
+  var el=document.getElementById('orphan-row-'+i);
+  if(el) el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px;">Kept \u2014 voucher left in place.</div>';
+}
+
+async function accDeleteOrphan(i){
+  var R=ACC_RECON; if(!R||!R.orphanDetails||!R.orphanDetails[i]) return;
+  var v=R.orphanDetails[i];
+  if(!v.id||v._missing){ toast('Voucher already gone','info'); return; }
+  var label=(v.vou_no||v.voucher_no||'this voucher')+' \u00b7 '+fmtINR(parseFloat(v.amount)||0);
+  if(!confirm('Delete '+label+'?\n\nIts source record no longer exists. This cannot be undone.')) return;
+  try{
+    await sbDelete('vouchers',v.id);
+    ACC_VOUCHERS=ACC_VOUCHERS.filter(function(x){return x.id!==v.id;});
+    var el=document.getElementById('orphan-row-'+i);
+    if(el) el.innerHTML='<div style="font-size:11px;color:#2E7D32;font-weight:700;padding:4px;">\u2713 Voucher deleted.</div>';
     toast('Deleted','success');
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
