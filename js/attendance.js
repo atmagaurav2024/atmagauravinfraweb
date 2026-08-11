@@ -289,7 +289,8 @@ async function delPunchEntry(id){
   try{
     await sbDelete('attendance_punches',id);
     toast('Punch record deleted','success');
-    renderPunchLog();
+    if(document.getElementById('punch-log-wrap')) renderPunchLog();
+    if(document.getElementById('logs-tbody') && typeof renderLogsTab==='function') renderLogsTab();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 

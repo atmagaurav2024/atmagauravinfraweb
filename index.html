@@ -1954,6 +1954,7 @@ input,select,textarea{font-size:16px !important;}
             <th>Within Radius</th>
             <th>Device</th>
             <th>Selfie</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="logs-tbody">
@@ -6535,7 +6536,7 @@ async function renderLogsTab(){
   if(!tbody) return;
   var range = attLogsGetRange();
 
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:18px;">Loading…</td></tr>';
 
   var empNameById = {};
   (employees||[]).forEach(function(e){ empNameById[e.id] = e.name; });
@@ -6544,12 +6545,13 @@ async function renderLogsTab(){
   try{
     rows = await sbFetch('attendance_punches',{select:'*',filter:'date=gte.'+range.from+'&date=lte.'+range.to,order:'date.asc,punch_time.asc'});
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red2);padding:18px;">Failed to load punch logs: '+e.message+'</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--red2);padding:18px;">Failed to load punch logs: '+e.message+'</td></tr>';
     return;
   }
   rows = rows || [];
   LOGS_TAB_ROWS = rows.map(function(p){
     return {
+      id: p.id,
       employee: empNameById[p.emp_id] || p.emp_id || 'Unknown',
       type: p.punch_type === 'in' ? 'Punch In' : 'Punch Out',
       date: p.date || '',
@@ -6562,9 +6564,11 @@ async function renderLogsTab(){
   });
 
   if(!LOGS_TAB_ROWS.length){
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">No punches recorded for '+range.label+'</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:18px;">No punches recorded for '+range.label+'</td></tr>';
     return;
   }
+
+  var canDelLog = typeof attIsManager==='function' ? attIsManager() : (currentUser&&(currentUser.role==='admin'||currentUser.role==='pm'));
 
   tbody.innerHTML = LOGS_TAB_ROWS.map(function(r){
     var hasLoc = r.lat!=null && r.lng!=null;
@@ -6583,6 +6587,9 @@ async function renderLogsTab(){
     var typeBadge = r.type==='Punch In'
       ? '<span class="att-badge b-present">✅ Punch In</span>'
       : '<span class="att-badge b-absent">⏹ Punch Out</span>';
+    var actionCell = (canDelLog && r.id)
+      ? '<button class="btn btn-sm" onclick="delPunchEntry(\''+r.id+'\')" style="font-size:11px;color:#C62828;border-color:#FFCDD2;" title="Delete this punch record">🗑</button>'
+      : '<span style="color:var(--text3);">—</span>';
     return '<tr>'+
       '<td style="font-weight:600;">'+r.employee+'</td>'+
       '<td>'+typeBadge+'</td>'+
@@ -6592,6 +6599,7 @@ async function renderLogsTab(){
       '<td>'+radiusCell+'</td>'+
       '<td>'+deviceCell+'</td>'+
       '<td>'+selfieCell+'</td>'+
+      '<td>'+actionCell+'</td>'+
     '</tr>';
   }).join('');
 }
