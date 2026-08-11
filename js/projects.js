@@ -683,6 +683,25 @@ async function openProjForm(id){
 
 function closeProjSheet(){ closeSheet('ov-proj','sh-proj'); }
 
+// A project-restricted user (userProjectIds() returns a non-null list)
+// who creates a new project isn't assigned to it by default - scopeProjects()
+// would then hide the project they just made from their own project list.
+// Admins and users with no restriction (project_ids null/empty in the
+// employees table, meaning "sees all projects") need no change.
+async function projAutoAssignCreator(newProjectId){
+  if(!newProjectId || !currentUser || !currentUser.id) return;
+  if(String(currentUser.role||'').trim().toLowerCase()==='admin') return;
+  var ids=(typeof userProjectIds==='function')?userProjectIds():null;
+  if(!ids) return; // unrestricted — nothing to do
+  var idStr=String(newProjectId);
+  if(ids.indexOf(idStr)>-1) return;
+  ids.push(idStr);
+  try{
+    await sbUpdate('employees', currentUser.id, {project_ids: JSON.stringify(ids)});
+    currentUser.projectIds = JSON.stringify(ids);
+  }catch(e){ console.warn('Could not auto-assign new project to creator:', e); }
+}
+
 async function saveProjForm(editId){
   var name = (document.getElementById('pf-name')||{value:''}).value.trim();
   if(!name){toast('Project name required','warning');return;}
@@ -804,7 +823,10 @@ async function saveProjForm(editId){
             throw new Error(e2.message||'Insert failed: '+res2.status);
           }
           var saved=await res2.json();
-          if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(Object.assign(saved[0],{_full:true}));
+          if(Array.isArray(saved)&&saved[0]){
+            PROJ_DATA.push(Object.assign(saved[0],{_full:true}));
+            await projAutoAssignCreator(saved[0].id);
+          }
           projCacheSave(projSummaryRows());
           await projModLoadProjects(true);
           toast('Project added! (some optional fields not saved — add missing columns to DB)','success');
@@ -813,7 +835,10 @@ async function saveProjForm(editId){
         }
       } else {
         var saved=await res.json();
-        if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(Object.assign(saved[0],{_full:true}));
+        if(Array.isArray(saved)&&saved[0]){
+          PROJ_DATA.push(Object.assign(saved[0],{_full:true}));
+          await projAutoAssignCreator(saved[0].id);
+        }
         projCacheSave(projSummaryRows());
         await projModLoadProjects(true); // force re-fetch so new project appears
       }
