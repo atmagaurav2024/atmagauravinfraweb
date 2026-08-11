@@ -1608,7 +1608,7 @@ async function planAddRes(subId,itemId,unit){
       '<div><label class="flbl">Resource Qty *</label>'+
         '<input id="pr-qty" class="finp" type="number" step="0.001" placeholder="e.g. 10 bags"></div>'+
       '<div><label class="flbl">Unit</label>'+
-        '<select id="pr-unit-sel" class="fsel">'+uomOpts+'</select>'+
+        '<select id="pr-unit-sel" class="fsel" onchange="if(!catSelectChanged(this,\'uom\'))catRememberValue(this);">'+uomOpts+'</select>'+
       '</div>'+
     '</div>'+
     '<label class="flbl">Rate (\u20b9)</label>'+
