@@ -44,7 +44,8 @@ html,body{height:100%;overflow:hidden;}
 .sr-item{display:flex;align-items:center;gap:14px;height:46px;padding:0 16px;cursor:pointer;border:none;background:transparent;width:100%;text-align:left;}
 .sr-item:active{background:rgba(255,255,255,0.06);}
 .sr-item.on{background:#1565C0;}
-.sr-ic{font-size:19px;line-height:1;flex-shrink:0;width:22px;text-align:center;}
+.sr-ic{font-size:16px;line-height:1;flex-shrink:0;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;}
+.sr-item.on .sr-ic{background:rgba(255,255,255,0.18);}
 .sr-lb{font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap;font-family:'Nunito',sans-serif;}
 .side-rail:not(.expanded) .sr-lb{display:none;}
 .side-rail:not(.expanded) .sr-logo-txt{display:none;}
@@ -2376,16 +2377,16 @@ input,select,textarea{font-size:16px !important;}
   </div>
   <div class="sr-items" id="sr-items">
     <button class="sr-item on" data-mod="dashboard" onclick="showApp('dashboard')"><div class="sr-ic">&#127968;</div><div class="sr-lb">Dashboard</div></button>
-    <button class="sr-item" data-mod="projects" onclick="showApp('projects')"><div class="sr-ic">&#127959;</div><div class="sr-lb">Projects</div></button>
+    <button class="sr-item" data-mod="projects" onclick="showApp('projects')"><div class="sr-ic">&#127959;&#65039;</div><div class="sr-lb">Projects</div></button>
     <button class="sr-item" data-mod="employees" onclick="showApp('employees')"><div class="sr-ic">&#128101;</div><div class="sr-lb">Employees</div></button>
-    <button class="sr-item" data-mod="attendance" onclick="showApp('attendance')"><div class="sr-ic">&#9200;</div><div class="sr-lb">Attendance</div></button>
+    <button class="sr-item" data-mod="attendance" onclick="showApp('attendance')"><div class="sr-ic">&#9200;&#65039;</div><div class="sr-lb">Attendance</div></button>
     <button class="sr-item" data-mod="accounts" onclick="showApp('accounts')"><div class="sr-ic">&#128176;</div><div class="sr-lb">Accounts</div></button>
     <button class="sr-item" data-mod="petty-cash" onclick="showApp('petty-cash')"><div class="sr-ic">&#128181;</div><div class="sr-lb">Petty Cash</div></button>
     <button class="sr-item" data-mod="loans" onclick="showApp('loans')"><div class="sr-ic">&#127974;</div><div class="sr-lb">Loans</div></button>
     <button class="sr-item" data-mod="overheads" onclick="showApp('overheads')"><div class="sr-ic">&#127970;</div><div class="sr-lb">Overheads</div></button>
     <button class="sr-item" data-mod="registry" onclick="showApp('registry')"><div class="sr-ic">&#128218;</div><div class="sr-lb">Registry</div></button>
     <button class="sr-item" data-mod="access" onclick="showApp('access')"><div class="sr-ic">&#128274;</div><div class="sr-lb">Access Control</div></button>
-    <button class="sr-item" data-mod="company" onclick="showApp('company')"><div class="sr-ic">&#127963;</div><div class="sr-lb">Company</div></button>
+    <button class="sr-item" data-mod="company" onclick="showApp('company')"><div class="sr-ic">&#127963;&#65039;</div><div class="sr-lb">Company</div></button>
   </div>
   <div class="sr-foot">
     <button class="sr-item" data-mod="profile" onclick="showProfile()"><div class="sr-ic">&#128100;</div><div class="sr-lb">Profile</div></button>
