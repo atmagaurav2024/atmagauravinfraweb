@@ -670,18 +670,23 @@ async function openProjForm(id){
   foot.innerHTML = '';
   if(id){
     var delBtn = document.createElement('button');
+    delBtn.id='pf-delete-btn';
     delBtn.className='btn btn-outline'; delBtn.style.color='#C62828'; delBtn.textContent='Delete';
     delBtn.onclick = function(){ if(confirm('Delete this project?')) deleteProjItem(id); };
     foot.appendChild(delBtn);
   }
   var saveBtn = document.createElement('button');
+  saveBtn.id='pf-save-btn';
   saveBtn.className='btn btn-navy'; saveBtn.innerHTML='&#10003; Save Project';
   saveBtn.onclick = function(){ saveProjForm(id||null); };
   foot.appendChild(saveBtn);
   openSheet('ov-proj','sh-proj');
 }
 
-function closeProjSheet(){ closeSheet('ov-proj','sh-proj'); }
+function closeProjSheet(){
+  if(window._pfSaving) return; // a save is in flight — don't let the sheet be dismissed mid-save
+  closeSheet('ov-proj','sh-proj');
+}
 
 // A project-restricted user (userProjectIds() returns a non-null list)
 // who creates a new project isn't assigned to it by default - scopeProjects()
@@ -703,8 +708,15 @@ async function projAutoAssignCreator(newProjectId){
 }
 
 async function saveProjForm(editId){
+  if(window._pfSaving) return; // guard against double-submit from a rapid double click
   var name = (document.getElementById('pf-name')||{value:''}).value.trim();
   if(!name){toast('Project name required','warning');return;}
+
+  window._pfSaving = true;
+  var saveBtn=document.getElementById('pf-save-btn'), delBtn=document.getElementById('pf-delete-btn');
+  var saveBtnOrigHTML=saveBtn?saveBtn.innerHTML:'';
+  if(saveBtn){ saveBtn.disabled=true; saveBtn.style.opacity='0.6'; saveBtn.style.cursor='not-allowed'; saveBtn.innerHTML='\u23f3 Saving\u2026'; }
+  if(delBtn){ delBtn.disabled=true; delBtn.style.opacity='0.6'; delBtn.style.cursor='not-allowed'; }
 
   // File upload (base64 encode for storage — small files only)
   var attachments=[];
@@ -844,9 +856,15 @@ async function saveProjForm(editId){
       }
       toast('Project added! Select it from the dropdown above.','success');
     }
+    window._pfSaving=false;
     closeProjSheet();
     loadProjData(true); // force refresh list + selector after save
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+  finally{
+    window._pfSaving=false;
+    if(saveBtn){ saveBtn.disabled=false; saveBtn.style.opacity=''; saveBtn.style.cursor=''; saveBtn.innerHTML=saveBtnOrigHTML; }
+    if(delBtn){ delBtn.disabled=false; delBtn.style.opacity=''; delBtn.style.cursor=''; }
+  }
 }
 
 async function deleteProjItem(id){
