@@ -20,6 +20,13 @@ html,body{height:100%;overflow:hidden;}
 
 /* App-level screens */
 .app-screen{position:fixed;inset:0;display:none;flex-direction:column;overflow:hidden;z-index:100;background:#F0F4F8;}
+/* Sheets/overlays are nested inside .app-screen, and position:fixed always
+   starts a new stacking context — so a sheet's own z-index (600) only wins
+   against things OUTSIDE its screen if the screen itself is raised while
+   the sheet is open. Otherwise fixed-position siblings with a higher
+   z-index than .app-screen's base 100 (like the left rail) would render
+   over every sheet, no matter what z-index the sheet declares. */
+.app-screen.sheet-open{z-index:700;}
 .app-screen.on{display:flex;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .app-screen.on{animation:fadeIn .25s ease;}
@@ -6209,8 +6216,20 @@ function ir(lbl,val,mono){
   return '<div class="info-row"><div class="ir-lbl">'+lbl+'</div><div class="ir-val'+(mono?' style="font-family:\'JetBrains Mono\',monospace;font-size:12px;"':'')+'">'+(mono?'<span style="font-family:\'JetBrains Mono\',monospace;font-size:12px;">'+val+'</span>':val)+'</div></div>';
 }
 function fmtV(n){if(n>=10000000)return '₹'+(n/10000000).toFixed(2)+'Cr';if(n>=100000)return '₹'+(n/100000).toFixed(1)+'L';return '₹'+(n/1000).toFixed(0)+'K';}
-function openSheet(o,s){document.getElementById(o).classList.add('on');document.getElementById(s).classList.add('on');}
-function closeSheet(o,s){document.getElementById(o).classList.remove('on');document.getElementById(s).classList.remove('on');}
+function openSheet(o,s){
+  document.getElementById(o).classList.add('on');
+  var sheetEl=document.getElementById(s);
+  sheetEl.classList.add('on');
+  var screen=sheetEl.closest('.app-screen');
+  if(screen) screen.classList.add('sheet-open');
+}
+function closeSheet(o,s){
+  document.getElementById(o).classList.remove('on');
+  var sheetEl=document.getElementById(s);
+  sheetEl.classList.remove('on');
+  var screen=sheetEl.closest('.app-screen');
+  if(screen) screen.classList.remove('sheet-open');
+}
 
 // toast: shared above
 

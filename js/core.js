@@ -219,11 +219,15 @@ function openSheet(o, s) {
   var ov = document.getElementById(o), sh = document.getElementById(s);
   if (ov) ov.classList.add('on');
   if (sh) sh.classList.add('on');
+  var screen = sh && sh.closest('.app-screen');
+  if (screen) screen.classList.add('sheet-open');
 }
 function closeSheet(o, s) {
   var ov = document.getElementById(o), sh = document.getElementById(s);
   if (ov) ov.classList.remove('on');
   if (sh) sh.classList.remove('on');
+  var screen = sh && sh.closest('.app-screen');
+  if (screen) screen.classList.remove('sheet-open');
 }
 
 // ── PROFILE ──────────────────────────────────────────────
