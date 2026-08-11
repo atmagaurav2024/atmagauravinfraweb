@@ -191,6 +191,7 @@ function showApp(name) {
 }
 
 function doLogout() {
+  if (typeof projCacheClear === 'function') projCacheClear();
   currentUser = null; currentSession = null;
   document.querySelectorAll('.app-screen').forEach(function(s) { s.classList.remove('on'); });
   var nav = document.getElementById('app-nav');

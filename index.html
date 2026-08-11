@@ -3126,6 +3126,9 @@ async function saveNewPassword(){
 }
 
 function doLogout(){
+  // Clear this user's cached project list before wiping currentUser,
+  // so it can't be shown to whoever logs in next on this device.
+  if(typeof projCacheClear==='function') projCacheClear();
   // Clear all in-memory caches
   EMP_LIST=[]; EMP_PAY=[]; EMP_ORDERS=[]; SALARY_RECORDS=[];
   USERS=[]; PROJ_DATA=[]; VENDORS=[]; MATERIALS=[]; SUBCONTRACTORS=[];
