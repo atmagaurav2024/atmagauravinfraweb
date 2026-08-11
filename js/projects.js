@@ -18,9 +18,21 @@ function sortByItemCode(arr){
 }
 
 var PROJ_DATA=[], PROJ_EDIT_ID=null;
-var PROJ_CACHE_KEY='aipl_project_list_v1';
+var PROJ_CACHE_PREFIX='aipl_project_list_v2:';
 var PROJ_SUMMARY_SELECT='id,name,code,status,location,contract_value,client,client_gstin,client_state,client_address,description,project_length,tender_cost,tender_pct,loa_date,wo_date,completion_date,dlp_date,revised_completion_date,contract_provisions,eot_entries,coordinates,attachments';
 var PROJ_LOADING=null;
+
+// Cache key is scoped to the signed-in user so switching accounts on a
+// shared device never shows one user's cached (and visibility-scoped)
+// project list to another user, even for an instant.
+function projCacheKey(){
+  var uid=(currentUser && (currentUser.id || currentUser.role || currentUser.name)) || null;
+  if(!uid) return null; // not logged in — don't read/write any cache
+  return PROJ_CACHE_PREFIX + uid;
+}
+// One-time cleanup: remove the old un-scoped v1 cache key so a stale,
+// cross-user list can never linger on a shared device.
+try{ localStorage.removeItem('aipl_project_list_v1'); }catch(e){}
 var PROJ_MOD_TAB = 'projects';      // current main tab
 var PROJ_MOD_SUB = '';              // current sub-tab (for grouped tabs)
 var PROJ_MOD_SEL_ID = '';           // selected project id
@@ -38,14 +50,26 @@ var PMT_GROUPS = {
 // ── Project selector (hidden, kept for compat) ────────────
 function projCacheLoad(){
   try{
-    var raw=localStorage.getItem(PROJ_CACHE_KEY);
+    var key=projCacheKey();
+    if(!key) return [];
+    var raw=localStorage.getItem(key);
     if(!raw) return [];
     var rows=JSON.parse(raw);
     return Array.isArray(rows)?rows:[];
   }catch(e){return [];}
 }
 function projCacheSave(rows){
-  try{localStorage.setItem(PROJ_CACHE_KEY, JSON.stringify((rows||[]).slice(0,300)));}catch(e){}
+  try{
+    var key=projCacheKey();
+    if(!key) return;
+    localStorage.setItem(key, JSON.stringify((rows||[]).slice(0,300)));
+  }catch(e){}
+}
+function projCacheClear(){
+  try{
+    var key=projCacheKey();
+    if(key) localStorage.removeItem(key);
+  }catch(e){}
 }
 function projMergeRows(rows, full){
   if(!Array.isArray(rows)) return;
