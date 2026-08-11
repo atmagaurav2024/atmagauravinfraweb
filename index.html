@@ -4309,17 +4309,21 @@ async function saveAttSettings(){
 }
 
 // Checks a punch location against every project assigned to the current
-// user. Returns:
-//   {skip:true}                                     — no assigned project has coordinates configured; nothing to check against
+// user — or, if they're unrestricted (see all projects, e.g. an admin
+// or a Director with no explicit assignment), against every project in
+// the system, since "all projects assigned to them" is effectively all
+// of them in that case. Returns:
+//   {skip:true}                                     — nothing has coordinates configured to check against
 //   {withinRange:true, projectId, projectName, distance, radius}   — inside radius of that project
-//   {withinRange:false, nearestProjectId, nearestProjectName, nearestDistance, radius}  — outside every assigned project's radius
+//   {withinRange:false, nearestProjectId, nearestProjectName, nearestDistance, radius}  — outside every checked project's radius
 async function attCheckGeofence(lat,lng){
   var radius=await attGetGeofenceRadius();
   var ids=(typeof userProjectIds==='function')?userProjectIds():null;
-  if(!ids||!ids.length) return {skip:true}; // unrestricted user — no specific site to check against
   var projRows=[];
   try{
-    projRows=await sbFetch('projects',{select:'id,name,coordinates',filter:'id=in.('+ids.join(',')+')'});
+    projRows = (ids && ids.length)
+      ? await sbFetch('projects',{select:'id,name,coordinates',filter:'id=in.('+ids.join(',')+')'})
+      : await sbFetch('projects',{select:'id,name,coordinates'}); // unrestricted — check against all
   }catch(e){ return {skip:true}; }
   var best=null; // {projectId, projectName, distance}
   (projRows||[]).forEach(function(p){
@@ -4330,7 +4334,7 @@ async function attCheckGeofence(lat,lng){
       if(!best||d<best.distance) best={projectId:p.id,projectName:p.name,distance:d};
     });
   });
-  if(!best) return {skip:true}; // assigned project(s) have no coordinates configured yet
+  if(!best) return {skip:true}; // no project (assigned or otherwise) has coordinates configured yet
   if(best.distance<=radius) return {withinRange:true,projectId:best.projectId,projectName:best.projectName,distance:best.distance,radius:radius};
   return {withinRange:false,nearestProjectId:best.projectId,nearestProjectName:best.projectName,nearestDistance:best.distance,radius:radius};
 }
