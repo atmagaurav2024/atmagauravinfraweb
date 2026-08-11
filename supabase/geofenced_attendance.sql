@@ -30,8 +30,10 @@ insert into attendance_settings (id, geofence_radius_m)
 --    policies instead, copy that pattern here for consistency.
 alter table attendance_settings enable row level security;
 
+drop policy if exists "attendance_settings_read" on attendance_settings;
 create policy "attendance_settings_read" on attendance_settings
   for select using (true);
 
+drop policy if exists "attendance_settings_write" on attendance_settings;
 create policy "attendance_settings_write" on attendance_settings
   for update using (true);
