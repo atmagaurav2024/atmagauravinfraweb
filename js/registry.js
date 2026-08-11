@@ -447,6 +447,9 @@ function addCategory(type){
 async function saveNewCat(type){
   var n=(document.getElementById('new-cat-name')||{value:''}).value.trim();
   if(!n){toast('Please enter a category name','warning');return;}
+  if((CAT_DATA[type]||[]).some(function(c){return catKey(c.name)===catKey(n);})){
+    toast('"'+n+'" already exists','warning'); return;
+  }
   var icon=(document.getElementById('new-cat-icon')||{value:''}).value.trim()||'📦';
   var desc=(document.getElementById('new-cat-desc')||{value:''}).value.trim()||'';
   var newCat={id:type+'-new-'+Date.now(),icon:icon,name:n,desc:desc,color:'#37474F',count:0,active:true};

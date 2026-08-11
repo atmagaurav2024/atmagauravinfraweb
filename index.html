@@ -6245,7 +6245,12 @@ async function saveCatEdit(type,i){
   var n=document.getElementById('edit-name').value.trim();
   var desc=document.getElementById('edit-desc').value.trim();
   var icon=document.getElementById('edit-icon').value.trim();
-  if(n) CAT_DATA[type][i].name=n;
+  if(n){
+    var dupKey=(typeof catKey==='function')?catKey:function(s){return (s||'').toLowerCase().trim();};
+    var isDup=(CAT_DATA[type]||[]).some(function(c,j){return j!==i && dupKey(c.name)===dupKey(n);});
+    if(isDup){ toast('"'+n+'" already exists','warning'); return; }
+    CAT_DATA[type][i].name=n;
+  }
   if(desc) CAT_DATA[type][i].desc=desc;
   if(icon) CAT_DATA[type][i].icon=icon;
   if(selectedColour) CAT_DATA[type][i].color=selectedColour;
