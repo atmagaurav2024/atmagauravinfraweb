@@ -7247,7 +7247,13 @@ var CLOUDINARY_UPLOAD_PRESET = 'aipl_unsigned'; // create this in Cloudinary das
 async function uploadToCloudinary(file, folder, progressId){
   if(!file) return null;
   var formData = new FormData();
-  formData.append('file', file);
+  // File objects (from <input type=file>) already have a real .name;
+  // a plain Blob (e.g. a canvas.toBlob() selfie capture) doesn't, and
+  // FormData defaults an unnamed blob to filename "blob" with no
+  // extension, which Cloudinary's unsigned upload can reject outright.
+  var ext = (file.type && file.type.indexOf('/')>-1) ? file.type.split('/')[1].split('+')[0] : 'jpg';
+  var filename = file.name || ('upload_'+Date.now()+'.'+ext);
+  formData.append('file', file, filename);
   formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
   formData.append('folder', 'aipl/'+folder);
 
@@ -7280,6 +7286,7 @@ async function uploadToCloudinary(file, folder, progressId){
         } else {
           if(progFill){ progFill.classList.add('error'); }
           if(progPct)  { progPct.textContent='❌ Failed'; }
+          console.error('Cloudinary upload failed:', data);
           toast('Upload failed: '+(data.error&&data.error.message||'Error'),'error');
           resolve(null);
         }
