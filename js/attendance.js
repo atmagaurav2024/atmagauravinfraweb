@@ -259,7 +259,7 @@ async function renderPunchLog(){
     var data=await sbFetch('attendance_punches',{select:'*',filter:filter,order:'punch_time.asc'});
     var log=Array.isArray(data)&&data.length?data:punchLog;
     if(!log.length){wrap.innerHTML='<div class="punch-log-empty">No punch records for this date</div>';return;}
-    var canDelete=currentUser&&(currentUser.role==='admin'||currentUser.role==='pm');
+    var canDelete=typeof attIsManager==='function'?attIsManager():(currentUser&&(currentUser.role==='admin'||currentUser.role==='pm'));
     wrap.innerHTML=log.map(function(entry){
       var isIn=entry.punch_type==='in'||entry.type==='in';
       var timeStr=entry.punch_time?new Date(entry.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):(entry.time||'—');
@@ -274,12 +274,15 @@ async function renderPunchLog(){
   }catch(e){wrap.innerHTML='<div class="punch-log-empty">Error loading punch log</div>';}
 }
 
-// Admin/PM only, matching the same gate used for editing attendance status
-// in lockStatusBtnsIfNotAdmin(). A punch record has no edit UI, so a
-// mistaken or duplicate punch can only be corrected by removing it.
+// Uses attIsManager() — same gate as the rest of Attendance (role
+// admin/pm, or the granular Access Control 'edit' permission for
+// custom roles like Director whose employees.role isn't literally
+// 'admin'/'pm'). A punch record has no edit UI, so a mistaken or
+// duplicate punch can only be corrected by removing it.
 async function delPunchEntry(id){
   if(!id) return;
-  if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='pm')){
+  var allowed=typeof attIsManager==='function'?attIsManager():(currentUser&&(currentUser.role==='admin'||currentUser.role==='pm'));
+  if(!allowed){
     toast('Only admins can delete punch records','warning'); return;
   }
   if(!confirm('Delete this punch record?\n\nThis cannot be undone. If this affects a day\'s status, review it in the Today tab afterwards.')) return;
