@@ -6429,6 +6429,7 @@ function renderPunchLog() {
     list.innerHTML = '<div class="punch-log-empty">No punches recorded yet</div>';
     return;
   }
+  var canDelPunch = typeof attIsManager==='function' ? attIsManager() : (currentUser&&(currentUser.role==='admin'||currentUser.role==='pm'));
   list.innerHTML = punchLog.map(function(entry, i) {
     var durHtml = '';
     if (entry.type === 'out' && entry.duration !== undefined) {
@@ -6438,6 +6439,9 @@ function renderPunchLog() {
     var latStr = entry.lat ? Math.abs(entry.lat).toFixed(4)+'°'+(entry.lat>=0?'N':'S') : '';
     var lngStr = entry.lng ? Math.abs(entry.lng).toFixed(4)+'°'+(entry.lng>=0?'E':'W') : '';
     var coordLabel = latStr && lngStr ? latStr+', '+lngStr : 'Location';
+    var delHtml = (canDelPunch && entry.id)
+      ? '<button onclick="event.stopPropagation();delPunchEntry(\''+entry.id+'\');" style="background:none;border:none;color:#C62828;font-size:16px;padding:0 4px;cursor:pointer;flex-shrink:0;" title="Delete this punch record">🗑</button>'
+      : '';
     return '<div class="punch-entry" style="cursor:pointer;" onclick="openPunchMap('+i+')">' +
       (entry.selfie ? '<img src="'+entry.selfie+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-right:8px;flex-shrink:0;">' : '') +
       '<div class="punch-dot ' + (entry.type === 'in' ? 'punch-dot-in' : 'punch-dot-out') + '"></div>' +
@@ -6446,9 +6450,31 @@ function renderPunchLog() {
         '<div class="punch-entry-time">' + entry.time + ' · <span style="color:var(--blue2);">📍 ' + coordLabel + '</span></div>' +
       '</div>' +
       durHtml +
+      delHtml +
       '<div style="font-size:18px;color:var(--text3);padding-left:4px;">›</div>' +
     '</div>';
   }).join('');
+}
+
+// Deletes a punch record from Supabase, then refreshes whichever
+// punch-log view(s) are actually present on screen — the personal
+// "Today's Punch Log" list (punchLog / renderPunchLog) and/or the
+// all-employees Punch Logs table in Attendance Module (renderLogsTab).
+// Gated the same way as the rest of Attendance: attIsManager() (role
+// admin/pm, the Access Control 'edit' permission, or the permissive
+// default when no permission profile is configured).
+async function delPunchEntry(id){
+  if(!id) return;
+  var allowed = typeof attIsManager==='function' ? attIsManager() : (currentUser&&(currentUser.role==='admin'||currentUser.role==='pm'));
+  if(!allowed){ toast('Only admins can delete punch records','warning'); return; }
+  if(!confirm('Delete this punch record?\n\nThis cannot be undone. If this affects a day\'s status, review it in the Today tab afterwards.')) return;
+  try{
+    await sbDelete('attendance_punches', id);
+    toast('Punch record deleted','success');
+    punchLog = punchLog.filter(function(p){ return p.id !== id; });
+    if(document.getElementById('punch-log-list')) renderPunchLog();
+    if(document.getElementById('logs-tbody') && typeof renderLogsTab==='function') renderLogsTab();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 function openPunchMap(idx) {
