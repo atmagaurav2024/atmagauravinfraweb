@@ -1646,6 +1646,7 @@ input,select,textarea{font-size:16px !important;}
   <div class="topbar-project">—</div>
   <div class="topbar-right">
     <div class="topbar-date" id="topbar-date">—</div>
+    <button class="btn btn-outline" id="att-settings-btn" style="color:#FFF;border-color:rgba(255,255,255,0.2);display:none;" onclick="openAttSettings()">⚙ Settings</button>
     <button class="btn btn-outline" style="color:#FFF;border-color:rgba(255,255,255,0.2);" onclick="openLeaveModal()">+ Apply Leave</button>
     <button class="btn btn-outline" style="color:#FFF;border-color:rgba(255,255,255,0.2);" onclick="attExportCSV()">📥 Export</button>
   </div>
@@ -1770,6 +1771,7 @@ input,select,textarea{font-size:16px !important;}
     <div class="tab" onclick="switchTab('monthly',this)">📊 Monthly View</div>
     <div class="tab" onclick="switchTab('leaves',this)">🏖️ Leave Management</div>
     <div class="tab" onclick="switchTab('logs',this)">📋 Punch Logs</div>
+    <div class="tab" id="tab-btn-pending" onclick="switchTab('pending',this)" style="display:none;">📍 Pending Punches <span id="pending-punch-badge" style="background:#E65100;color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:800;margin-left:2px;display:none;">0</span></div>
   </div>
 
   <!-- ─── DAILY TAB ─── -->
@@ -1919,6 +1921,35 @@ input,select,textarea{font-size:16px !important;}
     </div>
   </div>
 
+  <!-- ─── PENDING PUNCHES TAB (out-of-geofence punches awaiting approval) ─── -->
+  <div id="tab-pending" style="display:none;">
+    <div class="table-card">
+      <div class="table-card-header">
+        <div class="tch-title">📍 Pending Punches — Outside Assigned Site Radius</div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);padding:0 14px 10px;">
+        These punches were made outside the configured radius of every project assigned to the employee. Approve to record them as normal attendance, or reject to discard.
+      </div>
+      <table class="att-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Punch Type</th>
+            <th>Time</th>
+            <th>GPS Location</th>
+            <th>Nearest Project</th>
+            <th>Distance</th>
+            <th>Selfie</th>
+            <th>Decision</th>
+          </tr>
+        </thead>
+        <tbody id="pending-punch-tbody">
+          <!-- rendered dynamically -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ─── LOGS TAB ─── -->
   <div id="tab-logs" style="display:none;">
     <div class="table-card">
@@ -1949,6 +1980,8 @@ input,select,textarea{font-size:16px !important;}
             <th>Employee</th>
             <th>Punch Type</th>
             <th>Time</th>
+            <th>Project</th>
+            <th>Status</th>
             <th>GPS Location</th>
             <th>Accuracy</th>
             <th>Within Radius</th>
@@ -1962,6 +1995,23 @@ input,select,textarea{font-size:16px !important;}
         </tbody>
       </table>
       
+    </div>
+  </div>
+
+  <div class="sh-overlay" id="ov-attsettings" onclick="closeAttSettings()"></div>
+  <div class="sheet" id="sh-attsettings">
+    <div class="sh-handle"></div>
+    <div class="sh-head"><div class="sh-title">⚙ Attendance Settings</div><span class="sh-close" onclick="closeAttSettings()">&#10005;</span></div>
+    <div class="sh-body">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">
+        A punch is auto-approved only if it's made within this distance of one of the employee's assigned project locations (set under each project's GPS Coordinates). Punches made further away are held for admin approval instead of being recorded automatically.
+      </div>
+      <label class="flbl">Allowed radius (metres)</label>
+      <input type="number" id="att-geofence-radius" class="finput" min="10" step="10" placeholder="e.g. 200" style="margin-bottom:6px;">
+      <div style="font-size:10.5px;color:var(--text3);">Applies to every project. Typical range: 100–500m depending on site size.</div>
+    </div>
+    <div class="sh-foot">
+      <button class="btn btn-navy" onclick="saveAttSettings()">✓ Save</button>
     </div>
   </div>
 
@@ -3996,6 +4046,12 @@ function applyAttendanceRoleView(isManager){
   // Show personal punch card for employees
   var selfCard = document.getElementById('att-self-card');
   if(selfCard) selfCard.style.display = isManager ? 'none' : '';
+  // Geofence settings + pending-punch approvals — manager only
+  var settingsBtn = document.getElementById('att-settings-btn');
+  if(settingsBtn) settingsBtn.style.display = isManager ? '' : 'none';
+  var pendingTabBtn = document.getElementById('tab-btn-pending');
+  if(pendingTabBtn) pendingTabBtn.style.display = isManager ? '' : 'none';
+  if(isManager) updatePendingPunchBadge();
 }
 
 function renderEmployeeSelfView(){
@@ -4213,6 +4269,72 @@ async function uploadSelfie(empId){
   }
 }
 
+// ── GEOFENCED ATTENDANCE ────────────────────────────────────────────
+// Distance in metres between two lat/lng points (haversine formula).
+function haversineMeters(lat1,lng1,lat2,lng2){
+  if([lat1,lng1,lat2,lng2].some(function(v){return v==null||isNaN(v);})) return null;
+  var R=6371000, toRad=function(d){return d*Math.PI/180;};
+  var dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+var ATT_GEOFENCE_RADIUS=null; // cached, metres
+async function attGetGeofenceRadius(){
+  if(ATT_GEOFENCE_RADIUS!=null) return ATT_GEOFENCE_RADIUS;
+  try{
+    var rows=await sbFetch('attendance_settings',{select:'geofence_radius_m',filter:'id=eq.1'});
+    ATT_GEOFENCE_RADIUS=(rows&&rows[0]&&rows[0].geofence_radius_m!=null)?Number(rows[0].geofence_radius_m):200;
+  }catch(e){ ATT_GEOFENCE_RADIUS=200; } // table not set up yet — fall back rather than block punching
+  return ATT_GEOFENCE_RADIUS;
+}
+
+function openAttSettings(){
+  attGetGeofenceRadius().then(function(r){
+    var inp=document.getElementById('att-geofence-radius');
+    if(inp) inp.value=r;
+  });
+  openSheet('ov-attsettings','sh-attsettings');
+}
+function closeAttSettings(){ closeSheet('ov-attsettings','sh-attsettings'); }
+async function saveAttSettings(){
+  var val=parseInt((document.getElementById('att-geofence-radius')||{value:''}).value,10);
+  if(!val||val<10){ toast('Enter a radius of at least 10 metres','warning'); return; }
+  try{
+    await sbUpdate('attendance_settings',1,{geofence_radius_m:val,updated_by:currentUser.id,updated_at:new Date().toISOString()});
+    ATT_GEOFENCE_RADIUS=val;
+    toast('Geofence radius saved: '+val+'m','success');
+    closeAttSettings();
+  }catch(e){ toast('Error saving settings — has the attendance_settings table been created? '+e.message,'error'); }
+}
+
+// Checks a punch location against every project assigned to the current
+// user. Returns:
+//   {skip:true}                                     — no assigned project has coordinates configured; nothing to check against
+//   {withinRange:true, projectId, projectName, distance, radius}   — inside radius of that project
+//   {withinRange:false, nearestProjectId, nearestProjectName, nearestDistance, radius}  — outside every assigned project's radius
+async function attCheckGeofence(lat,lng){
+  var radius=await attGetGeofenceRadius();
+  var ids=(typeof userProjectIds==='function')?userProjectIds():null;
+  if(!ids||!ids.length) return {skip:true}; // unrestricted user — no specific site to check against
+  var projRows=[];
+  try{
+    projRows=await sbFetch('projects',{select:'id,name,coordinates',filter:'id=in.('+ids.join(',')+')'});
+  }catch(e){ return {skip:true}; }
+  var best=null; // {projectId, projectName, distance}
+  (projRows||[]).forEach(function(p){
+    var pts=[]; try{ pts=p.coordinates?JSON.parse(p.coordinates):[]; }catch(e){}
+    (pts||[]).forEach(function(pt){
+      var d=haversineMeters(lat,lng,parseFloat(pt.lat),parseFloat(pt.lng));
+      if(d==null) return;
+      if(!best||d<best.distance) best={projectId:p.id,projectName:p.name,distance:d};
+    });
+  });
+  if(!best) return {skip:true}; // assigned project(s) have no coordinates configured yet
+  if(best.distance<=radius) return {withinRange:true,projectId:best.projectId,projectName:best.projectName,distance:best.distance,radius:radius};
+  return {withinRange:false,nearestProjectId:best.projectId,nearestProjectName:best.projectName,nearestDistance:best.distance,radius:radius};
+}
+
 async function confirmPunch() {
   if (!selfieOk) {
     showToast('Please take a selfie first','warning');
@@ -4230,21 +4352,49 @@ async function confirmPunch() {
   const status = document.getElementById('punch-status');
   var today = attToday();
   var gpsMode = gpsReady ? 'site' : 'manual';
+  var wasPunchedIn = isPunchedIn; // capture before any state changes below
+  var nowTime = new Date();
+  var selfiePreviewSrc = document.getElementById('selfie-preview').src;
 
-  if (!isPunchedIn) {
+  // Check location against assigned projects BEFORE touching any local
+  // punch state — an out-of-range punch must not flip the UI to
+  // "punched in/out" until an admin approves it.
+  var geo = await attCheckGeofence(currentLat, currentLng);
+
+  if(geo.withinRange === false){
+    closePunchModal();
+    showToast('📍 '+Math.round(geo.nearestDistance)+'m from '+geo.nearestProjectName+' — outside the '+geo.radius+'m allowed radius. Sent for approval, not recorded yet.','warning');
+    try{
+      var selfieUrlPending = await uploadSelfie(currentUser.id);
+      await sbInsert('attendance_punches',{
+        emp_id:currentUser.id, date:today, punch_type:(wasPunchedIn?'out':'in'), punch_time:nowTime.toISOString(),
+        lat:currentLat, lng:currentLng, selfie_url:selfieUrlPending,
+        status:'pending', project_id:geo.nearestProjectId, distance_m:Math.round(geo.nearestDistance)
+      });
+    }catch(e){ showToast('Could not submit punch for approval: '+e.message,'error'); }
+    resetSelfieBox();
+    return;
+  }
+
+  // Within an assigned project's radius, or no geofence configured to
+  // check against — proceed exactly as before, now tagging which
+  // project (if any) the punch matched.
+  var matchedProjectId = geo.withinRange ? geo.projectId : null;
+
+  if (!wasPunchedIn) {
     isPunchedIn = true;
-    punchInTime = new Date();
+    punchInTime = nowTime;
     ring.className = 'punch-ring punch-ring-out';
     icon.textContent = '⏹';
     label.textContent = 'PUNCH OUT';
     status.textContent = `Punched In at ${punchInTime.toLocaleTimeString()}`;
     document.getElementById('stat-mytime').textContent = `In: ${punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`;
-    punchLog.push({type:'in', time: punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng, selfie: document.getElementById('selfie-preview').src});
+    punchLog.push({type:'in', time: punchInTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng, selfie: selfiePreviewSrc});
     renderPunchLog();
     closePunchModal();
     try{
       var selfieUrl = await uploadSelfie(currentUser.id);
-      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrl});
+      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrl, status:'approved', project_id:matchedProjectId, distance_m:geo.withinRange?Math.round(geo.distance):null});
       var existing = ATT_TODAY_MAP[currentUser.id];
       var inTimeStr = punchInTime.toTimeString().slice(0,8);
       if(existing){
@@ -4257,19 +4407,19 @@ async function confirmPunch() {
     }catch(e){ showToast('Punch saved locally but failed to sync: '+e.message,'warning'); }
   } else {
     isPunchedIn = false;
-    const outTime = new Date();
+    const outTime = nowTime;
     const diff = Math.round((outTime - punchInTime) / 60000);
     ring.className = 'punch-ring punch-ring-in';
     icon.textContent = '👉';
     label.textContent = 'PUNCH IN';
     status.textContent = `Last Out: ${outTime.toLocaleTimeString()} · ${diff}m worked`;
     document.getElementById('stat-mytime').textContent = `${Math.floor(diff/60)}h ${diff%60}m`;
-    punchLog.push({type:'out', time: outTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng, duration: diff, selfie: document.getElementById('selfie-preview').src});
+    punchLog.push({type:'out', time: outTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:currentLat, lng:currentLng, duration: diff, selfie: selfiePreviewSrc});
     renderPunchLog();
     closePunchModal();
     try{
       var selfieUrlOut = await uploadSelfie(currentUser.id);
-      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrlOut});
+      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrlOut, status:'approved', project_id:matchedProjectId, distance_m:geo.withinRange?Math.round(geo.distance):null});
       var existing2 = ATT_TODAY_MAP[currentUser.id];
       var outTimeStr = outTime.toTimeString().slice(0,8);
       var hoursWorked = Math.round((diff/60)*100)/100;
@@ -5139,12 +5289,13 @@ async function submitLeave() {
 function switchTab(tab, el) {
   document.querySelectorAll('.tabs-row .tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  ['daily','monthly','leaves','logs'].forEach(t => {
+  ['daily','monthly','leaves','logs','pending'].forEach(t => {
     document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
   });
   if (tab === 'monthly') renderCal();
   if (tab === 'leaves') renderLeave();
   if (tab === 'logs') renderLogsTab();
+  if (tab === 'pending') renderPendingPunches();
 }
 
 // ── OVERLAY CLOSE ──
@@ -6474,6 +6625,144 @@ async function delPunchEntry(id){
     punchLog = punchLog.filter(function(p){ return p.id !== id; });
     if(document.getElementById('punch-log-list')) renderPunchLog();
     if(document.getElementById('logs-tbody') && typeof renderLogsTab==='function') renderLogsTab();
+    if(document.getElementById('pending-punch-tbody')) renderPendingPunches();
+    updatePendingPunchBadge();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ── PENDING PUNCH APPROVALS (out-of-geofence punches) ──────────────
+var PENDING_PUNCH_ROWS=[];
+
+async function updatePendingPunchBadge(){
+  var badge=document.getElementById('pending-punch-badge');
+  if(!badge) return;
+  try{
+    var rows=await sbFetch('attendance_punches',{select:'id',filter:'status=eq.pending'});
+    var n=(rows||[]).length;
+    badge.textContent=n;
+    badge.style.display=n>0?'inline-block':'none';
+  }catch(e){ badge.style.display='none'; } // table/column not set up yet
+}
+
+async function renderPendingPunches(){
+  var tbody=document.getElementById('pending-punch-tbody');
+  if(!tbody) return;
+  tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">Loading…</td></tr>';
+
+  var empNameById={};
+  (employees||[]).forEach(function(e){ empNameById[e.id]=e.name; });
+
+  var rows=[];
+  try{
+    rows=await sbFetch('attendance_punches',{select:'*',filter:'status=eq.pending',order:'punch_time.desc'});
+  }catch(e){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--red2);padding:18px;">Could not load pending punches — has the attendance_settings/attendance_punches migration been run? '+e.message+'</td></tr>';
+    return;
+  }
+  rows=rows||[];
+  PENDING_PUNCH_ROWS=rows;
+
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:18px;">No punches awaiting approval</td></tr>';
+    return;
+  }
+
+  var projIds=Array.from(new Set(rows.map(function(r){return r.project_id;}).filter(Boolean)));
+  var projNameById={};
+  if(projIds.length){
+    try{
+      var projRows=await sbFetch('projects',{select:'id,name',filter:'id=in.('+projIds.join(',')+')'});
+      (projRows||[]).forEach(function(p){ projNameById[p.id]=p.name; });
+    }catch(e){}
+  }
+
+  tbody.innerHTML=rows.map(function(r){
+    var empName=empNameById[r.emp_id]||r.emp_id||'Unknown';
+    var typeBadge=r.punch_type==='in'
+      ? '<span class="att-badge b-present">✅ Punch In</span>'
+      : '<span class="att-badge b-absent">⏹ Punch Out</span>';
+    var timeStr=r.punch_time?new Date(r.punch_time).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+    var hasLoc=r.lat!=null&&r.lng!=null;
+    var locCell=hasLoc
+      ? '<a href="https://www.google.com/maps?q='+r.lat+','+r.lng+'&z=18&t=m" target="_blank" style="color:var(--blue2);">'+Number(r.lat).toFixed(4)+', '+Number(r.lng).toFixed(4)+'</a>'
+      : '<span style="color:var(--text3);">—</span>';
+    var projCell=r.project_id?(projNameById[r.project_id]||'Unknown project'):'<span style="color:var(--text3);">No site matched</span>';
+    var distCell=(r.distance_m!=null)?(Math.round(r.distance_m)+'m away'):'<span style="color:var(--text3);">—</span>';
+    var selfieCell=r.selfie_url
+      ? '<a href="'+r.selfie_url+'" target="_blank"><img src="'+r.selfie_url+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;"></a>'
+      : '<span style="color:var(--text3);">—</span>';
+    return '<tr id="pending-row-'+r.id+'">'+
+      '<td style="font-weight:600;">'+empName+'</td>'+
+      '<td>'+typeBadge+'</td>'+
+      '<td>'+timeStr+'</td>'+
+      '<td>'+locCell+'</td>'+
+      '<td>'+projCell+'</td>'+
+      '<td style="color:#E65100;font-weight:700;">'+distCell+'</td>'+
+      '<td>'+selfieCell+'</td>'+
+      '<td><div style="display:flex;gap:6px;">'+
+        '<button class="btn btn-sm" onclick="decidePunch(\''+r.id+'\',\'approve\')" style="font-size:11px;color:#2E7D32;border-color:#C8E6C9;">✓ Approve</button>'+
+        '<button class="btn btn-sm" onclick="decidePunch(\''+r.id+'\',\'reject\')" style="font-size:11px;color:#C62828;border-color:#FFCDD2;">✕ Reject</button>'+
+      '</div></td>'+
+    '</tr>';
+  }).join('');
+}
+
+// Approves or rejects a pending (out-of-geofence) punch. Approving
+// propagates the punch into the main attendance table exactly like a
+// normal in-range punch would have — computing hours worked for a
+// punch-out against whatever punch_in is already on that day's record.
+async function decidePunch(id, decision){
+  var allowed = typeof attIsManager==='function' ? attIsManager() : (currentUser&&(currentUser.role==='admin'||currentUser.role==='pm'));
+  if(!allowed){ toast('Only admins can decide on pending punches','warning'); return; }
+  var row=PENDING_PUNCH_ROWS.find(function(r){ return r.id===id; });
+  if(!row){ toast('Punch not found — refreshing list','warning'); renderPendingPunches(); return; }
+
+  if(decision==='reject'){
+    if(!confirm('Reject this punch? It will not be recorded as attendance.')) return;
+  }
+
+  try{
+    await sbUpdate('attendance_punches', id, {
+      status: decision==='approve'?'approved':'rejected',
+      approved_by: currentUser.id, approved_at: new Date().toISOString()
+    });
+
+    if(decision==='approve'){
+      var empId=row.emp_id, date=row.date, punchTime=new Date(row.punch_time);
+      var attRows=await sbFetch('attendance',{select:'*',filter:'employee_id=eq.'+empId+'&date=eq.'+date});
+      var attRow=(attRows&&attRows[0])||null;
+      var timeStr=punchTime.toTimeString().slice(0,8);
+
+      if(row.punch_type==='in'){
+        if(attRow){
+          await sbUpdate('attendance', attRow.id, {status:'present', punch_in:timeStr, punch_in_lat:row.lat, punch_in_lng:row.lng, punch_in_selfie:row.selfie_url});
+        } else {
+          await sbInsert('attendance',{employee_id:empId, date:date, status:'present', punch_in:timeStr, punch_in_lat:row.lat, punch_in_lng:row.lng, punch_in_selfie:row.selfie_url, marked_by:currentUser.id});
+        }
+      } else {
+        var hoursWorked=null;
+        if(attRow && attRow.punch_in){
+          var inDt=new Date(date+'T'+attRow.punch_in);
+          var diffMin=Math.round((punchTime-inDt)/60000);
+          if(diffMin>0) hoursWorked=Math.round((diffMin/60)*100)/100;
+        }
+        if(attRow){
+          var upd={punch_out:timeStr, punch_out_lat:row.lat, punch_out_lng:row.lng};
+          if(hoursWorked!=null) upd.hours_worked=hoursWorked;
+          await sbUpdate('attendance', attRow.id, upd);
+        } else {
+          await sbInsert('attendance',{employee_id:empId, date:date, status:'present', punch_out:timeStr, punch_out_lat:row.lat, punch_out_lng:row.lng, marked_by:currentUser.id});
+        }
+      }
+      toast('Punch approved and recorded','success');
+    } else {
+      toast('Punch rejected','info');
+    }
+
+    renderPendingPunches();
+    updatePendingPunchBadge();
+    if(document.getElementById('logs-tbody') && typeof renderLogsTab==='function') renderLogsTab();
+    if(empId===currentUser.id) attLoadAll(); // refresh the acting-on-self case
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
@@ -6562,7 +6851,7 @@ async function renderLogsTab(){
   if(!tbody) return;
   var range = attLogsGetRange();
 
-  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:18px;">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:18px;">Loading…</td></tr>';
 
   var empNameById = {};
   (employees||[]).forEach(function(e){ empNameById[e.id] = e.name; });
@@ -6571,10 +6860,21 @@ async function renderLogsTab(){
   try{
     rows = await sbFetch('attendance_punches',{select:'*',filter:'date=gte.'+range.from+'&date=lte.'+range.to,order:'date.asc,punch_time.asc'});
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--red2);padding:18px;">Failed to load punch logs: '+e.message+'</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--red2);padding:18px;">Failed to load punch logs: '+e.message+'</td></tr>';
     return;
   }
   rows = rows || [];
+
+  var projIds = Array.from(new Set(rows.map(function(p){ return p.project_id; }).filter(Boolean)));
+  var projNameById = {};
+  if(projIds.length){
+    try{
+      var projRows = await sbFetch('projects',{select:'id,name',filter:'id=in.('+projIds.join(',')+')'});
+      (projRows||[]).forEach(function(p){ projNameById[p.id]=p.name; });
+    }catch(e){}
+  }
+  var radius = await attGetGeofenceRadius();
+
   LOGS_TAB_ROWS = rows.map(function(p){
     return {
       id: p.id,
@@ -6585,12 +6885,15 @@ async function renderLogsTab(){
       lat: p.lat, lng: p.lng,
       accuracy: p.accuracy,
       device: p.device || '',
-      selfie: p.selfie_url || ''
+      selfie: p.selfie_url || '',
+      project: p.project_id ? (projNameById[p.project_id]||'Unknown project') : '',
+      status: p.status || 'approved',
+      distance: p.distance_m
     };
   });
 
   if(!LOGS_TAB_ROWS.length){
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:18px;">No punches recorded for '+range.label+'</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text3);padding:18px;">No punches recorded for '+range.label+'</td></tr>';
     return;
   }
 
@@ -6602,10 +6905,11 @@ async function renderLogsTab(){
       ? '<a href="https://www.google.com/maps?q='+r.lat+','+r.lng+'&z=18&t=m" target="_blank" style="color:var(--blue2);">'+r.lat.toFixed(4)+', '+r.lng.toFixed(4)+'</a>'
       : '<span style="color:var(--text3);">—</span>';
     var accCell = (r.accuracy!=null) ? ('±'+Math.round(r.accuracy)+'m') : '<span style="color:var(--text3);">—</span>';
-    // No site geofence coordinates are configured anywhere in this app yet,
-    // so there is no real distance to check against — showing this
-    // honestly rather than a fake always-green checkmark.
-    var radiusCell = '<span style="color:var(--text3);" title="No site geofence configured">—</span>';
+    var radiusCell = (r.distance!=null)
+      ? (r.distance<=radius
+          ? '<span style="color:#2E7D32;font-weight:700;">✓ '+Math.round(r.distance)+'m</span>'
+          : '<span style="color:#C62828;font-weight:700;">✗ '+Math.round(r.distance)+'m</span>')
+      : '<span style="color:var(--text3);" title="No site geofence configured for this punch">—</span>';
     var deviceCell = r.device ? r.device : '<span style="color:var(--text3);">—</span>';
     var selfieCell = r.selfie
       ? '<a href="'+r.selfie+'" target="_blank"><img src="'+r.selfie+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;"></a>'
@@ -6613,6 +6917,9 @@ async function renderLogsTab(){
     var typeBadge = r.type==='Punch In'
       ? '<span class="att-badge b-present">✅ Punch In</span>'
       : '<span class="att-badge b-absent">⏹ Punch Out</span>';
+    var projCell = r.project ? r.project : '<span style="color:var(--text3);">—</span>';
+    var statusMap = {approved:'<span style="color:#2E7D32;font-weight:700;">Approved</span>', pending:'<span style="color:#E65100;font-weight:700;">Pending</span>', rejected:'<span style="color:#C62828;font-weight:700;">Rejected</span>'};
+    var statusCell = statusMap[r.status] || r.status;
     var actionCell = (canDelLog && r.id)
       ? '<button class="btn btn-sm" onclick="delPunchEntry(\''+r.id+'\')" style="font-size:11px;color:#C62828;border-color:#FFCDD2;" title="Delete this punch record">🗑</button>'
       : '<span style="color:var(--text3);">—</span>';
@@ -6620,6 +6927,8 @@ async function renderLogsTab(){
       '<td style="font-weight:600;">'+r.employee+'</td>'+
       '<td>'+typeBadge+'</td>'+
       '<td>'+(r.date?attDisplayDate(r.date)+' · ':'')+r.time+'</td>'+
+      '<td>'+projCell+'</td>'+
+      '<td>'+statusCell+'</td>'+
       '<td>'+locCell+'</td>'+
       '<td>'+accCell+'</td>'+
       '<td>'+radiusCell+'</td>'+
@@ -6633,10 +6942,10 @@ async function renderLogsTab(){
 function exportLogsCSV(){
   if(!LOGS_TAB_ROWS.length){ showToast('Nothing to export for this period','warning'); return; }
   var range = attLogsGetRange();
-  var header = ['Employee','Punch Type','Date','Time','Latitude','Longitude','Accuracy (m)','Device','Selfie URL'];
+  var header = ['Employee','Punch Type','Date','Time','Project','Status','Distance (m)','Latitude','Longitude','Accuracy (m)','Device','Selfie URL'];
   var lines = [header.join(',')];
   LOGS_TAB_ROWS.forEach(function(r){
-    var csvRow = [r.employee, r.type, r.date||'', r.time, r.lat!=null?r.lat:'', r.lng!=null?r.lng:'', r.accuracy!=null?r.accuracy:'', r.device||'', r.selfie||'']
+    var csvRow = [r.employee, r.type, r.date||'', r.time, r.project||'', r.status||'', r.distance!=null?Math.round(r.distance):'', r.lat!=null?r.lat:'', r.lng!=null?r.lng:'', r.accuracy!=null?r.accuracy:'', r.device||'', r.selfie||'']
       .map(function(v){ v=String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; });
     lines.push(csvRow.join(','));
   });
