@@ -18,6 +18,9 @@ function sortByItemCode(arr){
 }
 
 var PROJ_DATA=[], PROJ_EDIT_ID=null;
+var PROJ_CACHE_KEY='aipl_project_list_v1';
+var PROJ_SUMMARY_SELECT='id,name,code,status,location,contract_value,client,client_gstin,client_state,client_address,description,project_length,tender_cost,tender_pct,loa_date,wo_date,completion_date,dlp_date,revised_completion_date,contract_provisions,eot_entries,coordinates,attachments';
+var PROJ_LOADING=null;
 var PROJ_MOD_TAB = 'projects';      // current main tab
 var PROJ_MOD_SUB = '';              // current sub-tab (for grouped tabs)
 var PROJ_MOD_SEL_ID = '';           // selected project id
@@ -33,16 +36,68 @@ var PMT_GROUPS = {
 };
 
 // ── Project selector (hidden, kept for compat) ────────────
+function projCacheLoad(){
+  try{
+    var raw=localStorage.getItem(PROJ_CACHE_KEY);
+    if(!raw) return [];
+    var rows=JSON.parse(raw);
+    return Array.isArray(rows)?rows:[];
+  }catch(e){return [];}
+}
+function projCacheSave(rows){
+  try{localStorage.setItem(PROJ_CACHE_KEY, JSON.stringify((rows||[]).slice(0,300)));}catch(e){}
+}
+function projMergeRows(rows, full){
+  if(!Array.isArray(rows)) return;
+  rows.forEach(function(row){
+    if(!row||!row.id) return;
+    var copy=Object.assign({}, row);
+    if(full) copy._full=true;
+    var idx=PROJ_DATA.findIndex(function(p){return p.id===copy.id;});
+    if(idx>-1) PROJ_DATA[idx]=Object.assign({}, PROJ_DATA[idx], copy);
+    else PROJ_DATA.push(copy);
+  });
+}
+function projSummaryRows(){
+  return (PROJ_DATA||[]).map(function(p){
+    var c=Object.assign({}, p);
+    delete c._full;
+    return c;
+  });
+}
+async function projFetchList(){
+  var rows = await sbFetch('projects',{select:PROJ_SUMMARY_SELECT,order:'name.asc'});
+  if(typeof scopeProjects==='function') rows = scopeProjects(rows);
+  PROJ_DATA = Array.isArray(rows) ? rows : [];
+  projCacheSave(PROJ_DATA);
+  return PROJ_DATA;
+}
+async function projLoadFullRecord(id){
+  if(!id) return null;
+  var existing=PROJ_DATA.find(function(x){return x.id===id;});
+  if(existing&&existing._full) return existing;
+  try{
+    var rows=await sbFetch('projects',{select:'*',filter:'id=eq.'+id});
+    if(Array.isArray(rows)&&rows[0]){
+      projMergeRows([rows[0]], true);
+      projCacheSave(projSummaryRows());
+      return PROJ_DATA.find(function(x){return x.id===id;})||rows[0];
+    }
+  }catch(e){console.warn('projLoadFullRecord:',e);}
+  return existing||null;
+}
+
 async function projModLoadProjects(forceFetch){
   var sel = document.getElementById('proj-mod-sel');
   if(!sel) return;
   // Only fetch when forced (after add/edit) — loadProjData handles initial fetch
   if(forceFetch){
     try{
-      var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
+      var rows = await sbFetch('projects',{select:PROJ_SUMMARY_SELECT,order:'name.asc'});
       // Restrict to the projects assigned to the signed-in user
       if(typeof scopeProjects==='function') rows = scopeProjects(rows);
       PROJ_DATA = Array.isArray(rows) ? rows : [];
+      projCacheSave(PROJ_DATA);
     }catch(e){}
   }
   // Render dropdown from cache
@@ -66,6 +121,10 @@ function projModSelChange(){
 
 // ── Main entry: called from showApp ───────────────────────
 function initProjects(){
+  if(!PROJ_DATA.length){
+    var cached=projCacheLoad();
+    if(cached.length) PROJ_DATA=cached;
+  }
   projModRenderNav();
   projModLoadTab();
   if(PROJ_DATA.length) projModLoadProjects();
@@ -193,7 +252,9 @@ function projModLoadTab(){
   var tab = PROJ_MOD_TAB;
 
   if(tab === 'projects'){
-    el.innerHTML = '<div style="padding:0 0 6px;"><div class="search-bar"><span style="font-size:16px;color:var(--text3);">&#128269;</span><input type="text" id="proj-search" placeholder="Search projects..." oninput="searchProj(this.value)"></div></div><div id="proj-list"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>';
+    if(!document.getElementById('proj-list')){
+      el.innerHTML = '<div style="padding:0 0 6px;"><div class="search-bar"><span style="font-size:16px;color:var(--text3);">&#128269;</span><input type="text" id="proj-search" placeholder="Search projects..." oninput="searchProj(this.value)"></div></div><div id="proj-list"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>';
+    }
     loadProjData();
     return;
   }
@@ -238,27 +299,37 @@ function projModAdd(){
 async function loadProjData(forceFetch){
   var el = document.getElementById('proj-list'); if(!el) return;
 
-  // Use cache if available and not forcing a refresh
-  if(PROJ_DATA.length && !forceFetch){
-    renderProjList();          // instant render from cache
-    projModLoadProjects();     // populate selector from cache
-    return;
+  if(!PROJ_DATA.length){
+    var cached=projCacheLoad();
+    if(cached.length) PROJ_DATA=cached;
   }
 
-  // Need to fetch — show spinner
-  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading projects...</div>';
+  if(PROJ_DATA.length){
+    renderProjList();
+    projModLoadProjects();
+    if(!forceFetch){
+      if(!PROJ_LOADING){
+        PROJ_LOADING=projFetchList().then(function(){
+          var el2=document.getElementById('proj-list');
+          if(el2) renderProjList();
+          projModLoadProjects();
+        }).catch(function(e){console.warn('project refresh:',e);}).finally(function(){PROJ_LOADING=null;});
+      }
+      return;
+    }
+  }else{
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading projects...</div>';
+  }
+
   try{
-    var rows = await sbFetch('projects',{select:'*',order:'name.asc'});
-      // Restrict to the projects assigned to the signed-in user
-      if(typeof scopeProjects==='function') rows = scopeProjects(rows);
-    PROJ_DATA = Array.isArray(rows) ? rows : [];
-    // Re-get el in case DOM changed during async fetch
+    if(!PROJ_LOADING) PROJ_LOADING=projFetchList().finally(function(){PROJ_LOADING=null;});
+    await PROJ_LOADING;
     var el2 = document.getElementById('proj-list');
     if(el2) renderProjList();
     projModLoadProjects();
   }catch(e){
-    var el2 = document.getElementById('proj-list');
-    if(el2) el2.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Error loading projects. Tap to retry.</div>';
+    var el3 = document.getElementById('proj-list');
+    if(el3) el3.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Error loading projects. Tap to retry.</div>';
     console.error(e);
   }
 }
@@ -408,8 +479,8 @@ function pfRenderFiles(){
   }).join('');
 }
 
-function openProjForm(id){
-  var p = id ? (PROJ_DATA.find(function(x){return x.id===id;})||{}) : {};
+async function openProjForm(id){
+  var p = id ? (await projLoadFullRecord(id)||{}) : {};
   PF_COORDS = [];
   PF_FILES  = [];
   PF_EOT    = [];
@@ -677,7 +748,8 @@ async function saveProjForm(editId){
         }
       }
       var idx=PROJ_DATA.findIndex(function(p){return p.id===editId;});
-      if(idx>-1) PROJ_DATA[idx]=Object.assign(PROJ_DATA[idx],data);
+      if(idx>-1) PROJ_DATA[idx]=Object.assign(PROJ_DATA[idx],data,{_full:true});
+      projCacheSave(projSummaryRows());
       toast('Project updated!','success');
     } else {
       // Insert with JWT
@@ -708,7 +780,8 @@ async function saveProjForm(editId){
             throw new Error(e2.message||'Insert failed: '+res2.status);
           }
           var saved=await res2.json();
-          if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(saved[0]);
+          if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(Object.assign(saved[0],{_full:true}));
+          projCacheSave(projSummaryRows());
           await projModLoadProjects(true);
           toast('Project added! (some optional fields not saved — add missing columns to DB)','success');
         } else {
@@ -716,7 +789,8 @@ async function saveProjForm(editId){
         }
       } else {
         var saved=await res.json();
-        if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(saved[0]);
+        if(Array.isArray(saved)&&saved[0]) PROJ_DATA.push(Object.assign(saved[0],{_full:true}));
+        projCacheSave(projSummaryRows());
         await projModLoadProjects(true); // force re-fetch so new project appears
       }
       toast('Project added! Select it from the dropdown above.','success');
@@ -730,6 +804,7 @@ async function deleteProjItem(id){
   try{
     await sbDelete('projects',id);
     PROJ_DATA=PROJ_DATA.filter(function(p){return p.id!==id;});
+    projCacheSave(projSummaryRows());
     closeProjSheet();
     loadProjData(true); // force refresh list + selector after save
     toast('Project deleted','success');
