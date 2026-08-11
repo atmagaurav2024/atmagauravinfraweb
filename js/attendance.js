@@ -259,6 +259,7 @@ async function renderPunchLog(){
     var data=await sbFetch('attendance_punches',{select:'*',filter:filter,order:'punch_time.asc'});
     var log=Array.isArray(data)&&data.length?data:punchLog;
     if(!log.length){wrap.innerHTML='<div class="punch-log-empty">No punch records for this date</div>';return;}
+    var canDelete=currentUser&&(currentUser.role==='admin'||currentUser.role==='pm');
     wrap.innerHTML=log.map(function(entry){
       var isIn=entry.punch_type==='in'||entry.type==='in';
       var timeStr=entry.punch_time?new Date(entry.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):(entry.time||'—');
@@ -267,9 +268,26 @@ async function renderPunchLog(){
         '<div class="punch-entry-info"><div class="punch-entry-type">'+(isIn?'🟢 Punch In':'🔴 Punch Out')+'</div>'+
         '<div class="punch-entry-time">'+timeStr+(entry.lat?' · 📍 Site':' · Manual')+'</div></div>'+
         (entry.lat?'<button class="btn btn-sm" onclick="openPunchMap('+(entry.lat||0)+','+(entry.lng||0)+')" style="font-size:11px;">🗺 Map</button>':'')+
+        (canDelete&&entry.id?'<button class="btn btn-sm" onclick="delPunchEntry(\''+entry.id+'\')" style="font-size:11px;color:#C62828;border-color:#FFCDD2;" title="Delete this punch record">🗑</button>':'')+
       '</div>';
     }).join('');
   }catch(e){wrap.innerHTML='<div class="punch-log-empty">Error loading punch log</div>';}
+}
+
+// Admin/PM only, matching the same gate used for editing attendance status
+// in lockStatusBtnsIfNotAdmin(). A punch record has no edit UI, so a
+// mistaken or duplicate punch can only be corrected by removing it.
+async function delPunchEntry(id){
+  if(!id) return;
+  if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='pm')){
+    toast('Only admins can delete punch records','warning'); return;
+  }
+  if(!confirm('Delete this punch record?\n\nThis cannot be undone. If this affects a day\'s status, review it in the Today tab afterwards.')) return;
+  try{
+    await sbDelete('attendance_punches',id);
+    toast('Punch record deleted','success');
+    renderPunchLog();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 function openPunchMap(lat,lng){window.open('https://www.google.com/maps?q='+lat+','+lng,'_blank');}
