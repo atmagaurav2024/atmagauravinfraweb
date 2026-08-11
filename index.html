@@ -31,6 +31,28 @@ html,body{height:100%;overflow:hidden;}
 .an-lb{font-size:10px;font-weight:700;color:#94A3B8;font-family:'Nunito',sans-serif;}
 .an-item.on .an-lb{color:#1565C0;}
 
+/* Left icon rail (desktop/tablet only — see JS updateNavLayout) */
+.side-rail{display:none;position:fixed;top:0;left:0;bottom:0;width:64px;background:#0D2137;z-index:250;
+  flex-direction:column;align-items:stretch;overflow:hidden;transition:width .2s cubic-bezier(.4,0,.2,1);
+  box-shadow:2px 0 12px rgba(0,0,0,0.15);}
+.side-rail.expanded{width:220px;}
+.sr-logo{height:56px;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.08);}
+.sr-logo-ic{width:32px;height:32px;border-radius:9px;background:#1565C0;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.sr-logo-txt{color:#fff;font-size:13px;font-weight:900;white-space:nowrap;font-family:'Nunito',sans-serif;}
+.sr-items{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0;}
+.sr-items::-webkit-scrollbar{width:0;}
+.sr-item{display:flex;align-items:center;gap:14px;height:46px;padding:0 16px;cursor:pointer;border:none;background:transparent;width:100%;text-align:left;}
+.sr-item:active{background:rgba(255,255,255,0.06);}
+.sr-item.on{background:#1565C0;}
+.sr-ic{font-size:19px;line-height:1;flex-shrink:0;width:22px;text-align:center;}
+.sr-lb{font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap;font-family:'Nunito',sans-serif;}
+.side-rail:not(.expanded) .sr-lb{display:none;}
+.sr-foot{flex-shrink:0;padding:8px 0;border-top:1px solid rgba(255,255,255,0.08);}
+.side-rail-backdrop{display:none;position:fixed;inset:0;z-index:249;background:rgba(0,0,0,0.15);}
+.side-rail-backdrop.on{display:block;}
+body.has-rail .app-screen{left:64px;}
+body.has-rail .app-nav{display:none !important;}
+
 /* ═══════════════════════════════════════════
    LOGIN / AUTH CSS
 ═══════════════════════════════════════════ */
@@ -2344,6 +2366,32 @@ input,select,textarea{font-size:16px !important;}
 
 </div>
 
+<!-- LEFT ICON RAIL (shown on wider screens; see updateNavLayout) -->
+<div class="side-rail-backdrop" id="side-rail-backdrop" onclick="collapseRail()"></div>
+<div class="side-rail" id="side-rail">
+  <div class="sr-logo" onclick="toggleRail()" title="Expand / collapse">
+    <div class="sr-logo-ic">&#9889;</div>
+    <div class="sr-logo-txt">AIPL</div>
+  </div>
+  <div class="sr-items" id="sr-items">
+    <button class="sr-item on" data-mod="dashboard" onclick="showApp('dashboard')"><div class="sr-ic">&#127968;</div><div class="sr-lb">Dashboard</div></button>
+    <button class="sr-item" data-mod="projects" onclick="showApp('projects')"><div class="sr-ic">&#127959;</div><div class="sr-lb">Projects</div></button>
+    <button class="sr-item" data-mod="employees" onclick="showApp('employees')"><div class="sr-ic">&#128101;</div><div class="sr-lb">Employees</div></button>
+    <button class="sr-item" data-mod="attendance" onclick="showApp('attendance')"><div class="sr-ic">&#9200;</div><div class="sr-lb">Attendance</div></button>
+    <button class="sr-item" data-mod="accounts" onclick="showApp('accounts')"><div class="sr-ic">&#128176;</div><div class="sr-lb">Accounts</div></button>
+    <button class="sr-item" data-mod="petty-cash" onclick="showApp('petty-cash')"><div class="sr-ic">&#128181;</div><div class="sr-lb">Petty Cash</div></button>
+    <button class="sr-item" data-mod="loans" onclick="showApp('loans')"><div class="sr-ic">&#127974;</div><div class="sr-lb">Loans</div></button>
+    <button class="sr-item" data-mod="overheads" onclick="showApp('overheads')"><div class="sr-ic">&#127970;</div><div class="sr-lb">Overheads</div></button>
+    <button class="sr-item" data-mod="registry" onclick="showApp('registry')"><div class="sr-ic">&#128218;</div><div class="sr-lb">Registry</div></button>
+    <button class="sr-item" data-mod="access" onclick="showApp('access')"><div class="sr-ic">&#128274;</div><div class="sr-lb">Access Control</div></button>
+    <button class="sr-item" data-mod="company" onclick="showApp('company')"><div class="sr-ic">&#127963;</div><div class="sr-lb">Company</div></button>
+  </div>
+  <div class="sr-foot">
+    <button class="sr-item" data-mod="profile" onclick="showProfile()"><div class="sr-ic">&#128100;</div><div class="sr-lb">Profile</div></button>
+    <button class="sr-item" onclick="openDrawer()"><div class="sr-ic">&#8942;</div><div class="sr-lb">More</div></button>
+  </div>
+</div>
+
 <!-- BOTTOM NAV (shown when in app) -->
 <nav class="app-nav" id="app-nav" style="display:none;">
   <button class="an-item on" id="an-home" onclick="showApp('dashboard')"><div class="an-ic">&#127968;</div><div class="an-lb">Home</div></button>
@@ -3018,12 +3066,17 @@ function showApp(name){
   target.classList.add('on');
   document.body.setAttribute('data-app', isProjectTab ? 'projects' : name);
   currentApp = isProjectTab ? 'projects' : name;
-  var nav=document.getElementById('app-nav');
-  if(nav) nav.style.display='flex';
+  updateNavLayout();
   ['home','attendance','registry','profile'].forEach(function(n){
     var el=document.getElementById('an-'+n);
     if(el) el.classList.toggle('on', n===name||(n==='home'&&(name==='dashboard'||isProjectTab)));
   });
+  document.querySelectorAll('#side-rail .sr-item[data-mod]').forEach(function(el){
+    var m=el.getAttribute('data-mod');
+    el.classList.toggle('on', m===name||(m==='dashboard'&&(name==='dashboard'||isProjectTab)));
+  });
+  collapseRail();
+  applyDrawerPermissions();
   if(name==='attendance'&&!window._attInit){window._attInit=true;initAttendance();}
   if(name==='dashboard'){ loadDashboardInsights(); if(!window._coLoaded){window._coLoaded=true;preloadCompanyData();} }
   if(name==='registry'){initRegistry();startSync();}
@@ -3037,6 +3090,40 @@ function showApp(name){
   else if(name==='company'){initCompany();}
   else{stopSync();}
 }
+
+// ── LEFT ICON RAIL ────────────────────────────────────────────────────
+// Icon-only rail is always visible on wider screens (never collapses
+// away); the toggle only expands/collapses the text labels next to
+// the icons. On narrow screens we fall back to the existing bottom nav.
+var RAIL_BREAKPOINT = 900;
+
+function toggleRail(){
+  var r=document.getElementById('side-rail'); if(!r) return;
+  var expanded = r.classList.toggle('expanded');
+  var bd=document.getElementById('side-rail-backdrop');
+  if(bd) bd.classList.toggle('on', expanded);
+}
+function collapseRail(){
+  var r=document.getElementById('side-rail'); if(r) r.classList.remove('expanded');
+  var bd=document.getElementById('side-rail-backdrop'); if(bd) bd.classList.remove('on');
+}
+function updateNavLayout(){
+  var rail=document.getElementById('side-rail');
+  var nav=document.getElementById('app-nav');
+  if(!rail || !nav) return;
+  // Only run the rail/bottom-nav swap once the user is actually inside
+  // the app (nav gets hidden again by doLogout).
+  var inApp = !!currentUser;
+  var useRail = inApp && window.innerWidth >= RAIL_BREAKPOINT;
+  document.body.classList.toggle('has-rail', useRail);
+  rail.style.display = useRail ? 'flex' : 'none';
+  nav.style.display = inApp ? (useRail ? 'none' : 'flex') : 'none';
+  if(!useRail) collapseRail();
+}
+window.addEventListener('resize', function(){
+  if(window._railResizeT) clearTimeout(window._railResizeT);
+  window._railResizeT = setTimeout(updateNavLayout, 150);
+});
 
 function showProfile(){
   var u = currentUser;
@@ -3135,6 +3222,9 @@ function doLogout(){
   currentUser=null; currentSession=null;
   document.querySelectorAll('.app-screen').forEach(function(s){s.classList.remove('on');});
   document.getElementById('app-nav').style.display='none';
+  var rail=document.getElementById('side-rail'); if(rail) rail.style.display='none';
+  document.body.classList.remove('has-rail');
+  collapseRail();
   showScreen('scr-login');
   toast('Signed out successfully','success');
 }
@@ -6975,6 +7065,12 @@ function applyDrawerPermissions(){
     var match = (item.getAttribute('onclick')||'').match(/showApp\('([^']+)'\)/);
     if(!match) return;
     var mod = match[1];
+    var checkFn = checks[mod];
+    if(checkFn) item.style.display = checkFn() ? '' : 'none';
+  });
+  // Same check, applied to the left icon rail
+  document.querySelectorAll('#side-rail .sr-item[data-mod]').forEach(function(item){
+    var mod = item.getAttribute('data-mod');
     var checkFn = checks[mod];
     if(checkFn) item.style.display = checkFn() ? '' : 'none';
   });
