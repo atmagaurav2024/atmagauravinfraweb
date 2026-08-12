@@ -3141,7 +3141,7 @@ function showApp(name){
   });
   document.querySelectorAll('#side-rail .sr-item[data-mod]').forEach(function(el){
     var m=el.getAttribute('data-mod');
-    el.classList.toggle('on', m===name||(m==='dashboard'&&(name==='dashboard'||isProjectTab)));
+    el.classList.toggle('on', m===name||(m==='dashboard'&&name==='dashboard')||(m==='projects'&&isProjectTab));
   });
   collapseRail();
   applyDrawerPermissions();
