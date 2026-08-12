@@ -3089,6 +3089,7 @@ async function loadUserPermissions(){
     // Applied second so an individual setting wins over the role default
     apply(await sbFetch('access_permissions',{select:'*',filter:'employee_id=eq.'+currentUser.id}));
     USER_PERMISSIONS=perms;
+    console.log('[perm-debug] loadUserPermissions() done. role used for lookup:', JSON.stringify(role), '| USER_PERMISSIONS:', JSON.parse(JSON.stringify(perms)));
   }catch(e){ console.warn('loadUserPermissions', e); }
 }
 function initProjects(){if(typeof projModRenderNav==='function'){projModRenderNav();projModLoadTab();}}
@@ -3144,7 +3145,7 @@ function showApp(name){
   });
   collapseRail();
   applyDrawerPermissions();
-  if(name==='attendance'&&!window._attInit){window._attInit=true;initAttendance();}
+  if(name==='attendance'){initAttendance();}
   if(name==='dashboard'){ loadDashboardInsights(); if(!window._coLoaded){window._coLoaded=true;preloadCompanyData();} }
   if(name==='registry'){initRegistry();startSync();}
   else if(name==='employees'){initEmpMgmt();}
@@ -21462,6 +21463,7 @@ async function acSavePermissions(){
       (AC_TAB==='emp' && AC_TARGET===currentUser.id) ||
       (AC_TAB==='role' && String(AC_TARGET||'').trim().toLowerCase()===String(currentUser.role||currentUser.designation||'').trim().toLowerCase())
     );
+    console.log('[perm-debug] save complete. AC_TAB=', AC_TAB, 'AC_TARGET=', AC_TARGET, 'currentUser.id=', currentUser&&currentUser.id, 'currentUser.role=', currentUser&&currentUser.role, 'currentUser.designation=', currentUser&&currentUser.designation, '-> savedAffectsSelf=', savedAffectsSelf);
     if(savedAffectsSelf){
       await loadUserPermissions();
       // Checks whether Attendance is actually the screen visible right
@@ -21522,13 +21524,22 @@ function salScoped(list){
 
 // Returns 'all', 'department', or 'self'
 function getEmpDataScope(){
-  if(!currentUser || currentUser.role==='admin') return 'all';
-  if(!Object.keys(USER_PERMISSIONS).length) return 'all';
+  if(!currentUser || currentUser.role==='admin'){
+    console.log('[perm-debug] getEmpDataScope() -> all (reason: no currentUser, or currentUser.role is literally "admin" — this bypasses the scope setting entirely. currentUser.role =', currentUser&&currentUser.role, ')');
+    return 'all';
+  }
+  if(!Object.keys(USER_PERMISSIONS).length){
+    console.log('[perm-debug] getEmpDataScope() -> all (reason: USER_PERMISSIONS is empty — permissive default, nothing has been configured for anyone yet)');
+    return 'all';
+  }
   var mp = USER_PERMISSIONS['emp-data-scope'];
-  if(!mp) return 'all';
-  if(mp['self']===true) return 'self';
-  if(mp['department']===true) return 'department';
-  return 'all';
+  if(!mp){
+    console.log('[perm-debug] getEmpDataScope() -> all (reason: no emp-data-scope entry in USER_PERMISSIONS at all)', USER_PERMISSIONS);
+    return 'all';
+  }
+  var result = mp['self']===true ? 'self' : (mp['department']===true ? 'department' : 'all');
+  console.log('[perm-debug] getEmpDataScope() ->', result, '(emp-data-scope entry:', mp, ')');
+  return result;
 }
 
 // ════ COMPANY DETAILS ═══════════════════════════════════════════════════
