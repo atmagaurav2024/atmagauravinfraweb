@@ -21332,9 +21332,25 @@ async function acSavePermissions(){
       throw new Error(err);
     }
     toast('\u2713 Permissions saved for '+(AC_TAB==='emp'?'employee':'role')+'!','success');
-    // Reload user permissions if saving for current user
-    if(AC_TAB==='emp' && currentUser && AC_TARGET===currentUser.id){
+    // Reload user permissions if this save affects the currently signed-in
+    // user — either directly (their own employee row) or indirectly
+    // (their role, which is the more common way to set something like
+    // "Self Only" for everyone holding that role at once). Previously
+    // only the direct-employee case was covered, so a role-level change
+    // never took effect until a full page reload re-fetched everything.
+    var savedAffectsSelf = currentUser && (
+      (AC_TAB==='emp' && AC_TARGET===currentUser.id) ||
+      (AC_TAB==='role' && String(AC_TARGET||'').trim().toLowerCase()===String(currentUser.role||currentUser.designation||'').trim().toLowerCase())
+    );
+    if(savedAffectsSelf){
       await loadUserPermissions();
+      // Re-render whichever screen is actually on-screen right now (most
+      // likely Access Control itself, but covers any case where another
+      // screen's data was left loaded underneath) so the change is
+      // reflected immediately instead of needing a hard refresh.
+      if(typeof currentApp!=='undefined' && currentApp && typeof showApp==='function'){
+        showApp(currentApp);
+      }
     }
   }catch(e){toast('Error saving: '+e.message,'error');console.error(e);}
 }
