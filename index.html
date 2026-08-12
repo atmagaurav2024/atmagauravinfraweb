@@ -5426,6 +5426,25 @@ function permissionRowAffectsSelf(row){
   return false;
 }
 
+// Called after USER_PERMISSIONS has just been reloaded and is known to
+// affect the current session. Checks whether the Attendance screen is
+// actually visible directly (attScreen.classList.contains('on')) rather
+// than only trusting the currentApp tracker — e.g. an admin saving a
+// role change from the Access Control screen has currentApp==='access',
+// which would never touch Attendance even though the change affects a
+// screen sitting open in another tab, or one they're about to switch
+// back to. Re-runs initAttendance() (a full re-init, not just a
+// re-render) whenever Attendance is the thing on screen, since the
+// scoped employee list itself needs rebuilding, not just redrawing.
+function refreshVisibleScreensAfterPermissionChange(){
+  var attScreen = document.getElementById('app-attendance');
+  if(attScreen && attScreen.classList.contains('on') && typeof initAttendance==='function'){
+    initAttendance();
+    return;
+  }
+  if(currentApp && typeof showApp==='function') showApp(currentApp);
+}
+
 // Called once after login. Subscribes to the tables this app currently
 // has live-update support for — Access Control and Attendance, the two
 // areas built out so far. Extending to another table/screen just needs
@@ -5441,9 +5460,7 @@ function initRealtimeSync(){
   subscribeRealtime('access_permissions', function(payload){
     var row = (payload.new && Object.keys(payload.new).length) ? payload.new : payload.old;
     if(!permissionRowAffectsSelf(row)) return;
-    loadUserPermissions().then(function(){
-      if(currentApp && typeof showApp==='function') showApp(currentApp);
-    });
+    loadUserPermissions().then(refreshVisibleScreensAfterPermissionChange);
   });
 
   // Geofence radius — take effect on the very next punch, no reload needed.
@@ -21447,12 +21464,13 @@ async function acSavePermissions(){
     );
     if(savedAffectsSelf){
       await loadUserPermissions();
-      // Re-render whichever screen is actually on-screen right now (most
-      // likely Access Control itself, but covers any case where another
-      // screen's data was left loaded underneath) so the change is
-      // reflected immediately instead of needing a hard refresh.
-      if(typeof currentApp!=='undefined' && currentApp && typeof showApp==='function'){
-        showApp(currentApp);
+      // Checks whether Attendance is actually the screen visible right
+      // now and does a full re-init if so (not just Access Control's
+      // own screen, which is what currentApp would be at this exact
+      // moment — the admin is saving from here, but the goal is for
+      // Attendance to reflect it whenever it's next looked at).
+      if(typeof refreshVisibleScreensAfterPermissionChange==='function'){
+        refreshVisibleScreensAfterPermissionChange();
       }
     }
   }catch(e){toast('Error saving: '+e.message,'error');console.error(e);}
