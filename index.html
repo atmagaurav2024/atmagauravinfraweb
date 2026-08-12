@@ -4251,17 +4251,51 @@ function resetSelfieBox(){
   selfieStage='idle'; selfieBlob=null; selfieOk=false;
 }
 
+// Returns {url, deleteToken} or null. deleteToken (when Cloudinary
+// grants one) can delete *only this specific asset*, and only within
+// ~10 minutes of upload — Cloudinary's one safe way to let unsigned,
+// client-side code delete something it just uploaded. Deleting an
+// arbitrary older asset securely requires a signed request using the
+// Cloudinary API secret, which must never be shipped to the browser —
+// so that's simply not something this app can do without a backend.
 async function uploadSelfie(empId){
   if(!selfieBlob) return null;
-  // Cloudinary, not Supabase Storage — reuses the same unsigned upload
-  // preset already configured for employee photos/KYC docs, so this
-  // doesn't depend on a Supabase Storage bucket existing at all.
   try{
-    return await uploadToCloudinary(selfieBlob, 'selfies', null);
+    var filename='selfie_'+Date.now()+'.jpg';
+    var formData=new FormData();
+    formData.append('file', selfieBlob, filename);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    formData.append('folder', 'aipl/selfies');
+    formData.append('return_delete_token', 'true');
+    var res=await fetch('https://api.cloudinary.com/v1_1/'+CLOUDINARY_CLOUD+'/upload',{method:'POST',body:formData});
+    var data=await res.json().catch(function(){return{};});
+    if(!res.ok || !data.secure_url){
+      console.error('Cloudinary selfie upload failed:', data);
+      return null;
+    }
+    return {url:data.secure_url, deleteToken:data.delete_token||null};
   }catch(err){
     console.warn('Selfie upload failed', err);
     return null;
   }
+}
+
+// In-memory only (cleared on page reload) — maps an attendance_punches
+// row id to the Cloudinary delete_token captured at upload time, for
+// the "just took a bad selfie, undo immediately" case. Not persisted:
+// the token itself expires ~10 min after upload regardless, so there's
+// nothing useful left to save once that window has passed.
+var SELFIE_DELETE_TOKENS = {};
+
+async function deleteCloudinarySelfie(token){
+  if(!token) return false;
+  try{
+    var res=await fetch('https://api.cloudinary.com/v1_1/'+CLOUDINARY_CLOUD+'/delete_by_token',{
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:token})
+    });
+    var data=await res.json().catch(function(){return{};});
+    return data.result==='ok';
+  }catch(e){ return false; }
 }
 
 // ── GEOFENCED ATTENDANCE ────────────────────────────────────────────
@@ -4367,12 +4401,13 @@ async function confirmPunch() {
       : '📍 '+Math.round(geo.nearestDistance)+'m from '+geo.nearestProjectName+' — outside the '+geo.radius+'m allowed radius. Sent for approval, not recorded yet.';
     showToast(pendingMsg,'warning');
     try{
-      var selfieUrlPending = await uploadSelfie(currentUser.id);
-      await sbInsert('attendance_punches',{
+      var selfieObjP = await uploadSelfie(currentUser.id);
+      var pendingRes = await sbInsert('attendance_punches',{
         emp_id:currentUser.id, date:today, punch_type:(wasPunchedIn?'out':'in'), punch_time:nowTime.toISOString(),
-        lat:currentLat, lng:currentLng, selfie_url:selfieUrlPending,
+        lat:currentLat, lng:currentLng, selfie_url:selfieObjP?selfieObjP.url:null,
         status:'pending', project_id:geo.nearestProjectId||null, distance_m:(geo.nearestDistance!=null)?Math.round(geo.nearestDistance):null
       });
+      if(selfieObjP && selfieObjP.deleteToken && pendingRes && pendingRes[0]) SELFIE_DELETE_TOKENS[pendingRes[0].id]=selfieObjP.deleteToken;
     }catch(e){ showToast('Could not submit punch for approval: '+e.message,'error'); }
     resetSelfieBox();
     return;
@@ -4395,8 +4430,10 @@ async function confirmPunch() {
     renderPunchLog();
     closePunchModal();
     try{
-      var selfieUrl = await uploadSelfie(currentUser.id);
-      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrl, status:'approved', project_id:matchedProjectId, distance_m:geo.withinRange?Math.round(geo.distance):null});
+      var selfieObj = await uploadSelfie(currentUser.id);
+      var selfieUrl = selfieObj?selfieObj.url:null;
+      var punchInRes = await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'in', punch_time:punchInTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrl, status:'approved', project_id:matchedProjectId, distance_m:geo.withinRange?Math.round(geo.distance):null});
+      if(selfieObj && selfieObj.deleteToken && punchInRes && punchInRes[0]) SELFIE_DELETE_TOKENS[punchInRes[0].id]=selfieObj.deleteToken;
       var existing = ATT_TODAY_MAP[currentUser.id];
       var inTimeStr = punchInTime.toTimeString().slice(0,8);
       if(existing){
@@ -4420,8 +4457,10 @@ async function confirmPunch() {
     renderPunchLog();
     closePunchModal();
     try{
-      var selfieUrlOut = await uploadSelfie(currentUser.id);
-      await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrlOut, status:'approved', project_id:matchedProjectId, distance_m:geo.withinRange?Math.round(geo.distance):null});
+      var selfieObjOut = await uploadSelfie(currentUser.id);
+      var selfieUrlOut = selfieObjOut?selfieObjOut.url:null;
+      var punchOutRes = await sbInsert('attendance_punches',{emp_id:currentUser.id, date:today, punch_type:'out', punch_time:outTime.toISOString(), lat:currentLat, lng:currentLng, selfie_url:selfieUrlOut, status:'approved', project_id:matchedProjectId, distance_m:geo.withinRange?Math.round(geo.distance):null});
+      if(selfieObjOut && selfieObjOut.deleteToken && punchOutRes && punchOutRes[0]) SELFIE_DELETE_TOKENS[punchOutRes[0].id]=selfieObjOut.deleteToken;
       var existing2 = ATT_TODAY_MAP[currentUser.id];
       var outTimeStr = outTime.toTimeString().slice(0,8);
       var hoursWorked = Math.round((diff/60)*100)/100;
@@ -6623,7 +6662,20 @@ async function delPunchEntry(id){
   if(!confirm('Delete this punch record?\n\nThis cannot be undone. If this affects a day\'s status, review it in the Today tab afterwards.')) return;
   try{
     await sbDelete('attendance_punches', id);
-    toast('Punch record deleted','success');
+    // Best-effort: only works if this punch's selfie was uploaded in this
+    // same browser session, within Cloudinary's ~10 minute delete_token
+    // window. Older selfies can't be deleted from client-side code at all —
+    // that needs a signed request with the Cloudinary API secret, which
+    // must never be shipped to the browser, so it stays in Cloudinary
+    // storage (harmless, just not cleaned up automatically).
+    var delToken = SELFIE_DELETE_TOKENS[id];
+    if(delToken){
+      delete SELFIE_DELETE_TOKENS[id];
+      var cleaned = await deleteCloudinarySelfie(delToken);
+      toast(cleaned ? 'Punch record and selfie deleted' : 'Punch record deleted (selfie image could not be removed — token expired)', 'success');
+    } else {
+      toast('Punch record deleted','success');
+    }
     punchLog = punchLog.filter(function(p){ return p.id !== id; });
     if(document.getElementById('punch-log-list')) renderPunchLog();
     if(document.getElementById('logs-tbody') && typeof renderLogsTab==='function') renderLogsTab();
