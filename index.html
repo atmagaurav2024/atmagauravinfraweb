@@ -2462,6 +2462,13 @@ input,select,textarea{font-size:16px !important;}
 
 <div class="toast-wrap" id="toast-wrap"></div>
 
+<!-- Supabase JS SDK — used ONLY for Realtime (websocket) subscriptions.
+     Every existing data read/write in this app goes through the sbFetch/
+     sbInsert/sbUpdate/sbDelete REST helpers below and is unaffected by
+     this; this client exists purely so other users' changes can push
+     updates to an open session without a manual refresh. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+
 <script>
 // Stubs — real implementations in external JS files
 // Registry stubs (overridden by registry.js after load)
@@ -3431,6 +3438,7 @@ async function doLoginInner(ph,pw){
         showApp('dashboard');
         loadPendingApprovals();
         loadUserPermissions();
+        initRealtimeSync();
         toast('Welcome back, '+currentUser.name+'!','success');
       } else {
         // Auth succeeded but no employee record — could be admin
@@ -3439,6 +3447,7 @@ async function doLoginInner(ph,pw){
         showApp('dashboard');
         loadPendingApprovals();
         loadUserPermissions();
+        initRealtimeSync();
         toast('Welcome back!','success');
       }
     } else if(result.error_description||result.msg){
@@ -5374,6 +5383,100 @@ function showToast(msg, type = 'success') {
 // ── SUPABASE CONFIG ──
 const SUPABASE_URL = 'https://aywlauygsqkivdihbaut.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5d2xhdXlnc3FraXZkaWhiYXV0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODYxNjgsImV4cCI6MjA4OTY2MjE2OH0.NHMZTF6yCaZXW8bNw496Hd_t_NAIE__PUU4WsxZc3yw';
+
+// ── REALTIME (cross-session live updates) ───────────────────────────
+// Separate from every sbFetch/sbInsert/sbUpdate/sbDelete call in this
+// file, which all remain plain REST and are unaffected by this. This
+// client exists only to receive push notifications over a websocket
+// when a row changes in one of the tables below, from ANY user's
+// session, so an already-open screen can update itself without the
+// person needing to refresh or navigate away and back.
+var sbClient = null;
+try{
+  if(typeof supabase!=='undefined' && supabase.createClient){
+    sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+}catch(e){ console.warn('Realtime client failed to initialize — live updates disabled, everything else still works normally.', e); }
+
+var REALTIME_CHANNELS={};
+// Subscribes once per table (safe to call multiple times — later calls
+// for a table already being watched are ignored). onChange receives the
+// raw Postgres Changes payload: {eventType:'INSERT'|'UPDATE'|'DELETE', new, old, ...}
+function subscribeRealtime(table, onChange){
+  if(!sbClient || REALTIME_CHANNELS[table]) return;
+  try{
+    var ch = sbClient.channel('rt-'+table)
+      .on('postgres_changes', {event:'*', schema:'public', table:table}, function(payload){
+        try{ onChange(payload); }catch(e){ console.warn('Realtime handler error for '+table, e); }
+      })
+      .subscribe();
+    REALTIME_CHANNELS[table]=ch;
+  }catch(e){ console.warn('Could not subscribe to realtime updates for '+table, e); }
+}
+
+// True if an access_permissions row (from an INSERT/UPDATE/DELETE payload)
+// applies to the currently signed-in user — directly, or via their role.
+// Shared between the local save handler (acSavePerms) and the realtime
+// listener below so both use the exact same matching logic.
+function permissionRowAffectsSelf(row){
+  if(!row || !currentUser) return false;
+  if(row.employee_id && row.employee_id===currentUser.id) return true;
+  var myRole=String(currentUser.role||currentUser.designation||'').trim().toLowerCase();
+  if(row.role && myRole && String(row.role).trim().toLowerCase()===myRole) return true;
+  return false;
+}
+
+// Called once after login. Subscribes to the tables this app currently
+// has live-update support for — Access Control and Attendance, the two
+// areas built out so far. Extending to another table/screen just needs
+// one more subscribeRealtime(...) call with its own refresh logic; the
+// underlying subscribeRealtime()/sbClient plumbing is already general
+// purpose.
+function initRealtimeSync(){
+  if(!currentUser || !sbClient) return;
+
+  // Access Control — a role or individual permission change from any
+  // admin, in any session, applies immediately to everyone signed in
+  // who it affects, not just the admin who saved it.
+  subscribeRealtime('access_permissions', function(payload){
+    var row = (payload.new && Object.keys(payload.new).length) ? payload.new : payload.old;
+    if(!permissionRowAffectsSelf(row)) return;
+    loadUserPermissions().then(function(){
+      if(currentApp && typeof showApp==='function') showApp(currentApp);
+    });
+  });
+
+  // Geofence radius — take effect on the very next punch, no reload needed.
+  subscribeRealtime('attendance_settings', function(payload){
+    if(payload.new && payload.new.id===1 && payload.new.geofence_radius_m!=null){
+      ATT_GEOFENCE_RADIUS = Number(payload.new.geofence_radius_m);
+    }
+  });
+
+  // Punch records — keep the admin-facing Punch Logs table and Pending
+  // Punches queue live as punches come in from any employee, any
+  // device, without the admin needing to switch tabs or refresh. Only
+  // does the work when the Attendance module (and that specific tab)
+  // is actually the thing on screen right now.
+  subscribeRealtime('attendance_punches', function(payload){
+    var screen=document.getElementById('app-attendance');
+    if(!screen || !screen.classList.contains('on')) return;
+    var logsTab=document.getElementById('tab-logs'), pendingTab=document.getElementById('tab-pending');
+    if(logsTab && logsTab.style.display!=='none' && typeof renderLogsTab==='function') renderLogsTab();
+    if(pendingTab && pendingTab.style.display!=='none' && typeof renderPendingPunches==='function') renderPendingPunches();
+    if(typeof updatePendingPunchBadge==='function') updatePendingPunchBadge();
+  });
+
+  // Daily attendance rows (status/punch_in/punch_out edits) — keep the
+  // admin table current when someone else is also viewing/editing the
+  // same day at the same time.
+  subscribeRealtime('attendance', function(payload){
+    var screen=document.getElementById('app-attendance');
+    if(!screen || !screen.classList.contains('on')) return;
+    var dailyTab=document.getElementById('tab-daily');
+    if(dailyTab && dailyTab.style.display!=='none' && typeof attReloadDailyDate==='function') attReloadDailyDate();
+  });
+}
 
 async function sbFetch(table, options={}){
   var url=SUPABASE_URL+'/rest/v1/'+table;
