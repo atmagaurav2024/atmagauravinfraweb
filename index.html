@@ -3965,7 +3965,7 @@ async function attLoadAll(){
     var initials=(e.first_name?e.first_name[0]:'')+(e.last_name?e.last_name[0]:'');
     var rec=ATT_TODAY_MAP[e.id];
     return {
-      id:e.id, name:name, desig:e.designation||e.department||'',
+      id:e.id, name:name, desig:e.designation||e.department||'', dept:e.department||'',
       color:COLORS[i%COLORS.length], initials:initials.toUpperCase()||'?',
       status: rec?rec.status:'', in: rec&&rec.punch_in?rec.punch_in.slice(0,5):'', out: rec&&rec.punch_out?rec.punch_out.slice(0,5):'',
       ot: rec&&rec.overtime_hours?rec.overtime_hours+'h':'0h', gps: rec?rec.gps_mode:'', recId: rec?rec.id:null
@@ -4004,10 +4004,11 @@ function attDisplayDate(iso){
   return parseInt(p[2],10)+' '+MONTHS[parseInt(p[1],10)-1];
 }
 function attExportCSV(){
-  if(!employees.length){ showToast('No attendance data to export','warning'); return; }
+  var scoped = (typeof empScoped==='function') ? empScoped(employees) : employees;
+  if(!scoped.length){ showToast('No attendance data to export','warning'); return; }
   var header=['#','Employee','Designation','Status','In Time','Out Time','OT','GPS Mode','Remarks'];
   var lines=[['Attendance — '+attToday()],[''],header];
-  employees.forEach(function(e,i){
+  scoped.forEach(function(e,i){
     lines.push([i+1,e.name,e.desig,e.status||'Not marked',e.in||'',e.out||'',e.ot||'',e.gps||'',e.remarks||'']);
   });
   var csv=lines.map(function(row){
@@ -4487,7 +4488,9 @@ function attMonthTagHTML(empId){
 
 function renderAttTable() {
   const tbody = document.getElementById('att-tbody');
-  tbody.innerHTML = employees.map((e, i) => {
+  const scopedEmployees = (typeof empScoped==='function') ? empScoped(employees) : employees;
+  tbody.innerHTML = scopedEmployees.map((e, di) => {
+    const i = employees.indexOf(e); // true index into the global `employees` array — setStatus/attUpdateTime/attUpdateRemarks all index into that, not the scoped subset
     const statusBadge = {
       present: `<span class="att-badge b-present">✅ Present</span>`,
       absent:  `<span class="att-badge b-absent">❌ Absent</span>`,
@@ -4512,8 +4515,8 @@ function renderAttTable() {
     }
 
     return `
-      <tr class="anim" style="animation-delay:${i*0.04}s">
-        <td style="color:var(--text3);font-size:12px;font-weight:600;">${i+1}</td>
+      <tr class="anim" style="animation-delay:${di*0.04}s">
+        <td style="color:var(--text3);font-size:12px;font-weight:600;">${di+1}</td>
         <td>
           <div class="emp-cell">
             <div class="emp-avatar" style="background:${e.color};">${e.initials}</div>
@@ -4638,11 +4641,12 @@ function lockStatusBtnsIfNotAdmin(){
 }
 
 function updateSummary() {
-  const p = employees.filter(e => e.status === 'present').length;
-  const a = employees.filter(e => e.status === 'absent').length;
+  const scoped = (typeof empScoped==='function') ? empScoped(employees) : employees;
+  const p = scoped.filter(e => e.status === 'present').length;
+  const a = scoped.filter(e => e.status === 'absent').length;
   document.getElementById('card-present').textContent = p;
   document.getElementById('card-absent').textContent = a;
-  document.getElementById('stat-present').textContent = `${p} / ${employees.length}`;
+  document.getElementById('stat-present').textContent = `${p} / ${scoped.length}`;
   document.getElementById('stat-absent').textContent = a;
 }
 
@@ -4832,7 +4836,8 @@ function populateAttEmpSel(){
   var isManager = attIsManager();
   var opts = '<option value="'+currentUser.id+'">My Attendance</option>';
   if(isManager){
-    opts += employees
+    var scopedForSel = (typeof empScoped==='function') ? empScoped(employees) : employees;
+    opts += scopedForSel
       .filter(function(e){ return e.id!==currentUser.id; })
       .map(function(e){ return '<option value="'+e.id+'">'+e.name+'</option>'; })
       .join('');
