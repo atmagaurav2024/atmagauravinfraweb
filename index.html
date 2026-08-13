@@ -19395,22 +19395,24 @@ function lnOpenParty(editId){
     '<button class="btn btn-navy" onclick="lnSaveParty('+(ex?'\''+ex.id+'\'':'')+')">'+(ex?'Update Party':'Save Party')+'</button>';
   openSheet('ov-ln','sh-ln');
 }
-async function lnSaveParty(editId){
+async function lnSaveParty(editId, onSaved){
   if(!lnCanEdit()){toast('No permission','warning');return;}
   var name=gv('lp-name'); if(!name){toast('Enter a name','warning');return;}
   var fields={name:name,party_type:gv('lp-type'),contact:gv('lp-contact')||null,
     address:gv('lp-address')||null,pan:gv('lp-pan')||null,remarks:gv('lp-remarks')||null};
   try{
+    var saved=null;
     if(editId){
       await sbUpdate('loan_parties', editId, fields);
       var i=LN_PARTIES.findIndex(function(p){return p.id===editId;});
-      if(i>-1) LN_PARTIES[i]=Object.assign({},LN_PARTIES[i],fields);
+      if(i>-1){ LN_PARTIES[i]=Object.assign({},LN_PARTIES[i],fields); saved=LN_PARTIES[i]; }
     } else {
       var res=await sbInsert('loan_parties',fields);
-      if(res&&res[0]) LN_PARTIES.push(res[0]);
+      if(res&&res[0]){ LN_PARTIES.push(res[0]); saved=res[0]; }
     }
     LN_PARTIES.sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
     closeSheet('ov-ln','sh-ln'); lnRender(); toast(editId?'Party updated':'Party saved','success');
+    if(saved && typeof onSaved==='function') onSaved(saved);
   }catch(e){toast('Error: '+e.message,'error');}
 }
 async function lnDelParty(id){
@@ -20555,15 +20557,17 @@ function tpmSetLoanMode(mode, ex){
 // so lnSaveLoan('taken', null, callback) below can save it exactly as if
 // it had been entered in the Loans module itself — same table, same
 // accounting auto-post, no separate insert logic to keep in sync.
-function tpmRegisterLoanFormHtml(){
+var TPM_LOAN_DRAFT=null; // captures the loan mini-form's in-progress values while the "Add New Lender" step is shown, so they aren't lost
+
+function tpmRegisterLoanFormHtml(preselectPartyId){
   var elig=LN_PARTIES.filter(function(p){return p.party_type==='both'||p.party_type==='creditor';});
-  if(!elig.length){
-    return '<div style="font-size:11px;color:#C62828;">No lender on file yet. Add one in Loans &gt; Party-wise first, then come back and use "Register New Loan", or "Link Existing Loan" once it exists.</div>';
-  }
   return '<div style="background:#FAFAF9;border:1px solid #E7E5E4;border-radius:8px;padding:10px;">'+
-    '<label class="flbl">Lender (Creditor) *</label><select class="fsel" id="ll-party">'+
-      elig.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('')+
+    '<label class="flbl">Lender (Creditor) *</label><select class="fsel" id="ll-party" onchange="tpmPartyDropdownChange(this)">'+
+      (elig.length?'':'<option value="">Select lender...</option>')+
+      elig.map(function(p){return '<option value="'+p.id+'"'+(preselectPartyId===p.id?' selected':'')+'>'+p.name+'</option>';}).join('')+
+      '<option value="__new__">&#43; Add New Lender</option>'+
     '</select>'+
+    (!elig.length?'<div style="font-size:10px;color:#E65100;margin:-6px 0 8px;">No lender on file yet \u2014 pick "+ Add New Lender" above to create one now.</div>':'')+
     '<label class="flbl">Principal Amount (\u20b9) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00">'+
     '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free">'+
@@ -20580,6 +20584,68 @@ function tpmRegisterLoanFormHtml(){
     '<button type="button" onclick="tpmRegisterLoanSubmit()" class="btn btn-navy" style="width:100%;margin-top:6px;">Register This Loan</button>'+
     '<div style="font-size:10px;color:var(--text3);margin-top:6px;">This creates a real loan \u2014 it will also appear in the Loans module, posted to Accounts exactly as if registered there directly.</div>'+
   '</div>';
+}
+
+// Captures whatever's already filled into the loan mini-form before
+// switching it out for the lender sub-form, so picking "+ Add New
+// Lender" (or cancelling out of it) doesn't lose the principal/date/
+// rate/etc the person already typed.
+function tpmCaptureLoanDraft(){
+  return {principal:gv('ll-principal'), date:gv('ll-date'), rate:gv('ll-rate'), inttype:gv('ll-inttype'),
+    tenure:gv('ll-tenure'), purpose:gv('ll-purpose'), ref:gv('ll-ref'), mode:gv('ll-mode'), remarks:gv('ll-remarks')};
+}
+function tpmApplyLoanDraft(draft){
+  if(!draft) return;
+  var map={'ll-principal':'principal','ll-date':'date','ll-rate':'rate','ll-inttype':'inttype',
+    'll-tenure':'tenure','ll-purpose':'purpose','ll-ref':'ref','ll-mode':'mode','ll-remarks':'remarks'};
+  Object.keys(map).forEach(function(id){
+    var el=document.getElementById(id);
+    if(el && draft[map[id]]){ el.value=draft[map[id]]; }
+  });
+  if(gv('ll-mode')==='EmpBank' && typeof lnToggleModeEmp==='function') lnToggleModeEmp('ll-mode');
+}
+
+function tpmPartyDropdownChange(sel){
+  if(sel.value!=='__new__') return;
+  TPM_LOAN_DRAFT=tpmCaptureLoanDraft();
+  var body=document.getElementById('tpm-loanmode-body');
+  if(body) body.innerHTML=tpmNewLenderFormHtml();
+}
+
+function tpmNewLenderFormHtml(){
+  return '<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;padding:10px;">'+
+    '<div style="font-weight:800;font-size:12px;margin-bottom:6px;">Add New Lender</div>'+
+    '<label class="flbl">Name *</label><input class="finp" id="lp-name" placeholder="Person or company name">'+
+    '<label class="flbl">Type *</label><select class="fsel" id="lp-type">'+
+      '<option value="creditor" selected>Creditor (I borrow from them)</option>'+
+      '<option value="debtor">Debtor (I lend to them)</option>'+
+      '<option value="both">Both</option>'+
+    '</select>'+
+    '<label class="flbl">Contact</label><input class="finp" id="lp-contact" placeholder="Phone / email">'+
+    '<label class="flbl">Address</label><input class="finp" id="lp-address">'+
+    '<label class="flbl">PAN</label><input class="finp" id="lp-pan" placeholder="ABCDE1234F">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="lp-remarks">'+
+    '<div style="display:flex;gap:8px;margin-top:8px;">'+
+      '<button type="button" onclick="tpmSaveNewLender()" class="btn btn-navy" style="flex:1;">Save Lender</button>'+
+      '<button type="button" onclick="tpmCancelNewLender()" class="btn btn-outline" style="flex:1;">Cancel</button>'+
+    '</div>'+
+  '</div>';
+}
+
+async function tpmSaveNewLender(){
+  await lnSaveParty(null, function(saved){
+    var draft=TPM_LOAN_DRAFT; TPM_LOAN_DRAFT=null;
+    var body=document.getElementById('tpm-loanmode-body');
+    if(body) body.innerHTML=tpmRegisterLoanFormHtml(saved.id);
+    tpmApplyLoanDraft(draft);
+    toast('Lender added and selected','success');
+  });
+}
+function tpmCancelNewLender(){
+  var draft=TPM_LOAN_DRAFT; TPM_LOAN_DRAFT=null;
+  var body=document.getElementById('tpm-loanmode-body');
+  if(body) body.innerHTML=tpmRegisterLoanFormHtml();
+  tpmApplyLoanDraft(draft);
 }
 
 function tpmNewLoanConfirmHtml(){
