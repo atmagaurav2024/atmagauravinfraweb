@@ -17899,9 +17899,37 @@ function lnPartyName(id){ var p=LN_PARTIES.find(function(x){return x.id===id;});
 // repayment in date order, accruing interest on the balance that actually
 // stood during each period, then up to today. Uses a 365-day year.
 var LN_INT_TYPES={simple:'Simple Interest', yearly:'Compound (Yearly)', halfyearly:'Compound (Half Yearly)',
-  quarterly:'Compound (Quarterly)', monthly:'Compound (Monthly)'};
-// Compounding periods per year; simple interest has none.
+  quarterly:'Compound (Quarterly)', monthly:'Compound (Monthly)', emi:'EMI (Equated Monthly Installment)'};
+// Compounding periods per year; simple interest and EMI have none — an
+// EMI loan's interest still genuinely accrues day-wise on the reducing
+// balance exactly like simple interest (lnAccruedInterest below falls
+// through to that automatically, since 'emi' has no entry here). EMI is
+// a repayment *schedule*, not a different interest accrual mathematics.
 var LN_INT_FREQ={yearly:1, halfyearly:2, quarterly:4, monthly:12};
+
+// Standard EMI formula: P x r x (1+r)^n / ((1+r)^n - 1), r = monthly rate.
+// Falls back to a plain even split over the tenure when rate is 0.
+function lnEmiAmount(principal, annualRatePct, tenureMonths){
+  principal=parseFloat(principal)||0; annualRatePct=parseFloat(annualRatePct)||0; tenureMonths=parseInt(tenureMonths,10)||0;
+  if(principal<=0 || tenureMonths<=0) return 0;
+  var r=annualRatePct/12/100;
+  if(r<=0) return principal/tenureMonths;
+  var factor=Math.pow(1+r, tenureMonths);
+  return principal*r*factor/(factor-1);
+}
+// Shared by both places the loan form appears (lnOpenLoan and TPM's
+// Register New Loan window) — both use the same ll-* field ids, so one
+// function updates whichever is currently on screen.
+function lnUpdateEmiPreview(){
+  var el=document.getElementById('ll-emi-info');
+  if(!el) return;
+  if(gv('ll-inttype')!=='emi'){ el.style.display='none'; return; }
+  el.style.display='';
+  var tenure=gv('ll-tenure');
+  if(!tenure){ el.innerHTML='Enter Tenure (months) to estimate the EMI.'; return; }
+  var emi=lnEmiAmount(gv('ll-principal'), gv('ll-rate'), tenure);
+  el.innerHTML=emi>0 ? ('Estimated EMI: <b>'+fmtINR(emi)+'</b> / month for '+tenure+' months') : 'Enter Principal and Tenure to estimate the EMI.';
+}
 
 // Interest accrued to date on the reducing outstanding balance.
 // Simple: balance x rate x days/365 for each period the balance stood.
@@ -18938,6 +18966,8 @@ function lnRender(){
                   (isTaken?'<button onclick="lnSwitchTab(\'allocation\');lnAllocSelectLoan(\''+l.id+'\');" style="background:none;border:1px solid #B2DFDB;color:#00695C;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128202; Allocate</button>':'')+
                   (isTaken && lnCanEdit() && LN_ALLOCATIONS.some(function(a){return a.loan_id===l.id && a.status==='ACTIVE';})?
                     '<button onclick="lnOpenSettle(\''+l.id+'\')" style="background:none;border:1px solid #C5CAE9;color:#283593;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128181; Settle</button>':'')+
+                  ((l.interest_type||'')==='emi' && lnCanEdit()?
+                    '<button onclick="lnOpenEmiPayment(\''+l.id+'\')" style="background:none;border:1px solid #FFCC80;color:#E65100;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128197; Create EMI Payment</button>':'')+
                   (lnCanEdit()?'<button onclick="lnOpenLoan(\''+l.direction+'\',\''+l.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
                   (lnCanDelete()?'<button onclick="lnDelLoan(\''+l.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
                 '</div>'+
@@ -19452,15 +19482,16 @@ function lnOpenLoan(dir, editId){
       elig.map(function(p){return '<option value="'+p.id+'"'+((ex&&ex.party_id===p.id)?' selected':'')+'>'+p.name+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Principal Amount (&#8377;) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00" value="'+(ex?(parseFloat(ex.principal)||''):'')+'">'+
     '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+((ex&&ex.start_date)||new Date().toISOString().slice(0,10))+'">'+
-    '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free" value="'+(ex?(parseFloat(ex.interest_rate)||''):'')+'">'+
-    '<label class="flbl">Interest Type</label><select class="fsel" id="ll-inttype">'+
+    '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free" value="'+(ex?(parseFloat(ex.interest_rate)||''):'')+'" oninput="lnUpdateEmiPreview()">'+
+    '<label class="flbl">Interest Type</label><select class="fsel" id="ll-inttype" onchange="lnUpdateEmiPreview()">'+
       ['simple|Simple Interest','yearly|Compound \u2014 Yearly','halfyearly|Compound \u2014 Half Yearly',
-       'quarterly|Compound \u2014 Quarterly','monthly|Compound \u2014 Monthly'].map(function(o){
+       'quarterly|Compound \u2014 Quarterly','monthly|Compound \u2014 Monthly','emi|EMI (Equated Monthly Installment)'].map(function(o){
         var p=o.split('|');
         return '<option value="'+p[0]+'"'+((ex&&(ex.interest_type||'simple')===p[0])?' selected':'')+'>'+p[1]+'</option>';
       }).join('')+
     '</select>'+
-    '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional" value="'+((ex&&ex.tenure_months)||'')+'">'+
+    '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional" value="'+((ex&&ex.tenure_months)||'')+'" oninput="lnUpdateEmiPreview()">'+
+    '<div id="ll-emi-info" style="display:none;font-size:10.5px;color:#00695C;font-weight:700;background:#E0F2F1;border-radius:6px;padding:6px 8px;margin:-6px 0 10px;"></div>'+
     '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Working capital" value="'+((ex&&ex.purpose)||'').replace(/"/g,'&quot;')+'">'+
     '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref" value="'+((ex&&ex.reference)||'').replace(/"/g,'&quot;')+'">'+
     '<label class="flbl">Received / Paid Via</label>'+lnModeOptionsHtml('ll-mode')+
@@ -19471,6 +19502,7 @@ function lnOpenLoan(dir, editId){
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="lnSaveLoan(\''+dir+'\''+(ex?',\''+ex.id+'\'':'')+')">'+(ex?'Update Loan':'Save Loan')+'</button>';
   openSheet('ov-ln','sh-ln');
+  lnUpdateEmiPreview();
 }
 async function lnSaveLoan(dir, editId, onSaved){
   if(!lnCanEdit()){toast('No permission','warning');return;}
@@ -19952,6 +19984,107 @@ async function lnSaveTxn(loanId,type){
     }
     closeSheet('ov-ln','sh-ln'); lnRender(); toast('Saved','success');
   }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ── EMI PAYMENT ──────────────────────────────────────────────────────
+// Records one EMI installment as two loan_transactions (principal +
+// interest — same split this module already tracks separately
+// elsewhere), each posted to Accounts with the same legs lnSaveTxn
+// uses for a plain repayment/interest entry. Kept as its own function
+// since an EMI needs both components recorded together as one action,
+// not two separate visits to the single-type form above.
+function lnOpenEmiPayment(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  var st=lnLoanStats(loanId);
+  var emi=lnEmiAmount(loan.principal, loan.interest_rate, loan.tenure_months);
+  var monthlyRate=(parseFloat(loan.interest_rate)||0)/12/100;
+  var interestPortion=Math.min(st.outstanding*monthlyRate, emi);
+  var principalPortion=Math.max(0, Math.min(emi-interestPortion, st.outstanding));
+  document.getElementById('ln-sheet-title').textContent='Create EMI Payment';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="background:#FFF3E0;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;">'+
+      '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b>'+
+      '<br>Tenure: '+(loan.tenure_months||'\u2014')+' months \u00b7 EMI: <b>'+fmtINR(emi)+'</b>'+
+      (!loan.tenure_months?'<div style="color:#C62828;font-weight:700;margin-top:2px;">Tenure (months) isn\'t set on this loan \u2014 edit the loan to set it so the EMI can be calculated.</div>':'')+
+    '</div>'+
+    '<label class="flbl">EMI Amount (\u20b9) *</label><input class="finp" id="le-emi" type="number" step="0.01" value="'+(emi>0?emi.toFixed(2):'')+'" oninput="lnEmiSplitRecalc()">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+      '<div><label class="flbl">Principal Portion (\u20b9)</label><input class="finp" id="le-principal" type="number" step="0.01" value="'+(principalPortion>0?principalPortion.toFixed(2):'')+'" oninput="lnEmiCheckSplit()"></div>'+
+      '<div><label class="flbl">Interest Portion (\u20b9)</label><input class="finp" id="le-interest" type="number" step="0.01" value="'+(interestPortion>0?interestPortion.toFixed(2):'')+'" oninput="lnEmiCheckSplit()"></div>'+
+    '</div>'+
+    '<div id="le-split-check" style="font-size:10.5px;font-weight:700;margin:4px 0 8px;"></div>'+
+    '<label class="flbl">Date *</label><input class="finp" id="le-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Mode</label>'+lnModeOptionsHtml('le-mode')+
+    '<label class="flbl">Reference</label><input class="finp" id="le-ref">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="le-remarks">'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:6px;">Records as two transactions \u2014 principal reduces the outstanding balance, interest is tracked against what\'s accrued \u2014 posted to Accounts the same as recording them individually.</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="lnSaveEmiPayment(\''+loanId+'\')">Save EMI Payment</button>';
+  openSheet('ov-ln','sh-ln');
+  lnEmiCheckSplit();
+}
+function lnEmiSplitRecalc(){
+  // Editing the EMI amount itself keeps the interest portion as
+  // computed and lets principal absorb the difference.
+  var emi=parseFloat(gv('le-emi'))||0;
+  var interest=parseFloat(gv('le-interest'))||0;
+  var pEl=document.getElementById('le-principal');
+  if(pEl) pEl.value=Math.max(0, emi-interest).toFixed(2);
+  lnEmiCheckSplit();
+}
+function lnEmiCheckSplit(){
+  var emi=parseFloat(gv('le-emi'))||0;
+  var p=parseFloat(gv('le-principal'))||0, i=parseFloat(gv('le-interest'))||0;
+  var el=document.getElementById('le-split-check'); if(!el) return;
+  var ok=Math.abs((p+i)-emi)<0.02;
+  el.style.color=ok?'#2E7D32':'#C62828';
+  el.textContent=ok?'\u2713 Principal + Interest = EMI amount':'\u26a0 Principal + Interest ('+fmtINR(p+i)+') must equal the EMI amount ('+fmtINR(emi)+')';
+}
+async function lnSaveEmiPayment(loanId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  var isTaken=(loan.direction==='taken');
+  var emi=parseFloat(gv('le-emi'))||0;
+  var principal=parseFloat(gv('le-principal'))||0, interest=parseFloat(gv('le-interest'))||0;
+  if(emi<=0){ toast('Enter a valid EMI amount','warning'); return; }
+  if(Math.abs((principal+interest)-emi)>0.02){ toast('Principal + Interest must equal the EMI amount','warning'); return; }
+  var date=gv('le-date')||new Date().toISOString().slice(0,10);
+  var mode=gv('le-mode')||'Bank';
+  var modeEmp=gv('le-mode-emp')||null;
+  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  var ref=gv('le-ref')||null, remarks=gv('le-remarks')||null;
+  try{
+    var cashCode=lnCashCode(mode);
+    var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+
+    if(principal>0.005){
+      var resP=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'repayment',amount:principal,
+        date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+'EMI principal'});
+      var savedP=(resP&&resP[0])?resP[0]:null;
+      if(savedP && typeof accAutoPost==='function'){
+        LN_TXNS.unshift(savedP);
+        var oP=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'EMI (principal) paid to '+pn}
+                      :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'EMI (principal) recovered from '+pn};
+        accAutoPost({type:oP.type,date:date,partyName:pn,debitCode:oP.debitCode,creditCode:oP.creditCode,
+          amount:principal,narration:oP.narration,sourceType:'loan_txn',sourceId:savedP.id});
+      }
+    }
+    if(interest>0.005){
+      var resI=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'interest',amount:interest,
+        date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+'EMI interest'});
+      var savedI=(resI&&resI[0])?resI[0]:null;
+      if(savedI && typeof accAutoPost==='function'){
+        LN_TXNS.unshift(savedI);
+        var oI=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'EMI (interest) paid to '+pn}
+                      :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'EMI (interest) received from '+pn};
+        accAutoPost({type:oI.type,date:date,partyName:pn,debitCode:oI.debitCode,creditCode:oI.creditCode,
+          amount:interest,narration:oI.narration,sourceType:'loan_txn',sourceId:savedI.id});
+      }
+    }
+    closeSheet('ov-ln','sh-ln'); lnRender();
+    toast('EMI payment of '+fmtINR(emi)+' recorded ('+fmtINR(principal)+' principal + '+fmtINR(interest)+' interest)','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 // Payment vouchers are consolidated per receipt, not per transaction, so
 // they are found by the receipt number in their narration rather than by
@@ -20597,18 +20730,20 @@ function tpmRenderLoanWindow(preselectPartyId){
     (!elig.length?'<div style="font-size:10px;color:#E65100;margin:-6px 0 8px;">No lender on file yet \u2014 pick "+ Add New Lender" above to create one now.</div>':'')+
     '<label class="flbl">Principal Amount (\u20b9) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00">'+
     '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
-    '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free">'+
-    '<label class="flbl">Interest Type</label><select class="fsel" id="ll-inttype">'+
+    '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free" oninput="lnUpdateEmiPreview()">'+
+    '<label class="flbl">Interest Type</label><select class="fsel" id="ll-inttype" onchange="lnUpdateEmiPreview()">'+
       '<option value="simple">Simple Interest</option><option value="yearly">Compound \u2014 Yearly</option>'+
       '<option value="halfyearly">Compound \u2014 Half Yearly</option><option value="quarterly">Compound \u2014 Quarterly</option>'+
-      '<option value="monthly">Compound \u2014 Monthly</option>'+
+      '<option value="monthly">Compound \u2014 Monthly</option><option value="emi">EMI (Equated Monthly Installment)</option>'+
     '</select>'+
-    '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional">'+
+    '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional" oninput="lnUpdateEmiPreview()">'+
+    '<div id="ll-emi-info" style="display:none;font-size:10.5px;color:#00695C;font-weight:700;background:#E0F2F1;border-radius:6px;padding:6px 8px;margin:-6px 0 10px;"></div>'+
     '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Machinery purchase">'+
     '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref">'+
     '<label class="flbl">Received Via</label>'+lnModeOptionsHtml('ll-mode')+
     '<label class="flbl">Remarks</label><input class="finp" id="ll-remarks">'+
     '<div style="font-size:10px;color:var(--text3);margin-top:6px;">This creates a real loan \u2014 it will also appear in the Loans module, posted to Accounts exactly as if registered there directly.</div>';
+  lnUpdateEmiPreview();
   document.getElementById('tpmloan-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-tpmloan\',\'sh-tpmloan\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="tpmRegisterLoanSubmit()">Register This Loan</button>';
