@@ -4126,15 +4126,14 @@ function execGenerateSalesBillInvoice(billId,mode,civilHsn,civilDesc){
 function salesSubTab(tab){ SALES_SUBTAB=tab; execRenderSales(); }
 
 // ── Other Expenses tab: wraps Petty Expenses + new expense categories ────
-var OTHEREXP_SUBTAB='pettyexp'; // pettyexp | interest | tax | depreciation | amortization
+var OTHEREXP_SUBTAB='pettyexp'; // pettyexp | interest | tax | depreciation
 function otherExpSubTab(tab){ OTHEREXP_SUBTAB=tab; execRenderOtherExpenses(); }
 
 var OTHEREXP_CATS=[
   {id:'pettyexp',      label:'Petty Expenses',     icon:'🧾'},
   {id:'interest',      label:'Interest Expenses',  icon:'💳'},
   {id:'tax',           label:'Taxes',              icon:'🧮'},
-  {id:'depreciation',  label:'Depreciation',       icon:'📉'},
-  {id:'amortization',  label:'Amortization',       icon:'📄'}
+  {id:'depreciation',  label:'Depreciation',       icon:'📉'}
 ];
 
 function execRenderOtherExpenses(){
@@ -4229,8 +4228,8 @@ async function execRenderPettyExpenses(containerId){
   }
 }
 
-// ── Interest / Taxes / Depreciation / Amortization sub-tabs ──────────────
-// All four share the same simple model: entries in `other_expenses`,
+// ── Interest / Taxes / Depreciation sub-tabs ──────────────────────────────
+// All three share the same simple model: entries in `other_expenses`,
 // scoped to this project via project_id and distinguished by `type`.
 async function execRenderOtherExpCategory(type,label,icon,containerId){
   var el=document.getElementById(containerId||'exec-content');if(!el)return;
@@ -4305,7 +4304,7 @@ async function execSaveOtherExpense(type,projId){
     toast('Saved','success');
     execRenderOtherExpenses();
 
-    // Auto-post to Accounts: Dr [Interest/Tax/Depreciation/Amortization], Cr Bank
+    // Auto-post to Accounts: Dr [Interest/Tax/Depreciation], Cr Bank
     if(res&&res[0]&&typeof accAutoPost==='function'&&typeof ACC_OTHEREXP_CODES!=='undefined'){
       accAutoPost({type:'Payment', date:date||new Date().toISOString().slice(0,10), partyName:desc,
         debitCode:ACC_OTHEREXP_CODES[type]||'4201', creditCode:'1002', amount:amount,
