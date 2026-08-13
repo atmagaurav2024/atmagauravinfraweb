@@ -17567,7 +17567,7 @@ async function pcDeleteEntry(id,type){
 // LOANS — money borrowed from lenders (creditors) and lent to borrowers
 // (debtors), with party records, repayment tracking and GL posting.
 // ════════════════════════════════════════════════════════════════════════
-var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken', LN_ALLOCATIONS=[], LN_PROJECTS_LITE=[];
+var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken', LN_ALLOCATIONS=[], LN_PROJECTS_LITE=[], LN_REPAYMENTS=[];
 var LN_TAB_DEFS=[
   {id:'taken',   label:'\u2b07 Loans Taken'},
   {id:'given',   label:'\u2b06 Loans Given'},
@@ -17756,10 +17756,11 @@ async function initLoans(){
       sbFetch('loan_transactions',{select:'*',order:'date.desc'}).catch(function(){return [];}),
       sbFetch('employees',{select:'id,emp_id,first_name,last_name,employee_code,status',filter:'status=eq.active'}).catch(function(){return [];}),
       sbFetch('loan_allocations',{select:'*',filter:'status=eq.ACTIVE'}).catch(function(){return [];}),
-      sbFetch('projects',{select:'id,name,code'}).catch(function(){return [];})
+      sbFetch('projects',{select:'id,name,code'}).catch(function(){return [];}),
+      sbFetch('loan_repayments',{select:'*',filter:'status=eq.ACTIVE'}).catch(function(){return [];})
     ]);
     LN_PARTIES=r[0]||[]; LN_LOANS=r[1]||[]; LN_TXNS=r[2]||[];
-    LN_ALLOCATIONS=r[4]||[]; LN_PROJECTS_LITE=r[5]||[];
+    LN_ALLOCATIONS=r[4]||[]; LN_PROJECTS_LITE=r[5]||[]; LN_REPAYMENTS=r[6]||[];
     lnAutoBookMonthly();   // silent catch-up for any completed month not yet booked
     LN_EMPS=(r[3]||[]).map(function(e){return {id:e.id,code:e.emp_id||e.employee_code,name:((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim()||e.employee_code||'Employee'};})
       .sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
@@ -18115,6 +18116,252 @@ async function lnAllocDelete(allocId){
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
+// ── PHASE 2 — REPAYMENT SETTLEMENT ACROSS PROJECTS ──────────────────
+// When a loan is allocated across multiple projects/overheads and one
+// project's cash repays it, that repayment needs splitting across
+// every project's actual outstanding share. Whatever a non-funding
+// project's share covers becomes an inter-project advance — that
+// project now owes the funding project back, with its own interest
+// from here on.
+
+// Current total allocated to one project/overhead — summed across all
+// its ACTIVE allocation rows (a project can have more than one, e.g.
+// a later top-up added alongside an earlier one rather than editing it).
+function lnProjectAllocatedAmount(loanId, projectId, isOverhead){
+  return LN_ALLOCATIONS.filter(function(a){
+    return a.loan_id===loanId && a.status==='ACTIVE' &&
+      (isOverhead ? a.type==='OVERHEAD' : (a.type==='PROJECT' && a.project_id===projectId));
+  }).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+}
+function lnProjectAccruedInterest(loanId, projectId, isOverhead, loan){
+  return LN_ALLOCATIONS.filter(function(a){
+    return a.loan_id===loanId && a.status==='ACTIVE' &&
+      (isOverhead ? a.type==='OVERHEAD' : (a.type==='PROJECT' && a.project_id===projectId));
+  }).reduce(function(s,a){return s+lnAllocAccruedInterest(a, loan);},0);
+}
+// Sums everything already applied to this project across every past
+// settlement recorded for this loan (loan_repayments.split).
+function lnProjectPriorPayments(loanId, projectId, isOverhead){
+  var prin=0, int=0;
+  LN_REPAYMENTS.filter(function(r){return r.loan_id===loanId && r.status==='ACTIVE';}).forEach(function(r){
+    var split=[]; try{ split=typeof r.split==='string'?JSON.parse(r.split):(r.split||[]); }catch(e){}
+    (split||[]).forEach(function(s){
+      var match=isOverhead ? s.is_overhead : (!s.is_overhead && s.project_id===projectId);
+      if(match){ prin+=parseFloat(s.principal)||0; int+=parseFloat(s.interest)||0; }
+    });
+  });
+  return {principal:prin, interest:int};
+}
+function lnProjectOutstanding(loanId, projectId, isOverhead, loan){
+  var allocated=lnProjectAllocatedAmount(loanId, projectId, isOverhead);
+  var accrued=lnProjectAccruedInterest(loanId, projectId, isOverhead, loan);
+  var prior=lnProjectPriorPayments(loanId, projectId, isOverhead);
+  return {principal:Math.max(0, allocated-prior.principal), interest:Math.max(0, accrued-prior.interest)};
+}
+
+// Default suggested split: the funding project's own outstanding share
+// is covered first, then whatever's left is spread pro-rata across
+// every other project's outstanding — capped so no project is ever
+// suggested more than it actually owes. This is only a starting point;
+// the person recording the repayment can edit every figure before
+// saving, and the total must match exactly what was actually paid.
+function lnComputeSettlementParties(loanId, fundingProjectId, loan){
+  var seen={}, parties=[];
+  LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status==='ACTIVE';}).forEach(function(a){
+    var key=a.type==='OVERHEAD'?'OVERHEAD':('P:'+a.project_id);
+    if(seen[key]) return; seen[key]=true;
+    var isOverhead=a.type==='OVERHEAD';
+    var out=lnProjectOutstanding(loanId, a.project_id, isOverhead, loan);
+    parties.push({key:key, isOverhead:isOverhead, projectId:isOverhead?null:a.project_id,
+      label:isOverhead?'Company Overheads':lnProjectName(a.project_id),
+      outPrincipal:out.principal, outInterest:out.interest});
+  });
+  return parties;
+}
+function lnSuggestSplit(parties, fundingProjectId, totalPrincipal, totalInterest){
+  function distribute(amountKey, total){
+    var result={}; parties.forEach(function(p){result[p.key]=0;});
+    var remaining=total;
+    if(fundingProjectId){
+      var fk='P:'+fundingProjectId;
+      var fp=parties.find(function(p){return p.key===fk;});
+      if(fp){ var applied=Math.min(remaining, fp[amountKey]); result[fk]=applied; remaining-=applied; }
+    }
+    if(remaining>0.005){
+      var others=parties.filter(function(p){return p.key!==('P:'+fundingProjectId) && p[amountKey]>0.005;});
+      var totalOut=others.reduce(function(s,p){return s+p[amountKey];},0);
+      if(totalOut>0.005){
+        others.forEach(function(p){
+          var share=Math.min(p[amountKey], remaining*(p[amountKey]/totalOut));
+          result[p.key]=(result[p.key]||0)+share;
+        });
+      }
+    }
+    return result;
+  }
+  var pSplit=distribute('outPrincipal', totalPrincipal);
+  var iSplit=distribute('outInterest', totalInterest);
+  var out={};
+  parties.forEach(function(p){ out[p.key]={principal:Math.round((pSplit[p.key]||0)*100)/100, interest:Math.round((iSplit[p.key]||0)*100)/100}; });
+  return out;
+}
+
+var LN_SETTLE_LOAN_ID=null;
+
+function lnOpenSettle(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  if(!loan){ toast('Loan not found','warning'); return; }
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var hasAlloc=LN_ALLOCATIONS.some(function(a){return a.loan_id===loanId && a.status==='ACTIVE';});
+  if(!hasAlloc){ toast('Allocate this loan to at least one project or overhead first','warning'); return; }
+  LN_SETTLE_LOAN_ID=loanId;
+  document.getElementById('ln-sheet-title').textContent='Settle Repayment \u2014 '+lnPartyName(loan.party_id);
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<label class="flbl">Funding Project</label>'+
+    '<select class="fsel" id="ls-fundproj" onchange="lnSettleRecompute()">'+
+      '<option value="">Company level (not project-specific)</option>'+
+      LN_PROJECTS_LITE.map(function(p){return '<option value="'+p.id+'">'+(p.name||p.code)+'</option>';}).join('')+
+    '</select>'+
+    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">Which project\u2019s cash actually paid this. If no single project funded it, leave as Company level \u2014 no inter-project advances are created in that case.</div>'+
+    '<label class="flbl">Date *</label><input class="finp" id="ls-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+      '<div><label class="flbl">Principal Paid (\u20b9)</label><input class="finp" id="ls-principal" type="number" step="0.01" placeholder="0.00" oninput="lnSettleRecompute()"></div>'+
+      '<div><label class="flbl">Interest Paid (\u20b9)</label><input class="finp" id="ls-interest" type="number" step="0.01" placeholder="0.00" oninput="lnSettleRecompute()"></div>'+
+    '</div>'+
+    '<div style="text-align:right;margin:6px 0;"><button onclick="lnSettleRecompute()" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\u21bb Suggest pro-rata split</button></div>'+
+    '<div id="ls-split-table"></div>'+
+    '<div id="ls-split-check" style="font-size:11px;font-weight:700;margin-top:6px;"></div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="lnSettleSave(\''+loanId+'\')">Save Repayment</button>';
+  openSheet('ov-ln','sh-ln');
+  lnSettleRecompute();
+}
+
+function lnSettleRecompute(){
+  var loanId=LN_SETTLE_LOAN_ID;
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  var wrap=document.getElementById('ls-split-table');
+  if(!loan || !wrap) return;
+  var fundingProjectId=gv('ls-fundproj')||null;
+  var totalP=parseFloat(gv('ls-principal'))||0, totalI=parseFloat(gv('ls-interest'))||0;
+  var parties=lnComputeSettlementParties(loanId, fundingProjectId, loan);
+  var sugg=lnSuggestSplit(parties, fundingProjectId, totalP, totalI);
+
+  wrap.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11px;">'+
+    '<tr style="text-align:left;color:var(--text3);"><th style="padding:4px;">Project / Overhead</th><th style="padding:4px;">Outstanding</th><th style="padding:4px;">Principal Applied</th><th style="padding:4px;">Interest Applied</th></tr>'+
+    parties.map(function(p){
+      var s=sugg[p.key]||{principal:0,interest:0};
+      return '<tr style="border-top:1px solid var(--border);">'+
+        '<td style="padding:5px 4px;font-weight:700;">'+p.label+(p.key===('P:'+fundingProjectId)?' <span style="color:#00695C;font-size:9px;">(funder)</span>':'')+'</td>'+
+        '<td style="padding:5px 4px;color:var(--text3);">'+fmtINR(p.outPrincipal)+' + '+fmtINR(p.outInterest)+' int</td>'+
+        '<td style="padding:5px 4px;"><input type="number" step="0.01" class="finp ls-split-p" data-key="'+p.key+'" value="'+s.principal+'" style="width:90px;padding:4px 6px;font-size:11px;" oninput="lnSettleCheckSum()"></td>'+
+        '<td style="padding:5px 4px;"><input type="number" step="0.01" class="finp ls-split-i" data-key="'+p.key+'" value="'+s.interest+'" style="width:90px;padding:4px 6px;font-size:11px;" oninput="lnSettleCheckSum()"></td>'+
+      '</tr>';
+    }).join('')+
+  '</table>';
+  lnSettleCheckSum();
+}
+
+function lnSettleCheckSum(){
+  var totalP=parseFloat(gv('ls-principal'))||0, totalI=parseFloat(gv('ls-interest'))||0;
+  var sumP=0, sumI=0;
+  document.querySelectorAll('.ls-split-p').forEach(function(el){sumP+=parseFloat(el.value)||0;});
+  document.querySelectorAll('.ls-split-i').forEach(function(el){sumI+=parseFloat(el.value)||0;});
+  var el=document.getElementById('ls-split-check');
+  if(!el) return;
+  var okP=Math.abs(sumP-totalP)<0.02, okI=Math.abs(sumI-totalI)<0.02;
+  if(okP && okI){
+    el.style.color='#2E7D32';
+    el.textContent='\u2713 Split matches: '+fmtINR(sumP)+' principal + '+fmtINR(sumI)+' interest';
+  }else{
+    el.style.color='#C62828';
+    el.textContent='\u26a0 Split totals '+fmtINR(sumP)+' principal + '+fmtINR(sumI)+' interest \u2014 must match '+fmtINR(totalP)+' + '+fmtINR(totalI)+' exactly before saving';
+  }
+}
+
+async function lnSettleSave(loanId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  if(!loan) return;
+  var date=gv('ls-date')||new Date().toISOString().slice(0,10);
+  var fundingProjectId=gv('ls-fundproj')||null;
+  var totalP=parseFloat(gv('ls-principal'))||0, totalI=parseFloat(gv('ls-interest'))||0;
+  if(totalP<=0 && totalI<=0){ toast('Enter a principal or interest amount','warning'); return; }
+
+  var splitRows=[];
+  document.querySelectorAll('.ls-split-p').forEach(function(el){
+    var key=el.getAttribute('data-key');
+    var iEl=document.querySelector('.ls-split-i[data-key="'+key+'"]');
+    var p=parseFloat(el.value)||0, i=iEl?(parseFloat(iEl.value)||0):0;
+    if(p<=0.005 && i<=0.005) return;
+    splitRows.push({key:key, principal:p, interest:i});
+  });
+  var sumP=splitRows.reduce(function(s,r){return s+r.principal;},0);
+  var sumI=splitRows.reduce(function(s,r){return s+r.interest;},0);
+  if(Math.abs(sumP-totalP)>0.02 || Math.abs(sumI-totalI)>0.02){
+    toast('The split must add up exactly to the amount paid before saving','warning');
+    return;
+  }
+
+  var parties=lnComputeSettlementParties(loanId, fundingProjectId, loan);
+  var partyByKey={}; parties.forEach(function(p){partyByKey[p.key]=p;});
+  var splitForDb=splitRows.map(function(r){
+    var p=partyByKey[r.key]||{};
+    return {project_id:p.projectId||null, is_overhead:!!p.isOverhead, principal:r.principal, interest:r.interest};
+  });
+
+  try{
+    var res=await sbInsert('loan_repayments',{
+      loan_id:loanId, date:date, principal_paid:totalP, interest_paid:totalI,
+      funded_by_project_id:fundingProjectId, split:JSON.stringify(splitForDb),
+      status:'ACTIVE', created_by:currentUser?currentUser.id:null
+    });
+    var repaymentRow=(res&&res[0])?res[0]:null;
+    LN_REPAYMENTS.push(repaymentRow||{loan_id:loanId,status:'ACTIVE',split:JSON.stringify(splitForDb)});
+
+    // Every non-funding project covered by this repayment now has an
+    // inter-project advance owed back to the funding project — the
+    // funder's cash paid that share, so from here it's a new,
+    // separately-interest-bearing obligation between the two projects.
+    var cascadeIds=[];
+    if(fundingProjectId){
+      for(var i=0;i<splitRows.length;i++){
+        var r=splitRows[i], p=partyByKey[r.key];
+        // Overhead beneficiaries aren't skipped by the DB (to_project_id
+        // is NOT NULL) — inter_project_advances only models project-to-
+        // project debt, so an overhead's covered share isn't turned into
+        // an advance at all; it's simply paid by the funding project
+        // with no further tracking, same as if the company had paid it.
+        if(!p || p.key===('P:'+fundingProjectId) || p.isOverhead) continue;
+        var beneficiaryTotal=r.principal+r.interest;
+        if(beneficiaryTotal<=0.005) continue;
+        var advRes=await sbInsert('inter_project_advances',{
+          from_project_id:fundingProjectId, to_project_id:p.projectId,
+          source_loan_id:loanId, source_repayment_id:repaymentRow?repaymentRow.id:null,
+          principal:beneficiaryTotal, date:date, interest_rate:parseFloat(loan.interest_rate)||0,
+          rate_source:'SAME_AS_LOAN', status:'ACTIVE', settled_principal:0, settled_interest:0,
+          created_by:currentUser?currentUser.id:null
+        }).catch(function(e){
+          console.warn('inter_project_advances insert failed (non-blocking) \u2014 has the migration been run?', e);
+          return null;
+        });
+        if(advRes && advRes[0]) cascadeIds.push({entity_name:'inter_project_advances', entity_id:advRes[0].id});
+      }
+    }
+
+    await lnAuditWrite('loan_repayments', repaymentRow?repaymentRow.id:loanId, 'CREATE',
+      {principal_paid:totalP, interest_paid:totalI, funded_by_project_id:fundingProjectId, split:splitForDb},
+      null, cascadeIds.length?cascadeIds:null);
+
+    toast('Repayment settled across '+splitRows.length+' '+(splitRows.length===1?'project/overhead':'projects/overheads')+(cascadeIds.length?' \u2014 '+cascadeIds.length+' inter-project advance'+(cascadeIds.length!==1?'s':'')+' created':''),'success');
+    closeSheet('ov-ln','sh-ln');
+    lnRender();
+  }catch(e){
+    toast('Error: '+e.message+' \u2014 has the loan allocation migration been run?','error');
+  }
+}
+
 function lnRender(){
   var c=document.getElementById('ln-content'); if(!c)return;
   if(LN_TAB==='parties') return lnRenderParties();
@@ -18209,6 +18456,8 @@ function lnRender(){
                 '</div>'+
                 '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">'+
                   (isTaken?'<button onclick="lnOpenAllocPanel(\''+l.id+'\')" style="background:none;border:1px solid #B2DFDB;color:#00695C;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128202; Allocate</button>':'')+
+                  (isTaken && lnCanEdit() && LN_ALLOCATIONS.some(function(a){return a.loan_id===l.id && a.status==='ACTIVE';})?
+                    '<button onclick="lnOpenSettle(\''+l.id+'\')" style="background:none;border:1px solid #C5CAE9;color:#283593;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128181; Settle</button>':'')+
                   (lnCanEdit()?'<button onclick="lnOpenLoan(\''+l.direction+'\',\''+l.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
                   (lnCanDelete()?'<button onclick="lnDelLoan(\''+l.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
                 '</div>'+
