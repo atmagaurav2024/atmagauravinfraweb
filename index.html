@@ -18419,15 +18419,21 @@ async function lnSettleSave(loanId){
 // lnAllocDelete() unchanged for the actual writes — same backend as
 // the quick "Allocate" button on each loan row, just a different way
 // to reach it.
-var LN_ALLOC2_SELECTED=null, LN_ALLOC2_ADDING=false, LN_ALLOC2_EDITING=null;
+var LN_ALLOC2_SELECTED=null, LN_ALLOC2_ADDING=false, LN_ALLOC2_EDITING=null, LN_ALLOC2_MOBILE_VIEW='list';
 
 function lnAllocSelectLoan(loanId){
   LN_ALLOC2_SELECTED=loanId; LN_ALLOC2_ADDING=false; LN_ALLOC2_EDITING=null;
+  LN_ALLOC2_MOBILE_VIEW='detail'; // narrow screens: jump straight to the detail on selection
+  lnRenderAllocationTab();
+}
+function lnAlloc2BackToList(){
+  LN_ALLOC2_MOBILE_VIEW='list';
   lnRenderAllocationTab();
 }
 
 function lnRenderAllocationTab(){
   var c=document.getElementById('ln-content'); if(!c)return;
+  var isNarrow=window.innerWidth<720;
   var takenLoans=LN_LOANS.filter(function(l){return l.direction==='taken';})
     .sort(function(a,b){return String(b.start_date||'').localeCompare(String(a.start_date||''));});
   if((!LN_ALLOC2_SELECTED || !takenLoans.some(function(l){return l.id===LN_ALLOC2_SELECTED;})) && takenLoans.length){
@@ -18442,7 +18448,7 @@ function lnRenderAllocationTab(){
       var prin=parseFloat(l.principal)||0;
       var tag=!allocRows.length ? '<span class="ln-badge ln-badge-rose" style="margin-top:4px;">UNALLOCATED</span>'
         : (allocSum<prin-0.01 ? '<span class="ln-badge ln-badge-amber" style="margin-top:4px;">PARTIAL</span>' : '<span class="ln-badge ln-badge-emerald" style="margin-top:4px;">ALLOCATED</span>');
-      return '<button onclick="lnAllocSelectLoan(\''+l.id+'\')" style="display:block;width:100%;text-align:left;background:#fff;border:1px solid '+(sel?'#818CF8':'#E7E5E4')+';'+(sel?'box-shadow:0 0 0 1px #818CF8;':'')+'border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;font-family:Nunito,sans-serif;">'+
+      return '<button onclick="lnAllocSelectLoan(\''+l.id+'\')" style="display:block;width:100%;text-align:left;background:#fff;border:1px solid '+(sel&&!isNarrow?'#818CF8':'#E7E5E4')+';'+(sel&&!isNarrow?'box-shadow:0 0 0 1px #818CF8;':'')+'border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;font-family:Nunito,sans-serif;">'+
         '<div style="font-size:12.5px;font-weight:700;color:#1C1917;">'+lnPartyName(l.party_id)+'</div>'+
         '<div class="ln-mono ln-sub" style="margin-top:2px;">'+fmtINR(prin)+' @ '+(l.interest_rate||0)+'%</div>'+
         '<div class="ln-sub">from '+fmtDate(l.start_date)+'</div>'+
@@ -18451,14 +18457,20 @@ function lnRenderAllocationTab(){
     }).join('') : '<div class="ln-muted" style="font-size:12px;">No loans taken yet.</div>')+
     '<div class="ln-sub" style="margin-top:8px;">Add a new loan from the Loans Taken tab.</div>';
 
-  c.innerHTML='<div class="ln-ledger" id="ln-alloc2-wrap" style="display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:start;">'+
-    '<div>'+leftHtml+'</div>'+
-    '<div id="ln-alloc2-detail">'+lnAllocDetailHtml(LN_ALLOC2_SELECTED)+'</div>'+
-  '</div>';
+  var detailHtml='<div id="ln-alloc2-detail">'+lnAllocDetailHtml(LN_ALLOC2_SELECTED)+'</div>';
 
-  // Narrow screens: stack the list above the detail instead of side by side.
-  if(window.innerWidth<720){
-    document.getElementById('ln-alloc2-wrap').style.gridTemplateColumns='1fr';
+  if(isNarrow){
+    // Drill-down on mobile: show the list OR the detail, never both stacked
+    // (a long loan list would otherwise push the detail far below the fold).
+    c.innerHTML='<div class="ln-ledger">'+
+      (LN_ALLOC2_MOBILE_VIEW==='detail'
+        ? '<button onclick="lnAlloc2BackToList()" class="ln-btn-ghost" style="margin-bottom:10px;padding-left:0;">\u2190 Back to loans</button>'+detailHtml
+        : leftHtml)+
+    '</div>';
+  }else{
+    c.innerHTML='<div class="ln-ledger" style="display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:start;">'+
+      '<div>'+leftHtml+'</div>'+detailHtml+
+    '</div>';
   }
 }
 
