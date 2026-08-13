@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231B5E20'/><text y='.9em' font-size='75' x='12'>🏗️</text></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>AIPL — Construction Management</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
 <style>
 
 /* ═══════════════════════════════════════════
@@ -1240,6 +1240,44 @@ input,select,textarea{font-size:16px !important;}
 #app-attendance .sts-btn{font-size:11px !important;padding:5px 10px !important;}
 #app-attendance .frow{grid-template-columns:1fr !important;}
 #app-attendance .gps-strip{font-size:11px;}
+
+/* ═══════════════════════════════════════════
+   LOAN ALLOCATION LEDGER — editorial/fintech theme
+   Scoped to .ln-ledger so it never affects the rest of the
+   app, or the pre-existing Loans Taken/Given/Parties/
+   Payments/Ledger tabs, which keep their existing look.
+═══════════════════════════════════════════ */
+.ln-ledger{font-family:'Nunito',sans-serif;color:#1C1917;}
+.ln-ledger .ln-h{font-family:'Source Serif 4',Georgia,serif;font-weight:600;letter-spacing:-0.01em;}
+.ln-ledger .ln-eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#6366F1;font-weight:700;}
+.ln-ledger .ln-mono{font-family:'JetBrains Mono',monospace;}
+.ln-ledger .ln-card{background:#fff;border:1px solid #E7E5E4;border-radius:8px;padding:14px;}
+.ln-ledger .ln-lbl{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#A8A29E;margin-bottom:4px;}
+.ln-ledger .ln-val{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;color:#1C1917;}
+.ln-ledger .ln-val-amber{color:#B45309;} .ln-ledger .ln-val-indigo{color:#4338CA;}
+.ln-ledger .ln-val-rose{color:#E11D48;} .ln-ledger .ln-val-emerald{color:#047857;}
+.ln-ledger table.ln-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.ln-ledger table.ln-table thead th{text-align:left;padding:8px 10px;background:#F5F5F4;color:#78716C;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;}
+.ln-ledger table.ln-table thead th.ln-r{text-align:right;}
+.ln-ledger table.ln-table tbody td{padding:8px 10px;border-top:1px solid #F5F5F4;}
+.ln-ledger table.ln-table tbody td.ln-r{text-align:right;}
+.ln-ledger .ln-row-card{background:#fff;border:1px solid #E7E5E4;border-radius:8px;padding:14px 16px;margin-bottom:8px;}
+.ln-ledger .ln-row-card.ln-dim{opacity:0.55;}
+.ln-ledger .ln-btn-primary{background:#4F46E5;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'Nunito',sans-serif;}
+.ln-ledger .ln-btn-primary:disabled{background:#D6D3D1;cursor:not-allowed;}
+.ln-ledger .ln-btn-ghost{background:none;border:none;color:#78716C;font-size:12px;font-weight:600;cursor:pointer;font-family:'Nunito',sans-serif;padding:4px 6px;}
+.ln-ledger .ln-btn-outline{background:#fff;border:1px solid #D6D3D1;color:#44403C;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Nunito',sans-serif;}
+.ln-ledger .ln-btn-danger-ghost{background:none;border:1px solid #FECDD3;color:#A8A29E;cursor:pointer;padding:3px 7px;border-radius:6px;font-size:11px;}
+.ln-ledger .ln-btn-danger-ghost:hover{color:#E11D48;}
+.ln-ledger .ln-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;display:inline-block;}
+.ln-ledger .ln-badge-emerald{background:#D1FAE5;color:#047857;} .ln-ledger .ln-badge-rose{background:#FFE4E6;color:#E11D48;}
+.ln-ledger .ln-badge-amber{background:#FEF3C7;color:#B45309;} .ln-ledger .ln-badge-indigo{background:#E0E7FF;color:#4338CA;}
+.ln-ledger .ln-input{border:1px solid #D6D3D1;border-radius:6px;padding:6px 10px;font-size:12.5px;font-family:'Nunito',sans-serif;color:#1C1917;background:#fff;width:100%;box-sizing:border-box;}
+.ln-ledger .ln-input:focus{outline:none;border-color:#818CF8;box-shadow:0 0 0 3px rgba(79,70,229,0.12);}
+.ln-ledger .ln-muted{color:#A8A29E;} .ln-ledger .ln-sub{color:#78716C;font-size:11px;}
+.ln-ledger .ln-tabbar{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid #E7E5E4;margin-bottom:14px;background:#fff !important;padding:0 14px !important;}
+.ln-ledger .ln-tab{padding:9px 12px !important;font-size:12px;font-weight:600;font-family:'Nunito',sans-serif;white-space:nowrap;border:none;background:none !important;cursor:pointer;color:#A8A29E !important;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:0 !important;}
+.ln-ledger .ln-tab.ln-tab-active{color:#4338CA !important;border-bottom-color:#4F46E5;}
 
 /* ═══════════════════════════════════════════
    DASHBOARD
@@ -11289,8 +11327,8 @@ async function empSavePay(){
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127974; Loans</div>
   </div>
-  <div id="ln-tab-bar" style="display:flex;overflow-x:auto;background:#00695C;padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;"></div>
-  <div id="ln-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
+  <div id="ln-tab-bar" class="ln-ledger ln-tabbar" style="display:flex;overflow-x:auto;background:#00695C;padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;"></div>
+  <div id="ln-content" class="ln-ledger" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#FAFAF9;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
 </div>
 <div class="sh-overlay" id="ov-ln" onclick="closeSheet('ov-ln','sh-ln')"></div>
 <div class="sheet" id="sh-ln"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="ln-sheet-title">Loans</div><span class="sh-close" onclick="closeSheet('ov-ln','sh-ln')">&#10005;</span></div><div class="sh-body" id="ln-sheet-body"></div><div class="sh-foot" id="ln-sheet-foot"></div></div>
@@ -17585,7 +17623,7 @@ function lnRenderTabBar(){
   var bar=document.getElementById('ln-tab-bar'); if(!bar)return;
   bar.innerHTML=LN_TAB_DEFS.map(function(t){
     var a=LN_TAB===t.id;
-    return '<button onclick="lnSwitchTab(\''+t.id+'\')" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:'+(a?'white':'transparent')+';color:'+(a?'#00695C':'rgba(255,255,255,.65)')+';">'+t.label+'</button>';
+    return '<button onclick="lnSwitchTab(\''+t.id+'\')" class="ln-tab'+(a?' ln-tab-active':'')+'">'+t.label+'</button>';
   }).join('');
 }
 function lnSwitchTab(t){ LN_TAB=t; lnRenderTabBar(); lnRender(); }
@@ -17969,50 +18007,51 @@ function lnRenderAllocPanel(){
   var remaining=principal-allocated;
 
   var rowsHtml=rows.length?rows.map(function(a){
-    var name=a.type==='OVERHEAD'?'\ud83c\udfe2 Company Overheads':('\ud83c\udfd7\ufe0f '+lnProjectName(a.project_id));
+    var name=a.type==='OVERHEAD'?'Company Overheads':lnProjectName(a.project_id);
     var pct=principal>0?Math.round((parseFloat(a.amount)||0)/principal*100):0;
     var accr=lnAllocAccruedInterest(a, loan);
-    return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;">'+
+    return '<div class="ln-row-card">'+
       '<div style="display:flex;justify-content:space-between;gap:8px;">'+
-        '<div><div style="font-size:12.5px;font-weight:800;">'+name+'</div>'+
-        '<div style="font-size:10px;color:var(--text3);">since '+fmtDate(a.effective_from)+' \u00b7 '+pct+'% of principal</div></div>'+
+        '<div><div style="font-size:13px;font-weight:700;">'+name+'</div>'+
+        '<div class="ln-sub" style="margin-top:2px;">since '+fmtDate(a.effective_from)+' \u00b7 '+pct+'% of principal</div></div>'+
         '<div style="text-align:right;flex-shrink:0;">'+
-          '<div style="font-size:13px;font-weight:900;">'+fmtINR(parseFloat(a.amount)||0)+'</div>'+
-          (accr>0.5?'<div style="font-size:9.5px;color:#E65100;font-weight:700;">'+fmtINR(accr)+' interest accrued</div>':'')+
+          '<div class="ln-mono" style="font-size:14px;font-weight:600;">'+fmtINR(parseFloat(a.amount)||0)+'</div>'+
+          (accr>0.5?'<div class="ln-mono" style="font-size:10px;color:#B45309;">'+fmtINR(accr)+' interest accrued</div>':'')+
         '</div>'+
       '</div>'+
-      (lnCanEdit()?'<div style="display:flex;gap:6px;margin-top:8px;">'+
-        '<button onclick="lnAllocOpenForm(\''+loanId+'\',\''+a.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\u270e Edit</button>'+
-        '<button onclick="lnAllocDelete(\''+a.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\ud83d\uddd1 Delete</button>'+
+      (lnCanEdit()?'<div style="display:flex;gap:6px;margin-top:10px;">'+
+        '<button onclick="lnAllocOpenForm(\''+loanId+'\',\''+a.id+'\')" class="ln-btn-outline">\u270e Edit</button>'+
+        '<button onclick="lnAllocDelete(\''+a.id+'\')" class="ln-btn-danger-ghost">\ud83d\uddd1 Delete</button>'+
       '</div>':'')+
     '</div>';
-  }).join(''):'<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">Not allocated to any project or overhead yet.</div>';
+  }).join(''):'<div class="ln-muted" style="padding:16px 0;font-size:12px;">Not allocated to any project or overhead yet.</div>';
 
-  body.innerHTML=
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'+
-      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ALLOCATED</div><div style="font-size:14px;font-weight:900;">'+fmtINR(allocated)+'</div></div>'+
-      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">UNALLOCATED</div><div style="font-size:14px;font-weight:900;color:'+(remaining>0.5?'#C62828':'#2E7D32')+';">'+fmtINR(remaining)+'</div></div>'+
+  body.innerHTML='<div class="ln-ledger">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">'+
+      '<div class="ln-card"><div class="ln-lbl">Allocated</div><div class="ln-val" style="font-size:17px;">'+fmtINR(allocated)+'</div></div>'+
+      '<div class="ln-card"><div class="ln-lbl">Unallocated</div><div class="ln-val" style="font-size:17px;color:'+(remaining>0.5?'#E11D48':'#047857')+';">'+fmtINR(remaining)+'</div></div>'+
     '</div>'+
     rowsHtml+
-    (lnCanEdit() && remaining>0.5?'<button onclick="lnAllocOpenForm(\''+loanId+'\')" style="width:100%;background:#00695C;color:white;border:none;border-radius:10px;padding:10px;font-size:12.5px;font-weight:800;cursor:pointer;margin-top:4px;">+ Add Allocation</button>':'')+
-    '<div style="text-align:center;margin-top:14px;">'+
-      '<button onclick="lnAllocToggleHistory()" style="background:none;border:none;color:#1565C0;font-size:11px;font-weight:700;cursor:pointer;text-decoration:underline;">'+(LN_ALLOC_SHOW_HISTORY?'Hide history':'View history')+'</button>'+
+    (lnCanEdit() && remaining>0.5?'<button onclick="lnAllocOpenForm(\''+loanId+'\')" class="ln-btn-primary" style="width:100%;padding:10px;font-size:13px;margin-top:6px;">+ Add Allocation</button>':'')+
+    '<div style="text-align:center;margin-top:16px;">'+
+      '<button onclick="lnAllocToggleHistory()" class="ln-btn-ghost" style="text-decoration:underline;">'+(LN_ALLOC_SHOW_HISTORY?'Hide history':'View history')+'</button>'+
     '</div>'+
-    (LN_ALLOC_SHOW_HISTORY?lnAllocHistoryHtml(loanId):'');
+    (LN_ALLOC_SHOW_HISTORY?lnAllocHistoryHtml(loanId):'')+
+  '</div>';
 }
 
 function lnAllocHistoryHtml(loanId){
   var past=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status!=='ACTIVE';})
     .sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''));});
-  if(!past.length) return '<div style="text-align:center;padding:10px;color:var(--text3);font-size:11px;">No superseded or deleted allocations.</div>';
-  return '<div style="margin-top:6px;">'+past.map(function(a){
+  if(!past.length) return '<div class="ln-muted" style="text-align:center;padding:10px;font-size:11px;">No superseded or deleted allocations.</div>';
+  return '<div style="margin-top:8px;">'+past.map(function(a){
     var name=a.type==='OVERHEAD'?'Company Overheads':lnProjectName(a.project_id);
     var badge=a.status==='DELETED'
-      ?'<span style="background:#FFEBEE;color:#C62828;font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;">DELETED</span>'
-      :'<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;">SUPERSEDED</span>';
-    return '<div style="border-bottom:1px solid var(--border);padding:8px 0;font-size:11px;">'+
-      '<div style="display:flex;justify-content:space-between;gap:8px;"><span>'+name+' \u2014 '+fmtINR(parseFloat(a.amount)||0)+'</span>'+badge+'</div>'+
-      '<div style="color:var(--text3);">'+fmtDate(a.effective_from)+' to '+(a.effective_to?fmtDate(a.effective_to):'\u2014')+(a.reason?' \u00b7 reason: '+a.reason:'')+'</div>'+
+      ?'<span class="ln-badge ln-badge-rose">DELETED</span>'
+      :'<span class="ln-badge ln-badge-amber">SUPERSEDED</span>';
+    return '<div style="border-bottom:1px solid #F5F5F4;padding:8px 0;font-size:11.5px;">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px;"><span>'+name+' \u2014 <span class="ln-mono">'+fmtINR(parseFloat(a.amount)||0)+'</span></span>'+badge+'</div>'+
+      '<div class="ln-sub">'+fmtDate(a.effective_from)+' to '+(a.effective_to?fmtDate(a.effective_to):'\u2014')+(a.reason?' \u00b7 reason: '+a.reason:'')+'</div>'+
     '</div>';
   }).join('')+'</div>';
 }
@@ -18033,20 +18072,21 @@ function lnAllocOpenForm(loanId, editAllocId){
   }).join('');
 
   document.getElementById('ln-sheet-title').textContent=ex?'Edit Allocation':'Add Allocation';
-  document.getElementById('ln-sheet-body').innerHTML=
-    '<label class="flbl">Allocate To</label>'+
-    '<select class="fsel" id="la-type" onchange="document.getElementById(\'la-projwrap\').style.display=this.value===\'PROJECT\'?\'\':\'none\';">'+
+  document.getElementById('ln-sheet-body').innerHTML='<div class="ln-ledger">'+
+    '<div class="ln-lbl" style="margin-top:0;">Allocate To</div>'+
+    '<select class="ln-input" id="la-type" style="margin-bottom:10px;" onchange="document.getElementById(\'la-projwrap\').style.display=this.value===\'PROJECT\'?\'\':\'none\';">'+
       '<option value="PROJECT"'+((!ex||ex.type==='PROJECT')?' selected':'')+'>Project</option>'+
       '<option value="OVERHEAD"'+((ex&&ex.type==='OVERHEAD')?' selected':'')+'>Company Overheads</option>'+
     '</select>'+
     '<div id="la-projwrap" style="display:'+((ex&&ex.type==='OVERHEAD')?'none':'')+';">'+
-      '<label class="flbl">Project *</label><select class="fsel" id="la-project">'+projOpts+'</select>'+
+      '<div class="ln-lbl">Project *</div><select class="ln-input" id="la-project" style="margin-bottom:10px;">'+projOpts+'</select>'+
     '</div>'+
-    '<label class="flbl">Amount (\u20b9) *</label><input class="finp" id="la-amount" type="number" step="0.01" placeholder="0.00" value="'+(ex?(parseFloat(ex.amount)||''):'')+'">'+
-    '<div style="font-size:10.5px;color:var(--text3);margin:-6px 0 8px;">Unallocated balance: <b>'+fmtINR(maxAmount)+'</b></div>'+
-    '<label class="flbl">Effective From *</label><input class="finp" id="la-from" type="date" value="'+((ex&&ex.effective_from)||new Date().toISOString().slice(0,10))+'">'+
-    (ex?'<label class="flbl">Reason for change *</label><input class="finp" id="la-reason" placeholder="e.g. Re-allocated after tranche 2 disbursement">':'')+
-    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">'+(ex?'Editing keeps history: the old split closes on this date, and a new one starts \u2014 past interest stays correct.':'Allocation amounts must not exceed the loan\'s principal in total.')+'</div>';
+    '<div class="ln-lbl">Amount (\u20b9) *</div><input class="ln-input ln-mono" id="la-amount" type="number" step="0.01" placeholder="0.00" value="'+(ex?(parseFloat(ex.amount)||''):'')+'" style="margin-bottom:4px;">'+
+    '<div class="ln-sub" style="margin-bottom:10px;">Unallocated balance: <b class="ln-mono">'+fmtINR(maxAmount)+'</b></div>'+
+    '<div class="ln-lbl">Effective From *</div><input class="ln-input" id="la-from" type="date" value="'+((ex&&ex.effective_from)||new Date().toISOString().slice(0,10))+'" style="margin-bottom:10px;">'+
+    (ex?'<div class="ln-lbl">Reason for change *</div><input class="ln-input" id="la-reason" placeholder="e.g. Re-allocated after tranche 2 disbursement" style="margin-bottom:10px;">':'')+
+    '<div class="ln-sub">'+(ex?'Editing keeps history: the old split closes on this date, and a new one starts \u2014 past interest stays correct.':'Allocation amounts must not exceed the loan\'s principal in total.')+'</div>'+
+  '</div>';
   document.getElementById('ln-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="lnRenderAllocPanel()">Cancel</button>'+
     '<button class="btn btn-navy" onclick="lnAllocSave(\''+loanId+'\''+(ex?',\''+ex.id+'\'':'')+')">'+(ex?'Save Change':'Add')+'</button>';
@@ -18222,21 +18262,22 @@ function lnOpenSettle(loanId){
   if(!hasAlloc){ toast('Allocate this loan to at least one project or overhead first','warning'); return; }
   LN_SETTLE_LOAN_ID=loanId;
   document.getElementById('ln-sheet-title').textContent='Settle Repayment \u2014 '+lnPartyName(loan.party_id);
-  document.getElementById('ln-sheet-body').innerHTML=
-    '<label class="flbl">Funding Project</label>'+
-    '<select class="fsel" id="ls-fundproj" onchange="lnSettleRecompute()">'+
+  document.getElementById('ln-sheet-body').innerHTML='<div class="ln-ledger">'+
+    '<div class="ln-lbl" style="margin-top:0;">Funding Project</div>'+
+    '<select class="ln-input" id="ls-fundproj" style="margin-bottom:4px;" onchange="lnSettleRecompute()">'+
       '<option value="">Company level (not project-specific)</option>'+
       LN_PROJECTS_LITE.map(function(p){return '<option value="'+p.id+'">'+(p.name||p.code)+'</option>';}).join('')+
     '</select>'+
-    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">Which project\u2019s cash actually paid this. If no single project funded it, leave as Company level \u2014 no inter-project advances are created in that case.</div>'+
-    '<label class="flbl">Date *</label><input class="finp" id="ls-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
-      '<div><label class="flbl">Principal Paid (\u20b9)</label><input class="finp" id="ls-principal" type="number" step="0.01" placeholder="0.00" oninput="lnSettleRecompute()"></div>'+
-      '<div><label class="flbl">Interest Paid (\u20b9)</label><input class="finp" id="ls-interest" type="number" step="0.01" placeholder="0.00" oninput="lnSettleRecompute()"></div>'+
+    '<div class="ln-sub" style="margin-bottom:10px;">Which project\u2019s cash actually paid this. If no single project funded it, leave as Company level \u2014 no inter-project advances are created in that case.</div>'+
+    '<div class="ln-lbl">Date *</div><input class="ln-input" id="ls-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" style="margin-bottom:10px;">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
+      '<div><div class="ln-lbl">Principal Paid (\u20b9)</div><input class="ln-input ln-mono" id="ls-principal" type="number" step="0.01" placeholder="0.00" oninput="lnSettleRecompute()"></div>'+
+      '<div><div class="ln-lbl">Interest Paid (\u20b9)</div><input class="ln-input ln-mono" id="ls-interest" type="number" step="0.01" placeholder="0.00" oninput="lnSettleRecompute()"></div>'+
     '</div>'+
-    '<div style="text-align:right;margin:6px 0;"><button onclick="lnSettleRecompute()" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\u21bb Suggest pro-rata split</button></div>'+
+    '<div style="text-align:right;margin:6px 0 10px;"><button onclick="lnSettleRecompute()" class="ln-btn-outline">\u21bb Suggest pro-rata split</button></div>'+
     '<div id="ls-split-table"></div>'+
-    '<div id="ls-split-check" style="font-size:11px;font-weight:700;margin-top:6px;"></div>';
+    '<div id="ls-split-check" style="font-size:11.5px;font-weight:700;margin-top:8px;"></div>'+
+  '</div>';
   document.getElementById('ln-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="lnSettleSave(\''+loanId+'\')">Save Repayment</button>';
@@ -18254,18 +18295,17 @@ function lnSettleRecompute(){
   var parties=lnComputeSettlementParties(loanId, fundingProjectId, loan);
   var sugg=lnSuggestSplit(parties, fundingProjectId, totalP, totalI);
 
-  wrap.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11px;">'+
-    '<tr style="text-align:left;color:var(--text3);"><th style="padding:4px;">Project / Overhead</th><th style="padding:4px;">Outstanding</th><th style="padding:4px;">Principal Applied</th><th style="padding:4px;">Interest Applied</th></tr>'+
+  wrap.innerHTML='<table class="ln-table"><thead><tr><th>Project / Overhead</th><th class="ln-r">Outstanding</th><th class="ln-r">Principal Applied</th><th class="ln-r">Interest Applied</th></tr></thead><tbody>'+
     parties.map(function(p){
       var s=sugg[p.key]||{principal:0,interest:0};
-      return '<tr style="border-top:1px solid var(--border);">'+
-        '<td style="padding:5px 4px;font-weight:700;">'+p.label+(p.key===('P:'+fundingProjectId)?' <span style="color:#00695C;font-size:9px;">(funder)</span>':'')+'</td>'+
-        '<td style="padding:5px 4px;color:var(--text3);">'+fmtINR(p.outPrincipal)+' + '+fmtINR(p.outInterest)+' int</td>'+
-        '<td style="padding:5px 4px;"><input type="number" step="0.01" class="finp ls-split-p" data-key="'+p.key+'" value="'+s.principal+'" style="width:90px;padding:4px 6px;font-size:11px;" oninput="lnSettleCheckSum()"></td>'+
-        '<td style="padding:5px 4px;"><input type="number" step="0.01" class="finp ls-split-i" data-key="'+p.key+'" value="'+s.interest+'" style="width:90px;padding:4px 6px;font-size:11px;" oninput="lnSettleCheckSum()"></td>'+
+      return '<tr>'+
+        '<td style="font-weight:700;">'+p.label+(p.key===('P:'+fundingProjectId)?' <span class="ln-badge ln-badge-indigo" style="margin-left:4px;">FUNDER</span>':'')+'</td>'+
+        '<td class="ln-r ln-mono ln-sub">'+fmtINR(p.outPrincipal)+' + '+fmtINR(p.outInterest)+' int</td>'+
+        '<td class="ln-r"><input type="number" step="0.01" class="ln-input ln-mono ls-split-p" data-key="'+p.key+'" value="'+s.principal+'" style="width:100px;text-align:right;padding:5px 8px;" oninput="lnSettleCheckSum()"></td>'+
+        '<td class="ln-r"><input type="number" step="0.01" class="ln-input ln-mono ls-split-i" data-key="'+p.key+'" value="'+s.interest+'" style="width:100px;text-align:right;padding:5px 8px;" oninput="lnSettleCheckSum()"></td>'+
       '</tr>';
     }).join('')+
-  '</table>';
+  '</tbody></table>';
   lnSettleCheckSum();
 }
 
@@ -18278,11 +18318,11 @@ function lnSettleCheckSum(){
   if(!el) return;
   var okP=Math.abs(sumP-totalP)<0.02, okI=Math.abs(sumI-totalI)<0.02;
   if(okP && okI){
-    el.style.color='#2E7D32';
-    el.textContent='\u2713 Split matches: '+fmtINR(sumP)+' principal + '+fmtINR(sumI)+' interest';
+    el.style.color='#047857';
+    el.innerHTML='\u2713 Split matches: <span class="ln-mono">'+fmtINR(sumP)+' principal + '+fmtINR(sumI)+' interest</span>';
   }else{
-    el.style.color='#C62828';
-    el.textContent='\u26a0 Split totals '+fmtINR(sumP)+' principal + '+fmtINR(sumI)+' interest \u2014 must match '+fmtINR(totalP)+' + '+fmtINR(totalI)+' exactly before saving';
+    el.style.color='#E11D48';
+    el.innerHTML='\u26a0 Split totals <span class="ln-mono">'+fmtINR(sumP)+' + '+fmtINR(sumI)+'</span> \u2014 must match <span class="ln-mono">'+fmtINR(totalP)+' + '+fmtINR(totalI)+'</span> exactly before saving';
   }
 }
 
@@ -18394,43 +18434,48 @@ function lnRenderInterProject(){
   var totalOwed=rows.filter(function(a){return a.status==='ACTIVE';}).reduce(function(s,a){return s+lnAdvanceOutstanding(a);},0);
 
   c.innerHTML=
-    '<div style="font-size:14px;font-weight:800;margin-bottom:10px;">Inter-Project Ledger</div>'+
-    '<div class="card" style="text-align:center;margin-bottom:12px;"><div style="font-size:10px;color:var(--text3);">TOTAL OUTSTANDING BETWEEN PROJECTS</div><div style="font-size:16px;font-weight:900;color:#283593;">'+fmtINR(totalOwed)+'</div></div>'+
+    '<div class="ln-eyebrow">Fund Flow</div>'+
+    '<div class="ln-h" style="font-size:19px;margin:2px 0 14px;">Inter-Project Ledger</div>'+
+    '<div class="ln-card" style="margin-bottom:16px;">'+
+      '<div class="ln-lbl">Total Outstanding Between Projects</div>'+
+      '<div class="ln-val ln-val-indigo">'+fmtINR(totalOwed)+'</div>'+
+    '</div>'+
     (rows.length? rows.map(function(a){
       var accr=lnAdvanceAccruedInterest(a);
       var out=lnAdvanceOutstanding(a);
       var closed=a.status==='CLOSED';
-      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:10px 12px;'+(closed?'opacity:0.65;':'')+'">'+
+      return '<div class="ln-row-card'+(closed?' ln-dim':'')+'">'+
         '<div style="display:flex;justify-content:space-between;gap:8px;">'+
           '<div>'+
-            '<div style="font-size:12.5px;font-weight:800;">'+lnProjectName(a.from_project_id)+' \u2192 '+lnProjectName(a.to_project_id)+'</div>'+
-            '<div style="font-size:10px;color:var(--text3);">'+fmtDate(a.date)+' \u00b7 '+(parseFloat(a.interest_rate)||0)+'% p.a.'+(a.rate_source==='CUSTOM'?' (custom)':' (same as loan)')+
-              (closed?' \u00b7 <b style="color:#2E7D32;">CLOSED</b>':'')+'</div>'+
-            '<div style="font-size:10px;color:var(--text3);">Principal '+fmtINR(parseFloat(a.principal)||0)+' + interest '+fmtINR(accr)+' accrued'+
+            '<div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;">'+lnProjectName(a.from_project_id)+' <span class="ln-muted">\u2192</span> '+lnProjectName(a.to_project_id)+
+              (closed?' <span class="ln-badge ln-badge-emerald">SETTLED</span>':'')+'</div>'+
+            '<div class="ln-sub" style="margin-top:2px;">'+fmtDate(a.date)+' \u00b7 '+(parseFloat(a.interest_rate)||0)+'% p.a. ('+(a.rate_source==='CUSTOM'?'custom rate':'same as loan rate')+')</div>'+
+            '<div class="ln-sub ln-mono" style="margin-top:2px;">Principal '+fmtINR(parseFloat(a.principal)||0)+' + interest '+fmtINR(accr)+' accrued'+
               ((parseFloat(a.settled_principal)||parseFloat(a.settled_interest))?' \u00b7 settled '+fmtINR((parseFloat(a.settled_principal)||0)+(parseFloat(a.settled_interest)||0)):'')+'</div>'+
           '</div>'+
           '<div style="text-align:right;flex-shrink:0;">'+
-            '<div style="font-size:14px;font-weight:900;color:'+(out>0.5?'#C62828':'#2E7D32')+';">'+fmtINR(out)+'</div>'+
-            '<div style="font-size:9px;color:var(--text3);">outstanding</div>'+
+            '<div class="ln-mono" style="font-size:15px;font-weight:600;color:'+(out>0.5?'#E11D48':'#047857')+';">'+fmtINR(out)+'</div>'+
+            '<div class="ln-lbl" style="margin:0;">outstanding</div>'+
           '</div>'+
         '</div>'+
-        (!closed && lnCanEdit()?'<div style="display:flex;gap:6px;margin-top:8px;">'+
-          '<button onclick="lnAdvOpenSettle(\''+a.id+'\')" style="background:#283593;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\ud83d\udcb0 Record Settlement</button>'+
-          '<button onclick="lnAdvOpenRate(\''+a.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\u270e Rate</button>'+
-          (lnCanDelete()?'<button onclick="lnAdvDelete(\''+a.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\ud83d\uddd1</button>':'')+
+        (!closed && lnCanEdit()?'<div style="display:flex;gap:6px;margin-top:10px;">'+
+          '<button onclick="lnAdvOpenSettle(\''+a.id+'\')" class="ln-btn-primary">Record Settlement</button>'+
+          '<button onclick="lnAdvOpenRate(\''+a.id+'\')" class="ln-btn-outline">\u270e Rate</button>'+
+          (lnCanDelete()?'<button onclick="lnAdvDelete(\''+a.id+'\')" class="ln-btn-danger-ghost">\ud83d\uddd1</button>':'')+
         '</div>':'')+
       '</div>';
-    }).join('') : '<div style="text-align:center;padding:30px;color:var(--text3);">No inter-project advances yet \u2014 these are created automatically when a repayment (Settle, on a taken loan) covers more than one project.</div>');
+    }).join('') : '<div class="ln-muted" style="padding:30px 4px;font-size:13px;">No inter-project advances yet \u2014 these appear once a repayment (Settle, on a taken loan) covers more than the funding project\'s own share.</div>');
 }
 
 function lnAdvOpenRate(advId){
   var a=LN_ADVANCES.find(function(x){return x.id===advId;});
   if(!a) return;
   document.getElementById('ln-sheet-title').textContent='Edit Interest Rate';
-  document.getElementById('ln-sheet-body').innerHTML=
-    '<div style="font-size:12px;margin-bottom:10px;">'+lnProjectName(a.from_project_id)+' \u2192 '+lnProjectName(a.to_project_id)+' \u00b7 '+fmtINR(parseFloat(a.principal)||0)+'</div>'+
-    '<label class="flbl">Interest Rate (% p.a.) *</label><input class="finp" id="lar-rate" type="number" step="0.01" value="'+(parseFloat(a.interest_rate)||0)+'">'+
-    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">Changing this switches the rate source to Custom, overriding the loan\'s original rate for this advance only. Applies to interest accrued from today onward \u2014 past accrual at the old rate isn\'t rewritten.</div>';
+  document.getElementById('ln-sheet-body').innerHTML='<div class="ln-ledger">'+
+    '<div class="ln-sub" style="font-size:12.5px;margin-bottom:12px;">'+lnProjectName(a.from_project_id)+' <span class="ln-muted">\u2192</span> '+lnProjectName(a.to_project_id)+' \u00b7 <span class="ln-mono">'+fmtINR(parseFloat(a.principal)||0)+'</span></div>'+
+    '<div class="ln-lbl" style="margin-top:0;">Interest Rate (% p.a.) *</div><input class="ln-input ln-mono" id="lar-rate" type="number" step="0.01" value="'+(parseFloat(a.interest_rate)||0)+'" style="margin-bottom:10px;">'+
+    '<div class="ln-sub">Changing this switches the rate source to Custom, overriding the loan\'s original rate for this advance only. Applies to interest accrued from today onward \u2014 past accrual at the old rate isn\'t rewritten.</div>'+
+  '</div>';
   document.getElementById('ln-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="lnAdvSaveRate(\''+advId+'\')">Save</button>';
@@ -18456,12 +18501,13 @@ function lnAdvOpenSettle(advId){
   if(!a) return;
   var out=lnAdvanceOutstanding(a);
   document.getElementById('ln-sheet-title').textContent='Record Settlement';
-  document.getElementById('ln-sheet-body').innerHTML=
-    '<div style="font-size:12px;margin-bottom:10px;">'+lnProjectName(a.from_project_id)+' \u2192 '+lnProjectName(a.to_project_id)+'<br><span style="color:var(--text3);">Outstanding: '+fmtINR(out)+'</span></div>'+
-    '<label class="flbl">Date *</label><input class="finp" id="las-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
-    '<label class="flbl">Principal Paid (\u20b9)</label><input class="finp" id="las-principal" type="number" step="0.01" placeholder="0.00">'+
-    '<label class="flbl">Interest Paid (\u20b9)</label><input class="finp" id="las-interest" type="number" step="0.01" placeholder="0.00">'+
-    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">Partial settlement is fine \u2014 record whatever was actually paid; the advance stays open with the remaining balance until fully settled.</div>';
+  document.getElementById('ln-sheet-body').innerHTML='<div class="ln-ledger">'+
+    '<div class="ln-sub" style="font-size:12.5px;margin-bottom:12px;">'+lnProjectName(a.from_project_id)+' <span class="ln-muted">\u2192</span> '+lnProjectName(a.to_project_id)+'<br>Outstanding: <span class="ln-mono" style="color:#1C1917;font-weight:600;">'+fmtINR(out)+'</span></div>'+
+    '<div class="ln-lbl" style="margin-top:0;">Date *</div><input class="ln-input" id="las-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" style="margin-bottom:10px;">'+
+    '<div class="ln-lbl">Principal Paid (\u20b9)</div><input class="ln-input ln-mono" id="las-principal" type="number" step="0.01" placeholder="0.00" style="margin-bottom:10px;">'+
+    '<div class="ln-lbl">Interest Paid (\u20b9)</div><input class="ln-input ln-mono" id="las-interest" type="number" step="0.01" placeholder="0.00" style="margin-bottom:10px;">'+
+    '<div class="ln-sub">Partial settlement is fine \u2014 record whatever was actually paid; the advance stays open with the remaining balance until fully settled.</div>'+
+  '</div>';
   document.getElementById('ln-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="lnAdvSaveSettle(\''+advId+'\')">Save</button>';
@@ -18524,25 +18570,38 @@ function lnRenderProjectCost(){
   var projIds=Array.from(new Set(LN_ALLOCATIONS.filter(function(a){return a.status==='ACTIVE' && a.type==='PROJECT';}).map(function(a){return a.project_id;})));
   var summaries=projIds.map(function(pid){ return Object.assign({id:pid,name:lnProjectName(pid)}, lnProjectCostSummary(pid)); })
     .sort(function(a,b){return b.directCost-a.directCost;});
-  var overheadTotal=0;
+  var overheadTotal=0, totalPrincipalOut=0, totalAccrued=0;
   LN_LOANS.filter(function(l){return l.direction==='taken';}).forEach(function(loan){
     overheadTotal+=lnProjectAllocatedAmount(loan.id, null, true);
+    var st=lnLoanStats(loan.id);
+    totalPrincipalOut+=st.outstanding; totalAccrued+=st.accrued;
   });
+  var advOutstanding=LN_ADVANCES.filter(function(a){return a.status==='ACTIVE';}).reduce(function(s,a){return s+lnAdvanceOutstanding(a);},0);
 
   c.innerHTML=
-    '<div style="font-size:14px;font-weight:800;margin-bottom:10px;">Per-Project Loan Cost</div>'+
-    (overheadTotal>0.5?'<div class="card" style="text-align:center;margin-bottom:12px;"><div style="font-size:10px;color:var(--text3);">ALLOCATED TO COMPANY OVERHEADS</div><div style="font-size:14px;font-weight:900;">'+fmtINR(overheadTotal)+'</div></div>':'')+
-    (summaries.length? summaries.map(function(s){
-      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:10px 12px;">'+
-        '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">'+s.name+'</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10.5px;">'+
-          '<div><span style="color:var(--text3);">Direct loan cost</span><br><b style="font-size:13px;">'+fmtINR(s.directCost)+'</b></div>'+
-          '<div><span style="color:var(--text3);">Interest accrued</span><br><b style="font-size:13px;color:#E65100;">'+fmtINR(s.interestAccrued)+'</b></div>'+
-          '<div><span style="color:var(--text3);">Owed to other projects</span><br><b style="font-size:13px;color:'+(s.owedToOthers>0.5?'#C62828':'#2E7D32')+';">'+fmtINR(s.owedToOthers)+'</b></div>'+
-          '<div><span style="color:var(--text3);">Receivable from others</span><br><b style="font-size:13px;color:'+(s.receivable>0.5?'#2E7D32':'var(--text3)')+';">'+fmtINR(s.receivable)+'</b></div>'+
-        '</div>'+
-      '</div>';
-    }).join('') : '<div style="text-align:center;padding:30px;color:var(--text3);">No projects have an active loan allocation yet.</div>');
+    '<div class="ln-eyebrow">Fund Flow</div>'+
+    '<div class="ln-h" style="font-size:19px;margin:2px 0 14px;">Project Cost Overview</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:18px;">'+
+      '<div class="ln-card"><div class="ln-lbl">Total Principal Outstanding</div><div class="ln-val">'+fmtINR(totalPrincipalOut)+'</div></div>'+
+      '<div class="ln-card"><div class="ln-lbl">Accrued Interest (All Loans)</div><div class="ln-val ln-val-amber">'+fmtINR(totalAccrued)+'</div></div>'+
+      '<div class="ln-card"><div class="ln-lbl">Inter-Project Advances Outstanding</div><div class="ln-val ln-val-indigo">'+fmtINR(advOutstanding)+'</div></div>'+
+    '</div>'+
+    (overheadTotal>0.5?'<div class="ln-sub" style="margin-bottom:10px;">Company Overheads carry <b class="ln-mono">'+fmtINR(overheadTotal)+'</b> of allocated loan principal, shown separately since it isn\'t a project.</div>':'')+
+    (summaries.length?
+      '<div class="ln-card" style="padding:0;overflow:hidden;">'+
+        '<table class="ln-table"><thead><tr><th>Project</th><th class="ln-r">Direct Loan Cost</th><th class="ln-r">Interest Accrued</th><th class="ln-r">Owed To Others</th><th class="ln-r">Receivable</th></tr></thead><tbody>'+
+        summaries.map(function(s){
+          return '<tr><td style="font-weight:600;">'+s.name+'</td>'+
+            '<td class="ln-r ln-mono">'+fmtINR(s.directCost)+'</td>'+
+            '<td class="ln-r ln-mono" style="color:#B45309;">'+fmtINR(s.interestAccrued)+'</td>'+
+            '<td class="ln-r ln-mono" style="color:'+(s.owedToOthers>0.5?'#E11D48':'#A8A29E')+';">'+(s.owedToOthers>0.5?fmtINR(s.owedToOthers):'\u2014')+'</td>'+
+            '<td class="ln-r ln-mono" style="color:'+(s.receivable>0.5?'#047857':'#A8A29E')+';">'+(s.receivable>0.5?fmtINR(s.receivable):'\u2014')+'</td>'+
+          '</tr>';
+        }).join('')+
+        '</tbody></table>'+
+      '</div>'+
+      '<div class="ln-sub" style="margin-top:8px;">Direct loan cost + interest accrued reflects only what each project actually drew via its own loan allocation. Amounts it fronted for, or borrowed from, other projects show separately on the right.</div>'
+      : '<div class="ln-muted" style="padding:30px 4px;font-size:13px;">No projects have an active loan allocation yet.</div>');
 }
 
 // ── PHASE 3c — AUDIT LOG ─────────────────────────────────────────────
@@ -18558,33 +18617,33 @@ async function lnRenderAuditLog(){
   var rows=LN_AUDIT_LOG.filter(function(r){return LN_AUDIT_FILTER==='all' || r.entity_name===LN_AUDIT_FILTER;});
 
   var empName=function(id){ var e=LN_EMPS.find(function(x){return x.id===id;}); return e?e.name:(id?'Unknown':'System'); };
-  var actionColor={CREATE:'#2E7D32', EDIT:'#E65100', DELETE:'#C62828'};
+  var actionBadge={CREATE:'ln-badge-emerald', EDIT:'ln-badge-amber', DELETE:'ln-badge-rose'};
 
   c.innerHTML=
-    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
-      '<div style="font-size:14px;font-weight:800;">Audit Log</div>'+
-      '<button onclick="LN_AUDIT_LOG=null;lnRenderAuditLog();" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\u21bb Refresh</button>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px;">'+
+      '<div><div class="ln-eyebrow">Fund Flow</div><div class="ln-h" style="font-size:19px;margin-top:2px;">Audit Log</div></div>'+
+      '<button onclick="LN_AUDIT_LOG=null;lnRenderAuditLog();" class="ln-btn-outline">\u21bb Refresh</button>'+
     '</div>'+
-    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;margin-bottom:10px;gap:6px;">'+
-      '<button onclick="LN_AUDIT_FILTER=\'all\';lnRenderAuditLog();" style="background:'+(LN_AUDIT_FILTER==='all'?'#00695C':'transparent')+';color:'+(LN_AUDIT_FILTER==='all'?'white':'var(--text2)')+';border:1.5px solid '+(LN_AUDIT_FILTER==='all'?'#00695C':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">All</button>'+
+    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;gap:6px;">'+
+      '<button onclick="LN_AUDIT_FILTER=\'all\';lnRenderAuditLog();" class="ln-tab'+(LN_AUDIT_FILTER==='all'?' ln-tab-active':'')+'" style="border:1px solid '+(LN_AUDIT_FILTER==='all'?'#4F46E5':'#E7E5E4')+';border-radius:6px;">All</button>'+
       entities.map(function(e){
-        return '<button onclick="LN_AUDIT_FILTER=\''+e+'\';lnRenderAuditLog();" style="background:'+(LN_AUDIT_FILTER===e?'#00695C':'transparent')+';color:'+(LN_AUDIT_FILTER===e?'white':'var(--text2)')+';border:1.5px solid '+(LN_AUDIT_FILTER===e?'#00695C':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">'+e+'</button>';
+        return '<button onclick="LN_AUDIT_FILTER=\''+e+'\';lnRenderAuditLog();" class="ln-tab'+(LN_AUDIT_FILTER===e?' ln-tab-active':'')+'" style="border:1px solid '+(LN_AUDIT_FILTER===e?'#4F46E5':'#E7E5E4')+';border-radius:6px;">'+e+'</button>';
       }).join('')+
     '</div>'+
     (rows.length? rows.map(function(r){
       var changes=null; try{ changes=r.field_changes?(typeof r.field_changes==='string'?JSON.parse(r.field_changes):r.field_changes):null; }catch(e){}
       var cascades=null; try{ cascades=r.cascade_ids?(typeof r.cascade_ids==='string'?JSON.parse(r.cascade_ids):r.cascade_ids):null; }catch(e){}
-      return '<div style="background:white;border-radius:10px;border:1px solid var(--border);margin-bottom:6px;padding:8px 10px;font-size:11px;">'+
-        '<div style="display:flex;justify-content:space-between;gap:8px;">'+
-          '<div><span style="background:'+(actionColor[r.action]||'#666')+';color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;">'+r.action+'</span>'+
-            ' <b>'+r.entity_name+'</b></div>'+
-          '<div style="color:var(--text3);font-size:10px;">'+fmtDate((r.performed_at||'').slice(0,10))+' '+((r.performed_at||'').slice(11,16))+'</div>'+
+      return '<div class="ln-card" style="margin-bottom:8px;">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">'+
+          '<div><span class="ln-badge '+(actionBadge[r.action]||'ln-badge-indigo')+'">'+r.action+'</span>'+
+            ' <span class="ln-sub" style="font-size:11px;">'+r.entity_name+'</span></div>'+
+          '<div class="ln-sub">'+fmtDate((r.performed_at||'').slice(0,10))+' '+((r.performed_at||'').slice(11,16))+'</div>'+
         '</div>'+
-        '<div style="color:var(--text3);margin-top:3px;">by '+empName(r.performed_by)+(r.reason?' \u00b7 reason: '+r.reason:'')+'</div>'+
-        (changes?'<div style="margin-top:4px;background:#F8F9FA;border-radius:6px;padding:6px 8px;font-family:monospace;font-size:9.5px;white-space:pre-wrap;word-break:break-all;">'+JSON.stringify(changes,null,1)+'</div>':'')+
-        (cascades&&cascades.length?'<div style="margin-top:4px;color:#E65100;">\u2192 also affected: '+cascades.map(function(x){return x.entity_name;}).join(', ')+' ('+cascades.length+')</div>':'')+
+        '<div class="ln-sub" style="margin-top:4px;">by '+empName(r.performed_by)+(r.reason?' \u00b7 reason: '+r.reason:'')+'</div>'+
+        (changes?'<div class="ln-mono" style="margin-top:6px;background:#F5F5F4;border-radius:6px;padding:8px 10px;font-size:10px;white-space:pre-wrap;word-break:break-all;color:#57534E;">'+JSON.stringify(changes,null,1)+'</div>':'')+
+        (cascades&&cascades.length?'<div style="margin-top:6px;color:#4338CA;font-size:11px;">\u2192 also affected: '+cascades.map(function(x){return x.entity_name;}).join(', ')+' ('+cascades.length+')</div>':'')+
       '</div>';
-    }).join('') : '<div style="text-align:center;padding:30px;color:var(--text3);">No audit entries'+(LN_AUDIT_FILTER!=='all'?' for '+LN_AUDIT_FILTER:'')+' yet.</div>');
+    }).join('') : '<div class="ln-muted" style="padding:30px 4px;font-size:13px;">No audit entries'+(LN_AUDIT_FILTER!=='all'?' for '+LN_AUDIT_FILTER:'')+' yet.</div>');
 }
 
 function lnRender(){
