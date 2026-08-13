@@ -17609,6 +17609,7 @@ var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken', LN_ALLOC
 var LN_TAB_DEFS=[
   {id:'taken',   label:'\u2b07 Loans Taken'},
   {id:'given',   label:'\u2b06 Loans Given'},
+  {id:'allocation', label:'\ud83d\udcd1 Loan Allocation'},
   {id:'parties', label:'\ud83d\udc65 Party-wise'},
   {id:'payments',label:'\ud83e\uddfe Payments'},
   {id:'ledger',  label:'\ud83d\udcd2 Ledger'},
@@ -18093,24 +18094,24 @@ function lnAllocOpenForm(loanId, editAllocId){
 }
 
 async function lnAllocSave(loanId, editAllocId){
-  if(!lnCanEdit()){toast('No permission','warning');return;}
+  if(!lnCanEdit()){toast('No permission','warning');return false;}
   var loan=LN_LOANS.find(function(l){return l.id===loanId;});
-  if(!loan){toast('Loan not found','warning');return;}
+  if(!loan){toast('Loan not found','warning');return false;}
   var type=gv('la-type')||'PROJECT';
   var projectId=type==='PROJECT'?(gv('la-project')||null):null;
-  if(type==='PROJECT' && !projectId){ toast('Select a project','warning'); return; }
+  if(type==='PROJECT' && !projectId){ toast('Select a project','warning'); return false; }
   var amount=parseFloat(gv('la-amount'))||0;
-  if(amount<=0){ toast('Enter a valid amount','warning'); return; }
+  if(amount<=0){ toast('Enter a valid amount','warning'); return false; }
   var effFrom=gv('la-from')||new Date().toISOString().slice(0,10);
   var reason=editAllocId?(gv('la-reason')||'').trim():null;
-  if(editAllocId && !reason){ toast('A reason is required when changing an allocation','warning'); return; }
+  if(editAllocId && !reason){ toast('A reason is required when changing an allocation','warning'); return false; }
 
   var principal=parseFloat(loan.principal)||0;
   var others=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status==='ACTIVE' && a.id!==editAllocId;});
   var othersSum=others.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   if(othersSum+amount>principal+0.01){
     toast('This would allocate '+fmtINR(othersSum+amount)+', more than the principal '+fmtINR(principal),'warning');
-    return;
+    return false;
   }
 
   try{
@@ -18141,8 +18142,10 @@ async function lnAllocSave(loanId, editAllocId){
     var fresh=await sbFetch('loan_allocations',{select:'*',filter:'loan_id=eq.'+loanId});
     LN_ALLOCATIONS=LN_ALLOCATIONS.filter(function(a){return a.loan_id!==loanId;}).concat(fresh||[]);
     lnRenderAllocPanel();
+    return true;
   }catch(e){
     toast('Error: '+e.message+' \u2014 has the loan allocation migration been run?','error');
+    return false;
   }
 }
 
@@ -18408,6 +18411,145 @@ async function lnSettleSave(loanId){
   }
 }
 
+// ── LOAN ALLOCATION — master/detail view ────────────────────────────
+// A dedicated screen matching the reference: taken loans listed on the
+// left, the selected loan's full allocation picture (current split,
+// accrued interest, history) inline on the right, with add/edit done
+// as inline rows rather than a separate sheet. Reuses lnAllocSave() /
+// lnAllocDelete() unchanged for the actual writes — same backend as
+// the quick "Allocate" button on each loan row, just a different way
+// to reach it.
+var LN_ALLOC2_SELECTED=null, LN_ALLOC2_ADDING=false, LN_ALLOC2_EDITING=null;
+
+function lnAllocSelectLoan(loanId){
+  LN_ALLOC2_SELECTED=loanId; LN_ALLOC2_ADDING=false; LN_ALLOC2_EDITING=null;
+  lnRenderAllocationTab();
+}
+
+function lnRenderAllocationTab(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  var takenLoans=LN_LOANS.filter(function(l){return l.direction==='taken';})
+    .sort(function(a,b){return String(b.start_date||'').localeCompare(String(a.start_date||''));});
+  if((!LN_ALLOC2_SELECTED || !takenLoans.some(function(l){return l.id===LN_ALLOC2_SELECTED;})) && takenLoans.length){
+    LN_ALLOC2_SELECTED=takenLoans[0].id;
+  }
+
+  var leftHtml='<div class="ln-eyebrow">Fund Flow</div><div class="ln-h" style="font-size:18px;margin:2px 0 12px;">Loans</div>'+
+    (takenLoans.length? takenLoans.map(function(l){
+      var sel=l.id===LN_ALLOC2_SELECTED;
+      var allocRows=LN_ALLOCATIONS.filter(function(a){return a.loan_id===l.id && a.status==='ACTIVE';});
+      var allocSum=allocRows.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      var prin=parseFloat(l.principal)||0;
+      var tag=!allocRows.length ? '<span class="ln-badge ln-badge-rose" style="margin-top:4px;">UNALLOCATED</span>'
+        : (allocSum<prin-0.01 ? '<span class="ln-badge ln-badge-amber" style="margin-top:4px;">PARTIAL</span>' : '<span class="ln-badge ln-badge-emerald" style="margin-top:4px;">ALLOCATED</span>');
+      return '<button onclick="lnAllocSelectLoan(\''+l.id+'\')" style="display:block;width:100%;text-align:left;background:#fff;border:1px solid '+(sel?'#818CF8':'#E7E5E4')+';'+(sel?'box-shadow:0 0 0 1px #818CF8;':'')+'border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;font-family:Nunito,sans-serif;">'+
+        '<div style="font-size:12.5px;font-weight:700;color:#1C1917;">'+lnPartyName(l.party_id)+'</div>'+
+        '<div class="ln-mono ln-sub" style="margin-top:2px;">'+fmtINR(prin)+' @ '+(l.interest_rate||0)+'%</div>'+
+        '<div class="ln-sub">from '+fmtDate(l.start_date)+'</div>'+
+        tag+
+      '</button>';
+    }).join('') : '<div class="ln-muted" style="font-size:12px;">No loans taken yet.</div>')+
+    '<div class="ln-sub" style="margin-top:8px;">Add a new loan from the Loans Taken tab.</div>';
+
+  c.innerHTML='<div class="ln-ledger" id="ln-alloc2-wrap" style="display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:start;">'+
+    '<div>'+leftHtml+'</div>'+
+    '<div id="ln-alloc2-detail">'+lnAllocDetailHtml(LN_ALLOC2_SELECTED)+'</div>'+
+  '</div>';
+
+  // Narrow screens: stack the list above the detail instead of side by side.
+  if(window.innerWidth<720){
+    document.getElementById('ln-alloc2-wrap').style.gridTemplateColumns='1fr';
+  }
+}
+
+function lnAllocDetailHtml(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  if(!loan) return '<div class="ln-muted" style="font-size:13px;">Select or add a loan to manage its allocation.</div>';
+
+  var principal=parseFloat(loan.principal)||0;
+  var rows=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status==='ACTIVE';});
+  var allocated=rows.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var remaining=principal-allocated;
+
+  var html='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:14px;flex-wrap:wrap;">'+
+    '<div><div class="ln-h" style="font-size:18px;">'+lnPartyName(loan.party_id)+' \u2014 '+fmtINR(principal)+'</div>'+
+    '<div class="ln-sub" style="margin-top:2px;">Unallocated balance: <span class="ln-mono" style="color:'+(remaining>0.5?'#B45309':'#A8A29E')+';font-weight:600;">'+fmtINR(remaining)+'</span></div></div>'+
+    (lnCanEdit() && remaining>0.5 && !LN_ALLOC2_ADDING?'<button onclick="lnAlloc2StartAdd()" class="ln-btn-primary">+ Allocate</button>':'')+
+  '</div>';
+
+  if(LN_ALLOC2_ADDING) html+=lnAlloc2InlineForm(loanId, null);
+
+  html+='<div class="ln-lbl" style="font-size:11px;">Current Allocation &amp; Accrued Interest</div>'+
+    '<div class="ln-card" style="padding:0;overflow:hidden;margin:6px 0 16px;">'+
+    (rows.length?
+      '<table class="ln-table"><thead><tr><th>Target</th><th class="ln-r">Allocated</th><th class="ln-r">Interest Accrued</th><th></th></tr></thead><tbody>'+
+      rows.map(function(a){
+        var name=a.type==='OVERHEAD'?'Company Overheads':lnProjectName(a.project_id);
+        var accr=lnAllocAccruedInterest(a, loan);
+        var editing=LN_ALLOC2_EDITING===a.id;
+        var rowHtml='<tr><td>'+name+(a.effective_from!==loan.start_date?' <span class="ln-sub">(from '+fmtDate(a.effective_from)+')</span>':'')+'</td>'+
+          '<td class="ln-r ln-mono">'+fmtINR(parseFloat(a.amount)||0)+'</td>'+
+          '<td class="ln-r ln-mono" style="color:#B45309;">'+fmtINR(accr)+'</td>'+
+          '<td class="ln-r" style="white-space:nowrap;">'+
+            (lnCanEdit()?'<button onclick="lnAlloc2StartEdit(\''+a.id+'\')" class="ln-btn-ghost" title="Edit">\u270e</button>':'')+
+            (lnCanDelete()?'<button onclick="lnAlloc2Delete(\''+a.id+'\')" class="ln-btn-ghost" title="Delete">\ud83d\uddd1</button>':'')+
+          '</td></tr>';
+        if(editing) rowHtml+='<tr><td colspan="4" style="background:#EEF2FF;padding:12px;">'+lnAlloc2InlineForm(loanId, a)+'</td></tr>';
+        return rowHtml;
+      }).join('')+
+      '</tbody></table>'
+      : '<div class="ln-muted" style="padding:16px;font-size:12px;">Not allocated to any project or overhead yet.</div>')+
+    '</div>';
+
+  var past=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status!=='ACTIVE';});
+  if(past.length){
+    html+='<div class="ln-lbl" style="font-size:11px;">Allocation History</div><div style="margin-top:6px;">'+lnAllocHistoryHtml(loanId)+'</div>';
+  }
+  return html;
+}
+
+function lnAlloc2InlineForm(loanId, ex){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  var principal=parseFloat(loan.principal)||0;
+  var others=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status==='ACTIVE' && a.id!==(ex&&ex.id);});
+  var othersSum=others.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var maxAmount=Math.max(0, principal-othersSum);
+  var projOpts='<option value="">Select project...</option>'+LN_PROJECTS_LITE.map(function(p){
+    return '<option value="'+p.id+'"'+((ex&&ex.project_id===p.id)?' selected':'')+'>'+(p.name||p.code)+'</option>';
+  }).join('');
+  return '<div class="ln-card" style="background:#FAFAF9;margin-bottom:'+(ex?'0':'14px')+';">'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">'+
+      '<div style="min-width:120px;"><div class="ln-lbl">Allocate To</div><select class="ln-input" id="la-type" onchange="document.getElementById(\'la-projwrap\').style.display=this.value===\'PROJECT\'?\'\':\'none\';">'+
+        '<option value="PROJECT"'+((!ex||ex.type==='PROJECT')?' selected':'')+'>Project</option>'+
+        '<option value="OVERHEAD"'+((ex&&ex.type==='OVERHEAD')?' selected':'')+'>Overhead</option>'+
+      '</select></div>'+
+      '<div id="la-projwrap" style="display:'+((ex&&ex.type==='OVERHEAD')?'none':'')+';min-width:150px;"><div class="ln-lbl">Project</div><select class="ln-input" id="la-project">'+projOpts+'</select></div>'+
+      '<div style="width:120px;"><div class="ln-lbl">Amount</div><input class="ln-input ln-mono" id="la-amount" type="number" step="0.01" placeholder="0.00" value="'+(ex?(parseFloat(ex.amount)||''):'')+'"></div>'+
+      '<div style="width:150px;"><div class="ln-lbl">Effective From</div><input class="ln-input" id="la-from" type="date" value="'+((ex&&ex.effective_from)||new Date().toISOString().slice(0,10))+'"></div>'+
+      (ex?'<div style="min-width:160px;flex:1;"><div class="ln-lbl">Reason (required)</div><input class="ln-input" id="la-reason" placeholder="Why this change"></div>':'')+
+    '</div>'+
+    '<div class="ln-sub" style="margin-top:8px;">Unallocated balance: <span class="ln-mono">'+fmtINR(maxAmount)+'</span>'+(ex?' \u00b7 editing keeps history: the old split closes on this date, and a new one starts.':'')+'</div>'+
+    '<div style="display:flex;gap:8px;margin-top:10px;">'+
+      '<button onclick="lnAlloc2Save(\''+loanId+'\''+(ex?',\''+ex.id+'\'':'')+')" class="ln-btn-primary">'+(ex?'Save Change':'Save Allocation')+'</button>'+
+      '<button onclick="lnAlloc2Cancel()" class="ln-btn-ghost">Cancel</button>'+
+    '</div>'+
+  '</div>';
+}
+
+function lnAlloc2StartAdd(){ LN_ALLOC2_ADDING=true; LN_ALLOC2_EDITING=null; lnRenderAllocationTab(); }
+function lnAlloc2StartEdit(allocId){ LN_ALLOC2_EDITING=allocId; LN_ALLOC2_ADDING=false; lnRenderAllocationTab(); }
+function lnAlloc2Cancel(){ LN_ALLOC2_ADDING=false; LN_ALLOC2_EDITING=null; lnRenderAllocationTab(); }
+
+async function lnAlloc2Save(loanId, editAllocId){
+  var ok=await lnAllocSave(loanId, editAllocId); // shared backend — same validation/supersede/audit logic as the sheet-based Allocate button
+  if(ok){ LN_ALLOC2_ADDING=false; LN_ALLOC2_EDITING=null; }
+  lnRenderAllocationTab(); // re-render regardless — on failure this just redraws the same form so the person can fix and retry
+}
+async function lnAlloc2Delete(allocId){
+  await lnAllocDelete(allocId);
+  lnRenderAllocationTab();
+}
+
 // ── PHASE 3a — INTER-PROJECT LEDGER ─────────────────────────────────
 // interest_rate × days since the advance was created (or until it was
 // closed) — same live-derived approach as loan and allocation interest,
@@ -18651,6 +18793,7 @@ function lnRender(){
   if(LN_TAB==='parties') return lnRenderParties();
   if(LN_TAB==='payments') return lnRenderPayments();
   if(LN_TAB==='ledger') return lnRenderLedger();
+  if(LN_TAB==='allocation') return lnRenderAllocationTab();
   if(LN_TAB==='interproj') return lnRenderInterProject();
   if(LN_TAB==='projcost') return lnRenderProjectCost();
   if(LN_TAB==='audit') return lnRenderAuditLog();
@@ -18742,7 +18885,7 @@ function lnRender(){
                   })():'')+
                 '</div>'+
                 '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">'+
-                  (isTaken?'<button onclick="lnOpenAllocPanel(\''+l.id+'\')" style="background:none;border:1px solid #B2DFDB;color:#00695C;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128202; Allocate</button>':'')+
+                  (isTaken?'<button onclick="lnSwitchTab(\'allocation\');lnAllocSelectLoan(\''+l.id+'\');" style="background:none;border:1px solid #B2DFDB;color:#00695C;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128202; Allocate</button>':'')+
                   (isTaken && lnCanEdit() && LN_ALLOCATIONS.some(function(a){return a.loan_id===l.id && a.status==='ACTIVE';})?
                     '<button onclick="lnOpenSettle(\''+l.id+'\')" style="background:none;border:1px solid #C5CAE9;color:#283593;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128181; Settle</button>':'')+
                   (lnCanEdit()?'<button onclick="lnOpenLoan(\''+l.direction+'\',\''+l.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
