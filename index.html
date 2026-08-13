@@ -17567,7 +17567,7 @@ async function pcDeleteEntry(id,type){
 // LOANS — money borrowed from lenders (creditors) and lent to borrowers
 // (debtors), with party records, repayment tracking and GL posting.
 // ════════════════════════════════════════════════════════════════════════
-var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken';
+var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken', LN_ALLOCATIONS=[], LN_PROJECTS_LITE=[];
 var LN_TAB_DEFS=[
   {id:'taken',   label:'\u2b07 Loans Taken'},
   {id:'given',   label:'\u2b06 Loans Given'},
@@ -17754,9 +17754,12 @@ async function initLoans(){
       sbFetch('loan_parties',{select:'*',order:'name.asc'}).catch(function(){return [];}),
       sbFetch('loans',{select:'*',order:'start_date.desc'}).catch(function(){return [];}),
       sbFetch('loan_transactions',{select:'*',order:'date.desc'}).catch(function(){return [];}),
-      sbFetch('employees',{select:'id,emp_id,first_name,last_name,employee_code,status',filter:'status=eq.active'}).catch(function(){return [];})
+      sbFetch('employees',{select:'id,emp_id,first_name,last_name,employee_code,status',filter:'status=eq.active'}).catch(function(){return [];}),
+      sbFetch('loan_allocations',{select:'*',filter:'status=eq.ACTIVE'}).catch(function(){return [];}),
+      sbFetch('projects',{select:'id,name,code'}).catch(function(){return [];})
     ]);
     LN_PARTIES=r[0]||[]; LN_LOANS=r[1]||[]; LN_TXNS=r[2]||[];
+    LN_ALLOCATIONS=r[4]||[]; LN_PROJECTS_LITE=r[5]||[];
     lnAutoBookMonthly();   // silent catch-up for any completed month not yet booked
     LN_EMPS=(r[3]||[]).map(function(e){return {id:e.id,code:e.emp_id||e.employee_code,name:((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim()||e.employee_code||'Employee'};})
       .sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
@@ -17894,6 +17897,224 @@ function lnLoanStats(loanId, asOn){
 var LN_OPEN_PARTY=null;
 function lnToggleLoanParty(id){ LN_OPEN_PARTY=(LN_OPEN_PARTY===id)?null:id; lnRender(); }
 
+// ── LOAN ALLOCATION & INTER-PROJECT FINANCING — Phase 1 ─────────────
+// Splits a taken loan's principal across projects/company overheads.
+// Repayment settlement, the inter-project ledger, the audit log
+// screen, and the cost dashboard follow in later phases, building on
+// these same tables (see supabase/loan_allocation_ledger.sql).
+
+async function lnAuditWrite(entityName, entityId, action, fieldChanges, reason, cascadeIds){
+  try{
+    await sbInsert('audit_log',{
+      entity_name: entityName, entity_id: entityId, action: action,
+      field_changes: fieldChanges?JSON.stringify(fieldChanges):null,
+      reason: reason||null,
+      cascade_ids: cascadeIds?JSON.stringify(cascadeIds):null,
+      performed_by: currentUser?currentUser.id:null
+    });
+  }catch(e){ console.warn('audit_log write failed (non-blocking) — has the loan allocation migration been run?', e); }
+}
+
+function lnProjectName(id){
+  var p=LN_PROJECTS_LITE.find(function(x){return x.id===id;});
+  return p?(p.name||p.code||'Project'):'Unknown project';
+}
+
+// amount × rate × days_active/365, where days_active is the overlap
+// between this allocation's [effective_from, effective_to-or-today]
+// and the loan's [start_date, today]. Derived live, never stored, so
+// it's always correct without needing to recompute snapshots.
+function lnAllocAccruedInterest(alloc, loan){
+  var rate=parseFloat(loan&&loan.interest_rate)||0;
+  if(rate<=0) return 0;
+  var today=new Date().toISOString().slice(0,10);
+  var loanStart=(loan&&loan.start_date)||alloc.effective_from;
+  var rangeStart=(alloc.effective_from>loanStart)?alloc.effective_from:loanStart;
+  var rangeEnd=(alloc.effective_to && alloc.effective_to<today)?alloc.effective_to:today;
+  var d1=new Date(rangeStart+'T00:00:00'), d2=new Date(rangeEnd+'T00:00:00');
+  var days=Math.max(0, Math.round((d2-d1)/86400000));
+  return (parseFloat(alloc.amount)||0)*(rate/100)*(days/365);
+}
+
+var LN_ALLOC_LOAN_ID=null, LN_ALLOC_SHOW_HISTORY=false;
+
+async function lnOpenAllocPanel(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  if(!loan){ toast('Loan not found','warning'); return; }
+  LN_ALLOC_LOAN_ID=loanId; LN_ALLOC_SHOW_HISTORY=false;
+  document.getElementById('ln-sheet-title').textContent='Allocate '+fmtINR(parseFloat(loan.principal)||0)+' \u2014 '+lnPartyName(loan.party_id);
+  document.getElementById('ln-sheet-body').innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Loading allocations\u2026</div>';
+  document.getElementById('ln-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Close</button>';
+  openSheet('ov-ln','sh-ln');
+  lnRenderAllocPanel();
+}
+
+function lnRenderAllocPanel(){
+  var loanId=LN_ALLOC_LOAN_ID;
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  var body=document.getElementById('ln-sheet-body');
+  if(!loan || !body) return;
+  document.getElementById('ln-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Close</button>';
+
+  var principal=parseFloat(loan.principal)||0;
+  var rows=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status==='ACTIVE';});
+  var allocated=rows.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var remaining=principal-allocated;
+
+  var rowsHtml=rows.length?rows.map(function(a){
+    var name=a.type==='OVERHEAD'?'\ud83c\udfe2 Company Overheads':('\ud83c\udfd7\ufe0f '+lnProjectName(a.project_id));
+    var pct=principal>0?Math.round((parseFloat(a.amount)||0)/principal*100):0;
+    var accr=lnAllocAccruedInterest(a, loan);
+    return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px;">'+
+        '<div><div style="font-size:12.5px;font-weight:800;">'+name+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);">since '+fmtDate(a.effective_from)+' \u00b7 '+pct+'% of principal</div></div>'+
+        '<div style="text-align:right;flex-shrink:0;">'+
+          '<div style="font-size:13px;font-weight:900;">'+fmtINR(parseFloat(a.amount)||0)+'</div>'+
+          (accr>0.5?'<div style="font-size:9.5px;color:#E65100;font-weight:700;">'+fmtINR(accr)+' interest accrued</div>':'')+
+        '</div>'+
+      '</div>'+
+      (lnCanEdit()?'<div style="display:flex;gap:6px;margin-top:8px;">'+
+        '<button onclick="lnAllocOpenForm(\''+loanId+'\',\''+a.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\u270e Edit</button>'+
+        '<button onclick="lnAllocDelete(\''+a.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\ud83d\uddd1 Delete</button>'+
+      '</div>':'')+
+    '</div>';
+  }).join(''):'<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">Not allocated to any project or overhead yet.</div>';
+
+  body.innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ALLOCATED</div><div style="font-size:14px;font-weight:900;">'+fmtINR(allocated)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">UNALLOCATED</div><div style="font-size:14px;font-weight:900;color:'+(remaining>0.5?'#C62828':'#2E7D32')+';">'+fmtINR(remaining)+'</div></div>'+
+    '</div>'+
+    rowsHtml+
+    (lnCanEdit() && remaining>0.5?'<button onclick="lnAllocOpenForm(\''+loanId+'\')" style="width:100%;background:#00695C;color:white;border:none;border-radius:10px;padding:10px;font-size:12.5px;font-weight:800;cursor:pointer;margin-top:4px;">+ Add Allocation</button>':'')+
+    '<div style="text-align:center;margin-top:14px;">'+
+      '<button onclick="lnAllocToggleHistory()" style="background:none;border:none;color:#1565C0;font-size:11px;font-weight:700;cursor:pointer;text-decoration:underline;">'+(LN_ALLOC_SHOW_HISTORY?'Hide history':'View history')+'</button>'+
+    '</div>'+
+    (LN_ALLOC_SHOW_HISTORY?lnAllocHistoryHtml(loanId):'');
+}
+
+function lnAllocHistoryHtml(loanId){
+  var past=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status!=='ACTIVE';})
+    .sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''));});
+  if(!past.length) return '<div style="text-align:center;padding:10px;color:var(--text3);font-size:11px;">No superseded or deleted allocations.</div>';
+  return '<div style="margin-top:6px;">'+past.map(function(a){
+    var name=a.type==='OVERHEAD'?'Company Overheads':lnProjectName(a.project_id);
+    var badge=a.status==='DELETED'
+      ?'<span style="background:#FFEBEE;color:#C62828;font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;">DELETED</span>'
+      :'<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;">SUPERSEDED</span>';
+    return '<div style="border-bottom:1px solid var(--border);padding:8px 0;font-size:11px;">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px;"><span>'+name+' \u2014 '+fmtINR(parseFloat(a.amount)||0)+'</span>'+badge+'</div>'+
+      '<div style="color:var(--text3);">'+fmtDate(a.effective_from)+' to '+(a.effective_to?fmtDate(a.effective_to):'\u2014')+(a.reason?' \u00b7 reason: '+a.reason:'')+'</div>'+
+    '</div>';
+  }).join('')+'</div>';
+}
+
+function lnAllocToggleHistory(){ LN_ALLOC_SHOW_HISTORY=!LN_ALLOC_SHOW_HISTORY; lnRenderAllocPanel(); }
+
+function lnAllocOpenForm(loanId, editAllocId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  if(!loan) return;
+  var ex=editAllocId?LN_ALLOCATIONS.find(function(a){return a.id===editAllocId;}):null;
+  var principal=parseFloat(loan.principal)||0;
+  var others=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status==='ACTIVE' && a.id!==editAllocId;});
+  var othersSum=others.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var maxAmount=Math.max(0, principal-othersSum);
+
+  var projOpts='<option value="">Select project...</option>'+LN_PROJECTS_LITE.map(function(p){
+    return '<option value="'+p.id+'"'+((ex&&ex.project_id===p.id)?' selected':'')+'>'+(p.name||p.code)+'</option>';
+  }).join('');
+
+  document.getElementById('ln-sheet-title').textContent=ex?'Edit Allocation':'Add Allocation';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<label class="flbl">Allocate To</label>'+
+    '<select class="fsel" id="la-type" onchange="document.getElementById(\'la-projwrap\').style.display=this.value===\'PROJECT\'?\'\':\'none\';">'+
+      '<option value="PROJECT"'+((!ex||ex.type==='PROJECT')?' selected':'')+'>Project</option>'+
+      '<option value="OVERHEAD"'+((ex&&ex.type==='OVERHEAD')?' selected':'')+'>Company Overheads</option>'+
+    '</select>'+
+    '<div id="la-projwrap" style="display:'+((ex&&ex.type==='OVERHEAD')?'none':'')+';">'+
+      '<label class="flbl">Project *</label><select class="fsel" id="la-project">'+projOpts+'</select>'+
+    '</div>'+
+    '<label class="flbl">Amount (\u20b9) *</label><input class="finp" id="la-amount" type="number" step="0.01" placeholder="0.00" value="'+(ex?(parseFloat(ex.amount)||''):'')+'">'+
+    '<div style="font-size:10.5px;color:var(--text3);margin:-6px 0 8px;">Unallocated balance: <b>'+fmtINR(maxAmount)+'</b></div>'+
+    '<label class="flbl">Effective From *</label><input class="finp" id="la-from" type="date" value="'+((ex&&ex.effective_from)||new Date().toISOString().slice(0,10))+'">'+
+    (ex?'<label class="flbl">Reason for change *</label><input class="finp" id="la-reason" placeholder="e.g. Re-allocated after tranche 2 disbursement">':'')+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">'+(ex?'Editing keeps history: the old split closes on this date, and a new one starts \u2014 past interest stays correct.':'Allocation amounts must not exceed the loan\'s principal in total.')+'</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="lnRenderAllocPanel()">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="lnAllocSave(\''+loanId+'\''+(ex?',\''+ex.id+'\'':'')+')">'+(ex?'Save Change':'Add')+'</button>';
+}
+
+async function lnAllocSave(loanId, editAllocId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;});
+  if(!loan){toast('Loan not found','warning');return;}
+  var type=gv('la-type')||'PROJECT';
+  var projectId=type==='PROJECT'?(gv('la-project')||null):null;
+  if(type==='PROJECT' && !projectId){ toast('Select a project','warning'); return; }
+  var amount=parseFloat(gv('la-amount'))||0;
+  if(amount<=0){ toast('Enter a valid amount','warning'); return; }
+  var effFrom=gv('la-from')||new Date().toISOString().slice(0,10);
+  var reason=editAllocId?(gv('la-reason')||'').trim():null;
+  if(editAllocId && !reason){ toast('A reason is required when changing an allocation','warning'); return; }
+
+  var principal=parseFloat(loan.principal)||0;
+  var others=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status==='ACTIVE' && a.id!==editAllocId;});
+  var othersSum=others.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  if(othersSum+amount>principal+0.01){
+    toast('This would allocate '+fmtINR(othersSum+amount)+', more than the principal '+fmtINR(principal),'warning');
+    return;
+  }
+
+  try{
+    if(editAllocId){
+      var old=LN_ALLOCATIONS.find(function(a){return a.id===editAllocId;});
+      // Supersede pattern: close the old row, insert a fresh one — never
+      // mutate an allocation row in place, so past interest calculations
+      // that relied on its original amount/date range stay correct.
+      await sbUpdate('loan_allocations', editAllocId, {status:'SUPERSEDED', effective_to:effFrom});
+      var res=await sbInsert('loan_allocations',{
+        loan_id:loanId, type:type, project_id:projectId, amount:amount,
+        effective_from:effFrom, status:'ACTIVE', version:((old&&old.version)||1)+1,
+        created_by:currentUser?currentUser.id:null
+      });
+      await lnAuditWrite('loan_allocations', editAllocId, 'EDIT',
+        {before:{type:old&&old.type,project_id:old&&old.project_id,amount:old&&old.amount},
+         after:{type:type,project_id:projectId,amount:amount}}, reason,
+        res&&res[0]?[{entity_name:'loan_allocations',entity_id:res[0].id}]:null);
+      toast('Allocation updated','success');
+    }else{
+      await sbInsert('loan_allocations',{
+        loan_id:loanId, type:type, project_id:projectId, amount:amount,
+        effective_from:effFrom, status:'ACTIVE', version:1,
+        created_by:currentUser?currentUser.id:null
+      });
+      toast('Allocation added','success');
+    }
+    var fresh=await sbFetch('loan_allocations',{select:'*',filter:'loan_id=eq.'+loanId});
+    LN_ALLOCATIONS=LN_ALLOCATIONS.filter(function(a){return a.loan_id!==loanId;}).concat(fresh||[]);
+    lnRenderAllocPanel();
+  }catch(e){
+    toast('Error: '+e.message+' \u2014 has the loan allocation migration been run?','error');
+  }
+}
+
+async function lnAllocDelete(allocId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var reason=prompt('Reason for deleting this allocation:');
+  if(reason===null) return;
+  if(!reason.trim()){ toast('A reason is required to delete an allocation','warning'); return; }
+  var old=LN_ALLOCATIONS.find(function(a){return a.id===allocId;});
+  try{
+    await sbUpdate('loan_allocations', allocId, {status:'DELETED', effective_to:new Date().toISOString().slice(0,10)});
+    await lnAuditWrite('loan_allocations', allocId, 'DELETE', {deleted:old}, reason, null);
+    var idx=LN_ALLOCATIONS.findIndex(function(a){return a.id===allocId;});
+    if(idx>-1) LN_ALLOCATIONS[idx].status='DELETED';
+    toast('Allocation deleted','success');
+    lnRenderAllocPanel();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
 function lnRender(){
   var c=document.getElementById('ln-content'); if(!c)return;
   if(LN_TAB==='parties') return lnRenderParties();
@@ -17977,8 +18198,17 @@ function lnRender(){
                   '<div style="font-size:10px;color:var(--text3);">'+(l.purpose||'\u2014')+(l.reference?' \u00b7 Ref: '+l.reference:'')+
                     (l.mode==='EmpBank'?' \u00b7 \ud83d\udc64 '+lnEmpName(l.mode_emp_id)+'\u2019s a/c'+(l.to_petty_cash?' \ud83d\udcb5':''):'')+'</div>'+
                   '<div style="font-size:10px;color:var(--text3);">Repaid <b style="color:#2E7D32;">'+fmtINR(st.repaid)+'</b> \u00b7 outstanding <b>'+fmtINR(st.outstanding)+'</b> \u00b7 int due <b style="color:#E65100;">'+fmtINR(st.intDue)+'</b></div>'+
+                  (isTaken?(function(){
+                    var allocRows=LN_ALLOCATIONS.filter(function(a){return a.loan_id===l.id && a.status==='ACTIVE';});
+                    var allocSum=allocRows.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+                    var prin=parseFloat(l.principal)||0;
+                    if(!allocRows.length) return '<div style="font-size:10px;color:#C62828;font-weight:700;margin-top:2px;">\u26a0 Not allocated to any project yet</div>';
+                    if(allocSum<prin-0.01) return '<div style="font-size:10px;color:#E65100;font-weight:700;margin-top:2px;">Allocated '+fmtINR(allocSum)+' of '+fmtINR(prin)+' \u2014 '+fmtINR(prin-allocSum)+' unallocated</div>';
+                    return '<div style="font-size:10px;color:#2E7D32;font-weight:700;margin-top:2px;">Fully allocated across '+allocRows.length+' '+(allocRows.length===1?'project/overhead':'projects/overheads')+'</div>';
+                  })():'')+
                 '</div>'+
                 '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">'+
+                  (isTaken?'<button onclick="lnOpenAllocPanel(\''+l.id+'\')" style="background:none;border:1px solid #B2DFDB;color:#00695C;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128202; Allocate</button>':'')+
                   (lnCanEdit()?'<button onclick="lnOpenLoan(\''+l.direction+'\',\''+l.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
                   (lnCanDelete()?'<button onclick="lnDelLoan(\''+l.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
                 '</div>'+
