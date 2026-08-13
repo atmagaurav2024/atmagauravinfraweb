@@ -17567,13 +17567,16 @@ async function pcDeleteEntry(id,type){
 // LOANS — money borrowed from lenders (creditors) and lent to borrowers
 // (debtors), with party records, repayment tracking and GL posting.
 // ════════════════════════════════════════════════════════════════════════
-var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken', LN_ALLOCATIONS=[], LN_PROJECTS_LITE=[], LN_REPAYMENTS=[];
+var LN_PARTIES=[], LN_LOANS=[], LN_TXNS=[], LN_EMPS=[], LN_TAB='taken', LN_ALLOCATIONS=[], LN_PROJECTS_LITE=[], LN_REPAYMENTS=[], LN_ADVANCES=[], LN_SETTLEMENTS=[], LN_AUDIT_LOG=null;
 var LN_TAB_DEFS=[
   {id:'taken',   label:'\u2b07 Loans Taken'},
   {id:'given',   label:'\u2b06 Loans Given'},
   {id:'parties', label:'\ud83d\udc65 Party-wise'},
   {id:'payments',label:'\ud83e\uddfe Payments'},
-  {id:'ledger',  label:'\ud83d\udcd2 Ledger'}
+  {id:'ledger',  label:'\ud83d\udcd2 Ledger'},
+  {id:'interproj', label:'\ud83d\udd04 Inter-Project'},
+  {id:'projcost',  label:'\ud83d\udcca Project Cost'},
+  {id:'audit',     label:'\ud83d\udcdc Audit Log'}
 ];
 function lnCanEdit(){ return typeof canAccess==='function'?canAccess('loans','edit'):(currentUser&&currentUser.role==='admin'); }
 function lnCanDelete(){ return typeof canAccess==='function'?canAccess('loans','delete'):(currentUser&&currentUser.role==='admin'); }
@@ -17757,10 +17760,13 @@ async function initLoans(){
       sbFetch('employees',{select:'id,emp_id,first_name,last_name,employee_code,status',filter:'status=eq.active'}).catch(function(){return [];}),
       sbFetch('loan_allocations',{select:'*',filter:'status=eq.ACTIVE'}).catch(function(){return [];}),
       sbFetch('projects',{select:'id,name,code'}).catch(function(){return [];}),
-      sbFetch('loan_repayments',{select:'*',filter:'status=eq.ACTIVE'}).catch(function(){return [];})
+      sbFetch('loan_repayments',{select:'*',filter:'status=eq.ACTIVE'}).catch(function(){return [];}),
+      sbFetch('inter_project_advances',{select:'*'}).catch(function(){return [];}),
+      sbFetch('inter_project_settlements',{select:'*'}).catch(function(){return [];})
     ]);
     LN_PARTIES=r[0]||[]; LN_LOANS=r[1]||[]; LN_TXNS=r[2]||[];
     LN_ALLOCATIONS=r[4]||[]; LN_PROJECTS_LITE=r[5]||[]; LN_REPAYMENTS=r[6]||[];
+    LN_ADVANCES=r[7]||[]; LN_SETTLEMENTS=r[8]||[];
     lnAutoBookMonthly();   // silent catch-up for any completed month not yet booked
     LN_EMPS=(r[3]||[]).map(function(e){return {id:e.id,code:e.emp_id||e.employee_code,name:((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim()||e.employee_code||'Employee'};})
       .sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
@@ -18346,7 +18352,7 @@ async function lnSettleSave(loanId){
           console.warn('inter_project_advances insert failed (non-blocking) \u2014 has the migration been run?', e);
           return null;
         });
-        if(advRes && advRes[0]) cascadeIds.push({entity_name:'inter_project_advances', entity_id:advRes[0].id});
+        if(advRes && advRes[0]){ cascadeIds.push({entity_name:'inter_project_advances', entity_id:advRes[0].id}); LN_ADVANCES.push(advRes[0]); }
       }
     }
 
@@ -18362,11 +18368,233 @@ async function lnSettleSave(loanId){
   }
 }
 
+// ── PHASE 3a — INTER-PROJECT LEDGER ─────────────────────────────────
+// interest_rate × days since the advance was created (or until it was
+// closed) — same live-derived approach as loan and allocation interest,
+// nothing snapshotted.
+function lnAdvanceAccruedInterest(adv){
+  var rate=parseFloat(adv.interest_rate)||0;
+  if(rate<=0) return 0;
+  var today=new Date().toISOString().slice(0,10);
+  var end=(adv.status==='CLOSED' && adv.closed_date && adv.closed_date<today)?adv.closed_date:today;
+  var d1=new Date((adv.date||today)+'T00:00:00'), d2=new Date(end+'T00:00:00');
+  var days=Math.max(0, Math.round((d2-d1)/86400000));
+  return (parseFloat(adv.principal)||0)*(rate/100)*(days/365);
+}
+function lnAdvanceOutstanding(adv){
+  var owed=(parseFloat(adv.principal)||0)+lnAdvanceAccruedInterest(adv);
+  var settled=(parseFloat(adv.settled_principal)||0)+(parseFloat(adv.settled_interest)||0);
+  return Math.max(0, owed-settled);
+}
+
+function lnRenderInterProject(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  var rows=LN_ADVANCES.filter(function(a){return a.status!=='DELETED';})
+    .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+  var totalOwed=rows.filter(function(a){return a.status==='ACTIVE';}).reduce(function(s,a){return s+lnAdvanceOutstanding(a);},0);
+
+  c.innerHTML=
+    '<div style="font-size:14px;font-weight:800;margin-bottom:10px;">Inter-Project Ledger</div>'+
+    '<div class="card" style="text-align:center;margin-bottom:12px;"><div style="font-size:10px;color:var(--text3);">TOTAL OUTSTANDING BETWEEN PROJECTS</div><div style="font-size:16px;font-weight:900;color:#283593;">'+fmtINR(totalOwed)+'</div></div>'+
+    (rows.length? rows.map(function(a){
+      var accr=lnAdvanceAccruedInterest(a);
+      var out=lnAdvanceOutstanding(a);
+      var closed=a.status==='CLOSED';
+      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:10px 12px;'+(closed?'opacity:0.65;':'')+'">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;">'+
+          '<div>'+
+            '<div style="font-size:12.5px;font-weight:800;">'+lnProjectName(a.from_project_id)+' \u2192 '+lnProjectName(a.to_project_id)+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">'+fmtDate(a.date)+' \u00b7 '+(parseFloat(a.interest_rate)||0)+'% p.a.'+(a.rate_source==='CUSTOM'?' (custom)':' (same as loan)')+
+              (closed?' \u00b7 <b style="color:#2E7D32;">CLOSED</b>':'')+'</div>'+
+            '<div style="font-size:10px;color:var(--text3);">Principal '+fmtINR(parseFloat(a.principal)||0)+' + interest '+fmtINR(accr)+' accrued'+
+              ((parseFloat(a.settled_principal)||parseFloat(a.settled_interest))?' \u00b7 settled '+fmtINR((parseFloat(a.settled_principal)||0)+(parseFloat(a.settled_interest)||0)):'')+'</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0;">'+
+            '<div style="font-size:14px;font-weight:900;color:'+(out>0.5?'#C62828':'#2E7D32')+';">'+fmtINR(out)+'</div>'+
+            '<div style="font-size:9px;color:var(--text3);">outstanding</div>'+
+          '</div>'+
+        '</div>'+
+        (!closed && lnCanEdit()?'<div style="display:flex;gap:6px;margin-top:8px;">'+
+          '<button onclick="lnAdvOpenSettle(\''+a.id+'\')" style="background:#283593;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\ud83d\udcb0 Record Settlement</button>'+
+          '<button onclick="lnAdvOpenRate(\''+a.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\u270e Rate</button>'+
+          (lnCanDelete()?'<button onclick="lnAdvDelete(\''+a.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\ud83d\uddd1</button>':'')+
+        '</div>':'')+
+      '</div>';
+    }).join('') : '<div style="text-align:center;padding:30px;color:var(--text3);">No inter-project advances yet \u2014 these are created automatically when a repayment (Settle, on a taken loan) covers more than one project.</div>');
+}
+
+function lnAdvOpenRate(advId){
+  var a=LN_ADVANCES.find(function(x){return x.id===advId;});
+  if(!a) return;
+  document.getElementById('ln-sheet-title').textContent='Edit Interest Rate';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="font-size:12px;margin-bottom:10px;">'+lnProjectName(a.from_project_id)+' \u2192 '+lnProjectName(a.to_project_id)+' \u00b7 '+fmtINR(parseFloat(a.principal)||0)+'</div>'+
+    '<label class="flbl">Interest Rate (% p.a.) *</label><input class="finp" id="lar-rate" type="number" step="0.01" value="'+(parseFloat(a.interest_rate)||0)+'">'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">Changing this switches the rate source to Custom, overriding the loan\'s original rate for this advance only. Applies to interest accrued from today onward \u2014 past accrual at the old rate isn\'t rewritten.</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="lnAdvSaveRate(\''+advId+'\')">Save</button>';
+  openSheet('ov-ln','sh-ln');
+}
+async function lnAdvSaveRate(advId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var rate=parseFloat(gv('lar-rate'));
+  if(isNaN(rate)||rate<0){ toast('Enter a valid rate','warning'); return; }
+  var old=LN_ADVANCES.find(function(a){return a.id===advId;});
+  try{
+    await sbUpdate('inter_project_advances', advId, {interest_rate:rate, rate_source:'CUSTOM'});
+    await lnAuditWrite('inter_project_advances', advId, 'EDIT', {before:{interest_rate:old&&old.interest_rate,rate_source:old&&old.rate_source},after:{interest_rate:rate,rate_source:'CUSTOM'}}, 'Rate override', null);
+    var idx=LN_ADVANCES.findIndex(function(a){return a.id===advId;});
+    if(idx>-1){ LN_ADVANCES[idx].interest_rate=rate; LN_ADVANCES[idx].rate_source='CUSTOM'; }
+    toast('Rate updated','success');
+    closeSheet('ov-ln','sh-ln'); lnRenderInterProject();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function lnAdvOpenSettle(advId){
+  var a=LN_ADVANCES.find(function(x){return x.id===advId;});
+  if(!a) return;
+  var out=lnAdvanceOutstanding(a);
+  document.getElementById('ln-sheet-title').textContent='Record Settlement';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="font-size:12px;margin-bottom:10px;">'+lnProjectName(a.from_project_id)+' \u2192 '+lnProjectName(a.to_project_id)+'<br><span style="color:var(--text3);">Outstanding: '+fmtINR(out)+'</span></div>'+
+    '<label class="flbl">Date *</label><input class="finp" id="las-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Principal Paid (\u20b9)</label><input class="finp" id="las-principal" type="number" step="0.01" placeholder="0.00">'+
+    '<label class="flbl">Interest Paid (\u20b9)</label><input class="finp" id="las-interest" type="number" step="0.01" placeholder="0.00">'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">Partial settlement is fine \u2014 record whatever was actually paid; the advance stays open with the remaining balance until fully settled.</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="lnAdvSaveSettle(\''+advId+'\')">Save</button>';
+  openSheet('ov-ln','sh-ln');
+}
+async function lnAdvSaveSettle(advId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var a=LN_ADVANCES.find(function(x){return x.id===advId;});
+  if(!a) return;
+  var date=gv('las-date')||new Date().toISOString().slice(0,10);
+  var p=parseFloat(gv('las-principal'))||0, i=parseFloat(gv('las-interest'))||0;
+  if(p<=0 && i<=0){ toast('Enter an amount','warning'); return; }
+  var out=lnAdvanceOutstanding(a);
+  if(p+i>out+0.02){ toast('That\'s more than the '+fmtINR(out)+' outstanding on this advance','warning'); return; }
+  try{
+    await sbInsert('inter_project_settlements',{advance_id:advId, date:date, principal_paid:p, interest_paid:i, created_by:currentUser?currentUser.id:null});
+    var newSettledP=(parseFloat(a.settled_principal)||0)+p, newSettledI=(parseFloat(a.settled_interest)||0)+i;
+    var stillOwed=out-(p+i);
+    var updates={settled_principal:newSettledP, settled_interest:newSettledI};
+    if(stillOwed<=0.02){ updates.status='CLOSED'; updates.closed_date=date; }
+    await sbUpdate('inter_project_advances', advId, updates);
+    await lnAuditWrite('inter_project_advances', advId, 'EDIT', {settlement_recorded:{date:date,principal:p,interest:i}, now_closed:!!updates.status}, 'Settlement recorded', null);
+    var idx=LN_ADVANCES.findIndex(function(x){return x.id===advId;});
+    if(idx>-1) LN_ADVANCES[idx]=Object.assign({},LN_ADVANCES[idx],updates);
+    toast(updates.status==='CLOSED'?'Advance fully settled and closed':'Partial settlement recorded','success');
+    closeSheet('ov-ln','sh-ln'); lnRenderInterProject();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+async function lnAdvDelete(advId){
+  if(!lnCanDelete()){toast('No permission','warning');return;}
+  var a=LN_ADVANCES.find(function(x){return x.id===advId;});
+  if(!a) return;
+  var hasSettlement=(parseFloat(a.settled_principal)||0)>0 || (parseFloat(a.settled_interest)||0)>0;
+  var reason=prompt((hasSettlement?'\u26a0 This advance has partial settlements recorded against it.\n\n':'')+'Reason for deleting this inter-project advance:');
+  if(reason===null) return;
+  if(!reason.trim()){ toast('A reason is required to delete an advance','warning'); return; }
+  try{
+    await sbUpdate('inter_project_advances', advId, {status:'DELETED'});
+    await lnAuditWrite('inter_project_advances', advId, 'DELETE', {deleted:a}, reason, null);
+    var idx=LN_ADVANCES.findIndex(function(x){return x.id===advId;});
+    if(idx>-1) LN_ADVANCES[idx].status='DELETED';
+    toast('Advance deleted','success');
+    lnRenderInterProject();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ── PHASE 3b — PER-PROJECT COST DASHBOARD ───────────────────────────
+function lnProjectCostSummary(projectId){
+  var directCost=0, interestAccrued=0;
+  LN_LOANS.filter(function(l){return l.direction==='taken';}).forEach(function(loan){
+    directCost+=lnProjectAllocatedAmount(loan.id, projectId, false);
+    interestAccrued+=lnProjectAccruedInterest(loan.id, projectId, false, loan);
+  });
+  var owedToOthers=LN_ADVANCES.filter(function(a){return a.to_project_id===projectId && a.status==='ACTIVE';}).reduce(function(s,a){return s+lnAdvanceOutstanding(a);},0);
+  var receivable=LN_ADVANCES.filter(function(a){return a.from_project_id===projectId && a.status==='ACTIVE';}).reduce(function(s,a){return s+lnAdvanceOutstanding(a);},0);
+  return {directCost:directCost, interestAccrued:interestAccrued, owedToOthers:owedToOthers, receivable:receivable};
+}
+function lnRenderProjectCost(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  var projIds=Array.from(new Set(LN_ALLOCATIONS.filter(function(a){return a.status==='ACTIVE' && a.type==='PROJECT';}).map(function(a){return a.project_id;})));
+  var summaries=projIds.map(function(pid){ return Object.assign({id:pid,name:lnProjectName(pid)}, lnProjectCostSummary(pid)); })
+    .sort(function(a,b){return b.directCost-a.directCost;});
+  var overheadTotal=0;
+  LN_LOANS.filter(function(l){return l.direction==='taken';}).forEach(function(loan){
+    overheadTotal+=lnProjectAllocatedAmount(loan.id, null, true);
+  });
+
+  c.innerHTML=
+    '<div style="font-size:14px;font-weight:800;margin-bottom:10px;">Per-Project Loan Cost</div>'+
+    (overheadTotal>0.5?'<div class="card" style="text-align:center;margin-bottom:12px;"><div style="font-size:10px;color:var(--text3);">ALLOCATED TO COMPANY OVERHEADS</div><div style="font-size:14px;font-weight:900;">'+fmtINR(overheadTotal)+'</div></div>':'')+
+    (summaries.length? summaries.map(function(s){
+      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:10px 12px;">'+
+        '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">'+s.name+'</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10.5px;">'+
+          '<div><span style="color:var(--text3);">Direct loan cost</span><br><b style="font-size:13px;">'+fmtINR(s.directCost)+'</b></div>'+
+          '<div><span style="color:var(--text3);">Interest accrued</span><br><b style="font-size:13px;color:#E65100;">'+fmtINR(s.interestAccrued)+'</b></div>'+
+          '<div><span style="color:var(--text3);">Owed to other projects</span><br><b style="font-size:13px;color:'+(s.owedToOthers>0.5?'#C62828':'#2E7D32')+';">'+fmtINR(s.owedToOthers)+'</b></div>'+
+          '<div><span style="color:var(--text3);">Receivable from others</span><br><b style="font-size:13px;color:'+(s.receivable>0.5?'#2E7D32':'var(--text3)')+';">'+fmtINR(s.receivable)+'</b></div>'+
+        '</div>'+
+      '</div>';
+    }).join('') : '<div style="text-align:center;padding:30px;color:var(--text3);">No projects have an active loan allocation yet.</div>');
+}
+
+// ── PHASE 3c — AUDIT LOG ─────────────────────────────────────────────
+var LN_AUDIT_FILTER='all';
+async function lnRenderAuditLog(){
+  var c=document.getElementById('ln-content'); if(!c)return;
+  if(LN_AUDIT_LOG===null){
+    c.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading audit log\u2026</div>';
+    try{ LN_AUDIT_LOG=await sbFetch('audit_log',{select:'*',order:'performed_at.desc'})||[]; }
+    catch(e){ c.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Could not load audit log \u2014 has the migration been run? '+e.message+'</div>'; return; }
+  }
+  var entities=Array.from(new Set(LN_AUDIT_LOG.map(function(r){return r.entity_name;})));
+  var rows=LN_AUDIT_LOG.filter(function(r){return LN_AUDIT_FILTER==='all' || r.entity_name===LN_AUDIT_FILTER;});
+
+  var empName=function(id){ var e=LN_EMPS.find(function(x){return x.id===id;}); return e?e.name:(id?'Unknown':'System'); };
+  var actionColor={CREATE:'#2E7D32', EDIT:'#E65100', DELETE:'#C62828'};
+
+  c.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">'+
+      '<div style="font-size:14px;font-weight:800;">Audit Log</div>'+
+      '<button onclick="LN_AUDIT_LOG=null;lnRenderAuditLog();" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">\u21bb Refresh</button>'+
+    '</div>'+
+    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;margin-bottom:10px;gap:6px;">'+
+      '<button onclick="LN_AUDIT_FILTER=\'all\';lnRenderAuditLog();" style="background:'+(LN_AUDIT_FILTER==='all'?'#00695C':'transparent')+';color:'+(LN_AUDIT_FILTER==='all'?'white':'var(--text2)')+';border:1.5px solid '+(LN_AUDIT_FILTER==='all'?'#00695C':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">All</button>'+
+      entities.map(function(e){
+        return '<button onclick="LN_AUDIT_FILTER=\''+e+'\';lnRenderAuditLog();" style="background:'+(LN_AUDIT_FILTER===e?'#00695C':'transparent')+';color:'+(LN_AUDIT_FILTER===e?'white':'var(--text2)')+';border:1.5px solid '+(LN_AUDIT_FILTER===e?'#00695C':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">'+e+'</button>';
+      }).join('')+
+    '</div>'+
+    (rows.length? rows.map(function(r){
+      var changes=null; try{ changes=r.field_changes?(typeof r.field_changes==='string'?JSON.parse(r.field_changes):r.field_changes):null; }catch(e){}
+      var cascades=null; try{ cascades=r.cascade_ids?(typeof r.cascade_ids==='string'?JSON.parse(r.cascade_ids):r.cascade_ids):null; }catch(e){}
+      return '<div style="background:white;border-radius:10px;border:1px solid var(--border);margin-bottom:6px;padding:8px 10px;font-size:11px;">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;">'+
+          '<div><span style="background:'+(actionColor[r.action]||'#666')+';color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;">'+r.action+'</span>'+
+            ' <b>'+r.entity_name+'</b></div>'+
+          '<div style="color:var(--text3);font-size:10px;">'+fmtDate((r.performed_at||'').slice(0,10))+' '+((r.performed_at||'').slice(11,16))+'</div>'+
+        '</div>'+
+        '<div style="color:var(--text3);margin-top:3px;">by '+empName(r.performed_by)+(r.reason?' \u00b7 reason: '+r.reason:'')+'</div>'+
+        (changes?'<div style="margin-top:4px;background:#F8F9FA;border-radius:6px;padding:6px 8px;font-family:monospace;font-size:9.5px;white-space:pre-wrap;word-break:break-all;">'+JSON.stringify(changes,null,1)+'</div>':'')+
+        (cascades&&cascades.length?'<div style="margin-top:4px;color:#E65100;">\u2192 also affected: '+cascades.map(function(x){return x.entity_name;}).join(', ')+' ('+cascades.length+')</div>':'')+
+      '</div>';
+    }).join('') : '<div style="text-align:center;padding:30px;color:var(--text3);">No audit entries'+(LN_AUDIT_FILTER!=='all'?' for '+LN_AUDIT_FILTER:'')+' yet.</div>');
+}
+
 function lnRender(){
   var c=document.getElementById('ln-content'); if(!c)return;
   if(LN_TAB==='parties') return lnRenderParties();
   if(LN_TAB==='payments') return lnRenderPayments();
   if(LN_TAB==='ledger') return lnRenderLedger();
+  if(LN_TAB==='interproj') return lnRenderInterProject();
+  if(LN_TAB==='projcost') return lnRenderProjectCost();
+  if(LN_TAB==='audit') return lnRenderAuditLog();
   var dir=(LN_TAB==='taken')?'taken':'given';
   var isTaken=(dir==='taken');
   var accent=isTaken?'#C62828':'#2E7D32';
