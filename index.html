@@ -19454,7 +19454,7 @@ function lnOpenLoan(dir, editId){
     '<button class="btn btn-navy" onclick="lnSaveLoan(\''+dir+'\''+(ex?',\''+ex.id+'\'':'')+')">'+(ex?'Update Loan':'Save Loan')+'</button>';
   openSheet('ov-ln','sh-ln');
 }
-async function lnSaveLoan(dir, editId){
+async function lnSaveLoan(dir, editId, onSaved){
   if(!lnCanEdit()){toast('No permission','warning');return;}
   var principal=parseFloat(gv('ll-principal'))||0;
   if(principal<=0){toast('Enter a valid principal amount','warning');return;}
@@ -19545,6 +19545,7 @@ async function lnSaveLoan(dir, editId){
       }
     }
     closeSheet('ov-ln','sh-ln'); lnRender(); toast('Loan saved','success');
+    if(saved && typeof onSaved==='function') onSaved(saved);
   }catch(e){toast('Error: '+e.message,'error');}
 }
 async function lnDelLoan(id){
@@ -20318,6 +20319,7 @@ var TPM_STATUS_DEFS={
 };
 var TPM_FILTER_CAT='all', TPM_FILTER_STATUS='all', TPM_SEARCH='';
 var TPM_LOANS_LITE=[], TPM_LOAN_PARTIES_LITE=[], TPM_FORM_DOCS=[];
+var TPM_LOAN_MODE='link', TPM_NEW_LOAN_LINK=null;
 
 function tpmCanEdit(){ return typeof canAccess==='function' ? canAccess('tpm','edit') : (currentUser&&currentUser.role==='admin'); }
 function tpmCanDelete(){ return typeof canAccess==='function' ? canAccess('tpm','delete') : (currentUser&&currentUser.role==='admin'); }
@@ -20329,6 +20331,26 @@ function tpmProjectName(id){
 function tpmLoanLabel(loan){
   var party=TPM_LOAN_PARTIES_LITE.find(function(p){return p.id===loan.party_id;});
   return (party?party.name:'Unknown lender')+' \u2014 '+fmtINR(parseFloat(loan.principal)||0)+' @ '+(loan.interest_rate||0)+'%'+(loan.start_date?' ('+fmtDate(loan.start_date)+')':'');
+}
+// Registering a new loan from TPM reuses lnSaveLoan() itself (same
+// accounting auto-post, same table) rather than a separate insert, so
+// there's only ever one path that creates a loan. That function reads
+// creditor options from the Loans module's own LN_PARTIES/LN_EMPS
+// globals, which TPM doesn't otherwise need — fetched here on demand,
+// once, only when "Register New Loan" is actually used.
+async function tpmEnsureLoanModuleData(){
+  if(LN_PARTIES.length && LN_EMPS.length) return;
+  try{
+    var r=await Promise.all([
+      LN_PARTIES.length?Promise.resolve(LN_PARTIES):sbFetch('loan_parties',{select:'*',order:'name.asc'}).catch(function(){return [];}),
+      LN_EMPS.length?Promise.resolve(LN_EMPS):sbFetch('employees',{select:'id,emp_id,first_name,last_name,employee_code,status',filter:'status=eq.active'}).catch(function(){return [];})
+    ]);
+    if(!LN_PARTIES.length) LN_PARTIES=r[0]||[];
+    if(!LN_EMPS.length){
+      LN_EMPS=(r[1]||[]).map(function(e){return {id:e.id,code:e.emp_id||e.employee_code,name:((e.first_name||'')+(e.last_name?' '+e.last_name:'')).trim()||e.employee_code||'Employee'};})
+        .sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
+    }
+  }catch(e){ console.warn('tpmEnsureLoanModuleData:',e); }
 }
 
 async function initTPM(){
@@ -20447,6 +20469,7 @@ function tpmOpenForm(id){
   if(ex && ex.documents){
     try{ TPM_FORM_DOCS=typeof ex.documents==='string'?JSON.parse(ex.documents):(ex.documents||[]); }catch(e){ TPM_FORM_DOCS=[]; }
   }
+  TPM_LOAN_MODE='link'; TPM_NEW_LOAN_LINK=null;
   var takenOnLoan=!!(ex&&ex.taken_on_loan);
   document.getElementById('tpm-sheet-title').textContent=ex?'Edit Asset':'New Asset';
   document.getElementById('tpm-sheet-body').innerHTML=
@@ -20470,11 +20493,11 @@ function tpmOpenForm(id){
       '<option value="yes"'+(takenOnLoan?' selected':'')+'>Yes</option>'+
     '</select></div>'+
     '<div id="tpm-loanwrap" class="fgrp" style="display:'+(takenOnLoan?'':'none')+';">'+
-      '<label class="flbl">Linked Loan</label><select id="tpm-loanid" class="fsel">'+
-        '<option value="">Select loan...</option>'+
-        TPM_LOANS_LITE.map(function(l){return '<option value="'+l.id+'"'+((ex&&ex.linked_loan_id===l.id)?' selected':'')+'>'+tpmLoanLabel(l)+'</option>';}).join('')+
-      '</select>'+
-      (!TPM_LOANS_LITE.length?'<div style="font-size:10px;color:#C62828;margin-top:4px;">No taken loans found \u2014 add one in the Loans module first.</div>':'')+
+      '<div style="display:flex;gap:6px;margin-bottom:8px;">'+
+        '<button type="button" id="tpm-loanmode-link-btn" onclick="tpmSetLoanMode(\'link\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;"></button>'+
+        '<button type="button" id="tpm-loanmode-new-btn" onclick="tpmSetLoanMode(\'new\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;"></button>'+
+      '</div>'+
+      '<div id="tpm-loanmode-body"></div>'+
     '</div>'+
     '<div class="fgrp"><label class="flbl">Status</label><select id="tpm-status" class="fsel">'+
       Object.keys(TPM_STATUS_DEFS).map(function(s){return '<option value="'+s+'"'+((ex&&ex.status===s)||(!ex&&s==='available')?' selected':'')+'>'+TPM_STATUS_DEFS[s].label+'</option>';}).join('')+
@@ -20491,7 +20514,82 @@ function tpmOpenForm(id){
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-tpm\',\'sh-tpm\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="tpmSave('+(ex?'\''+ex.id+'\'':'null')+')">'+(ex?'Save Changes':'Add Asset')+'</button>';
   tpmRenderDocsList();
+  if(takenOnLoan) tpmSetLoanMode('link', ex);
   openSheet('ov-tpm','sh-tpm');
+}
+
+function tpmSetLoanMode(mode, ex){
+  TPM_LOAN_MODE=mode;
+  var linkBtn=document.getElementById('tpm-loanmode-link-btn'), newBtn=document.getElementById('tpm-loanmode-new-btn');
+  if(linkBtn){ linkBtn.textContent='Link Existing Loan'; linkBtn.style.background=mode==='link'?'#4E342E':'#fff'; linkBtn.style.color=mode==='link'?'#fff':'#4E342E'; linkBtn.style.border='1.5px solid #4E342E'; }
+  if(newBtn){ newBtn.textContent='Register New Loan'; newBtn.style.background=mode==='new'?'#4E342E':'#fff'; newBtn.style.color=mode==='new'?'#fff':'#4E342E'; newBtn.style.border='1.5px solid #4E342E'; }
+  var body=document.getElementById('tpm-loanmode-body'); if(!body) return;
+  if(mode==='link'){
+    body.innerHTML='<label class="flbl">Linked Loan</label><select id="tpm-loanid" class="fsel">'+
+      '<option value="">Select loan...</option>'+
+      TPM_LOANS_LITE.map(function(l){return '<option value="'+l.id+'"'+((ex&&ex.linked_loan_id===l.id)?' selected':'')+'>'+tpmLoanLabel(l)+'</option>';}).join('')+
+    '</select>'+
+    (!TPM_LOANS_LITE.length?'<div style="font-size:10px;color:#C62828;margin-top:4px;">No taken loans found yet \u2014 use "Register New Loan" instead.</div>':'');
+  }else{
+    if(TPM_NEW_LOAN_LINK){ body.innerHTML=tpmNewLoanConfirmHtml(); return; }
+    body.innerHTML='<div style="text-align:center;padding:12px;color:var(--text3);font-size:11px;">&#9203; Loading...</div>';
+    tpmEnsureLoanModuleData().then(function(){
+      if(TPM_LOAN_MODE!=='new') return; // switched away before this resolved
+      body.innerHTML=tpmRegisterLoanFormHtml();
+    });
+  }
+}
+
+// Reuses the Loans module's own fields/IDs (ll-party, ll-principal, etc.)
+// so lnSaveLoan('taken', null, callback) below can save it exactly as if
+// it had been entered in the Loans module itself — same table, same
+// accounting auto-post, no separate insert logic to keep in sync.
+function tpmRegisterLoanFormHtml(){
+  var elig=LN_PARTIES.filter(function(p){return p.party_type==='both'||p.party_type==='creditor';});
+  if(!elig.length){
+    return '<div style="font-size:11px;color:#C62828;">No lender on file yet. Add one in Loans &gt; Party-wise first, then come back and use "Register New Loan", or "Link Existing Loan" once it exists.</div>';
+  }
+  return '<div style="background:#FAFAF9;border:1px solid #E7E5E4;border-radius:8px;padding:10px;">'+
+    '<label class="flbl">Lender (Creditor) *</label><select class="fsel" id="ll-party">'+
+      elig.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('')+
+    '</select>'+
+    '<label class="flbl">Principal Amount (\u20b9) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00">'+
+    '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free">'+
+    '<label class="flbl">Interest Type</label><select class="fsel" id="ll-inttype">'+
+      '<option value="simple">Simple Interest</option><option value="yearly">Compound \u2014 Yearly</option>'+
+      '<option value="halfyearly">Compound \u2014 Half Yearly</option><option value="quarterly">Compound \u2014 Quarterly</option>'+
+      '<option value="monthly">Compound \u2014 Monthly</option>'+
+    '</select>'+
+    '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional">'+
+    '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Machinery purchase">'+
+    '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref">'+
+    '<label class="flbl">Received Via</label>'+lnModeOptionsHtml('ll-mode')+
+    '<label class="flbl">Remarks</label><input class="finp" id="ll-remarks">'+
+    '<button type="button" onclick="tpmRegisterLoanSubmit()" class="btn btn-navy" style="width:100%;margin-top:6px;">Register This Loan</button>'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:6px;">This creates a real loan \u2014 it will also appear in the Loans module, posted to Accounts exactly as if registered there directly.</div>'+
+  '</div>';
+}
+
+function tpmNewLoanConfirmHtml(){
+  return '<div style="background:#E8F5E9;border:1px solid #C8E6C9;border-radius:8px;padding:10px;font-size:11.5px;">'+
+    '<div style="font-weight:800;color:#2E7D32;">\u2713 Loan registered and linked</div>'+
+    '<div style="margin-top:2px;">'+tpmLoanLabel(TPM_NEW_LOAN_LINK)+'</div>'+
+    '<button type="button" onclick="tpmResetNewLoan()" style="background:none;border:none;color:#1565C0;font-size:10.5px;font-weight:700;cursor:pointer;margin-top:6px;padding:0;">Change</button>'+
+  '</div>';
+}
+function tpmResetNewLoan(){ TPM_NEW_LOAN_LINK=null; tpmSetLoanMode('new'); }
+
+async function tpmRegisterLoanSubmit(){
+  await lnSaveLoan('taken', null, function(saved){
+    TPM_NEW_LOAN_LINK={id:saved.id, principal:saved.principal, interest_rate:saved.interest_rate, party_id:saved.party_id, start_date:saved.start_date};
+    TPM_LOANS_LITE.unshift(TPM_NEW_LOAN_LINK);
+    if(!TPM_LOAN_PARTIES_LITE.some(function(p){return p.id===saved.party_id;})){
+      var p=LN_PARTIES.find(function(x){return x.id===saved.party_id;});
+      if(p) TPM_LOAN_PARTIES_LITE.push({id:p.id,name:p.name});
+    }
+    tpmSetLoanMode('new');
+  });
 }
 
 function tpmRenderDocsList(){
@@ -20532,8 +20630,16 @@ async function tpmSave(id){
   if(!name){toast('Asset name is required','warning');return;}
   var ownership=gv('tpm-ownership')||'owned';
   var takenOnLoan=gv('tpm-loanyn')==='yes';
-  var linkedLoanId=takenOnLoan?(gv('tpm-loanid')||null):null;
-  if(takenOnLoan && !linkedLoanId){ toast('Select which loan this asset is linked to, or set "Taken on Loan?" back to No','warning'); return; }
+  var linkedLoanId=null;
+  if(takenOnLoan){
+    if(TPM_LOAN_MODE==='new'){
+      linkedLoanId=TPM_NEW_LOAN_LINK?TPM_NEW_LOAN_LINK.id:null;
+      if(!linkedLoanId){ toast('Register the new loan first (use "Register This Loan" below), or switch to Link Existing Loan','warning'); return; }
+    }else{
+      linkedLoanId=gv('tpm-loanid')||null;
+      if(!linkedLoanId){ toast('Select which loan this asset is linked to, or set "Taken on Loan?" back to No','warning'); return; }
+    }
+  }
   var fields={
     name:name,
     category:gv('tpm-cat')||'Other',
