@@ -2480,6 +2480,7 @@ input,select,textarea{font-size:16px !important;}
     <button class="sr-item" data-mod="petty-cash" onclick="showApp('petty-cash')"><div class="sr-ic">&#128181;</div><div class="sr-lb">Petty Cash</div></button>
     <button class="sr-item" data-mod="loans" onclick="showApp('loans')"><div class="sr-ic">&#127974;</div><div class="sr-lb">Loans</div></button>
     <button class="sr-item" data-mod="overheads" onclick="showApp('overheads')"><div class="sr-ic">&#127970;</div><div class="sr-lb">Overheads</div></button>
+    <button class="sr-item" data-mod="tpm" onclick="showApp('tpm')"><div class="sr-ic">&#128295;</div><div class="sr-lb">Tools, Plant &amp; Machinery</div></button>
     <button class="sr-item" data-mod="registry" onclick="showApp('registry')"><div class="sr-ic">&#128218;</div><div class="sr-lb">Registry</div></button>
     <button class="sr-item" data-mod="access" onclick="showApp('access')"><div class="sr-ic">&#128274;</div><div class="sr-lb">Access Control</div></button>
     <button class="sr-item" data-mod="company" onclick="showApp('company')"><div class="sr-ic">&#127963;&#65039;</div><div class="sr-lb">Company</div></button>
@@ -3190,6 +3191,7 @@ function showApp(name){
   else if(isProjectTab){ initProjects(); }
   else if(name==='petty-cash'){initPettyCash();}
   else if(name==='overheads'){initOverheads();}
+  else if(name==='tpm'){initTPM();}
   else if(name==='loans'){initLoans();}
   else if(name==='accounts'){initAccounts();}
   else if(name==='access'){acInitModule();}
@@ -7644,6 +7646,7 @@ function applyDrawerPermissions(){
     'accounts':     function(){ return canAccess('accounts','view'); },
     'petty-cash':   function(){ return canAccess('petty-cash','view'); },
     'overheads':    function(){ return canAccess('overheads','view'); },
+    'tpm':          function(){ return canAccess('tpm','view'); },
     'loans':        function(){ return canAccess('loans','view'); },
     'access':       function(){ return canAccess('access','view'); },
     'company':      function(){ return canAccess('company','view'); },
@@ -7771,6 +7774,10 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
     <div class="drawer-item" onclick="showApp('overheads');closeDrawer();">
       <div class="drawer-item-ic" style="background:#F3E5F5;">&#127970;</div>
       <div class="drawer-item-info"><div class="drawer-item-title">Company Overheads</div><div class="drawer-item-sub">CA fees, rent, admin & non-project costs</div></div>
+    </div>
+    <div class="drawer-item" onclick="showApp('tpm');closeDrawer();">
+      <div class="drawer-item-ic" style="background:#EFEBE9;">&#128295;</div>
+      <div class="drawer-item-info"><div class="drawer-item-title">Tools, Plant &amp; Machinery</div><div class="drawer-item-sub">Asset register, status &amp; project assignment</div></div>
     </div>
 
     <!-- SETTINGS -->
@@ -11343,6 +11350,21 @@ async function empSavePay(){
 </div>
 <div class="sh-overlay" id="ov-oh" onclick="closeSheet('ov-oh','sh-oh')"></div>
 <div class="sheet" id="sh-oh"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="oh-sheet-title">New Overhead Expense</div><span class="sh-close" onclick="closeSheet('ov-oh','sh-oh')">&#10005;</span></div><div class="sh-body" id="oh-sheet-body"></div><div class="sh-foot" id="oh-sheet-foot"></div></div>
+
+<!-- TOOLS, PLANT & MACHINERY -->
+<div class="app-screen" id="app-tpm">
+  <div style="background:#4E342E;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128295; Tools, Plant &amp; Machinery</div>
+    <button class="tb-btn" id="tpm-add-btn" onclick="tpmOpenForm()" style="font-size:20px;">&#43;</button>
+  </div>
+  <div id="tpm-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
+
+  <div class="sh-overlay" id="ov-tpm" onclick="closeSheet('ov-tpm','sh-tpm')"></div>
+  <div class="sheet" id="sh-tpm"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="tpm-sheet-title">New Asset</div><span class="sh-close" onclick="closeSheet('ov-tpm','sh-tpm')">&#10005;</span></div><div class="sh-body" id="tpm-sheet-body"></div><div class="sh-foot" id="tpm-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-tpmx" onclick="closeSheet('ov-tpmx','sh-tpmx')"></div>
+  <div class="sheet" id="sh-tpmx"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="tpmx-sheet-title">Assign / Transfer</div><span class="sh-close" onclick="closeSheet('ov-tpmx','sh-tpmx')">&#10005;</span></div><div class="sh-body" id="tpmx-sheet-body"></div><div class="sh-foot" id="tpmx-sheet-foot"></div></div>
+</div>
 
 <!-- ACCESS CONTROL -->
 <div class="app-screen" id="app-access">
@@ -20280,6 +20302,259 @@ function ohExportPDF(){
   var d=ohExportData();
   d.rows=d.rows.map(function(r){ r[6]=fmtINR(r[6]); r[7]=r[7]?fmtINR(r[7]):''; r[9]=fmtINR(r[9]); return r; });
   accExportPDF('Company Overheads', d.header, d.rows);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TOOLS, PLANT & MACHINERY — asset register with project assignment
+// ═══════════════════════════════════════════════════════════════════
+var TPM_LIST=[], TPM_PROJECTS_LITE=[], TPM_TRANSFERS=[];
+var TPM_CATEGORIES=['Heavy Machinery','Vehicles','Tools','Site Equipment','Safety Equipment','Other'];
+var TPM_STATUS_DEFS={
+  available:  {label:'Available',   color:'#2E7D32', bg:'#E8F5E9'},
+  in_use:     {label:'In Use',      color:'#1565C0', bg:'#E3F2FD'},
+  maintenance:{label:'Maintenance', color:'#E65100', bg:'#FFF3E0'},
+  breakdown:  {label:'Breakdown',   color:'#C62828', bg:'#FFEBEE'},
+  disposed:   {label:'Disposed',    color:'#616161', bg:'#F5F5F5'}
+};
+var TPM_FILTER_CAT='all', TPM_FILTER_STATUS='all', TPM_SEARCH='';
+
+function tpmCanEdit(){ return typeof canAccess==='function' ? canAccess('tpm','edit') : (currentUser&&currentUser.role==='admin'); }
+function tpmCanDelete(){ return typeof canAccess==='function' ? canAccess('tpm','delete') : (currentUser&&currentUser.role==='admin'); }
+function tpmProjectName(id){
+  if(!id) return null;
+  var p=TPM_PROJECTS_LITE.find(function(x){return x.id===id;});
+  return p?(p.name||p.code):null;
+}
+
+async function initTPM(){
+  var cont=document.getElementById('tpm-content'); if(!cont) return;
+  cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>';
+  var addBtn=document.getElementById('tpm-add-btn');
+  if(addBtn) addBtn.style.display=tpmCanEdit()?'':'none';
+  try{
+    var r=await Promise.all([
+      sbFetch('tpm_assets',{select:'*',order:'name.asc'}),
+      sbFetch('projects',{select:'id,name,code'}).catch(function(){return [];})
+    ]);
+    TPM_LIST=Array.isArray(r[0])?r[0]:[];
+    TPM_PROJECTS_LITE=Array.isArray(r[1])?r[1]:[];
+    tpmRender();
+  }catch(e){
+    console.error('initTPM:',e);
+    cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading assets: '+e.message+
+      '<div style="font-size:11px;color:var(--text3);margin-top:8px;">If this says the table is missing, run supabase/tools_plant_machinery.sql in Supabase.</div></div>';
+  }
+}
+
+function tpmFilteredList(){
+  var q=TPM_SEARCH.trim().toLowerCase();
+  return TPM_LIST.filter(function(x){
+    if(TPM_FILTER_CAT!=='all' && (x.category||'Other')!==TPM_FILTER_CAT) return false;
+    if(TPM_FILTER_STATUS!=='all' && (x.status||'available')!==TPM_FILTER_STATUS) return false;
+    if(q && (x.name||'').toLowerCase().indexOf(q)===-1 && (x.reg_or_serial_no||'').toLowerCase().indexOf(q)===-1 && (x.make_model||'').toLowerCase().indexOf(q)===-1) return false;
+    return true;
+  });
+}
+
+function tpmSetFilter(kind,val){
+  if(kind==='cat') TPM_FILTER_CAT=val; else if(kind==='status') TPM_FILTER_STATUS=val;
+  tpmRender();
+}
+function tpmSetSearch(val){ TPM_SEARCH=val; tpmRenderList(); }
+
+function tpmRender(){
+  var cont=document.getElementById('tpm-content'); if(!cont) return;
+  var counts={available:0,in_use:0,maintenance:0,breakdown:0,disposed:0};
+  TPM_LIST.forEach(function(x){ var s=x.status||'available'; if(counts[s]!=null) counts[s]++; });
+
+  cont.innerHTML=
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL</div><div style="font-size:15px;font-weight:900;color:#4E342E;">'+TPM_LIST.length+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">AVAILABLE</div><div style="font-size:15px;font-weight:900;color:#2E7D32;">'+counts.available+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">IN USE</div><div style="font-size:15px;font-weight:900;color:#1565C0;">'+counts.in_use+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">MAINT./DOWN</div><div style="font-size:15px;font-weight:900;color:#E65100;">'+(counts.maintenance+counts.breakdown)+'</div></div>'+
+    '</div>'+
+    '<input class="finp" placeholder="&#128269; Search by name, make/model, or reg/serial no." style="margin-bottom:10px;" value="'+TPM_SEARCH.replace(/"/g,'&quot;')+'" oninput="tpmSetSearch(this.value)">'+
+    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;gap:6px;margin-bottom:6px;">'+
+      '<button onclick="tpmSetFilter(\'cat\',\'all\')" style="background:'+(TPM_FILTER_CAT==='all'?'#4E342E':'white')+';color:'+(TPM_FILTER_CAT==='all'?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_CAT==='all'?'#4E342E':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">All Categories</button>'+
+      TPM_CATEGORIES.map(function(c){
+        return '<button onclick="tpmSetFilter(\'cat\',\''+c+'\')" style="background:'+(TPM_FILTER_CAT===c?'#4E342E':'white')+';color:'+(TPM_FILTER_CAT===c?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_CAT===c?'#4E342E':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">'+c+'</button>';
+      }).join('')+
+    '</div>'+
+    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;gap:6px;margin-bottom:12px;">'+
+      '<button onclick="tpmSetFilter(\'status\',\'all\')" style="background:'+(TPM_FILTER_STATUS==='all'?'#37474F':'white')+';color:'+(TPM_FILTER_STATUS==='all'?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_STATUS==='all'?'#37474F':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">All Status</button>'+
+      Object.keys(TPM_STATUS_DEFS).map(function(s){
+        var d=TPM_STATUS_DEFS[s];
+        return '<button onclick="tpmSetFilter(\'status\',\''+s+'\')" style="background:'+(TPM_FILTER_STATUS===s?d.color:'white')+';color:'+(TPM_FILTER_STATUS===s?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_STATUS===s?d.color:'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">'+d.label+'</button>';
+      }).join('')+
+    '</div>'+
+    '<div id="tpm-list"></div>';
+  tpmRenderList();
+}
+
+function tpmRenderList(){
+  var el=document.getElementById('tpm-list'); if(!el) return;
+  var list=tpmFilteredList();
+  if(!list.length){
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">'+(TPM_LIST.length?'No assets match this filter.':'No assets registered yet.<br><span style="font-size:11px;">Use <b>+</b> to add cranes, JCBs, generators, vehicles, tools, and other equipment.</span>')+'</div>';
+    return;
+  }
+  el.innerHTML=list.map(function(x){
+    var sd=TPM_STATUS_DEFS[x.status||'available']||TPM_STATUS_DEFS.available;
+    var projName=tpmProjectName(x.current_project_id);
+    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;">'+
+      '<div style="display:flex;justify-content:space-between;gap:8px;">'+
+        '<div>'+
+          '<div style="font-size:13.5px;font-weight:800;">'+x.name+'</div>'+
+          '<div style="font-size:11px;color:var(--text3);">'+(x.category||'Other')+(x.make_model?' \u00b7 '+x.make_model:'')+(x.reg_or_serial_no?' \u00b7 '+x.reg_or_serial_no:'')+'</div>'+
+          (x.ownership==='rented_in'?'<div style="font-size:10px;color:#6A1B9A;font-weight:700;margin-top:2px;">&#128257; Rented from '+(x.vendor_name||'vendor')+'</div>':'')+
+        '</div>'+
+        '<span style="background:'+sd.bg+';color:'+sd.color+';font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap;height:fit-content;">'+sd.label+'</span>'+
+      '</div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #F0F0F0;">'+
+        '<div style="font-size:11px;color:var(--text3);">'+
+          (projName?'&#128205; <b style="color:var(--text2);">'+projName+'</b>':'<span>Not assigned to a project</span>')+
+          (x.purchase_cost?' \u00b7 '+fmtINR(parseFloat(x.purchase_cost)||0):'')+
+        '</div>'+
+        '<div style="display:flex;gap:6px;flex-shrink:0;">'+
+          (tpmCanEdit()?'<button onclick="tpmOpenTransfer(\''+x.id+'\')" style="background:none;border:1px solid #D7CCC8;color:#4E342E;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128257; Assign</button>':'')+
+          (tpmCanEdit()?'<button onclick="tpmOpenForm(\''+x.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
+          (tpmCanDelete()?'<button onclick="tpmDelete(\''+x.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function tpmOpenForm(id){
+  var ex=id?TPM_LIST.find(function(x){return x.id===id;}):null;
+  document.getElementById('tpm-sheet-title').textContent=ex?'Edit Asset':'New Asset';
+  document.getElementById('tpm-sheet-body').innerHTML=
+    '<div class="fgrp"><label class="flbl">Name *</label><input id="tpm-name" class="finp" placeholder="e.g. JCB 3DX Backhoe Loader" value="'+(ex?ex.name||'':'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Category</label><select id="tpm-cat" class="fsel">'+
+      TPM_CATEGORIES.map(function(c){return '<option value="'+c+'"'+((ex&&ex.category===c)||(!ex&&c==='Heavy Machinery')?' selected':'')+'>'+c+'</option>';}).join('')+
+    '</select></div>'+
+    '<div class="fgrp"><label class="flbl">Make / Model</label><input id="tpm-makemodel" class="finp" placeholder="e.g. JCB 3DX Super" value="'+(ex?ex.make_model||'':'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Registration / Serial No.</label><input id="tpm-regno" class="finp" placeholder="e.g. MH-12-AB-1234" value="'+(ex?ex.reg_or_serial_no||'':'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Ownership</label><select id="tpm-ownership" class="fsel" onchange="document.getElementById(\'tpm-vendorwrap\').style.display=this.value===\'rented_in\'?\'\':\'none\';">'+
+      '<option value="owned"'+((!ex||ex.ownership==='owned')?' selected':'')+'>Owned</option>'+
+      '<option value="rented_in"'+((ex&&ex.ownership==='rented_in')?' selected':'')+'>Rented In (from a vendor)</option>'+
+    '</select></div>'+
+    '<div id="tpm-vendorwrap" class="fgrp" style="display:'+((ex&&ex.ownership==='rented_in')?'':'none')+';"><label class="flbl">Vendor Name</label><input id="tpm-vendor" class="finp" placeholder="e.g. Shree Equipment Rentals" value="'+(ex?ex.vendor_name||'':'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Purchase Date</label><input id="tpm-pdate" class="finp" type="date" value="'+(ex&&ex.purchase_date?ex.purchase_date:'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Purchase Cost (\u20b9)</label><input id="tpm-pcost" class="finp" type="number" step="0.01" placeholder="0.00" value="'+(ex&&ex.purchase_cost?parseFloat(ex.purchase_cost):'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Status</label><select id="tpm-status" class="fsel">'+
+      Object.keys(TPM_STATUS_DEFS).map(function(s){return '<option value="'+s+'"'+((ex&&ex.status===s)||(!ex&&s==='available')?' selected':'')+'>'+TPM_STATUS_DEFS[s].label+'</option>';}).join('')+
+    '</select></div>'+
+    '<div class="fgrp"><label class="flbl">Notes</label><input id="tpm-notes" class="finp" placeholder="Any additional details" value="'+(ex?ex.notes||'':'')+'"></div>'+
+    (ex&&tpmProjectName(ex.current_project_id)?'<div style="font-size:10.5px;color:var(--text3);margin-top:-4px;">Currently assigned to <b>'+tpmProjectName(ex.current_project_id)+'</b> \u2014 use <b>Assign</b> on the list to change this.</div>':'');
+  document.getElementById('tpm-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-tpm\',\'sh-tpm\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="tpmSave('+(ex?'\''+ex.id+'\'':'null')+')">'+(ex?'Save Changes':'Add Asset')+'</button>';
+  openSheet('ov-tpm','sh-tpm');
+}
+
+async function tpmSave(id){
+  if(!tpmCanEdit()){toast('No permission','warning');return;}
+  var name=(document.getElementById('tpm-name')||{value:''}).value.trim();
+  if(!name){toast('Asset name is required','warning');return;}
+  var ownership=gv('tpm-ownership')||'owned';
+  var fields={
+    name:name,
+    category:gv('tpm-cat')||'Other',
+    make_model:(document.getElementById('tpm-makemodel')||{value:''}).value.trim()||null,
+    reg_or_serial_no:(document.getElementById('tpm-regno')||{value:''}).value.trim()||null,
+    ownership:ownership,
+    vendor_name:ownership==='rented_in'?((document.getElementById('tpm-vendor')||{value:''}).value.trim()||null):null,
+    purchase_date:gv('tpm-pdate')||null,
+    purchase_cost:parseFloat(gv('tpm-pcost'))||0,
+    status:gv('tpm-status')||'available',
+    notes:(document.getElementById('tpm-notes')||{value:''}).value.trim()||null,
+    updated_at:new Date().toISOString()
+  };
+  try{
+    if(id){
+      await sbUpdate('tpm_assets', id, fields);
+      var idx=TPM_LIST.findIndex(function(x){return x.id===id;});
+      if(idx>-1) TPM_LIST[idx]=Object.assign({},TPM_LIST[idx],fields);
+      toast('Asset updated','success');
+    }else{
+      fields.created_by=currentUser?currentUser.id:null;
+      var res=await sbInsert('tpm_assets',fields);
+      if(res&&res[0]) TPM_LIST.push(res[0]);
+      toast('Asset added','success');
+    }
+    closeSheet('ov-tpm','sh-tpm');
+    tpmRender();
+  }catch(e){
+    toast('Error: '+e.message+' \u2014 has supabase/tools_plant_machinery.sql been run?','error');
+  }
+}
+
+async function tpmDelete(id){
+  if(!tpmCanDelete()){toast('No permission','warning');return;}
+  var x=TPM_LIST.find(function(a){return a.id===id;});
+  if(!confirm('Delete "'+(x?x.name:'this asset')+'"?\n\nThis cannot be undone. Its assignment history will also be removed.')) return;
+  try{
+    // sbDelete() only supports deleting a single row by its own id, not an
+    // arbitrary filter — clearing this asset's transfer history needs a
+    // direct request filtered on tpm_id instead.
+    try{
+      await fetch(SUPABASE_URL+'/rest/v1/tpm_transfers?tpm_id=eq.'+id,{
+        method:'DELETE',
+        headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json'}
+      });
+    }catch(e){ console.warn('Could not clear transfer history for asset', id, e); }
+    await sbDelete('tpm_assets', id);
+    TPM_LIST=TPM_LIST.filter(function(a){return a.id!==id;});
+    toast('Asset deleted','success');
+    tpmRender();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function tpmOpenTransfer(id){
+  var x=TPM_LIST.find(function(a){return a.id===id;});
+  if(!x) return;
+  document.getElementById('tpmx-sheet-title').textContent='Assign / Transfer';
+  document.getElementById('tpmx-sheet-body').innerHTML=
+    '<div style="font-size:12.5px;font-weight:700;margin-bottom:2px;">'+x.name+'</div>'+
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Currently: '+(tpmProjectName(x.current_project_id)||'Not assigned \u2014 in the yard')+'</div>'+
+    '<div class="fgrp"><label class="flbl">Assign To</label><select id="tpmx-project" class="fsel">'+
+      '<option value="">Yard / Unassigned</option>'+
+      TPM_PROJECTS_LITE.map(function(p){return '<option value="'+p.id+'"'+(x.current_project_id===p.id?' selected':'')+'>'+(p.name||p.code)+'</option>';}).join('')+
+    '</select></div>'+
+    '<div class="fgrp"><label class="flbl">Date *</label><input id="tpmx-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Remarks</label><input id="tpmx-remarks" class="finp" placeholder="e.g. Moved for foundation work"></div>';
+  document.getElementById('tpmx-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-tpmx\',\'sh-tpmx\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="tpmSaveTransfer(\''+id+'\')">Save</button>';
+  openSheet('ov-tpmx','sh-tpmx');
+}
+
+async function tpmSaveTransfer(id){
+  if(!tpmCanEdit()){toast('No permission','warning');return;}
+  var x=TPM_LIST.find(function(a){return a.id===id;});
+  if(!x) return;
+  var toProjectId=gv('tpmx-project')||null;
+  var date=gv('tpmx-date')||new Date().toISOString().slice(0,10);
+  var remarks=(document.getElementById('tpmx-remarks')||{value:''}).value.trim()||null;
+  var fromProjectId=x.current_project_id||null;
+  if(fromProjectId===toProjectId){ toast('Already assigned there','warning'); return; }
+  try{
+    await sbInsert('tpm_transfers',{
+      tpm_id:id, from_project_id:fromProjectId, to_project_id:toProjectId,
+      date:date, remarks:remarks, created_by:currentUser?currentUser.id:null
+    });
+    var newStatus = toProjectId ? 'in_use' : 'available';
+    await sbUpdate('tpm_assets', id, {current_project_id:toProjectId, status:newStatus, updated_at:new Date().toISOString()});
+    var idx=TPM_LIST.findIndex(function(a){return a.id===id;});
+    if(idx>-1){ TPM_LIST[idx].current_project_id=toProjectId; TPM_LIST[idx].status=newStatus; }
+    toast(toProjectId?'Assigned to '+tpmProjectName(toProjectId):'Returned to yard','success');
+    closeSheet('ov-tpmx','sh-tpmx');
+    tpmRender();
+  }catch(e){
+    toast('Error: '+e.message+' \u2014 has supabase/tools_plant_machinery.sql been run?','error');
+  }
 }
 
 var ACC_ACCOUNTS=[], ACC_VOUCHERS=[], ACC_VOU_ITEMS=[], ACC_GST=[];
