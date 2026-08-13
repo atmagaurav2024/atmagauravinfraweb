@@ -6587,7 +6587,15 @@ function closeSheet(o,s){
   var sheetEl=document.getElementById(s);
   sheetEl.classList.remove('on');
   var screen=sheetEl.closest('.app-screen');
-  if(screen) screen.classList.remove('sheet-open');
+  if(screen){
+    // Only drop the boost if no other sheet inside this screen is still
+    // open — otherwise closing one stacked window (e.g. a lender-creation
+    // popup on top of a loan form on top of an asset form) would drop
+    // the whole screen back behind the left rail while sheets underneath
+    // are still legitimately open.
+    var stillOpen=screen.querySelector('.sheet.on');
+    if(!stillOpen) screen.classList.remove('sheet-open');
+  }
 }
 
 // toast: shared above
@@ -11364,6 +11372,14 @@ async function empSavePay(){
   <div class="sheet" id="sh-tpm"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="tpm-sheet-title">New Asset</div><span class="sh-close" onclick="closeSheet('ov-tpm','sh-tpm')">&#10005;</span></div><div class="sh-body" id="tpm-sheet-body"></div><div class="sh-foot" id="tpm-sheet-foot"></div></div>
   <div class="sh-overlay" id="ov-tpmx" onclick="closeSheet('ov-tpmx','sh-tpmx')"></div>
   <div class="sheet" id="sh-tpmx"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="tpmx-sheet-title">Assign / Transfer</div><span class="sh-close" onclick="closeSheet('ov-tpmx','sh-tpmx')">&#10005;</span></div><div class="sh-body" id="tpmx-sheet-body"></div><div class="sh-foot" id="tpmx-sheet-foot"></div></div>
+
+  <!-- Independent windows, stacked on top of the asset sheet — each
+       closes itself once its own job (register loan / add lender) is
+       done, returning to whatever's underneath. -->
+  <div class="sh-overlay" id="ov-tpmloan" onclick="closeSheet('ov-tpmloan','sh-tpmloan')"></div>
+  <div class="sheet" id="sh-tpmloan"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title">Register New Loan</div><span class="sh-close" onclick="closeSheet('ov-tpmloan','sh-tpmloan')">&#10005;</span></div><div class="sh-body" id="tpmloan-sheet-body"></div><div class="sh-foot" id="tpmloan-sheet-foot"></div></div>
+  <div class="sh-overlay" id="ov-tpmlender" onclick="closeSheet('ov-tpmlender','sh-tpmlender')"></div>
+  <div class="sheet" id="sh-tpmlender"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title">Add New Lender</div><span class="sh-close" onclick="closeSheet('ov-tpmlender','sh-tpmlender')">&#10005;</span></div><div class="sh-body" id="tpmlender-sheet-body"></div><div class="sh-foot" id="tpmlender-sheet-foot"></div></div>
 </div>
 
 <!-- ACCESS CONTROL -->
@@ -20545,23 +20561,34 @@ function tpmSetLoanMode(mode, ex){
     (!TPM_LOANS_LITE.length?'<div style="font-size:10px;color:#C62828;margin-top:4px;">No taken loans found yet \u2014 use "Register New Loan" instead.</div>':'');
   }else{
     if(TPM_NEW_LOAN_LINK){ body.innerHTML=tpmNewLoanConfirmHtml(); return; }
-    body.innerHTML='<div style="text-align:center;padding:12px;color:var(--text3);font-size:11px;">&#9203; Loading...</div>';
-    tpmEnsureLoanModuleData().then(function(){
-      if(TPM_LOAN_MODE!=='new') return; // switched away before this resolved
-      body.innerHTML=tpmRegisterLoanFormHtml();
-    });
+    // The actual registration happens in its own independent window
+    // (sh-tpmloan), stacked on top of this asset sheet — this area just
+    // shows a status line and the button to (re)open it.
+    body.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">No loan registered yet.</div>'+
+      '<button type="button" onclick="tpmOpenRegisterLoanWindow()" class="btn btn-navy" style="width:100%;">Open Loan Registration Form</button>';
+    tpmOpenRegisterLoanWindow();
   }
 }
 
-// Reuses the Loans module's own fields/IDs (ll-party, ll-principal, etc.)
-// so lnSaveLoan('taken', null, callback) below can save it exactly as if
-// it had been entered in the Loans module itself — same table, same
-// accounting auto-post, no separate insert logic to keep in sync.
-var TPM_LOAN_DRAFT=null; // captures the loan mini-form's in-progress values while the "Add New Lender" step is shown, so they aren't lost
-
-function tpmRegisterLoanFormHtml(preselectPartyId){
+// ── Independent window 1: Register New Loan ─────────────────────────
+// Its own sheet (sh-tpmloan), stacked on top of the asset sheet rather
+// than replacing content inside it — closes itself on save/cancel,
+// leaving the asset sheet exactly as it was underneath.
+function tpmOpenRegisterLoanWindow(){
+  document.getElementById('tpmloan-sheet-body').innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:11px;">&#9203; Loading...</div>';
+  document.getElementById('tpmloan-sheet-foot').innerHTML='';
+  openSheet('ov-tpmloan','sh-tpmloan');
+  tpmEnsureLoanModuleData().then(function(){
+    tpmRenderLoanWindow();
+  });
+}
+function tpmRenderLoanWindow(preselectPartyId){
+  // Reuses the Loans module's own field IDs (ll-party, ll-principal,
+  // etc.) so lnSaveLoan('taken', null, callback) can save it exactly as
+  // if entered in the Loans module itself — same table, same
+  // accounting auto-post, no separate insert logic to keep in sync.
   var elig=LN_PARTIES.filter(function(p){return p.party_type==='both'||p.party_type==='creditor';});
-  return '<div style="background:#FAFAF9;border:1px solid #E7E5E4;border-radius:8px;padding:10px;">'+
+  document.getElementById('tpmloan-sheet-body').innerHTML=
     '<label class="flbl">Lender (Creditor) *</label><select class="fsel" id="ll-party" onchange="tpmPartyDropdownChange(this)">'+
       (elig.length?'':'<option value="">Select lender...</option>')+
       elig.map(function(p){return '<option value="'+p.id+'"'+(preselectPartyId===p.id?' selected':'')+'>'+p.name+'</option>';}).join('')+
@@ -20581,40 +20608,33 @@ function tpmRegisterLoanFormHtml(preselectPartyId){
     '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref">'+
     '<label class="flbl">Received Via</label>'+lnModeOptionsHtml('ll-mode')+
     '<label class="flbl">Remarks</label><input class="finp" id="ll-remarks">'+
-    '<button type="button" onclick="tpmRegisterLoanSubmit()" class="btn btn-navy" style="width:100%;margin-top:6px;">Register This Loan</button>'+
-    '<div style="font-size:10px;color:var(--text3);margin-top:6px;">This creates a real loan \u2014 it will also appear in the Loans module, posted to Accounts exactly as if registered there directly.</div>'+
-  '</div>';
+    '<div style="font-size:10px;color:var(--text3);margin-top:6px;">This creates a real loan \u2014 it will also appear in the Loans module, posted to Accounts exactly as if registered there directly.</div>';
+  document.getElementById('tpmloan-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-tpmloan\',\'sh-tpmloan\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="tpmRegisterLoanSubmit()">Register This Loan</button>';
 }
-
-// Captures whatever's already filled into the loan mini-form before
-// switching it out for the lender sub-form, so picking "+ Add New
-// Lender" (or cancelling out of it) doesn't lose the principal/date/
-// rate/etc the person already typed.
-function tpmCaptureLoanDraft(){
-  return {principal:gv('ll-principal'), date:gv('ll-date'), rate:gv('ll-rate'), inttype:gv('ll-inttype'),
-    tenure:gv('ll-tenure'), purpose:gv('ll-purpose'), ref:gv('ll-ref'), mode:gv('ll-mode'), remarks:gv('ll-remarks')};
-}
-function tpmApplyLoanDraft(draft){
-  if(!draft) return;
-  var map={'ll-principal':'principal','ll-date':'date','ll-rate':'rate','ll-inttype':'inttype',
-    'll-tenure':'tenure','ll-purpose':'purpose','ll-ref':'ref','ll-mode':'mode','ll-remarks':'remarks'};
-  Object.keys(map).forEach(function(id){
-    var el=document.getElementById(id);
-    if(el && draft[map[id]]){ el.value=draft[map[id]]; }
-  });
-  if(gv('ll-mode')==='EmpBank' && typeof lnToggleModeEmp==='function') lnToggleModeEmp('ll-mode');
-}
-
 function tpmPartyDropdownChange(sel){
-  if(sel.value!=='__new__') return;
-  TPM_LOAN_DRAFT=tpmCaptureLoanDraft();
-  var body=document.getElementById('tpm-loanmode-body');
-  if(body) body.innerHTML=tpmNewLenderFormHtml();
+  if(sel.value==='__new__') tpmOpenNewLenderWindow();
+}
+async function tpmRegisterLoanSubmit(){
+  await lnSaveLoan('taken', null, function(saved){
+    TPM_NEW_LOAN_LINK={id:saved.id, principal:saved.principal, interest_rate:saved.interest_rate, party_id:saved.party_id, start_date:saved.start_date};
+    TPM_LOANS_LITE.unshift(TPM_NEW_LOAN_LINK);
+    if(!TPM_LOAN_PARTIES_LITE.some(function(p){return p.id===saved.party_id;})){
+      var p=LN_PARTIES.find(function(x){return x.id===saved.party_id;});
+      if(p) TPM_LOAN_PARTIES_LITE.push({id:p.id,name:p.name});
+    }
+    closeSheet('ov-tpmloan','sh-tpmloan');   // this window's job is done
+    tpmSetLoanMode('new');                   // updates the asset sheet underneath with the confirmation
+  });
 }
 
-function tpmNewLenderFormHtml(){
-  return '<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;padding:10px;">'+
-    '<div style="font-weight:800;font-size:12px;margin-bottom:6px;">Add New Lender</div>'+
+// ── Independent window 2: Add New Lender ────────────────────────────
+// Opens on top of the loan registration window (which stays open,
+// untouched, underneath — no need to capture/restore its field values
+// since we're not replacing its content). Closes itself on save/cancel.
+function tpmOpenNewLenderWindow(){
+  document.getElementById('tpmlender-sheet-body').innerHTML=
     '<label class="flbl">Name *</label><input class="finp" id="lp-name" placeholder="Person or company name">'+
     '<label class="flbl">Type *</label><select class="fsel" id="lp-type">'+
       '<option value="creditor" selected>Creditor (I borrow from them)</option>'+
@@ -20624,28 +20644,26 @@ function tpmNewLenderFormHtml(){
     '<label class="flbl">Contact</label><input class="finp" id="lp-contact" placeholder="Phone / email">'+
     '<label class="flbl">Address</label><input class="finp" id="lp-address">'+
     '<label class="flbl">PAN</label><input class="finp" id="lp-pan" placeholder="ABCDE1234F">'+
-    '<label class="flbl">Remarks</label><input class="finp" id="lp-remarks">'+
-    '<div style="display:flex;gap:8px;margin-top:8px;">'+
-      '<button type="button" onclick="tpmSaveNewLender()" class="btn btn-navy" style="flex:1;">Save Lender</button>'+
-      '<button type="button" onclick="tpmCancelNewLender()" class="btn btn-outline" style="flex:1;">Cancel</button>'+
-    '</div>'+
-  '</div>';
+    '<label class="flbl">Remarks</label><input class="finp" id="lp-remarks">';
+  document.getElementById('tpmlender-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="tpmCancelNewLender()">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="tpmSaveNewLender()">Save Lender</button>';
+  openSheet('ov-tpmlender','sh-tpmlender');
 }
-
 async function tpmSaveNewLender(){
   await lnSaveParty(null, function(saved){
-    var draft=TPM_LOAN_DRAFT; TPM_LOAN_DRAFT=null;
-    var body=document.getElementById('tpm-loanmode-body');
-    if(body) body.innerHTML=tpmRegisterLoanFormHtml(saved.id);
-    tpmApplyLoanDraft(draft);
+    closeSheet('ov-tpmlender','sh-tpmlender');  // this window's job is done
+    tpmRenderLoanWindow(saved.id);               // loan window underneath now shows the new lender, pre-selected
     toast('Lender added and selected','success');
   });
 }
 function tpmCancelNewLender(){
-  var draft=TPM_LOAN_DRAFT; TPM_LOAN_DRAFT=null;
-  var body=document.getElementById('tpm-loanmode-body');
-  if(body) body.innerHTML=tpmRegisterLoanFormHtml();
-  tpmApplyLoanDraft(draft);
+  closeSheet('ov-tpmlender','sh-tpmlender');
+  // the loan window underneath was never touched — its own party
+  // dropdown is still sitting on "+ Add New Lender"; put it back to
+  // whatever was selected before (nothing, since __new__ was just
+  // chosen) by simply re-rendering it with no preselection.
+  tpmRenderLoanWindow();
 }
 
 function tpmNewLoanConfirmHtml(){
@@ -20656,18 +20674,6 @@ function tpmNewLoanConfirmHtml(){
   '</div>';
 }
 function tpmResetNewLoan(){ TPM_NEW_LOAN_LINK=null; tpmSetLoanMode('new'); }
-
-async function tpmRegisterLoanSubmit(){
-  await lnSaveLoan('taken', null, function(saved){
-    TPM_NEW_LOAN_LINK={id:saved.id, principal:saved.principal, interest_rate:saved.interest_rate, party_id:saved.party_id, start_date:saved.start_date};
-    TPM_LOANS_LITE.unshift(TPM_NEW_LOAN_LINK);
-    if(!TPM_LOAN_PARTIES_LITE.some(function(p){return p.id===saved.party_id;})){
-      var p=LN_PARTIES.find(function(x){return x.id===saved.party_id;});
-      if(p) TPM_LOAN_PARTIES_LITE.push({id:p.id,name:p.name});
-    }
-    tpmSetLoanMode('new');
-  });
-}
 
 function tpmRenderDocsList(){
   var el=document.getElementById('tpm-docs-list'); if(!el) return;
