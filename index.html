@@ -17921,12 +17921,16 @@ function lnEmiAmount(principal, annualRatePct, tenureMonths){
 // Shared by both places the loan form appears (lnOpenLoan and TPM's
 // Register New Loan window) — both use the same ll-* field ids, so one
 // function updates whichever is currently on screen. Toggles the
-// Interest Type field (hidden for EMI — not a meaningful choice there)
-// and the live EMI estimate, based on the new Payment Type field.
+// Interest Type field (hidden for EMI — not a meaningful choice there),
+// the Date of First EMI field (optional — used only to suggest the
+// first Create EMI Payment's date, see lnComputeNextEmiDate), and the
+// live EMI estimate, based on the new Payment Type field.
 function lnUpdatePaymentType(){
   var isEmi=gv('ll-paytype')==='emi';
   var intWrap=document.getElementById('ll-inttype-wrap');
   if(intWrap) intWrap.style.display=isEmi?'none':'';
+  var dateWrap=document.getElementById('ll-first-emi-wrap');
+  if(dateWrap) dateWrap.style.display=isEmi?'':'none';
   var el=document.getElementById('ll-emi-info');
   if(!el) return;
   if(!isEmi){ el.style.display='none'; return; }
@@ -19502,6 +19506,7 @@ function lnOpenLoan(dir, editId){
     '</select></div>'+
     '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional" value="'+((ex&&ex.tenure_months)||'')+'" oninput="lnUpdatePaymentType()">'+
     '<div id="ll-emi-info" style="display:none;font-size:10.5px;color:#00695C;font-weight:700;background:#E0F2F1;border-radius:6px;padding:6px 8px;margin:-6px 0 10px;"></div>'+
+    '<div id="ll-first-emi-wrap" style="display:none;"><label class="flbl">Date of First EMI (optional)</label><input class="finp" id="ll-first-emi-date" type="date" value="'+((ex&&ex.first_emi_date)||'')+'"></div>'+
     '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Working capital" value="'+((ex&&ex.purpose)||'').replace(/"/g,'&quot;')+'">'+
     '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref" value="'+((ex&&ex.reference)||'').replace(/"/g,'&quot;')+'">'+
     '<label class="flbl">Received / Paid Via</label>'+lnModeOptionsHtml('ll-mode')+
@@ -19533,6 +19538,7 @@ async function lnSaveLoan(dir, editId, onSaved){
       interest_type:payType==='emi'?'simple':(gv('ll-inttype')||'simple'),
       tenure_months:parseInt(gv('ll-tenure'),10)||null,purpose:gv('ll-purpose')||null,
       reference:gv('ll-ref')||null,mode:mode,mode_emp_id:modeEmp,
+      first_emi_date:gv('ll-first-emi-date')||null,
       remarks:gv('ll-remarks')||null};
   try{
     if(editId){
@@ -20005,19 +20011,21 @@ async function lnSaveTxn(loanId,type){
 // uses for a plain repayment/interest entry. Kept as its own function
 // since an EMI needs both components recorded together as one action,
 // not two separate visits to the single-type form above.
-function lnComputeNextEmiDate(loanId, loanStartDate){
+function lnComputeNextEmiDate(loanId, loan){
   var txns=LN_TXNS.filter(function(t){return t.loan_id===loanId;});
-  var base;
   if(!txns.length){
-    // First EMI ever recorded for this loan — one month after disbursement.
-    base=loanStartDate?new Date(loanStartDate+'T00:00:00'):new Date();
-  }else{
-    var latest=txns.reduce(function(a,b){return (String(a.date)>String(b.date))?a:b;});
-    base=new Date(String(latest.date)+'T00:00:00');
+    // First EMI ever recorded — use what was set at registration, if any.
+    if(loan.first_emi_date) return loan.first_emi_date;
+    var base=loan.start_date?new Date(loan.start_date+'T00:00:00'):new Date();
+    if(isNaN(base)) base=new Date();
+    var next=new Date(base.getFullYear(), base.getMonth()+1, base.getDate());
+    return next.toISOString().slice(0,10);
   }
-  if(isNaN(base)) base=new Date();
-  var next=new Date(base.getFullYear(), base.getMonth()+1, base.getDate());
-  return next.toISOString().slice(0,10);
+  var latest=txns.reduce(function(a,b){return (String(a.date)>String(b.date))?a:b;});
+  var base2=new Date(String(latest.date)+'T00:00:00');
+  if(isNaN(base2)) base2=new Date();
+  var next2=new Date(base2.getFullYear(), base2.getMonth()+1, base2.getDate());
+  return next2.toISOString().slice(0,10);
 }
 
 function lnOpenEmiPayment(loanId){
@@ -20032,6 +20040,7 @@ function lnOpenEmiPayment(loanId){
     '<div style="background:#FFF3E0;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;">'+
       '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b>'+
       '<br>Tenure: '+(loan.tenure_months||'\u2014')+' months \u00b7 EMI: <b>'+fmtINR(emi)+'</b>'+
+      (loan.first_emi_date?' \u00b7 First EMI: '+fmtDate(loan.first_emi_date):'')+
       (!loan.tenure_months?'<div style="color:#C62828;font-weight:700;margin-top:2px;">Tenure (months) isn\'t set on this loan \u2014 edit the loan to set it so the EMI can be calculated.</div>':'')+
     '</div>'+
     '<label class="flbl">EMI Amount (\u20b9) *</label><input class="finp" id="le-emi" type="number" step="0.01" value="'+(emi>0?emi.toFixed(2):'')+'" oninput="lnEmiSplitRecalc()">'+
@@ -20040,8 +20049,12 @@ function lnOpenEmiPayment(loanId){
       '<div><label class="flbl">Interest Portion (\u20b9)</label><input class="finp" id="le-interest" type="number" step="0.01" value="'+(interestPortion>0?interestPortion.toFixed(2):'')+'" oninput="lnEmiCheckSplit()"></div>'+
     '</div>'+
     '<div id="le-split-check" style="font-size:10.5px;font-weight:700;margin:4px 0 8px;"></div>'+
-    '<label class="flbl">Date *</label><input class="finp" id="le-date" type="date" value="'+lnComputeNextEmiDate(loanId, loan.start_date)+'">'+
-    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">Defaulted to one month after '+(LN_TXNS.some(function(t){return t.loan_id===loanId;})?'the last recorded payment':'the loan start date')+' \u2014 editable.</div>'+
+    '<label class="flbl">Date *</label><input class="finp" id="le-date" type="date" value="'+lnComputeNextEmiDate(loanId, loan)+'">'+
+    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">'+
+      (LN_TXNS.some(function(t){return t.loan_id===loanId;})
+        ? 'Defaulted to one month after the last recorded payment'
+        : (loan.first_emi_date ? 'Defaulted to the Date of First EMI set on this loan' : 'Defaulted to one month after the loan start date'))+
+      ' \u2014 editable.</div>'+
     '<label class="flbl">Mode</label>'+lnModeOptionsHtml('le-mode')+
     '<label class="flbl">Reference</label><input class="finp" id="le-ref">'+
     '<label class="flbl">Remarks</label><input class="finp" id="le-remarks">'+
@@ -20770,6 +20783,7 @@ function tpmRenderLoanWindow(preselectPartyId){
     '</select></div>'+
     '<label class="flbl">Tenure (months)</label><input class="finp" id="ll-tenure" type="number" placeholder="Optional" oninput="lnUpdatePaymentType()">'+
     '<div id="ll-emi-info" style="display:none;font-size:10.5px;color:#00695C;font-weight:700;background:#E0F2F1;border-radius:6px;padding:6px 8px;margin:-6px 0 10px;"></div>'+
+    '<div id="ll-first-emi-wrap" style="display:none;"><label class="flbl">Date of First EMI (optional)</label><input class="finp" id="ll-first-emi-date" type="date"></div>'+
     '<label class="flbl">Purpose</label><input class="finp" id="ll-purpose" placeholder="e.g. Machinery purchase">'+
     '<label class="flbl">Reference / Agreement No.</label><input class="finp" id="ll-ref">'+
     '<label class="flbl">Received Via</label>'+lnModeOptionsHtml('ll-mode')+
