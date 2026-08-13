@@ -58,5 +58,21 @@ drop policy if exists "tpm_transfers_all" on tpm_transfers;
 create policy "tpm_transfers_all" on tpm_transfers for all using (true) with check (true);
 
 -- ── Realtime (optional, matches the Attendance/Access Control pattern) ──
-alter publication supabase_realtime add table public.tpm_assets;
-alter publication supabase_realtime add table public.tpm_transfers;
+-- ALTER PUBLICATION has no IF NOT EXISTS, so this checks first — safe to
+-- run any number of times, including if you already ran the old version
+-- of this file that added these unconditionally.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='tpm_assets'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.tpm_assets;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='tpm_transfers'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.tpm_transfers;
+  END IF;
+END $$;
