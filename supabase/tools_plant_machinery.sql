@@ -22,6 +22,15 @@ create table if not exists tpm_assets (
 create index if not exists idx_tpm_assets_status  on tpm_assets(status);
 create index if not exists idx_tpm_assets_project on tpm_assets(current_project_id);
 
+-- 1b. Added later: specification, uploaded documents, approximate life,
+--     and optional linking to the loan that financed the purchase.
+alter table tpm_assets
+  add column if not exists specification    text,
+  add column if not exists documents        jsonb,          -- [{name, url}, ...] — uploaded to Cloudinary, not Supabase Storage
+  add column if not exists approx_life_years numeric,
+  add column if not exists taken_on_loan     boolean not null default false,
+  add column if not exists linked_loan_id    uuid references loans(id);
+
 -- 2. Assignment/transfer history — every move between projects (or to/from
 --    the yard, i.e. no project) is logged here, in addition to the
 --    asset's own current_project_id reflecting where it is right now.

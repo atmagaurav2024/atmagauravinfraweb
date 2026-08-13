@@ -20317,6 +20317,7 @@ var TPM_STATUS_DEFS={
   disposed:   {label:'Disposed',    color:'#616161', bg:'#F5F5F5'}
 };
 var TPM_FILTER_CAT='all', TPM_FILTER_STATUS='all', TPM_SEARCH='';
+var TPM_LOANS_LITE=[], TPM_LOAN_PARTIES_LITE=[], TPM_FORM_DOCS=[];
 
 function tpmCanEdit(){ return typeof canAccess==='function' ? canAccess('tpm','edit') : (currentUser&&currentUser.role==='admin'); }
 function tpmCanDelete(){ return typeof canAccess==='function' ? canAccess('tpm','delete') : (currentUser&&currentUser.role==='admin'); }
@@ -20324,6 +20325,10 @@ function tpmProjectName(id){
   if(!id) return null;
   var p=TPM_PROJECTS_LITE.find(function(x){return x.id===id;});
   return p?(p.name||p.code):null;
+}
+function tpmLoanLabel(loan){
+  var party=TPM_LOAN_PARTIES_LITE.find(function(p){return p.id===loan.party_id;});
+  return (party?party.name:'Unknown lender')+' \u2014 '+fmtINR(parseFloat(loan.principal)||0)+' @ '+(loan.interest_rate||0)+'%'+(loan.start_date?' ('+fmtDate(loan.start_date)+')':'');
 }
 
 async function initTPM(){
@@ -20334,10 +20339,14 @@ async function initTPM(){
   try{
     var r=await Promise.all([
       sbFetch('tpm_assets',{select:'*',order:'name.asc'}),
-      sbFetch('projects',{select:'id,name,code'}).catch(function(){return [];})
+      sbFetch('projects',{select:'id,name,code'}).catch(function(){return [];}),
+      sbFetch('loans',{select:'id,principal,interest_rate,party_id,start_date',filter:'direction=eq.taken'}).catch(function(){return [];}),
+      sbFetch('loan_parties',{select:'id,name'}).catch(function(){return [];})
     ]);
     TPM_LIST=Array.isArray(r[0])?r[0]:[];
     TPM_PROJECTS_LITE=Array.isArray(r[1])?r[1]:[];
+    TPM_LOANS_LITE=Array.isArray(r[2])?r[2]:[];
+    TPM_LOAN_PARTIES_LITE=Array.isArray(r[3])?r[3]:[];
     tpmRender();
   }catch(e){
     console.error('initTPM:',e);
@@ -20402,12 +20411,18 @@ function tpmRenderList(){
   el.innerHTML=list.map(function(x){
     var sd=TPM_STATUS_DEFS[x.status||'available']||TPM_STATUS_DEFS.available;
     var projName=tpmProjectName(x.current_project_id);
+    var docCount=0; try{ var d=x.documents?(typeof x.documents==='string'?JSON.parse(x.documents):x.documents):[]; docCount=(d||[]).length; }catch(e){}
     return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;">'+
       '<div style="display:flex;justify-content:space-between;gap:8px;">'+
         '<div>'+
           '<div style="font-size:13.5px;font-weight:800;">'+x.name+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(x.category||'Other')+(x.make_model?' \u00b7 '+x.make_model:'')+(x.reg_or_serial_no?' \u00b7 '+x.reg_or_serial_no:'')+'</div>'+
           (x.ownership==='rented_in'?'<div style="font-size:10px;color:#6A1B9A;font-weight:700;margin-top:2px;">&#128257; Rented from '+(x.vendor_name||'vendor')+'</div>':'')+
+          '<div style="display:flex;gap:8px;margin-top:3px;">'+
+            (x.taken_on_loan?'<span style="font-size:9.5px;color:#00695C;font-weight:700;">&#127974; On loan</span>':'')+
+            (docCount?'<span style="font-size:9.5px;color:var(--text3);">&#128206; '+docCount+' doc'+(docCount!==1?'s':'')+'</span>':'')+
+            (x.approx_life_years?'<span style="font-size:9.5px;color:var(--text3);">&#8987; ~'+x.approx_life_years+'yr life</span>':'')+
+          '</div>'+
         '</div>'+
         '<span style="background:'+sd.bg+';color:'+sd.color+';font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap;height:fit-content;">'+sd.label+'</span>'+
       '</div>'+
@@ -20428,6 +20443,11 @@ function tpmRenderList(){
 
 function tpmOpenForm(id){
   var ex=id?TPM_LIST.find(function(x){return x.id===id;}):null;
+  TPM_FORM_DOCS=[];
+  if(ex && ex.documents){
+    try{ TPM_FORM_DOCS=typeof ex.documents==='string'?JSON.parse(ex.documents):(ex.documents||[]); }catch(e){ TPM_FORM_DOCS=[]; }
+  }
+  var takenOnLoan=!!(ex&&ex.taken_on_loan);
   document.getElementById('tpm-sheet-title').textContent=ex?'Edit Asset':'New Asset';
   document.getElementById('tpm-sheet-body').innerHTML=
     '<div class="fgrp"><label class="flbl">Name *</label><input id="tpm-name" class="finp" placeholder="e.g. JCB 3DX Backhoe Loader" value="'+(ex?ex.name||'':'')+'"></div>'+
@@ -20436,6 +20456,7 @@ function tpmOpenForm(id){
     '</select></div>'+
     '<div class="fgrp"><label class="flbl">Make / Model</label><input id="tpm-makemodel" class="finp" placeholder="e.g. JCB 3DX Super" value="'+(ex?ex.make_model||'':'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Registration / Serial No.</label><input id="tpm-regno" class="finp" placeholder="e.g. MH-12-AB-1234" value="'+(ex?ex.reg_or_serial_no||'':'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Specification</label><textarea id="tpm-spec" class="finp" rows="3" style="resize:vertical;" placeholder="e.g. Engine: 4-cylinder diesel, Operating weight: 8.5T, Bucket capacity: 0.9 m3">'+(ex?ex.specification||'':'')+'</textarea></div>'+
     '<div class="fgrp"><label class="flbl">Ownership</label><select id="tpm-ownership" class="fsel" onchange="document.getElementById(\'tpm-vendorwrap\').style.display=this.value===\'rented_in\'?\'\':\'none\';">'+
       '<option value="owned"'+((!ex||ex.ownership==='owned')?' selected':'')+'>Owned</option>'+
       '<option value="rented_in"'+((ex&&ex.ownership==='rented_in')?' selected':'')+'>Rented In (from a vendor)</option>'+
@@ -20443,15 +20464,66 @@ function tpmOpenForm(id){
     '<div id="tpm-vendorwrap" class="fgrp" style="display:'+((ex&&ex.ownership==='rented_in')?'':'none')+';"><label class="flbl">Vendor Name</label><input id="tpm-vendor" class="finp" placeholder="e.g. Shree Equipment Rentals" value="'+(ex?ex.vendor_name||'':'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Purchase Date</label><input id="tpm-pdate" class="finp" type="date" value="'+(ex&&ex.purchase_date?ex.purchase_date:'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Purchase Cost (\u20b9)</label><input id="tpm-pcost" class="finp" type="number" step="0.01" placeholder="0.00" value="'+(ex&&ex.purchase_cost?parseFloat(ex.purchase_cost):'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Approximate Life (Years)</label><input id="tpm-life" class="finp" type="number" step="0.5" placeholder="e.g. 10" value="'+(ex&&ex.approx_life_years!=null?parseFloat(ex.approx_life_years):'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Taken on Loan?</label><select id="tpm-loanyn" class="fsel" onchange="document.getElementById(\'tpm-loanwrap\').style.display=this.value===\'yes\'?\'\':\'none\';">'+
+      '<option value="no"'+(!takenOnLoan?' selected':'')+'>No</option>'+
+      '<option value="yes"'+(takenOnLoan?' selected':'')+'>Yes</option>'+
+    '</select></div>'+
+    '<div id="tpm-loanwrap" class="fgrp" style="display:'+(takenOnLoan?'':'none')+';">'+
+      '<label class="flbl">Linked Loan</label><select id="tpm-loanid" class="fsel">'+
+        '<option value="">Select loan...</option>'+
+        TPM_LOANS_LITE.map(function(l){return '<option value="'+l.id+'"'+((ex&&ex.linked_loan_id===l.id)?' selected':'')+'>'+tpmLoanLabel(l)+'</option>';}).join('')+
+      '</select>'+
+      (!TPM_LOANS_LITE.length?'<div style="font-size:10px;color:#C62828;margin-top:4px;">No taken loans found \u2014 add one in the Loans module first.</div>':'')+
+    '</div>'+
     '<div class="fgrp"><label class="flbl">Status</label><select id="tpm-status" class="fsel">'+
       Object.keys(TPM_STATUS_DEFS).map(function(s){return '<option value="'+s+'"'+((ex&&ex.status===s)||(!ex&&s==='available')?' selected':'')+'>'+TPM_STATUS_DEFS[s].label+'</option>';}).join('')+
     '</select></div>'+
+    '<div class="fgrp"><label class="flbl">Documents</label>'+
+      '<div id="tpm-docs-list"></div>'+
+      '<input type="file" id="tpm-docs-input" multiple accept="image/*,.pdf" onchange="tpmHandleFileSelect(this)" style="margin-top:6px;font-size:11px;">'+
+      '<div id="tpm-docs-status" style="font-size:10.5px;color:#1565C0;margin-top:4px;"></div>'+
+      '<div style="font-size:10px;color:var(--text3);margin-top:4px;">e.g. purchase invoice, RC book, insurance, warranty card. Uploaded to Cloudinary.</div>'+
+    '</div>'+
     '<div class="fgrp"><label class="flbl">Notes</label><input id="tpm-notes" class="finp" placeholder="Any additional details" value="'+(ex?ex.notes||'':'')+'"></div>'+
     (ex&&tpmProjectName(ex.current_project_id)?'<div style="font-size:10.5px;color:var(--text3);margin-top:-4px;">Currently assigned to <b>'+tpmProjectName(ex.current_project_id)+'</b> \u2014 use <b>Assign</b> on the list to change this.</div>':'');
   document.getElementById('tpm-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-tpm\',\'sh-tpm\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="tpmSave('+(ex?'\''+ex.id+'\'':'null')+')">'+(ex?'Save Changes':'Add Asset')+'</button>';
+  tpmRenderDocsList();
   openSheet('ov-tpm','sh-tpm');
+}
+
+function tpmRenderDocsList(){
+  var el=document.getElementById('tpm-docs-list'); if(!el) return;
+  if(!TPM_FORM_DOCS.length){ el.innerHTML='<div style="font-size:11px;color:var(--text3);">No documents uploaded yet.</div>'; return; }
+  el.innerHTML=TPM_FORM_DOCS.map(function(d,i){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:#F5F5F4;border-radius:6px;padding:5px 8px;margin-bottom:4px;font-size:11.5px;">'+
+      '<a href="'+d.url+'" target="_blank" style="color:#1565C0;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">&#128206; '+d.name+'</a>'+
+      '<button onclick="tpmRemoveDoc('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0;">&times;</button>'+
+    '</div>';
+  }).join('');
+}
+function tpmRemoveDoc(i){ TPM_FORM_DOCS.splice(i,1); tpmRenderDocsList(); }
+
+async function tpmHandleFileSelect(input){
+  var files=Array.prototype.slice.call(input.files||[]);
+  if(!files.length) return;
+  input.disabled=true;
+  var statusEl=document.getElementById('tpm-docs-status');
+  for(var i=0;i<files.length;i++){
+    var f=files[i];
+    if(statusEl) statusEl.textContent='Uploading '+f.name+'\u2026 ('+(i+1)+'/'+files.length+')';
+    try{
+      var url=await uploadToCloudinary(f,'tpm',null);
+      if(url) TPM_FORM_DOCS.push({name:f.name,url:url});
+      else toast('Failed to upload '+f.name,'error');
+    }catch(e){ toast('Failed to upload '+f.name+': '+e.message,'error'); }
+  }
+  if(statusEl) statusEl.textContent='';
+  input.value='';
+  input.disabled=false;
+  tpmRenderDocsList();
 }
 
 async function tpmSave(id){
@@ -20459,16 +20531,24 @@ async function tpmSave(id){
   var name=(document.getElementById('tpm-name')||{value:''}).value.trim();
   if(!name){toast('Asset name is required','warning');return;}
   var ownership=gv('tpm-ownership')||'owned';
+  var takenOnLoan=gv('tpm-loanyn')==='yes';
+  var linkedLoanId=takenOnLoan?(gv('tpm-loanid')||null):null;
+  if(takenOnLoan && !linkedLoanId){ toast('Select which loan this asset is linked to, or set "Taken on Loan?" back to No','warning'); return; }
   var fields={
     name:name,
     category:gv('tpm-cat')||'Other',
     make_model:(document.getElementById('tpm-makemodel')||{value:''}).value.trim()||null,
     reg_or_serial_no:(document.getElementById('tpm-regno')||{value:''}).value.trim()||null,
+    specification:(document.getElementById('tpm-spec')||{value:''}).value.trim()||null,
     ownership:ownership,
     vendor_name:ownership==='rented_in'?((document.getElementById('tpm-vendor')||{value:''}).value.trim()||null):null,
     purchase_date:gv('tpm-pdate')||null,
     purchase_cost:parseFloat(gv('tpm-pcost'))||0,
+    approx_life_years:gv('tpm-life')?parseFloat(gv('tpm-life')):null,
+    taken_on_loan:takenOnLoan,
+    linked_loan_id:linkedLoanId,
     status:gv('tpm-status')||'available',
+    documents:TPM_FORM_DOCS.length?JSON.stringify(TPM_FORM_DOCS):null,
     notes:(document.getElementById('tpm-notes')||{value:''}).value.trim()||null,
     updated_at:new Date().toISOString()
   };
