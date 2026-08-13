@@ -20488,14 +20488,14 @@ function tpmOpenForm(id){
     '<div class="fgrp"><label class="flbl">Purchase Date</label><input id="tpm-pdate" class="finp" type="date" value="'+(ex&&ex.purchase_date?ex.purchase_date:'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Purchase Cost (\u20b9)</label><input id="tpm-pcost" class="finp" type="number" step="0.01" placeholder="0.00" value="'+(ex&&ex.purchase_cost?parseFloat(ex.purchase_cost):'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Approximate Life (Years)</label><input id="tpm-life" class="finp" type="number" step="0.5" placeholder="e.g. 10" value="'+(ex&&ex.approx_life_years!=null?parseFloat(ex.approx_life_years):'')+'"></div>'+
-    '<div class="fgrp"><label class="flbl">Taken on Loan?</label><select id="tpm-loanyn" class="fsel" onchange="document.getElementById(\'tpm-loanwrap\').style.display=this.value===\'yes\'?\'\':\'none\';">'+
+    '<div class="fgrp"><label class="flbl">Taken on Loan?</label><select id="tpm-loanyn" class="fsel" onchange="tpmToggleLoanYN(this)">'+
       '<option value="no"'+(!takenOnLoan?' selected':'')+'>No</option>'+
       '<option value="yes"'+(takenOnLoan?' selected':'')+'>Yes</option>'+
     '</select></div>'+
     '<div id="tpm-loanwrap" class="fgrp" style="display:'+(takenOnLoan?'':'none')+';">'+
       '<div style="display:flex;gap:6px;margin-bottom:8px;">'+
-        '<button type="button" id="tpm-loanmode-link-btn" onclick="tpmSetLoanMode(\'link\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;"></button>'+
-        '<button type="button" id="tpm-loanmode-new-btn" onclick="tpmSetLoanMode(\'new\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;"></button>'+
+        '<button type="button" id="tpm-loanmode-link-btn" onclick="tpmSetLoanMode(\'link\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;background:#4E342E;color:#fff;border:1.5px solid #4E342E;">Link Existing Loan</button>'+
+        '<button type="button" id="tpm-loanmode-new-btn" onclick="tpmSetLoanMode(\'new\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;background:#fff;color:#4E342E;border:1.5px solid #4E342E;">Register New Loan</button>'+
       '</div>'+
       '<div id="tpm-loanmode-body"></div>'+
     '</div>'+
@@ -20516,6 +20516,17 @@ function tpmOpenForm(id){
   tpmRenderDocsList();
   if(takenOnLoan) tpmSetLoanMode('link', ex);
   openSheet('ov-tpm','sh-tpm');
+}
+
+// Fires on every change of "Taken on Loan?", not just when opening the
+// form for an asset that already has one linked — the mode content
+// (and the two buttons' active styling) previously only initialized in
+// the latter case, leaving them visually blank until first clicked
+// when switching a fresh asset to "Yes".
+function tpmToggleLoanYN(sel){
+  var show=sel.value==='yes';
+  document.getElementById('tpm-loanwrap').style.display=show?'':'none';
+  if(show) tpmSetLoanMode(TPM_LOAN_MODE||'link');
 }
 
 function tpmSetLoanMode(mode, ex){
