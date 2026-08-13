@@ -18976,8 +18976,9 @@ function lnRender(){
                   (isTaken?'<button onclick="lnSwitchTab(\'allocation\');lnAllocSelectLoan(\''+l.id+'\');" style="background:none;border:1px solid #B2DFDB;color:#00695C;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128202; Allocate</button>':'')+
                   (isTaken && lnCanEdit() && LN_ALLOCATIONS.some(function(a){return a.loan_id===l.id && a.status==='ACTIVE';})?
                     '<button onclick="lnOpenSettle(\''+l.id+'\')" style="background:none;border:1px solid #C5CAE9;color:#283593;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128181; Settle</button>':'')+
-                  ((l.payment_type||'')==='emi' && lnCanEdit()?
-                    '<button onclick="lnOpenEmiPayment(\''+l.id+'\')" style="background:none;border:1px solid #FFCC80;color:#E65100;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128197; Create EMI Payment</button>':'')+
+                  ((l.payment_type||'')==='emi' && l.status!=='closed' && lnCanEdit()?
+                    '<button onclick="lnOpenPaymentChooser(\''+l.id+'\')" style="background:none;border:1px solid #FFCC80;color:#E65100;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128176; Record Payment</button>':'')+
+                  (l.status==='closed'?'<span style="background:#EEEEEE;color:#616161;font-size:9.5px;font-weight:800;padding:3px 8px;border-radius:6px;white-space:nowrap;">&#10003; CLOSED</span>':'')+
                   (lnCanEdit()?'<button onclick="lnOpenLoan(\''+l.direction+'\',\''+l.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
                   (lnCanDelete()?'<button onclick="lnDelLoan(\''+l.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
                 '</div>'+
@@ -20011,6 +20012,220 @@ async function lnSaveTxn(loanId,type){
 // uses for a plain repayment/interest entry. Kept as its own function
 // since an EMI needs both components recorded together as one action,
 // not two separate visits to the single-type form above.
+// ── RECORD PAYMENT — chooser for EMI-type loans ─────────────────────
+// EMI Payment reuses the existing lnOpenEmiPayment() unchanged; the
+// other three are new, straightforward flows below.
+function lnOpenPaymentChooser(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  document.getElementById('ln-sheet-title').textContent='Record Payment';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:12px;">'+lnPartyName(loan.party_id)+'</div>'+
+    '<div style="display:flex;flex-direction:column;gap:8px;">'+
+      '<button type="button" onclick="lnOpenEmiPayment(\''+loanId+'\')" style="text-align:left;background:#FFF3E0;border:1px solid #FFCC80;border-radius:10px;padding:12px;cursor:pointer;">'+
+        '<div style="font-weight:800;font-size:13px;color:#E65100;">&#128197; EMI Payment</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Record the regular scheduled installment</div>'+
+      '</button>'+
+      '<button type="button" onclick="lnOpenPartPayment(\''+loanId+'\')" style="text-align:left;background:#E3F2FD;border:1px solid #90CAF9;border-radius:10px;padding:12px;cursor:pointer;">'+
+        '<div style="font-weight:800;font-size:13px;color:#1565C0;">&#128181; Part Payment</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Extra principal payment, ahead of the regular schedule</div>'+
+      '</button>'+
+      '<button type="button" onclick="lnOpenForeclosure(\''+loanId+'\')" style="text-align:left;background:#FFEBEE;border:1px solid #EF9A9A;border-radius:10px;padding:12px;cursor:pointer;">'+
+        '<div style="font-weight:800;font-size:13px;color:#C62828;">&#128274; Foreclosure</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Pay off the full outstanding balance and close the loan</div>'+
+      '</button>'+
+      '<button type="button" onclick="lnOpenPenaltyPayment(\''+loanId+'\')" style="text-align:left;background:#F3E5F5;border:1px solid #CE93D8;border-radius:10px;padding:12px;cursor:pointer;">'+
+        '<div style="font-weight:800;font-size:13px;color:#6A1B9A;">&#9888; Late Fees / Penalty Payment</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Record a late payment charge, separate from principal/interest</div>'+
+      '</button>'+
+    '</div>';
+  document.getElementById('ln-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Close</button>';
+  openSheet('ov-ln','sh-ln');
+}
+
+// ── PART PAYMENT ─────────────────────────────────────────────────────
+// A single extra principal payment, outside the regular EMI schedule.
+// Recorded exactly like a plain repayment (txn_type 'repayment') -
+// same accounting legs, just tagged in remarks for clarity.
+function lnOpenPartPayment(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  var st=lnLoanStats(loanId);
+  document.getElementById('ln-sheet-title').textContent='Part Payment';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="background:#E3F2FD;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;">'+
+      '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b>'+
+    '</div>'+
+    '<label class="flbl">Amount (\u20b9) *</label><input class="finp" id="lp2-amount" type="number" step="0.01" placeholder="0.00">'+
+    '<label class="flbl">Date *</label><input class="finp" id="lp2-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Mode</label>'+lnModeOptionsHtml('lp2-mode')+
+    '<label class="flbl">Reference</label><input class="finp" id="lp2-ref">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="lp2-remarks">'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:6px;">Reduces the outstanding principal directly, outside the regular EMI schedule \u2014 posted to Accounts the same as a repayment.</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="lnOpenPaymentChooser(\''+loanId+'\')">\u2190 Back</button>'+
+    '<button class="btn btn-navy" onclick="lnSavePartPayment(\''+loanId+'\')">Save Part Payment</button>';
+  openSheet('ov-ln','sh-ln');
+}
+async function lnSavePartPayment(loanId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  var isTaken=(loan.direction==='taken');
+  var amt=parseFloat(gv('lp2-amount'))||0;
+  if(amt<=0){toast('Enter a valid amount','warning');return;}
+  var st=lnLoanStats(loanId);
+  if(amt>st.outstanding+0.005){
+    if(!confirm('This part payment of '+fmtINR(amt)+' exceeds the outstanding principal of '+fmtINR(st.outstanding)+'. Continue anyway?')) return;
+  }
+  var date=gv('lp2-date')||new Date().toISOString().slice(0,10);
+  var mode=gv('lp2-mode')||'Bank';
+  var modeEmp=gv('lp2-mode-emp')||null;
+  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  var remarks=gv('lp2-remarks')||'';
+  try{
+    var res=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'repayment',amount:amt,
+      date:date,mode:mode,mode_emp_id:modeEmp,reference:gv('lp2-ref')||null,remarks:(remarks?remarks+' \u2014 ':'')+'Part payment'});
+    var saved=(res&&res[0])?res[0]:null;
+    if(saved){
+      LN_TXNS.unshift(saved);
+      if(typeof accAutoPost==='function'){
+        var cashCode=lnCashCode(mode);
+        var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+        var o=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Part payment to '+pn}
+                     :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Part payment received from '+pn};
+        accAutoPost({type:o.type,date:date,partyName:pn,debitCode:o.debitCode,creditCode:o.creditCode,
+          amount:amt,narration:o.narration,sourceType:'loan_txn',sourceId:saved.id});
+      }
+    }
+    closeSheet('ov-ln','sh-ln'); lnRender();
+    toast('Part payment of '+fmtINR(amt)+' recorded','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ── FORECLOSURE ───────────────────────────────────────────────────────
+// Pays off the full outstanding principal + accrued interest in one
+// go and marks the loan closed. Amounts default to the computed
+// outstanding/accrued but stay editable, for when a lender agrees a
+// waiver or discount as part of the foreclosure settlement.
+function lnOpenForeclosure(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  var st=lnLoanStats(loanId);
+  document.getElementById('ln-sheet-title').textContent='Foreclosure';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="background:#FFEBEE;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;">'+
+      '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b> \u00b7 Interest due: <b>'+fmtINR(st.intDue)+'</b>'+
+      '<div style="color:#C62828;font-weight:700;margin-top:4px;">This closes the loan \u2014 no further payments can be recorded against it afterward.</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+      '<div><label class="flbl">Principal (\u20b9)</label><input class="finp" id="lf-principal" type="number" step="0.01" value="'+st.outstanding.toFixed(2)+'"></div>'+
+      '<div><label class="flbl">Interest (\u20b9)</label><input class="finp" id="lf-interest" type="number" step="0.01" value="'+st.intDue.toFixed(2)+'"></div>'+
+    '</div>'+
+    '<label class="flbl">Date *</label><input class="finp" id="lf-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Mode</label>'+lnModeOptionsHtml('lf-mode')+
+    '<label class="flbl">Reference</label><input class="finp" id="lf-ref">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="lf-remarks">'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:6px;">Amounts default to the full outstanding balance and accrued interest \u2014 editable if the lender has agreed a waiver or discount.</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="lnOpenPaymentChooser(\''+loanId+'\')">\u2190 Back</button>'+
+    '<button class="btn btn-navy" style="background:#C62828;" onclick="lnSaveForeclosure(\''+loanId+'\')">Close Loan (Foreclose)</button>';
+  openSheet('ov-ln','sh-ln');
+}
+async function lnSaveForeclosure(loanId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  var isTaken=(loan.direction==='taken');
+  var principal=parseFloat(gv('lf-principal'))||0, interest=parseFloat(gv('lf-interest'))||0;
+  if(principal<=0 && interest<=0){toast('Enter a valid amount','warning');return;}
+  if(!confirm('Foreclose this loan? This marks it as closed and cannot be undone from here.')) return;
+  var date=gv('lf-date')||new Date().toISOString().slice(0,10);
+  var mode=gv('lf-mode')||'Bank';
+  var modeEmp=gv('lf-mode-emp')||null;
+  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  var ref=gv('lf-ref')||null, remarks=gv('lf-remarks')||null;
+  try{
+    var cashCode=lnCashCode(mode);
+    var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+    if(principal>0.005){
+      var resP=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'repayment',amount:principal,
+        date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+'Foreclosure'});
+      var savedP=(resP&&resP[0])?resP[0]:null;
+      if(savedP && typeof accAutoPost==='function'){
+        LN_TXNS.unshift(savedP);
+        var oP=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Loan foreclosed \u2014 principal paid to '+pn}
+                      :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Loan foreclosed \u2014 principal recovered from '+pn};
+        accAutoPost({type:oP.type,date:date,partyName:pn,debitCode:oP.debitCode,creditCode:oP.creditCode,
+          amount:principal,narration:oP.narration,sourceType:'loan_txn',sourceId:savedP.id});
+      }
+    }
+    if(interest>0.005){
+      var resI=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'interest',amount:interest,
+        date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+'Foreclosure'});
+      var savedI=(resI&&resI[0])?resI[0]:null;
+      if(savedI && typeof accAutoPost==='function'){
+        LN_TXNS.unshift(savedI);
+        var oI=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Loan foreclosed \u2014 interest paid to '+pn}
+                      :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Loan foreclosed \u2014 interest received from '+pn};
+        accAutoPost({type:oI.type,date:date,partyName:pn,debitCode:oI.debitCode,creditCode:oI.creditCode,
+          amount:interest,narration:oI.narration,sourceType:'loan_txn',sourceId:savedI.id});
+      }
+    }
+    await sbUpdate('loans', loanId, {status:'closed'});
+    var idx=LN_LOANS.findIndex(function(l){return l.id===loanId;});
+    if(idx>-1) LN_LOANS[idx].status='closed';
+    closeSheet('ov-ln','sh-ln'); lnRender();
+    toast('Loan foreclosed and closed','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ── LATE FEES / PENALTY PAYMENT ─────────────────────────────────────
+// Tracked as its own txn_type ('penalty'), separate from repayment/
+// interest — lnAccruedInterest()/lnLoanStats() only ever look for
+// 'repayment' and 'interest', so a penalty entry doesn't affect the
+// outstanding balance or interest-due figures, by design.
+function lnOpenPenaltyPayment(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  document.getElementById('ln-sheet-title').textContent='Late Fees / Penalty Payment';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:10px;">'+lnPartyName(loan.party_id)+'</div>'+
+    '<label class="flbl">Amount (\u20b9) *</label><input class="finp" id="lpen-amount" type="number" step="0.01" placeholder="0.00">'+
+    '<label class="flbl">Date *</label><input class="finp" id="lpen-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Mode</label>'+lnModeOptionsHtml('lpen-mode')+
+    '<label class="flbl">Reference</label><input class="finp" id="lpen-ref">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="lpen-remarks" placeholder="e.g. Late payment for March EMI">'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:6px;">Tracked separately from principal and interest \u2014 does not reduce the outstanding balance.</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="lnOpenPaymentChooser(\''+loanId+'\')">\u2190 Back</button>'+
+    '<button class="btn btn-navy" onclick="lnSavePenaltyPayment(\''+loanId+'\')">Save</button>';
+  openSheet('ov-ln','sh-ln');
+}
+async function lnSavePenaltyPayment(loanId){
+  if(!lnCanEdit()){toast('No permission','warning');return;}
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  var isTaken=(loan.direction==='taken');
+  var amt=parseFloat(gv('lpen-amount'))||0;
+  if(amt<=0){toast('Enter a valid amount','warning');return;}
+  var date=gv('lpen-date')||new Date().toISOString().slice(0,10);
+  var mode=gv('lpen-mode')||'Bank';
+  var modeEmp=gv('lpen-mode-emp')||null;
+  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  try{
+    var res=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'penalty',amount:amt,
+      date:date,mode:mode,mode_emp_id:modeEmp,reference:gv('lpen-ref')||null,remarks:gv('lpen-remarks')||null});
+    var saved=(res&&res[0])?res[0]:null;
+    if(saved){
+      LN_TXNS.unshift(saved);
+      if(typeof accAutoPost==='function'){
+        var cashCode=lnCashCode(mode);
+        var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+        var o=isTaken?{type:'Payment',debitCode:'4204',creditCode:cashCode,narration:'Late fee/penalty paid to '+pn}
+                     :{type:'Receipt',debitCode:cashCode,creditCode:'3006',narration:'Late fee/penalty received from '+pn};
+        accAutoPost({type:o.type,date:date,partyName:pn,debitCode:o.debitCode,creditCode:o.creditCode,
+          amount:amt,narration:o.narration,sourceType:'loan_txn',sourceId:saved.id});
+      }
+    }
+    closeSheet('ov-ln','sh-ln'); lnRender();
+    toast('Penalty payment of '+fmtINR(amt)+' recorded','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
 function lnComputeNextEmiDate(loanId, loan){
   var txns=LN_TXNS.filter(function(t){return t.loan_id===loanId;});
   if(!txns.length){
@@ -20060,7 +20275,7 @@ function lnOpenEmiPayment(loanId){
     '<label class="flbl">Remarks</label><input class="finp" id="le-remarks">'+
     '<div style="font-size:10px;color:var(--text3);margin-top:6px;">Records as two transactions \u2014 principal reduces the outstanding balance, interest is tracked against what\'s accrued \u2014 posted to Accounts the same as recording them individually.</div>';
   document.getElementById('ln-sheet-foot').innerHTML=
-    '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
+    '<button class="btn btn-outline" onclick="lnOpenPaymentChooser(\''+loanId+'\')">\u2190 Back</button>'+
     '<button class="btn btn-navy" onclick="lnSaveEmiPayment(\''+loanId+'\')">Save EMI Payment</button>';
   openSheet('ov-ln','sh-ln');
   lnEmiCheckSplit();
@@ -21105,6 +21320,7 @@ var ACC_DEFAULT_COA=[
   {code:'3002', name:'Sales Bill Additions',     type:'Income',    group:'Direct Income'},
   {code:'3003', name:'Sales Bill Deductions',    type:'Income',    group:'Direct Income'},
   {code:'3005', name:'Interest Income',          type:'Income',    group:'Other Income'},
+  {code:'3006', name:'Penalty / Late Fee Income',type:'Income',    group:'Other Income'},
   {code:'4001', name:'Purchases / Direct Work Expenses', type:'Expense', group:'Direct Expenses'},
   {code:'4002', name:'Purchase Bill Additions',  type:'Expense',   group:'Direct Expenses'},
   {code:'4003', name:'Purchase Bill Deductions', type:'Expense',   group:'Direct Expenses'},
@@ -21121,6 +21337,7 @@ var ACC_DEFAULT_COA=[
   {code:'4201', name:'Interest Expenses',        type:'Expense',   group:'Indirect Expenses'},
   {code:'4202', name:'Taxes',                    type:'Expense',   group:'Indirect Expenses'},
   {code:'4203', name:'Depreciation',             type:'Expense',   group:'Indirect Expenses'},
+  {code:'4204', name:'Loan Penalty / Late Fee',  type:'Expense',   group:'Indirect Expenses'},
   {code:'4301', name:'Professional / CA Fees',   type:'Expense',   group:'Company Overheads'},
   {code:'4302', name:'Audit Fees',               type:'Expense',   group:'Company Overheads'},
   {code:'4303', name:'ROC / Compliance',         type:'Expense',   group:'Company Overheads'},
