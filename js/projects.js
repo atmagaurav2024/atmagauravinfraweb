@@ -4288,6 +4288,23 @@ function projLoanAllocInterest(alloc, loan, txns){
   return projLoanAccruedInterest(loan, txns)*share;
 }
 
+// This allocation's proportional share of interest actually PAID on the
+// loan so far (sum of txn_type='interest' transactions). Different from
+// accrued on purpose: accrued is what the interest formula says has
+// built up by now; paid is real cash already handed over, and only
+// matches accrued once a loan is settled exactly in step with its own
+// accrual. Reported alongside accrued so the two are never mistaken for
+// one another — this is what reconciles directly against the "interest
+// paid" figure the Loans module shows for the same loan.
+function projLoanAllocInterestPaid(alloc, loan, txns){
+  var principal=parseFloat(loan&&loan.principal)||0;
+  if(principal<=0) return 0;
+  var share=Math.min(1, (parseFloat(alloc.amount)||0)/principal);
+  var paid=(txns||[]).filter(function(t){return t.loan_id===loan.id && t.txn_type==='interest';})
+    .reduce(function(s,t){return s+(parseFloat(t.amount)||0);},0);
+  return paid*share;
+}
+
 // ── Interest / Taxes / Depreciation sub-tabs ──────────────────────────────
 // All three share the same simple model: entries in `other_expenses`,
 // scoped to this project via project_id and distinguished by `type`.
@@ -4324,21 +4341,32 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
         var loan=loansLite.find(function(l){return l.id===a.loan_id;});
         if(!loan) return null;
         var party=parties.find(function(p){return p.id===loan.party_id;});
-        return {accrued:projLoanAllocInterest(a,loan,allTxns), lender:party?party.name:'Unknown lender',
+        var accrued=projLoanAllocInterest(a,loan,allTxns);
+        var paid=projLoanAllocInterestPaid(a,loan,allTxns);
+        return {accrued:accrued, paid:paid, due:Math.max(0,accrued-paid), lender:party?party.name:'Unknown lender',
           rate:parseFloat(loan.interest_rate)||0, allocAmt:parseFloat(a.amount)||0};
       }).filter(Boolean);
       var loanTotal=loanRows.reduce(function(s,x){return s+x.accrued;},0);
+      var loanPaidTotal=loanRows.reduce(function(s,x){return s+x.paid;},0);
+      var loanDueTotal=loanRows.reduce(function(s,x){return s+x.due;},0);
       if(loanRows.length){
         loanInterestHtml=
           '<div style="background:#FFF3E0;border:1px solid #FFCC80;border-radius:10px;padding:10px 14px;margin:0 4px 10px;">'+
-            '<div style="display:flex;justify-content:space-between;align-items:center;">'+
-              '<div style="font-size:11.5px;font-weight:800;color:#E65100;">🏦 Loan-Allocated Interest (this project\'s share, accrued to date)</div>'+
-              '<div style="font-size:15px;font-weight:900;color:#E65100;">'+inr(loanTotal)+'</div>'+
+            '<div style="font-size:11.5px;font-weight:800;color:#E65100;">🏦 Loan-Allocated Interest (this project\'s share)</div>'+
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;">'+
+              '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Accrued</div><div style="font-size:14px;font-weight:900;color:#E65100;">'+inr(loanTotal)+'</div></div>'+
+              '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Paid</div><div style="font-size:14px;font-weight:900;color:#2E7D32;">'+inr(loanPaidTotal)+'</div></div>'+
+              '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Due</div><div style="font-size:14px;font-weight:900;color:'+(loanDueTotal>0.5?'#C62828':'#2E7D32')+';">'+inr(loanDueTotal)+'</div></div>'+
             '</div>'+
-            '<div style="font-size:10px;color:var(--text3);margin-top:4px;">From loans allocated to this project in the Loans module — not a manual entry below, so it isn\'t double-counted in Total. Reflects actual repayments already made against the loan.</div>'+
+            '<div style="font-size:10px;color:var(--text3);margin-top:6px;">From loans allocated to this project in the Loans module — not a manual entry below, so it isn\'t double-counted in Total. "Paid" is this project\'s share of the same interest payments recorded in the Loans module, so it reconciles directly with what\'s shown there.</div>'+
             loanRows.map(function(x){
-              return '<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text3);margin-top:4px;padding-top:4px;border-top:1px solid #FFE0B2;">'+
-                '<span>'+x.lender+' · '+inr(x.allocAmt)+' @ '+x.rate+'%</span><span style="font-weight:700;color:#E65100;">'+inr(x.accrued)+'</span>'+
+              return '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #FFE0B2;font-size:10.5px;">'+
+                '<div style="color:var(--text3);">'+x.lender+' · '+inr(x.allocAmt)+' @ '+x.rate+'%</div>'+
+                '<div style="display:flex;gap:12px;margin-top:2px;color:var(--text3);">'+
+                  '<span>accrued <b style="color:#E65100;">'+inr(x.accrued)+'</b></span>'+
+                  '<span>paid <b style="color:#2E7D32;">'+inr(x.paid)+'</b></span>'+
+                  '<span>due <b style="color:'+(x.due>0.5?'#C62828':'#2E7D32')+';">'+inr(x.due)+'</b></span>'+
+                '</div>'+
               '</div>';
             }).join('')+
           '</div>';
