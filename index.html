@@ -1421,12 +1421,19 @@ input,select,textarea{font-size:16px !important;}
 <div class="screen" id="scr-login">
   <div class="login-bg">
     <div class="login-logo">&#127959;</div>
-    <div class="login-brand" id="login-brand">AIPL</div>
+    <div class="login-brand" id="login-brand">Rydax</div>
     <div class="login-sub">Construction Management</div>
   </div>
   <div class="login-card">
     <div class="login-title">Welcome back</div>
     <div class="login-desc">Sign in to your project dashboard</div>
+
+    <label class="flbl">Company Code</label>
+    <div class="inp-wrap">
+      <input class="finp" type="text" placeholder="e.g. atmagaurav" id="inp-cocode" style="padding-right:44px;text-transform:lowercase;"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();var p=document.getElementById('inp-phone');if(p)p.focus();}">
+      <span class="inp-ic">&#127970;</span>
+    </div>
 
     <label class="flbl">Mobile Number</label>
     <div class="inp-wrap">
@@ -1452,8 +1459,43 @@ input,select,textarea{font-size:16px !important;}
 
     <button class="btn-primary" onclick="doLogin()">&#9889; Sign In to Dashboard</button>
 
-    <!-- Admin shortcut (demo) -->
-    <div style="margin-top:4px;text-align:center;">
+    <div style="margin-top:16px;text-align:center;font-size:13px;color:var(--text3);">
+      New to Rydax? <span style="color:var(--blue);font-weight:700;cursor:pointer;" onclick="showScreen('scr-co-signup')">Create your company</span>
+    </div>
+  </div>
+</div>
+
+<!-- NEW COMPANY SIGNUP -->
+<div class="screen" id="scr-co-signup">
+  <div class="login-bg">
+    <div class="login-logo">&#127959;</div>
+    <div class="login-brand">Rydax</div>
+    <div class="login-sub">Set up your company</div>
+  </div>
+  <div class="login-card">
+    <div class="login-title">Create your company</div>
+    <div class="login-desc">You'll be the first admin — invite your team once you're in.</div>
+
+    <label class="flbl">Company Name</label>
+    <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. Atmagaurav Infra Pvt Ltd" id="co-name"></div>
+
+    <label class="flbl">Company Code</label>
+    <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. atmagaurav (used to sign in)" id="co-slug" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')"></div>
+    <div style="font-size:11px;color:var(--text3);margin:-10px 0 14px;">Lowercase letters, numbers, and hyphens only. This is what you and your team will enter to sign in.</div>
+
+    <label class="flbl">Your Name</label>
+    <div class="inp-wrap"><input class="finp" type="text" placeholder="Full name" id="co-admin-name"></div>
+
+    <label class="flbl">Your Mobile Number</label>
+    <div class="inp-wrap"><input class="finp" type="tel" placeholder="+91 98765 43210" id="co-admin-phone"></div>
+
+    <label class="flbl">Password</label>
+    <div class="inp-wrap"><input class="finp" type="password" placeholder="Choose a password" id="co-admin-pass"></div>
+
+    <button class="btn-primary" onclick="doCompanySignup()" style="margin-top:8px;">&#9889; Create Company &amp; Continue</button>
+
+    <div style="margin-top:16px;text-align:center;font-size:13px;color:var(--text3);">
+      Already have a company? <span style="color:var(--blue);font-weight:700;cursor:pointer;" onclick="showScreen('scr-login')">Sign in</span>
     </div>
   </div>
 </div>
@@ -3442,25 +3484,30 @@ async function doLogin(){
   if(LOGIN_BUSY) return;
   var pw = document.getElementById('inp-pass').value;
   var ph = document.getElementById('inp-phone').value.trim();
+  var co = (document.getElementById('inp-cocode')||{}).value.trim();
+  if(!co){toast('Please enter your company code','warning');return;}
   if(!ph){toast('Please enter your mobile number','warning');return;}
   if(!pw){toast('Please enter your password','warning');return;}
   LOGIN_BUSY=true;
-  try{ await doLoginInner(ph,pw); } finally { LOGIN_BUSY=false; }
+  try{ await doLoginInner(ph,pw,co); } finally { LOGIN_BUSY=false; }
 }
 
-async function doLoginInner(ph,pw){
+async function doLoginInner(ph,pw,co){
   try{
     // Show splash loading screen
     var splashMsg = document.getElementById('splash-msg');
     if(splashMsg) splashMsg.textContent = 'Signing in...';
     showScreen('scr-splash');
-    var result = await authSignIn(ph, pw);
+    var result = await authSignIn(ph, pw, co);
     if(result.access_token){
       currentSession = result;
-      // Get employee details from employees table
-      var mobile = ph.replace(/[^0-9]/g,'');
+      var authUserId = result.user ? result.user.id : (result.id||null);
       if(splashMsg) splashMsg.textContent = 'Loading your profile...';
-      var emps = await sbFetch('employees',{select:'*',filter:'phone=like.*'+mobile.slice(-10)+'*'});
+      // Looked up by auth_id (exact match on this specific auth account)
+      // rather than a fuzzy phone match — the same phone number can now
+      // legitimately exist under different companies, and this is both
+      // more precise and automatically tenant-scoped via RLS regardless.
+      var emps = authUserId ? await sbFetch('employees',{select:'*',filter:'auth_id=eq.'+authUserId}) : [];
       if(emps && emps.length){
         var emp = emps[0];
         if(emp.status==='pending'){
@@ -3475,6 +3522,8 @@ async function doLoginInner(ph,pw){
         }
         currentUser = mapEmployee(emp);
         currentUser.accessToken = result.access_token;
+        currentUser.companyId = emp.company_id;
+        currentUser.companySlug = co.toLowerCase();
         updateDashboardUser();
         showApp('dashboard');
         loadPendingApprovals();
@@ -3483,7 +3532,7 @@ async function doLoginInner(ph,pw){
         toast('Welcome back, '+currentUser.name+'!','success');
       } else {
         // Auth succeeded but no employee record — could be admin
-        currentUser = {name:'Admin', role:'admin', accessToken:result.access_token};
+        currentUser = {name:'Admin', role:'admin', accessToken:result.access_token, companySlug:co.toLowerCase()};
         updateDashboardUser();
         showApp('dashboard');
         loadPendingApprovals();
@@ -3495,7 +3544,7 @@ async function doLoginInner(ph,pw){
       var msg = result.error_description||result.msg||'Invalid credentials';
       if(msg.includes('Invalid')||msg.includes('invalid')){
         showScreen('scr-login');
-      toast('Wrong mobile number or password','error');
+      toast('Wrong company code, mobile number, or password','error');
       } else {
         toast(msg,'error');
       }
@@ -3507,6 +3556,58 @@ async function doLoginInner(ph,pw){
     showScreen('scr-login');
     toast('Connection error. Check internet.','error');
     console.error(e);
+  }
+}
+
+var COMPANY_SIGNUP_BUSY=false;
+async function doCompanySignup(){
+  if(COMPANY_SIGNUP_BUSY) return;
+  var name=(document.getElementById('co-name')||{}).value.trim();
+  var slug=(document.getElementById('co-slug')||{}).value.trim().toLowerCase();
+  var adminName=(document.getElementById('co-admin-name')||{}).value.trim();
+  var phone=(document.getElementById('co-admin-phone')||{}).value.trim();
+  var pass=(document.getElementById('co-admin-pass')||{}).value;
+  if(!name){toast('Enter your company name','warning');return;}
+  if(!slug||slug.length<3){toast('Company code must be at least 3 characters (letters, numbers, hyphens)','warning');return;}
+  if(!adminName){toast('Enter your name','warning');return;}
+  if(!phone){toast('Enter your mobile number','warning');return;}
+  if(!pass||pass.length<6){toast('Password must be at least 6 characters','warning');return;}
+
+  COMPANY_SIGNUP_BUSY=true;
+  try{
+    toast('Checking company code availability...','info');
+    var existing=await sbFetch('public_company_lookup',{select:'slug',filter:'slug=eq.'+slug}).catch(function(){return [];});
+    if(existing && existing.length){ toast('That company code is already taken — try another','warning'); return; }
+
+    toast('Creating your company...','info');
+    var coRes=await sbInsert('companies',{name:name, short_name:name.split(' ')[0], slug:slug, status:'active', plan:'trial'});
+    var company=(coRes&&coRes[0])?coRes[0]:null;
+    if(!company){ toast('Could not create company — try again','error'); return; }
+
+    toast('Setting up your admin account...','info');
+    var authResult=await authSignUp(phone, pass, slug);
+    var authUserId = authResult && (authResult.user ? authResult.user.id : authResult.id);
+    if(!authUserId){
+      toast('Could not create your login — '+(authResult&&(authResult.error_description||authResult.msg)||'unknown error'),'error');
+      return;
+    }
+
+    var nameParts=adminName.split(' ');
+    var empRes=await sbInsert('employees',{
+      company_id:company.id, auth_id:authUserId,
+      emp_id:slug.toUpperCase()+'-001', badge_no:slug.toUpperCase()+'-001',
+      first_name:nameParts[0]||adminName, last_name:nameParts.length>1?nameParts[nameParts.length-1]:'',
+      phone:phone, role:'admin', designation:'Admin', status:'active'
+    });
+    if(!empRes || !empRes[0]){ toast('Company created, but the admin profile failed — contact support','error'); return; }
+
+    toast('Company created! Signing you in...','success');
+    await doLoginInner(phone, pass, slug);
+  }catch(e){
+    console.error(e);
+    toast('Error: '+e.message,'error');
+  }finally{
+    COMPANY_SIGNUP_BUSY=false;
   }
 }
 function verifyOTP(){
@@ -3581,6 +3682,8 @@ function renderRegStep(){
   if(regStep===1){
     body.innerHTML=
       '<div style="font-size:13px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">Step 1 of 3 &mdash; Select Category</div>'+
+      '<label class="flbl">Company Code</label>'+
+      '<div class="inp-wrap" style="margin-bottom:14px;"><input class="finp" type="text" placeholder="Ask your admin for this" id="r-cocode" value="'+(regData.companySlug||'')+'" style="text-transform:lowercase;" oninput="regData.companySlug=this.value.toLowerCase().trim();"></div>'+
       '<div class="cat-grid" id="cat-grid">'+
         '<div class="cat-item" onclick="selCat(this,\'employee\')"><div class="cat-ic">&#128100;</div><div class="cat-name">Employee</div><div class="cat-desc">AIPL Staff</div></div>'+
         '<div class="cat-item" onclick="selCat(this,\'subcontractor\')"><div class="cat-ic">&#128296;</div><div class="cat-name">Subcontractor</div><div class="cat-desc">SC Company</div></div>'+
@@ -3698,6 +3801,7 @@ function selCat(el, cat){
 
 function nextStep(){
   if(regStep===1){
+    if(!regData.companySlug){toast('Please enter your company code','warning');return;}
     if(!regData.category){toast('Please select a category','warning');return;}
     regStep=2;
   } else if(regStep===2){
@@ -3874,10 +3978,18 @@ verifyOTP=async function(){
     };
     try{
       toast('Creating account...','info');
+      // Resolve the company code into a real company_id before anything
+      // else — every other step here depends on having it.
+      var coLookup=await sbFetch('public_company_lookup',{select:'id',filter:'slug=eq.'+(regData.companySlug||'')}).catch(function(){return [];});
+      if(!coLookup || !coLookup.length){
+        toast('Company code not found — check with your admin','error');
+        return;
+      }
+      data.company_id=coLookup[0].id;
       // Create Supabase Auth account
       // Auth signup is optional - employee record saves even if auth fails
       try{
-        var authResult = await authSignUp(regData.phone, regPassword);
+        var authResult = await authSignUp(regData.phone, regPassword, regData.companySlug);
         if(authResult && !authResult.error && (authResult.id||(authResult.user&&authResult.user.id))){
           data.auth_id = authResult.user ? authResult.user.id : authResult.id;
         } else if(authResult && authResult.error){
@@ -5549,21 +5661,17 @@ async function sbFetch(table, options={}){
   return res.json();
 }
 
-// Fetch company short name early (before login) so splash/login/topbar
-// branding shows it instead of the hardcoded fallback "AIPL".
-// Uses the public_company_branding view (anon-readable) rather than the
-// full company_details table, since that table's RLS requires auth and
-// this runs before login. Placed after SUPABASE_URL/SUPABASE_ANON_KEY
-// (const, temporal-dead-zone) and sbFetch are defined.
+// Pre-login branding is now the Rydax platform itself, not any specific
+// tenant's name — before login, the app doesn't yet know which company
+// a visitor belongs to (that's what the Company Code field on the login
+// screen resolves). Each tenant's own company name/short name shows
+// throughout the app *after* login, via the (now company_id-scoped)
+// Company module, same as before.
 (function primeBranding(){
-  sbFetch('public_company_branding',{select:'name,short_name'}).then(function(rows){
-    var row=(Array.isArray(rows)&&rows.length)?rows[0]:{};
-    var shortName = row.short_name || (row.name?row.name.split(' ')[0]:'') || 'AIPL';
-    document.querySelectorAll('#splash-name,#login-brand,#topbar-logo-text').forEach(function(el){
-      el.textContent = shortName;
-    });
-    document.title = shortName+' — Construction Management';
-  }).catch(function(){});
+  document.querySelectorAll('#splash-name,#login-brand,#topbar-logo-text').forEach(function(el){
+    el.textContent = 'Rydax';
+  });
+  document.title = 'Rydax — Construction Management';
 })();
 
 async function sbInsert(table, data){
@@ -7552,8 +7660,21 @@ function handleFilePreview(inputId, previewId){
 // ── SUPABASE AUTH ──
 var SUPABASE_AUTH_URL = 'https://aywlauygsqkivdihbaut.supabase.co/auth/v1';
 
-async function authSignUp(mobile, password){
-  var email = mobile.replace(/[^0-9]/g,'') + '@aipl.internal';
+// Supabase Auth's auth.users table is global across every tenant, so a
+// phone number alone can't be the identity anymore — the same number
+// could belong to different people at different companies. The company
+// slug is folded into the synthetic email so each (phone, company)
+// pair gets its own auth.users row, even if the phone number repeats
+// across companies.
+function synthAuthEmail(mobile, companySlug){
+  var digits = mobile.replace(/[^0-9]/g,'');
+  var slug = (companySlug||'').toLowerCase().replace(/[^a-z0-9-]/g,'');
+  if(!slug) throw new Error('Company code is required');
+  return digits + '@' + slug + '.rydax.internal';
+}
+
+async function authSignUp(mobile, password, companySlug){
+  var email = synthAuthEmail(mobile, companySlug);
   var res = await fetch(SUPABASE_AUTH_URL+'/signup',{
     method:'POST',
     headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'},
@@ -7562,8 +7683,8 @@ async function authSignUp(mobile, password){
   return res.json();
 }
 
-async function authSignIn(mobile, password){
-  var email = mobile.replace(/[^0-9]/g,'') + '@aipl.internal';
+async function authSignIn(mobile, password, companySlug){
+  var email = synthAuthEmail(mobile, companySlug);
   var res = await fetch(SUPABASE_AUTH_URL+'/token?grant_type=password',{
     method:'POST',
     headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'},
@@ -10400,7 +10521,7 @@ async function empResetPassword(empId, empName, phone){
     if(pw1!==pw2){toast('Passwords do not match','warning');return;}
     try{
       toast('Updating password...','info');
-      var authResult = await authSignUp(phone, pw1);
+      var authResult = await authSignUp(phone, pw1, currentUser.companySlug);
       if(authResult && authResult.error){
         var msg = authResult.error.message||'';
         if(msg.toLowerCase().includes('already')){
@@ -10484,7 +10605,7 @@ async function empFormSave(){
         try{
           toast('Updating login password...','info');
           var empPhone = phone||gv('f-uphone');
-          var authRes = await authSignUp(empPhone, pw1);
+          var authRes = await authSignUp(empPhone, pw1, currentUser.companySlug);
           if(authRes && authRes.error && authRes.error.message && authRes.error.message.toLowerCase().includes('already')){
             // User exists in auth — we cannot reset via anon key, inform admin
             toast(name+' updated. To reset login password, use Supabase Auth dashboard or ask employee to use Forgot Password.','info');
@@ -10502,13 +10623,14 @@ async function empFormSave(){
       // New — get next ID
       var newEmpId=await getNextAIPLId();
       data.emp_id=newEmpId; data.badge_no=newEmpId; data.status='pending';
+      data.company_id=currentUser.companyId;
 
       // Create Supabase Auth account with entered password
       var pw = (document.getElementById('f-upassword')||{}).value||'';
       if(pw && phone){
         try{
           toast('Creating login account...','info');
-          var authResult = await authSignUp(phone, pw);
+          var authResult = await authSignUp(phone, pw, currentUser.companySlug);
           if(authResult && !authResult.error && (authResult.user||authResult.id)){
             data.auth_id = authResult.user ? authResult.user.id : authResult.id;
           } else if(authResult && authResult.error){
