@@ -92,6 +92,51 @@ end $$;
 -- every RLS policy below resolves back to via auth.uid().
 alter table employees alter column company_id set not null;
 
+-- ── 2b. CRITICAL: default company_id from the authenticated user ────
+-- None of the app's existing insert calls (hundreds of them, across
+-- every module) set company_id explicitly — that work happens
+-- incrementally as a follow-up, module by module. Without this step,
+-- every one of those inserts would come through with company_id NULL,
+-- and the WITH CHECK policy below (company_id = ...) would reject
+-- every single one, since NULL = anything is never true in SQL —
+-- breaking every write in the app the moment this migration runs.
+-- This column default resolves company_id server-side from whoever's
+-- actually authenticated, so existing insert calls that don't specify
+-- it keep working exactly as before, correctly scoped to the caller's
+-- own company automatically.
+do $$
+declare
+  t text;
+  tables text[] := array[
+    'access_permissions','advance_recoveries','attendance','attendance_punches',
+    'attendance_settings','audit_log','boq_exec_resources','boq_items','boq_jm',
+    'boq_subitems','categories','chart_of_accounts','company_details',
+    'company_expenses','employee_advances','employee_leave_fixation',
+    'employee_orders','employee_pay','equipment','grn_entries',
+    'inter_project_advances','inter_project_settlements','labourers',
+    'leave_requests','loan_allocations','loan_parties','loan_repayments',
+    'loan_transactions','loans','materials','other_expenses',
+    'petty_cash_expenses','petty_cash_in','projects','resource_requisitions',
+    'salary_records','sales_bills','sales_payments','store_inventory',
+    'store_issue_log','subcontractors','tpm_assets','tpm_transfers',
+    'vendor_material_rates','vendors','vouchers','work_advances','work_bills',
+    'work_daily_progress','work_orders','work_payments'
+    -- employees is deliberately excluded here: its own insert paths
+    -- (signup, admin adding a teammate) already set company_id
+    -- explicitly and correctly, since a default resolved from the
+    -- *inserting* user's own company wouldn't be right for every case
+    -- (e.g. the anon brand-new-company signup path, where the
+    -- inserting session has no company yet at all).
+  ];
+begin
+  foreach t in array tables loop
+    execute format(
+      'alter table if exists %I alter column company_id set default (select company_id from employees where auth_id = auth.uid())',
+      t
+    );
+  end loop;
+end $$;
+
 -- ── 3. RLS: every table above, isolated to the caller's own company ──
 -- Resolves the caller's company via employees.auth_id = auth.uid() —
 -- the same column the registration flow already writes on signup.
