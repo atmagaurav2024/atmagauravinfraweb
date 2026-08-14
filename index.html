@@ -18018,6 +18018,13 @@ function lnLoanStats(loanId, asOn){
 
 var LN_OPEN_PARTY=null;
 function lnToggleLoanParty(id){ LN_OPEN_PARTY=(LN_OPEN_PARTY===id)?null:id; lnRender(); }
+var LN_TG_MOBILE_VIEW='list'; // 'list' | 'detail' — Loans Taken/Given master-detail, mobile only
+function lnSelectLoanParty(pid){
+  LN_OPEN_PARTY=pid;
+  LN_TG_MOBILE_VIEW='detail';
+  lnRender();
+}
+function lnTgBackToList(){ LN_TG_MOBILE_VIEW='list'; lnRender(); }
 
 // ── LOAN ALLOCATION & INTER-PROJECT FINANCING — Phase 1 ─────────────
 // Splits a taken loan's principal across projects/company overheads.
@@ -18888,6 +18895,7 @@ function lnRender(){
   var dir=(LN_TAB==='taken')?'taken':'given';
   var isTaken=(dir==='taken');
   var accent=isTaken?'#E11D48':'#047857';
+  var isNarrow=window.innerWidth<720;
 
   var loans=LN_LOANS.filter(function(l){return l.direction===dir;});
   // Group by party so each lender/borrower is one entry with all their loans
@@ -18898,6 +18906,7 @@ function lnRender(){
     var lb=groups[b].map(function(x){return String(x.start_date||'');}).sort().reverse()[0]||'';
     return lb.localeCompare(la);
   });
+  if((!LN_OPEN_PARTY || pids.indexOf(LN_OPEN_PARTY)===-1) && pids.length) LN_OPEN_PARTY=pids[0];
 
   var totPrin=0,totOut=0,totInt=0,totAccr=0,totDue=0,totRepaid=0;
   loans.forEach(function(l){
@@ -18906,7 +18915,7 @@ function lnRender(){
     totRepaid+=st.repaid;
   });
 
-  c.innerHTML=
+  var header=
     '<div class="ln-eyebrow">Fund Flow</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin:2px 0 14px;flex-wrap:wrap;">'+
       '<div class="ln-h" style="font-size:19px;">'+(isTaken?'Loans Taken':'Loans Given')+'</div>'+
@@ -18925,86 +18934,118 @@ function lnRender(){
         '<div class="ln-sub" style="font-weight:800;color:'+(totDue>0.5?'#E11D48':'#047857')+';">'+(totDue>0.5?('balance '+fmtINR(totDue)):'fully settled')+'</div>'+
         '</div>'+
       '<div class="ln-card"><div class="ln-lbl">Total '+(isTaken?'Payable':'Receivable')+'</div><div class="ln-val" style="font-size:17px;color:'+(totOut+totDue>0.5?accent:'#047857')+';">'+fmtINR(totOut+totDue)+'</div><div class="ln-sub">incl. '+fmtINR(totDue)+' interest due</div></div>'+
+    '</div>';
+
+  if(!pids.length){
+    c.innerHTML=header+'<div class="ln-muted" style="text-align:center;padding:30px 4px;font-size:13px;">No '+(isTaken?'loans taken':'loans given')+' recorded yet.'+
+      (LN_PARTIES.length?'':'<br>Add a party first from the Party-wise tab.')+'</div>';
+    return;
+  }
+
+  var listHtml=pids.map(function(pid){
+    var pl=groups[pid];
+    var pPrin=0,pOut=0,pDue=0;
+    pl.forEach(function(l){ var st=lnLoanStats(l.id); pPrin+=st.principal; pOut+=st.outstanding; pDue+=st.intDue; });
+    var sel=(pid===LN_OPEN_PARTY);
+    return '<button onclick="lnSelectLoanParty(\''+pid+'\')" style="display:block;width:100%;text-align:left;background:#fff;border:1px solid '+(sel&&!isNarrow?'#818CF8':'#E7E5E4')+';'+(sel&&!isNarrow?'box-shadow:0 0 0 1px #818CF8;':'')+'border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;font-family:Nunito,sans-serif;">'+
+      '<div style="font-size:12.5px;font-weight:700;color:#1C1917;">'+lnPartyName(pid)+'</div>'+
+      '<div class="ln-sub">'+pl.length+' loan'+(pl.length!==1?'s':'')+' \u00b7 '+fmtINR(pPrin)+' '+(isTaken?'borrowed':'lent')+'</div>'+
+      '<div class="ln-mono" style="font-size:12px;font-weight:600;color:'+accent+';margin-top:2px;">'+fmtINR(pOut+pDue)+'</div>'+
+    '</button>';
+  }).join('');
+
+  var detailHtml='<div id="ln-tg-detail">'+lnPartyDetailHtml(LN_OPEN_PARTY, dir, isTaken, accent)+'</div>';
+
+  if(isNarrow){
+    // Drill-down on mobile: list OR detail, never both stacked (a long
+    // party list would otherwise push the detail far below the fold).
+    c.innerHTML=header+
+      (LN_TG_MOBILE_VIEW==='detail'
+        ? '<button onclick="lnTgBackToList()" class="ln-btn-ghost" style="margin-bottom:10px;padding-left:0;">\u2190 Back to '+(isTaken?'lenders':'borrowers')+'</button>'+detailHtml
+        : listHtml);
+  }else{
+    c.innerHTML=header+
+      '<div style="display:grid;grid-template-columns:240px 1fr;gap:20px;align-items:start;">'+
+        '<div>'+listHtml+'</div>'+detailHtml+
+      '</div>';
+  }
+}
+
+function lnPartyDetailHtml(pid, dir, isTaken, accent){
+  if(!pid) return '<div class="ln-muted" style="font-size:13px;">Select a '+(isTaken?'lender':'borrower')+' to see their loans.</div>';
+  var pl=LN_LOANS.filter(function(l){return l.direction===dir && l.party_id===pid;})
+    .sort(function(a,b){return String(b.start_date||'').localeCompare(String(a.start_date||''));});
+  if(!pl.length) return '<div class="ln-muted" style="font-size:13px;">No loans found for this party.</div>';
+
+  var pPrin=0,pOut=0,pAccr=0,pSettled=0,pDue=0;
+  pl.forEach(function(l){ var st=lnLoanStats(l.id); pPrin+=st.principal; pOut+=st.outstanding; pAccr+=st.accrued; pSettled+=st.interest; pDue+=st.intDue; });
+  var pct=pPrin>0?Math.min(100,Math.round((pPrin-pOut)/pPrin*100)):0;
+
+  return '<div class="ln-card" style="padding:0;overflow:hidden;margin-bottom:12px;">'+
+      '<div style="padding:12px 14px;background:#FAFAF9;display:flex;align-items:flex-start;gap:8px;">'+
+        '<div style="flex:1;">'+
+          '<div class="ln-h" style="font-size:16px;">'+lnPartyName(pid)+'</div>'+
+          '<div class="ln-sub">'+pl.length+' loan'+(pl.length!==1?'s':'')+' \u00b7 '+fmtINR(pPrin)+' '+(isTaken?'borrowed':'lent')+'</div>'+
+        '</div>'+
+        '<div style="text-align:right;flex-shrink:0;">'+
+          '<div class="ln-mono" style="font-size:16px;font-weight:600;color:'+accent+';">'+fmtINR(pOut+pDue)+'</div>'+
+          '<div class="ln-sub ln-mono">'+fmtINR(pOut)+' + '+fmtINR(pDue)+' int</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="height:3px;background:#F5F5F4;"><div style="height:100%;width:'+pct+'%;background:#4F46E5;"></div></div>'+
+      '<div style="padding:5px 14px;font-size:10.5px;color:#78716C;background:#FAFAF9;display:flex;justify-content:space-between;">'+
+        '<span>Principal repaid <b style="color:#047857;">'+fmtINR(pPrin-pOut)+'</b> \u00b7 interest accrued '+fmtINR(pAccr)+' \u00b7 '+(isTaken?'paid':'recd')+' '+fmtINR(pSettled)+
+          (pDue>0.5?' \u00b7 <b style="color:#E11D48;">due '+fmtINR(pDue)+'</b>':'')+'</span><span>'+pct+'% repaid</span>'+
+      '</div>'+
+      '<div style="padding:10px 14px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid #F5F5F4;">'+
+        (lnCanEdit()?'<button onclick="lnOpenPartyTxn(\''+pid+'\',\''+dir+'\')" class="ln-btn-primary">&#128176; Record '+(isTaken?'Payment':'Receipt')+'</button>':'')+
+      '</div>'+
     '</div>'+
-    (pids.length? pids.map(function(pid){
-      var pl=groups[pid].slice().sort(function(a,b){return String(b.start_date||'').localeCompare(String(a.start_date||''));});
-      var pPrin=0,pOut=0,pAccr=0,pSettled=0,pDue=0;
-      pl.forEach(function(l){ var st=lnLoanStats(l.id); pPrin+=st.principal; pOut+=st.outstanding; pAccr+=st.accrued; pSettled+=st.interest; pDue+=st.intDue; });
-      var pct=pPrin>0?Math.min(100,Math.round((pPrin-pOut)/pPrin*100)):0;
-      var open=(LN_OPEN_PARTY===pid);
-
-      return '<div class="ln-card" style="padding:0;overflow:hidden;margin-bottom:10px;">'+
-        '<div onclick="lnToggleLoanParty(\''+pid+'\')" style="padding:12px 14px;background:#FAFAF9;display:flex;align-items:flex-start;gap:8px;cursor:pointer;">'+
+    pl.map(function(l){
+      var st=lnLoanStats(l.id);
+      var txns=LN_TXNS.filter(function(x){return x.loan_id===l.id;}).sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+      return '<div class="ln-row-card">'+
+        '<div style="display:flex;gap:8px;align-items:flex-start;">'+
           '<div style="flex:1;">'+
-            '<div style="font-size:13.5px;font-weight:700;">'+lnPartyName(pid)+'</div>'+
-            '<div class="ln-sub">'+pl.length+' loan'+(pl.length!==1?'s':'')+' \u00b7 '+fmtINR(pPrin)+' '+(isTaken?'borrowed':'lent')+'</div>'+
+            '<div class="ln-mono" style="font-size:13px;font-weight:600;">'+fmtINR(st.principal)+
+              ' <span class="ln-sub" style="font-family:Nunito,sans-serif;">\u00b7 '+fmtDate(l.start_date)+
+              (l.interest_rate?' \u00b7 '+l.interest_rate+'% '+(LN_INT_TYPES[l.interest_type||'simple']||''):' \u00b7 Interest-free')+'</span></div>'+
+            '<div class="ln-sub">'+(l.purpose||'\u2014')+(l.reference?' \u00b7 Ref: '+l.reference:'')+
+              (l.mode==='EmpBank'?' \u00b7 \ud83d\udc64 '+lnEmpName(l.mode_emp_id)+'\u2019s a/c'+(l.to_petty_cash?' \ud83d\udcb5':''):'')+'</div>'+
+            '<div class="ln-sub ln-mono">Repaid <b style="color:#047857;">'+fmtINR(st.repaid)+'</b> \u00b7 outstanding <b>'+fmtINR(st.outstanding)+'</b> \u00b7 int due <b style="color:#B45309;">'+fmtINR(st.intDue)+'</b></div>'+
+            (isTaken?(function(){
+              var allocRows=LN_ALLOCATIONS.filter(function(a){return a.loan_id===l.id && a.status==='ACTIVE';});
+              var allocSum=allocRows.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+              var prin=parseFloat(l.principal)||0;
+              if(!allocRows.length) return '<div style="font-size:10.5px;color:#E11D48;font-weight:700;margin-top:3px;">\u26a0 Not allocated to any project yet</div>';
+              if(allocSum<prin-0.01) return '<div style="font-size:10.5px;color:#B45309;font-weight:700;margin-top:3px;">Allocated '+fmtINR(allocSum)+' of '+fmtINR(prin)+' \u2014 '+fmtINR(prin-allocSum)+' unallocated</div>';
+              return '<div style="font-size:10.5px;color:#047857;font-weight:700;margin-top:3px;">Fully allocated across '+allocRows.length+' '+(allocRows.length===1?'project/overhead':'projects/overheads')+'</div>';
+            })():'')+
           '</div>'+
-          '<div style="text-align:right;flex-shrink:0;">'+
-            '<div class="ln-mono" style="font-size:14px;font-weight:600;color:'+accent+';">'+fmtINR(pOut+pDue)+'</div>'+
-            '<div class="ln-sub ln-mono">'+fmtINR(pOut)+' + '+fmtINR(pDue)+' int</div>'+
+          '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">'+
+            (isTaken?'<button onclick="lnSwitchTab(\'allocation\');lnAllocSelectLoan(\''+l.id+'\');" class="ln-btn-outline" style="white-space:nowrap;">&#128202; Allocate</button>':'')+
+            (isTaken && lnCanEdit() && LN_ALLOCATIONS.some(function(a){return a.loan_id===l.id && a.status==='ACTIVE';})?
+              '<button onclick="lnOpenSettle(\''+l.id+'\')" class="ln-btn-outline" style="white-space:nowrap;color:#4338CA;border-color:#C7D2FE;">&#128181; Settle</button>':'')+
+            ((l.payment_type||'')==='emi' && l.status!=='closed' && lnCanEdit()?
+              '<button onclick="lnOpenPaymentChooser(\''+l.id+'\')" class="ln-btn-outline" style="white-space:nowrap;color:#B45309;border-color:#FDE68A;">&#128176; Record Payment</button>':'')+
+            (l.status==='closed'?'<span class="ln-badge" style="background:#F5F5F4;color:#78716C;">&#10003; CLOSED</span>':'')+
+            (lnCanEdit()?'<button onclick="lnOpenLoan(\''+l.direction+'\',\''+l.id+'\')" class="ln-btn-ghost" style="border:1px solid #E7E5E4;border-radius:6px;">&#9998;</button>':'')+
+            (lnCanDelete()?'<button onclick="lnDelLoan(\''+l.id+'\')" class="ln-btn-danger-ghost">&#128465;</button>':'')+
           '</div>'+
-          '<div class="ln-muted" style="font-size:12px;">'+(open?'\u25b2':'\u25bc')+'</div>'+
         '</div>'+
-        '<div style="height:3px;background:#F5F5F4;"><div style="height:100%;width:'+pct+'%;background:#4F46E5;"></div></div>'+
-        '<div style="padding:5px 14px;font-size:10.5px;color:#78716C;background:#FAFAF9;display:flex;justify-content:space-between;">'+
-          '<span>Principal repaid <b style="color:#047857;">'+fmtINR(pPrin-pOut)+'</b> \u00b7 interest accrued '+fmtINR(pAccr)+' \u00b7 '+(isTaken?'paid':'recd')+' '+fmtINR(pSettled)+
-            (pDue>0.5?' \u00b7 <b style="color:#E11D48;">due '+fmtINR(pDue)+'</b>':'')+'</span><span>'+pct+'% repaid</span>'+
-        '</div>'+
-
-        (open?'<div style="padding:10px 14px;background:#fff;">'+
-          pl.map(function(l){
-            var st=lnLoanStats(l.id);
-            var txns=LN_TXNS.filter(function(x){return x.loan_id===l.id;}).sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
-            return '<div class="ln-row-card">'+
-              '<div style="display:flex;gap:8px;align-items:flex-start;">'+
-                '<div style="flex:1;">'+
-                  '<div class="ln-mono" style="font-size:13px;font-weight:600;">'+fmtINR(st.principal)+
-                    ' <span class="ln-sub" style="font-family:Nunito,sans-serif;">\u00b7 '+fmtDate(l.start_date)+
-                    (l.interest_rate?' \u00b7 '+l.interest_rate+'% '+(LN_INT_TYPES[l.interest_type||'simple']||''):' \u00b7 Interest-free')+'</span></div>'+
-                  '<div class="ln-sub">'+(l.purpose||'\u2014')+(l.reference?' \u00b7 Ref: '+l.reference:'')+
-                    (l.mode==='EmpBank'?' \u00b7 \ud83d\udc64 '+lnEmpName(l.mode_emp_id)+'\u2019s a/c'+(l.to_petty_cash?' \ud83d\udcb5':''):'')+'</div>'+
-                  '<div class="ln-sub ln-mono">Repaid <b style="color:#047857;">'+fmtINR(st.repaid)+'</b> \u00b7 outstanding <b>'+fmtINR(st.outstanding)+'</b> \u00b7 int due <b style="color:#B45309;">'+fmtINR(st.intDue)+'</b></div>'+
-                  (isTaken?(function(){
-                    var allocRows=LN_ALLOCATIONS.filter(function(a){return a.loan_id===l.id && a.status==='ACTIVE';});
-                    var allocSum=allocRows.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-                    var prin=parseFloat(l.principal)||0;
-                    if(!allocRows.length) return '<div style="font-size:10.5px;color:#E11D48;font-weight:700;margin-top:3px;">\u26a0 Not allocated to any project yet</div>';
-                    if(allocSum<prin-0.01) return '<div style="font-size:10.5px;color:#B45309;font-weight:700;margin-top:3px;">Allocated '+fmtINR(allocSum)+' of '+fmtINR(prin)+' \u2014 '+fmtINR(prin-allocSum)+' unallocated</div>';
-                    return '<div style="font-size:10.5px;color:#047857;font-weight:700;margin-top:3px;">Fully allocated across '+allocRows.length+' '+(allocRows.length===1?'project/overhead':'projects/overheads')+'</div>';
-                  })():'')+
-                '</div>'+
-                '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">'+
-                  (isTaken?'<button onclick="lnSwitchTab(\'allocation\');lnAllocSelectLoan(\''+l.id+'\');" class="ln-btn-outline" style="white-space:nowrap;">&#128202; Allocate</button>':'')+
-                  (isTaken && lnCanEdit() && LN_ALLOCATIONS.some(function(a){return a.loan_id===l.id && a.status==='ACTIVE';})?
-                    '<button onclick="lnOpenSettle(\''+l.id+'\')" class="ln-btn-outline" style="white-space:nowrap;color:#4338CA;border-color:#C7D2FE;">&#128181; Settle</button>':'')+
-                  ((l.payment_type||'')==='emi' && l.status!=='closed' && lnCanEdit()?
-                    '<button onclick="lnOpenPaymentChooser(\''+l.id+'\')" class="ln-btn-outline" style="white-space:nowrap;color:#B45309;border-color:#FDE68A;">&#128176; Record Payment</button>':'')+
-                  (l.status==='closed'?'<span class="ln-badge" style="background:#F5F5F4;color:#78716C;">&#10003; CLOSED</span>':'')+
-                  (lnCanEdit()?'<button onclick="lnOpenLoan(\''+l.direction+'\',\''+l.id+'\')" class="ln-btn-ghost" style="border:1px solid #E7E5E4;border-radius:6px;">&#9998;</button>':'')+
-                  (lnCanDelete()?'<button onclick="lnDelLoan(\''+l.id+'\')" class="ln-btn-danger-ghost">&#128465;</button>':'')+
-                '</div>'+
-              '</div>'+
-              (txns.length?'<div style="margin-top:8px;padding-top:6px;border-top:1px solid #F5F5F4;">'+txns.map(function(t){
-                var tBadge=t.txn_type==='interest'?'ln-badge-amber':(t.txn_type==='penalty'?'ln-badge-rose':'ln-badge-emerald');
-                var tl=t.txn_type==='interest'?'Interest':(t.txn_type==='penalty'?'Penalty':(isTaken?'Repaid':'Received'));
-                return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F5F5F4;">'+
-                  '<span class="ln-badge '+tBadge+'">'+tl+'</span>'+
-                  '<div style="flex:1;"><div class="ln-mono" style="font-size:11.5px;font-weight:600;">'+fmtINR(parseFloat(t.amount)||0)+'</div>'+
-                  '<div class="ln-sub">'+fmtDate(t.date)+(t.mode?' \u00b7 '+(t.mode==='EmpBank'?lnEmpName(t.mode_emp_id)+'\u2019s a/c':t.mode):'')+
-                    (t.receipt_no?' \u00b7 '+t.receipt_no:'')+(t.reference?' \u00b7 Ref '+t.reference:'')+'</div></div>'+
-                  (lnCanDelete()?'<button onclick="lnDelTxn(\''+t.id+'\')" class="ln-btn-ghost" style="font-size:14px;">\u00d7</button>':'')+
-                '</div>';
-              }).join('')+'</div>':'')+
-            '</div>';
-          }).join('')+
-        '</div>':'')+
-
-        '<div style="padding:10px 14px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid #F5F5F4;background:#FAFAF9;">'+
-          (lnCanEdit()?'<button onclick="lnOpenPartyTxn(\''+pid+'\',\''+dir+'\')" class="ln-btn-primary">&#128176; Record '+(isTaken?'Payment':'Receipt')+'</button>':'')+
-        '</div></div>';
-    }).join('')
-    :'<div class="ln-muted" style="text-align:center;padding:30px 4px;font-size:13px;">No '+(isTaken?'loans taken':'loans given')+' recorded yet.'+
-      (LN_PARTIES.length?'':'<br>Add a party first from the Party-wise tab.')+'</div>');
+        (txns.length?'<div style="margin-top:8px;padding-top:6px;border-top:1px solid #F5F5F4;">'+txns.map(function(t){
+          var tBadge=t.txn_type==='interest'?'ln-badge-amber':(t.txn_type==='penalty'?'ln-badge-rose':'ln-badge-emerald');
+          var tl=t.txn_type==='interest'?'Interest':(t.txn_type==='penalty'?'Penalty':(isTaken?'Repaid':'Received'));
+          return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F5F5F4;">'+
+            '<span class="ln-badge '+tBadge+'">'+tl+'</span>'+
+            '<div style="flex:1;"><div class="ln-mono" style="font-size:11.5px;font-weight:600;">'+fmtINR(parseFloat(t.amount)||0)+'</div>'+
+            '<div class="ln-sub">'+fmtDate(t.date)+(t.mode?' \u00b7 '+(t.mode==='EmpBank'?lnEmpName(t.mode_emp_id)+'\u2019s a/c':t.mode):'')+
+              (t.receipt_no?' \u00b7 '+t.receipt_no:'')+(t.reference?' \u00b7 Ref '+t.reference:'')+'</div></div>'+
+            (lnCanDelete()?'<button onclick="lnDelTxn(\''+t.id+'\')" class="ln-btn-ghost" style="font-size:14px;">\u00d7</button>':'')+
+          '</div>';
+        }).join('')+'</div>':'')+
+      '</div>';
+    }).join('');
 }
 
 var LN_PAY_FILTER='all';
