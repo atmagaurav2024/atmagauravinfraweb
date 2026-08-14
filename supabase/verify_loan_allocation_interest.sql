@@ -1,3 +1,13 @@
+-- ⚠️ OUTDATED — this used the same buggy formula the app had: it assumed
+-- the full allocated amount stayed outstanding forever, ignoring actual
+-- loan repayments. Fixed in the app (lnAllocAccruedInterest /
+-- projLoanAllocInterest now reduce correctly as repayments are made).
+-- This SQL was not updated to match since it needs a full reducing-
+-- balance walk over loan_transactions, which plain SQL cannot express
+-- simply. Do not use these numbers for verification — instead compare
+-- the app's own per-loan "int due" figure (shown on each loan card)
+-- times the allocation's share of that loan's principal.
+
 -- Verify: loan allocations per project, and the accrued interest that
 -- should match the "Loan-Allocated Interest" card in
 -- Project → Other Expenses → Interest Expenses.

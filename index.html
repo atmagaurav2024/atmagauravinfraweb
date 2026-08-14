@@ -18049,20 +18049,28 @@ function lnProjectName(id){
   return p?(p.name||p.code||'Project'):'Unknown project';
 }
 
-// amount × rate × days_active/365, where days_active is the overlap
-// between this allocation's [effective_from, effective_to-or-today]
-// and the loan's [start_date, today]. Derived live, never stored, so
-// it's always correct without needing to recompute snapshots.
+// This allocation's proportional share of the loan's own accrued
+// interest. Deliberately anchored to lnAccruedInterest(loan) rather than
+// computing independently from amount x rate x days, because that
+// independent version had a real bug: it kept accruing on the full
+// allocated amount forever, even after the loan itself was fully repaid
+// (LN_TXNS repayments were never considered). lnAccruedInterest() already
+// walks the loan's actual repayment history with a reducing balance, so
+// riding on it here means a repaid loan correctly stops accruing for
+// every allocation too, not just the loan's own headline figure.
+// Trade-off: if an allocation's own amount changed partway through the
+// loan's life (supersede pattern), this prorates the loan's *whole-life*
+// accrued interest by the *current* share rather than only the portion
+// while that specific split was in effect — accepted as a rare edge case
+// against fixing the much more common and severe unpaid-loan-still-
+// accruing bug.
 function lnAllocAccruedInterest(alloc, loan){
   var rate=parseFloat(loan&&loan.interest_rate)||0;
   if(rate<=0) return 0;
-  var today=new Date().toISOString().slice(0,10);
-  var loanStart=(loan&&loan.start_date)||alloc.effective_from;
-  var rangeStart=(alloc.effective_from>loanStart)?alloc.effective_from:loanStart;
-  var rangeEnd=(alloc.effective_to && alloc.effective_to<today)?alloc.effective_to:today;
-  var d1=new Date(rangeStart+'T00:00:00'), d2=new Date(rangeEnd+'T00:00:00');
-  var days=Math.max(0, Math.round((d2-d1)/86400000));
-  return (parseFloat(alloc.amount)||0)*(rate/100)*(days/365);
+  var principal=parseFloat(loan&&loan.principal)||0;
+  if(principal<=0) return 0;
+  var share=Math.min(1, (parseFloat(alloc.amount)||0)/principal);
+  return lnAccruedInterest(loan)*share;
 }
 
 var LN_ALLOC_LOAN_ID=null, LN_ALLOC_SHOW_HISTORY=false;

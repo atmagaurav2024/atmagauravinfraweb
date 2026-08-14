@@ -4228,20 +4228,64 @@ async function execRenderPettyExpenses(containerId){
   }
 }
 
-// Same formula as lnAllocAccruedInterest() in index.html (Loans module) -
-// duplicated here rather than relied on as a cross-file global, so this
-// works correctly regardless of whether the Loans module has been
-// visited this session yet.
-function projLoanAllocInterest(alloc, loan){
-  var rate=parseFloat(loan&&loan.interest_rate)||0;
+// Mirrors lnAccruedInterest() in index.html (Loans module): day-wise
+// simple interest on the reducing outstanding balance, repayments
+// applied on their date, compounding capitalised at each compounding
+// date if the loan's interest_type calls for it. Duplicated here (with
+// its own loan_transactions fetch) rather than relied on as a
+// cross-file global, so this is correct regardless of whether the
+// Loans module has been visited this session yet.
+var PROJ_LN_INT_FREQ={yearly:1, halfyearly:2, quarterly:4, monthly:12};
+function projLoanAccruedInterest(loan, txns){
+  var rate=parseFloat(loan.interest_rate)||0;
   if(rate<=0) return 0;
-  var today=new Date().toISOString().slice(0,10);
-  var loanStart=(loan&&loan.start_date)||alloc.effective_from;
-  var rangeStart=(alloc.effective_from>loanStart)?alloc.effective_from:loanStart;
-  var rangeEnd=(alloc.effective_to && alloc.effective_to<today)?alloc.effective_to:today;
-  var d1=new Date(rangeStart+'T00:00:00'), d2=new Date(rangeEnd+'T00:00:00');
-  var days=Math.max(0, Math.round((d2-d1)/86400000));
-  return (parseFloat(alloc.amount)||0)*(rate/100)*(days/365);
+  var start=loan.start_date; if(!start) return 0;
+  var dayMs=86400000;
+  var d0=new Date(start+'T00:00:00'); if(isNaN(d0)) return 0;
+  var today=new Date();
+  if(today<d0) return 0;
+
+  var freq=PROJ_LN_INT_FREQ[loan.interest_type||'simple']||0;
+  var events=(txns||[]).filter(function(t){return t.loan_id===loan.id && t.txn_type==='repayment';})
+    .map(function(t){return {date:new Date(String(t.date)+'T00:00:00'), kind:'repay', amt:parseFloat(t.amount)||0};})
+    .filter(function(e){return !isNaN(e.date);});
+  if(freq>0){
+    var stepMonths=12/freq;
+    var c=new Date(d0.getTime());
+    for(var g=0; g<400; g++){
+      c=new Date(c.getFullYear(), c.getMonth()+stepMonths, c.getDate());
+      if(c>today) break;
+      events.push({date:new Date(c.getTime()), kind:'compound'});
+    }
+  }
+  events.sort(function(a,b){ var d=a.date-b.date; if(d!==0) return d; return a.kind==='repay'?-1:1; });
+
+  var bal=parseFloat(loan.principal)||0, pending=0, accrued=0, cursor=d0;
+  var accrueTo=function(to){
+    var days=Math.round((to-cursor)/dayMs);
+    if(days>0&&bal>0){ var amt=bal*(rate/100)*(days/365); accrued+=amt; pending+=amt; }
+    cursor=to;
+  };
+  for(var i=0;i<events.length;i++){
+    var e=events[i];
+    if(e.date>today) break;
+    if(e.date>cursor) accrueTo(e.date);
+    if(e.kind==='repay'){ bal-=e.amt; } else { bal+=pending; pending=0; }
+  }
+  accrueTo(today);
+  return accrued>0?accrued:0;
+}
+
+// This allocation's proportional share of the loan's own accrued
+// interest, instead of independently accruing on the full allocated
+// amount forever — that version had a real bug where a fully repaid
+// loan kept showing interest accruing on its original amount, since it
+// never looked at loan_transactions at all.
+function projLoanAllocInterest(alloc, loan, txns){
+  var principal=parseFloat(loan&&loan.principal)||0;
+  if(principal<=0) return 0;
+  var share=Math.min(1, (parseFloat(alloc.amount)||0)/principal);
+  return projLoanAccruedInterest(loan, txns)*share;
 }
 
 // ── Interest / Taxes / Depreciation sub-tabs ──────────────────────────────
@@ -4261,8 +4305,9 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
     if(type==='interest'){
       fetches.push(
         sbFetch('loan_allocations',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.ACTIVE&type=eq.PROJECT'}).catch(function(){return [];}),
-        sbFetch('loans',{select:'id,principal,interest_rate,start_date,party_id'}).catch(function(){return [];}),
-        sbFetch('loan_parties',{select:'id,name'}).catch(function(){return [];})
+        sbFetch('loans',{select:'id,principal,interest_rate,interest_type,start_date,party_id'}).catch(function(){return [];}),
+        sbFetch('loan_parties',{select:'id,name'}).catch(function(){return [];}),
+        sbFetch('loan_transactions',{select:'loan_id,txn_type,amount,date'}).catch(function(){return [];})
       );
     }
     var r=await Promise.all(fetches);
@@ -4274,11 +4319,12 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
       var allocs=Array.isArray(r[1])?r[1]:[];
       var loansLite=Array.isArray(r[2])?r[2]:[];
       var parties=Array.isArray(r[3])?r[3]:[];
+      var allTxns=Array.isArray(r[4])?r[4]:[];
       var loanRows=allocs.map(function(a){
         var loan=loansLite.find(function(l){return l.id===a.loan_id;});
         if(!loan) return null;
         var party=parties.find(function(p){return p.id===loan.party_id;});
-        return {accrued:projLoanAllocInterest(a,loan), lender:party?party.name:'Unknown lender',
+        return {accrued:projLoanAllocInterest(a,loan,allTxns), lender:party?party.name:'Unknown lender',
           rate:parseFloat(loan.interest_rate)||0, allocAmt:parseFloat(a.amount)||0};
       }).filter(Boolean);
       var loanTotal=loanRows.reduce(function(s,x){return s+x.accrued;},0);
@@ -4289,7 +4335,7 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
               '<div style="font-size:11.5px;font-weight:800;color:#E65100;">🏦 Loan-Allocated Interest (this project\'s share, accrued to date)</div>'+
               '<div style="font-size:15px;font-weight:900;color:#E65100;">'+inr(loanTotal)+'</div>'+
             '</div>'+
-            '<div style="font-size:10px;color:var(--text3);margin-top:4px;">From loans allocated to this project in the Loans module — not a manual entry below, so it isn\'t double-counted in Total.</div>'+
+            '<div style="font-size:10px;color:var(--text3);margin-top:4px;">From loans allocated to this project in the Loans module — not a manual entry below, so it isn\'t double-counted in Total. Reflects actual repayments already made against the loan.</div>'+
             loanRows.map(function(x){
               return '<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text3);margin-top:4px;padding-top:4px;border-top:1px solid #FFE0B2;">'+
                 '<span>'+x.lender+' · '+inr(x.allocAmt)+' @ '+x.rate+'%</span><span style="font-weight:700;color:#E65100;">'+inr(x.accrued)+'</span>'+
