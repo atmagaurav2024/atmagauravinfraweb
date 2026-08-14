@@ -4270,7 +4270,7 @@ function projLoanAccruedInterest(loan, txns){
     var e=events[i];
     if(e.date>today) break;
     if(e.date>cursor) accrueTo(e.date);
-    if(e.kind==='repay'){ bal-=e.amt; } else { bal+=pending; pending=0; }
+    if(e.kind==='repay'){ bal-=e.amt; } else { if(bal>0){ bal+=pending; } pending=0; }
   }
   accrueTo(today);
   return accrued>0?accrued:0;

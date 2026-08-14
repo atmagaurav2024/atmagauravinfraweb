@@ -17997,7 +17997,7 @@ function lnAccruedInterest(loan, asOn){
     if(e.date>today) break;
     if(e.date>cursor) accrueTo(e.date);
     if(e.kind==='repay'){ bal-=e.amt; }
-    else { bal+=pending; pending=0; }   // capitalise
+    else { if(bal>0){ bal+=pending; } pending=0; }   // capitalise — only while principal is still genuinely outstanding
   }
   accrueTo(today);
   return accrued>0?accrued:0;
