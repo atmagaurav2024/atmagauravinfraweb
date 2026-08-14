@@ -4228,6 +4228,22 @@ async function execRenderPettyExpenses(containerId){
   }
 }
 
+// Same formula as lnAllocAccruedInterest() in index.html (Loans module) -
+// duplicated here rather than relied on as a cross-file global, so this
+// works correctly regardless of whether the Loans module has been
+// visited this session yet.
+function projLoanAllocInterest(alloc, loan){
+  var rate=parseFloat(loan&&loan.interest_rate)||0;
+  if(rate<=0) return 0;
+  var today=new Date().toISOString().slice(0,10);
+  var loanStart=(loan&&loan.start_date)||alloc.effective_from;
+  var rangeStart=(alloc.effective_from>loanStart)?alloc.effective_from:loanStart;
+  var rangeEnd=(alloc.effective_to && alloc.effective_to<today)?alloc.effective_to:today;
+  var d1=new Date(rangeStart+'T00:00:00'), d2=new Date(rangeEnd+'T00:00:00');
+  var days=Math.max(0, Math.round((d2-d1)/86400000));
+  return (parseFloat(alloc.amount)||0)*(rate/100)*(days/365);
+}
+
 // ── Interest / Taxes / Depreciation sub-tabs ──────────────────────────────
 // All three share the same simple model: entries in `other_expenses`,
 // scoped to this project via project_id and distinguished by `type`.
@@ -4241,9 +4257,47 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
   el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading...</div>';
 
   try{
-    var rows=await sbFetch('other_expenses',{select:'*',filter:'project_id=eq.'+projId+'&type=eq.'+type,order:'date.desc'});
-    var list=Array.isArray(rows)?rows:[];
+    var fetches=[sbFetch('other_expenses',{select:'*',filter:'project_id=eq.'+projId+'&type=eq.'+type,order:'date.desc'})];
+    if(type==='interest'){
+      fetches.push(
+        sbFetch('loan_allocations',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.ACTIVE&type=eq.PROJECT'}).catch(function(){return [];}),
+        sbFetch('loans',{select:'id,principal,interest_rate,start_date,party_id'}).catch(function(){return [];}),
+        sbFetch('loan_parties',{select:'id,name'}).catch(function(){return [];})
+      );
+    }
+    var r=await Promise.all(fetches);
+    var list=Array.isArray(r[0])?r[0]:[];
     var total=list.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+
+    var loanInterestHtml='';
+    if(type==='interest'){
+      var allocs=Array.isArray(r[1])?r[1]:[];
+      var loansLite=Array.isArray(r[2])?r[2]:[];
+      var parties=Array.isArray(r[3])?r[3]:[];
+      var loanRows=allocs.map(function(a){
+        var loan=loansLite.find(function(l){return l.id===a.loan_id;});
+        if(!loan) return null;
+        var party=parties.find(function(p){return p.id===loan.party_id;});
+        return {accrued:projLoanAllocInterest(a,loan), lender:party?party.name:'Unknown lender',
+          rate:parseFloat(loan.interest_rate)||0, allocAmt:parseFloat(a.amount)||0};
+      }).filter(Boolean);
+      var loanTotal=loanRows.reduce(function(s,x){return s+x.accrued;},0);
+      if(loanRows.length){
+        loanInterestHtml=
+          '<div style="background:#FFF3E0;border:1px solid #FFCC80;border-radius:10px;padding:10px 14px;margin:0 4px 10px;">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+              '<div style="font-size:11.5px;font-weight:800;color:#E65100;">🏦 Loan-Allocated Interest (this project\'s share, accrued to date)</div>'+
+              '<div style="font-size:15px;font-weight:900;color:#E65100;">'+inr(loanTotal)+'</div>'+
+            '</div>'+
+            '<div style="font-size:10px;color:var(--text3);margin-top:4px;">From loans allocated to this project in the Loans module — not a manual entry below, so it isn\'t double-counted in Total.</div>'+
+            loanRows.map(function(x){
+              return '<div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text3);margin-top:4px;padding-top:4px;border-top:1px solid #FFE0B2;">'+
+                '<span>'+x.lender+' · '+inr(x.allocAmt)+' @ '+x.rate+'%</span><span style="font-weight:700;color:#E65100;">'+inr(x.accrued)+'</span>'+
+              '</div>';
+            }).join('')+
+          '</div>';
+      }
+    }
 
     var rowsHtml=list.map(function(x){
       return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
@@ -4266,7 +4320,8 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
         '<div style="font-size:13px;font-weight:800;color:var(--navy);">'+icon+' '+label+' — '+(proj.name||'')+'</div>'+
         '<button onclick="execOpenAddOtherExpense(\''+type+'\',\''+label.replace(/'/g,"\\'")+'\')" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Add</button>'+
       '</div>'+
-      '<div style="font-size:15px;font-weight:900;color:#C62828;padding:0 4px 10px;">Total: '+inr(total)+'</div>'+
+      loanInterestHtml+
+      '<div style="font-size:15px;font-weight:900;color:#C62828;padding:0 4px 10px;">Total'+(type==='interest'?' (manual entries)':'')+': '+inr(total)+'</div>'+
       rowsHtml;
   }catch(e){
     console.error(e);
