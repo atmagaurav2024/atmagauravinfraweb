@@ -3629,10 +3629,17 @@ async function doCompanySignup(){
     // the way companies/employees do; this insert needs a real
     // authenticated session (now available via currentUser, set by
     // doLoginInner above) for current_company_id() to resolve at all.
+    // Kept non-blocking (signup itself already succeeded by this
+    // point) but now surfaced visibly rather than console-only, so a
+    // failure here is actually noticeable instead of silently leaving
+    // Company Details empty.
     if(currentUser && currentUser.accessToken){
-      await sbInsertMinimal('company_details',{company_id:companyId, name:name, short_name:shortName}).catch(function(e){
-        console.warn('Pre-filling company_details failed (non-fatal):', e);
-      });
+      try{
+        await sbInsertMinimal('company_details',{company_id:companyId, name:name, short_name:shortName});
+      }catch(e){
+        console.error('Pre-filling company_details failed:', e);
+        toast('Company created, but pre-filling Company Details failed ('+e.message+') — you can fill it in manually','warning');
+      }
     }
   }catch(e){
     console.error(e);
