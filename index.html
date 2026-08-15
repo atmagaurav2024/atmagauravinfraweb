@@ -69,7 +69,7 @@ body.has-rail .app-nav{display:none !important;}
 
 :root{
   --navy:#0D2137;--navy2:#122840;--navy3:#1A3A5C;--blue:#1565C0;--blue2:#1976D2;
-  --accent:#EA580C;--accent-hover:#C2410C;--accent-light:#FFF0E6;
+  --accent:var(--text);--accent-hover:#000;--accent-light:#F4F4F5;
   --green:#2E7D32;--greenl:#E8F5E9;--greenb:#A5D6A7;
   --red:#C62828;--redl:#FFEBEE;--redb:#EF9A9A;
   --amber:#F57F17;--amberl:#FFF8E1;--amberb:#FFE082;
@@ -1051,9 +1051,9 @@ body[data-app="registry"] .scroll{visibility:visible;pointer-events:auto;}
 /* ═══════════════════════════════════════════
    MASTER REGISTRY CSS
 ═══════════════════════════════════════════ */
-.topbar{position:fixed;top:0;left:0;right:0;height:var(--top);background:var(--navy);display:flex;align-items:center;padding:0 14px;gap:10px;z-index:49;box-shadow:0 2px 16px rgba(0,0,0,.3);}
-.tb-btn{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.1);border:none;font-size:16px;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;}
-.tb-info{flex:1;}.tb-title{font-size:16px;font-weight:800;color:white;}.tb-sub{font-size:10px;color:rgba(255,255,255,.5);}
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--top);background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;z-index:49;}
+.tb-btn{width:36px;height:36px;border-radius:10px;background:rgba(0,0,0,.05);border:none;font-size:16px;cursor:pointer;color:var(--text);display:flex;align-items:center;justify-content:center;}
+.tb-info{flex:1;}.tb-title{font-size:16px;font-weight:800;color:var(--text);}.tb-sub{font-size:10px;color:var(--text3);}
 .scroll{position:fixed;top:var(--top);left:0;right:0;bottom:var(--bot);overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .page{padding:14px;display:none;}.page.on{display:block;animation:pgIn .22s ease;}
 @keyframes pgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
@@ -6170,7 +6170,7 @@ function openPDF(docHtml){
   bar.innerHTML =
     '<div style="color:white;font-size:13px;font-weight:800;">&#128196; Document Preview</div>'+
     '<div style="display:flex;gap:8px;">'+
-      '<button id="pdf-print-btn" style="background:rgba(255,255,255,.2);color:white;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;">&#128424; Print</button>'+
+      '<button id="pdf-print-btn" style="background:var(--text);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;">&#128424; Print</button>'+
       '<button id="pdf-close-btn" style="background:#C62828;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;">&#10005; Close</button>'+
     '</div>';
 
@@ -8531,25 +8531,25 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
 
 <!-- ═══════════ EMPLOYEE MANAGEMENT MODULE ═══════════ -->
 <div class="app-screen" id="app-employees">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128101; Employee Management</div>
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128101; Employee Management</div>
     <button class="tb-btn" id="emp-refresh-btn" title="Refresh" onclick="EMP_LIST=[];EMP_PAY=[];EMP_LEAVEFIX=[];EMP_ORDERS=[];SALARY_RECORDS=[];initEmpMgmt();" style="font-size:16px;">&#8635;</button>
     <button class="tb-btn" id="emp-add-btn" onclick="EMP_TAB==='advances'?advOpenNew():empOpenForm(null)" style="font-size:20px;">&#43;</button>
   </div>
   <!-- Tab Bar -->
-  <div id="emp-tab-bar" style="display:flex;overflow-x:auto;background:var(--navy3);padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;">
-    <button onclick="empTab('active',this)"   id="emp-t-active"   style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:rgba(255,255,255,.2);color:white;">&#9989; Active</button>
-    <button onclick="empTab('pending',this)"  id="emp-t-pending"  style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#9203; Pending</button>
-    <button onclick="empTab('pay',this)"      id="emp-t-pay"      style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128178; Pay Fixation</button>
-    <button onclick="empTab('advances',this)" id="emp-t-advances" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128176; Advances</button>
-    <button onclick="empTab('leavefix',this)" id="emp-t-leavefix" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#127796; Leave Fixation</button>
-    <button onclick="empTab('salary',this)" id="emp-t-salary" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128200; Monthly Salary</button>
-    <button onclick="empTab('increment',this)" id="emp-t-increment" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128640; Increment</button>
-    <button onclick="empTab('transfer',this)" id="emp-t-transfer" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128260; Transfer</button>
-    <button onclick="empTab('annual',this)" id="emp-t-annual" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128200; Annual</button>
-    <button onclick="empTab('downloads',this)" id="emp-t-downloads" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128196; Downloads</button>
-    <button onclick="empTab('resigned',this)" id="emp-t-resigned" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:rgba(255,255,255,.6);">&#128683; Resigned</button>
+  <div id="emp-tab-bar" style="display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid var(--border);padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;">
+    <button onclick="empTab('active',this)"   id="emp-t-active"   style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:var(--text);color:#fff;">&#9989; Active</button>
+    <button onclick="empTab('pending',this)"  id="emp-t-pending"  style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#9203; Pending</button>
+    <button onclick="empTab('pay',this)"      id="emp-t-pay"      style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128178; Pay Fixation</button>
+    <button onclick="empTab('advances',this)" id="emp-t-advances" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128176; Advances</button>
+    <button onclick="empTab('leavefix',this)" id="emp-t-leavefix" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#127796; Leave Fixation</button>
+    <button onclick="empTab('salary',this)" id="emp-t-salary" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128200; Monthly Salary</button>
+    <button onclick="empTab('increment',this)" id="emp-t-increment" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128640; Increment</button>
+    <button onclick="empTab('transfer',this)" id="emp-t-transfer" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128260; Transfer</button>
+    <button onclick="empTab('annual',this)" id="emp-t-annual" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128200; Annual</button>
+    <button onclick="empTab('downloads',this)" id="emp-t-downloads" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128196; Downloads</button>
+    <button onclick="empTab('resigned',this)" id="emp-t-resigned" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128683; Resigned</button>
   </div>
   <div id="emp-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 90px;background:#F0F4F8;">
     <div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>
@@ -11969,9 +11969,9 @@ async function empSavePay(){
 <!-- PROJECTS -->
 <!-- PROJECT MODULE (unified) -->
 <div class="app-screen" id="app-projects">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127959; Project Module</div>
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127959; Project Module</div>
     <div id="proj-mod-sel-badge" style="flex-shrink:0;"></div>
     <button class="tb-btn" id="proj-mod-add-btn" onclick="projModAdd()" style="font-size:20px;">&#43;</button>
   </div>
@@ -12005,21 +12005,21 @@ async function empSavePay(){
 
 <!-- ACCOUNTS -->
 <div class="app-screen" id="app-accounts">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128176; Accounts</div>
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128176; Accounts</div>
     <button class="tb-btn" id="acc-add-btn" onclick="accQuickAdd()" style="font-size:20px;">&#43;</button>
   </div>
-  <div id="acc-tab-bar" style="display:flex;overflow-x:auto;background:var(--navy3);padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;"></div>
+  <div id="acc-tab-bar" style="display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid var(--border);padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;"></div>
   <div id="acc-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
 </div>
 <div class="sh-overlay" id="ov-acc" onclick="closeAccSheet()"></div>
 <div class="sheet" id="sh-acc"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="acc-sheet-title">New Voucher</div><span class="sh-close" onclick="closeAccSheet()">&#10005;</span></div><div class="sh-body" id="acc-sheet-body"></div><div class="sh-foot" id="acc-sheet-foot"></div></div>
 
 <div class="app-screen" id="app-loans">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127974; Loans</div>
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127974; Loans</div>
   </div>
   <div id="ln-tab-bar" class="ln-ledger ln-tabbar" style="display:flex;overflow-x:auto;background:#00695C;padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;"></div>
   <div id="ln-content" class="ln-ledger" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#FAFAF9;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
@@ -12028,9 +12028,9 @@ async function empSavePay(){
 <div class="sheet" id="sh-ln"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="ln-sheet-title">Loans</div><span class="sh-close" onclick="closeSheet('ov-ln','sh-ln')">&#10005;</span></div><div class="sh-body" id="ln-sheet-body"></div><div class="sh-foot" id="ln-sheet-foot"></div></div>
 
 <div class="app-screen" id="app-overheads">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127970; Company Overheads</div>
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127970; Company Overheads</div>
     <button class="tb-btn" id="oh-add-btn" onclick="ohOpenEntry()" style="font-size:20px;">&#43;</button>
   </div>
   <div id="oh-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
@@ -12041,8 +12041,8 @@ async function empSavePay(){
 <!-- TOOLS, PLANT & MACHINERY -->
 <!-- RYDAX PLATFORM ADMIN CONSOLE -->
 <div class="app-screen" id="app-platform-console">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128272; Rydax Platform Admin</div>
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128272; Rydax Platform Admin</div>
     <button class="tb-btn" onclick="paLogout()">Sign Out</button>
   </div>
   <div style="display:flex;background:#292524;padding:0 14px;gap:4px;flex-shrink:0;">
@@ -12056,9 +12056,9 @@ async function empSavePay(){
 </div>
 
 <div class="app-screen" id="app-tpm">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128295; Tools, Plant &amp; Machinery</div>
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128295; Tools, Plant &amp; Machinery</div>
     <button class="tb-btn" id="tpm-add-btn" onclick="tpmOpenForm()" style="font-size:20px;">&#43;</button>
   </div>
   <div id="tpm-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
@@ -12079,9 +12079,9 @@ async function empSavePay(){
 
 <!-- ACCESS CONTROL -->
 <div class="app-screen" id="app-access">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128274; Access Control</div>
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128274; Access Control</div>
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 12px;">
     <div style="display:flex;gap:8px;margin-bottom:14px;">
@@ -12123,9 +12123,9 @@ async function empSavePay(){
 </div>
 
 <div class="app-screen" id="app-company">
-  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
-    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127970; Company Details</div>
+    <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127970; Company Details</div>
     <button onclick="companySave()" style="background:rgba(255,255,255,.2);border:none;color:white;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128190; Save</button>
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;" id="company-body">
@@ -12265,7 +12265,7 @@ function projModRenderNav(){
     if(hasProjId&&!onProjects){
       var pp=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
       var pname=pp?(pp.code||pp.name):'';
-      badge.innerHTML='<span style="font-size:10px;background:rgba(255,255,255,.2);color:white;padding:3px 10px;border-radius:6px;font-weight:700;">'+pname+'</span>';
+      badge.innerHTML='<span style="font-size:10px;background:var(--text);color:#fff;padding:3px 10px;border-radius:6px;font-weight:700;">'+pname+'</span>';
     }else{
       badge.innerHTML='';
     }
@@ -22149,8 +22149,8 @@ function accRenderTabBar(){
     return '<button class="tab" data-tab="'+t.id+'" onclick="accSwitchTab(\''+t.id+'\')" style="'+
       'padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;'+
       'font-family:Nunito,sans-serif;border-radius:8px;'+
-      'background:'+(active?'white':'transparent')+';'+
-      'color:'+(active?'#1A237E':'rgba(255,255,255,.65)')+';">'+t.label+'</button>';
+      'background:'+(active?'var(--text)':'transparent')+';'+
+      'color:'+(active?'#fff':'var(--text3)')+';">'+t.label+'</button>';
   }).join('');
 }
 
