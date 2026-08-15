@@ -65,6 +65,26 @@ begin
   end if;
 end $$;
 
+-- employees.company_id is added explicitly here, ahead of everything
+-- else — current_company_id() below references it, and CREATE
+-- FUNCTION ... LANGUAGE SQL validates column existence against the
+-- schema at creation time, so the column has to exist first. The main
+-- loop further down will simply skip re-adding it (add column if not
+-- exists), since employees is also in that table list.
+alter table employees add column if not exists company_id uuid references companies(id);
+
+-- Postgres doesn't allow a raw subquery directly inside a column
+-- DEFAULT expression ("cannot use subquery in DEFAULT expression") —
+-- only function calls are allowed there. This wraps the same lookup
+-- in a small stable SQL function instead, which a DEFAULT can call.
+-- Used below both as the column default and inside the RLS policies,
+-- so the resolution logic lives in exactly one place.
+create or replace function current_company_id() returns uuid
+language sql stable
+as $$
+  select company_id from employees where auth_id = auth.uid()
+$$;
+
 -- ── 2+3+4+5. company_id, backfill, default, RLS — all per-table, ────
 --    each guarded by an existence check so a table that isn't real
 --    (like equipment) is skipped cleanly instead of aborting the run.
@@ -104,10 +124,7 @@ begin
     -- server-side default, except employees (its insert paths always
     -- set company_id explicitly and correctly — see note below)
     if t <> 'employees' then
-      execute format(
-        'alter table %I alter column company_id set default (select company_id from employees where auth_id = auth.uid())',
-        t
-      );
+      execute format('alter table %I alter column company_id set default current_company_id()', t);
     end if;
 
     -- RLS: tenant isolation
@@ -116,8 +133,8 @@ begin
     execute format('drop policy if exists %I on %I', t||'_tenant_isolated', t);
     execute format($f$
       create policy %I on %I for all
-      using (company_id = (select company_id from employees where auth_id = auth.uid()))
-      with check (company_id = (select company_id from employees where auth_id = auth.uid()))
+      using (company_id = current_company_id())
+      with check (company_id = current_company_id())
     $f$, t||'_tenant_isolated', t);
   end loop;
 end $$;
@@ -131,7 +148,7 @@ alter table employees alter column company_id set not null;
 alter table companies enable row level security;
 drop policy if exists "companies_own_row" on companies;
 create policy "companies_own_row" on companies for select
-  using (id = (select company_id from employees where auth_id = auth.uid()));
+  using (id = current_company_id());
 
 -- ── 6. Public pre-login views ─────────────────────────────────────────
 drop view if exists public_company_branding;
