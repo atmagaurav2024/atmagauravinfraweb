@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Rydax</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+  :root { --navy:#0D2137; --accent:#4F46E5; --text2:#44403C; --text3:#78716C; --border:#E7E5E4; --bg:#FAFAF9; }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Nunito',sans-serif;color:var(--text2);background:var(--bg);line-height:1.65;}
+  .topbar{background:var(--navy);padding:16px 20px;display:flex;align-items:center;gap:10px;}
+  .topbar a{color:#fff;text-decoration:none;font-family:'Source Serif 4',serif;font-size:18px;font-weight:700;}
+  .wrap{max-width:760px;margin:0 auto;padding:40px 20px 80px;}
+  h1{font-family:'Source Serif 4',serif;font-size:28px;font-weight:700;color:var(--navy);margin-bottom:4px;}
+  h2{font-family:'Source Serif 4',serif;font-size:19px;font-weight:600;color:var(--navy);margin-top:34px;border-bottom:1px solid var(--border);padding-bottom:6px;}
+  p,li{font-size:14.5px;}
+  a{color:var(--accent);}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;}
+  th{background:#F5F5F4;font-weight:700;}
+  .notice{background:#FFF3E0;border:1px solid #FFCC80;border-radius:10px;padding:14px 16px;font-size:13px;color:#7C4A03;margin-bottom:28px;}
+  .pending{background:#FFE4E6;color:#B91C1C;font-weight:700;padding:1px 6px;border-radius:5px;font-size:0.92em;}
+  footer{text-align:center;padding:24px;font-size:12px;color:var(--text3);}
+  footer a{color:var(--text3);}
+</style>
+</head>
+<body>
+  <div class="topbar"><a href="/">&#127959; Rydax</a></div>
+  <div class="wrap">
+<div class="notice"><p><strong>⚠ DRAFT — NOT LEGAL ADVICE.</strong> This template is written to reflect how Rydax actually stores and processes data today (Supabase for the database and authentication, Cloudinary for uploaded files, Razorpay for payments). It has <strong>not</strong> been reviewed by a lawyer and should be checked against the Digital Personal Data Protection Act, 2023 (DPDP Act) and its rules before publishing. Every <code>[bracketed]</code> field needs your actual details filled in.</p></div><h1>Privacy Policy</h1>
+<p><strong>Last updated: 15 August 2026</strong></p>
+<p>This Privacy Policy explains how <strong>Rydax</strong> ("<strong>Rydax</strong>", "<strong>we</strong>", "<strong>us</strong>", "<strong>our</strong>") collects, uses, stores, and protects information in connection with the Rydax platform (the "<strong>Service</strong>").</p>
+<p>This policy applies to two categories of people: (1) <strong>Company Admins and users</strong> who sign up for and use Rydax on behalf of a construction company, and (2) <strong>individuals whose personal data is entered into Rydax by a Company Account</strong> (for example, employees, subcontractors, or labourers of a Rydax customer).</p>
+<h2>1. Who Controls Your Data</h2>
+<p>For data entered into a Company Account (employee records, attendance, salary, etc.), <strong>the Company Account holder (your employer or the business that added your data) is the Data Fiduciary</strong> under the DPDP Act, and Rydax acts as a data processor providing the underlying technology. If you are an individual whose data appears in someone else's Rydax account and you have a question about that data, you should contact that company directly; we will assist them in responding to you as required by law.</p>
+<p>For data you provide to us directly as a Company Admin (e.g. signup details, billing contact), <strong>we act as the Data Fiduciary</strong>.</p>
+<h2>2. What Information We Collect</h2>
+<h3>2.1 Information you provide directly</h3>
+<ul>
+<li>Company details: name, registered address, GST/PAN, bank details (for invoicing), logo.</li>
+<li>Admin and user account details: name, phone number, password (stored encrypted, never in plain text), role/designation.</li>
+<li>Employee and workforce records entered by your Company Account: names, contact details, date of birth, address, Aadhaar/PAN (where entered for compliance purposes), bank account details for salary processing, photographs, and employment history.</li>
+<li>Financial and operational records: attendance, project data, vouchers, invoices, loan records, and other business data you choose to store in the Service.</li>
+<li>Documents you upload (ID proofs, cheques, certificates, photos) — these are stored via <strong>Cloudinary</strong>, a third-party file hosting provider.</li>
+</ul>
+<h3>2.2 Information collected automatically</h3>
+<ul>
+<li>Login timestamps and basic device/browser information, for security and troubleshooting purposes.</li>
+<li>GPS location, only where a user actively uses a location-based feature (such as geofenced attendance punch-in) and only at the moment of that action — we do not continuously track location in the background.</li>
+</ul>
+<h3>2.3 Payment information</h3>
+<ul>
+<li>Payments are processed by <strong>Razorpay</strong>. We receive confirmation that a payment succeeded and a reference ID, but we do not receive or store your card number, UPI ID, or bank account credentials — those are handled entirely within Razorpay's own secure systems.</li>
+</ul>
+<h2>3. How We Use Information</h2>
+<p>We use the information described above to:
+- Provide, operate, and maintain the Service, including tenant data isolation so no Company Account can see another's data;
+- Authenticate users and secure accounts;
+- Process subscription payments and maintain billing records;
+- Communicate with you about your account, service updates, or support requests;
+- Comply with legal obligations (e.g. tax, accounting, or regulatory record-keeping);
+- Improve and troubleshoot the Service.</p>
+<p>We do <strong>not</strong> sell personal data to third parties, and we do not use Customer Data (employee records, financial data, etc.) for advertising purposes.</p>
+<h2>4. Where Data Is Stored</h2>
+<p>Rydax is built on <strong>Supabase</strong> (database and authentication) and <strong>Cloudinary</strong> (file storage). Depending on the specific infrastructure region configured for this project, data may be stored on servers located <strong><span class="pending">server region to be confirmed</span></strong>. If data is stored or processed outside India, this is done through our infrastructure providers' standard data processing agreements, and we take reasonable steps to ensure an equivalent standard of protection.</p>
+<h2>5. Data Security</h2>
+<p>We use industry-standard measures to protect data, including:
+- <strong>Row-Level Security (RLS)</strong> enforced at the database level, so that even in the event of an application bug, one company's data cannot be read or modified by another company's users — this is enforced by the database itself, not just the application.
+- Encrypted connections (HTTPS/TLS) for all data in transit.
+- Password hashing (passwords are never stored in plain text).
+- Role-based access control within each Company Account, configurable by that company's own admins.</p>
+<p>No system can be guaranteed 100% secure. If we become aware of a data breach affecting your information, we will notify affected Company Accounts and, where required by law, the relevant data protection authority, without undue delay.</p>
+<h2>6. Data Retention</h2>
+<p>We retain Customer Data for as long as a Company Account remains active. If a Company Account is cancelled or terminated, we retain data for a limited period (currently <strong>30 days</strong>) to allow for export or reactivation, after which it is deleted from active systems, except where we are legally required to retain specific records for longer (e.g. financial records under applicable tax law).</p>
+<h2>7. Your Rights</h2>
+<p>Subject to applicable law (including the DPDP Act, 2023), individuals whose personal data is processed through Rydax have the right to:
+- Access the personal data held about them;
+- Request correction of inaccurate data;
+- Request erasure of their data, subject to our legal retention obligations;
+- Withdraw consent, where processing is based on consent;
+- Nominate another individual to exercise these rights on their behalf in the event of death or incapacity;
+- Raise a grievance with our Grievance Officer (see Section 9), and thereafter with the Data Protection Board of India, if unresolved.</p>
+<p>Where the personal data in question was entered by a Company Account (e.g. an employee's records entered by their employer), please raise the request with that company first — we will support them in responding as their processor.</p>
+<h2>8. Third-Party Service Providers</h2>
+<p>We share data with the following categories of third-party service providers, solely to the extent necessary to operate the Service:</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Purpose</th>
+<th>Data Involved</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Supabase</td>
+<td>Database hosting, authentication</td>
+<td>All Customer Data, login credentials (hashed)</td>
+</tr>
+<tr>
+<td>Cloudinary</td>
+<td>File/document/photo storage</td>
+<td>Uploaded documents and images</td>
+</tr>
+<tr>
+<td>Razorpay</td>
+<td>Payment processing</td>
+<td>Payment amount, order reference (not card/bank details)</td>
+</tr>
+</tbody>
+</table>
+<p>We do not permit these providers to use your data for their own purposes beyond providing their service to us.</p>
+<h2>9. Grievance Officer</h2>
+<p>In accordance with applicable law, you may contact our Grievance Officer with any privacy-related complaint or request:</p>
+<p><strong>Name:</strong> <span class="pending">Grievance Officer name — to be confirmed</span>
+<strong>Email:</strong> admin@rydax.in
+<strong>Address:</strong> <span class="pending">Registered address — to be confirmed</span></p>
+<p>We will acknowledge and address grievances within the timeframes required by applicable law.</p>
+<h2>10. Children's Data</h2>
+<p>Rydax is a business tool intended for use by companies and their adult employees. We do not knowingly collect personal data from individuals below the age of 18 for the purpose of creating a Rydax user account. Where an employer enters basic identity data of a minor employee strictly for statutory workforce compliance purposes where legally required, that data is handled under the same protections as any other employee record.</p>
+<h2>11. Changes to This Policy</h2>
+<p>We may update this Privacy Policy from time to time. We will post the updated policy with a new "Last updated" date and, for material changes, provide additional notice where required by law.</p>
+<h2>12. Contact Us</h2>
+<p><strong>Rydax</strong>
+<strong><span class="pending">Registered address — to be confirmed</span></strong>
+<strong>admin@rydax.in</strong></p>
+  </div>
+  <footer>&copy; 2026 Rydax &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a> &middot; <a href="/refund-policy.html">Refunds</a></footer>
+</body>
+</html>

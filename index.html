@@ -1466,6 +1466,11 @@ input,select,textarea{font-size:16px !important;}
     <div style="margin-top:16px;text-align:center;font-size:13px;color:var(--text3);">
       New to Rydax? <span style="color:var(--blue);font-weight:700;cursor:pointer;" onclick="showScreen('scr-co-signup')">Create your company</span>
     </div>
+    <div style="margin-top:14px;text-align:center;font-size:11px;color:var(--text3);">
+      <a href="/terms.html" target="_blank" style="color:var(--text3);">Terms</a> &middot;
+      <a href="/privacy.html" target="_blank" style="color:var(--text3);">Privacy</a> &middot;
+      <a href="/refund-policy.html" target="_blank" style="color:var(--text3);">Refunds</a>
+    </div>
   </div>
 </div>
 
@@ -1496,7 +1501,12 @@ input,select,textarea{font-size:16px !important;}
     <label class="flbl">Password</label>
     <div class="inp-wrap"><input class="finp" type="password" placeholder="Choose a password" id="co-admin-pass"></div>
 
-    <button class="btn-primary" onclick="doCompanySignup()" style="margin-top:8px;">&#9889; Create Company &amp; Continue</button>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text3);margin-top:12px;cursor:pointer;">
+      <input type="checkbox" id="co-agree-terms" style="margin-top:2px;flex-shrink:0;">
+      <span>I agree to the <a href="/terms.html" target="_blank" style="color:var(--blue);">Terms of Service</a>, <a href="/privacy.html" target="_blank" style="color:var(--blue);">Privacy Policy</a>, and <a href="/refund-policy.html" target="_blank" style="color:var(--blue);">Refund Policy</a>.</span>
+    </label>
+
+    <button class="btn-primary" onclick="doCompanySignup()" style="margin-top:12px;">&#9889; Create Company &amp; Continue</button>
 
     <div style="margin-top:16px;text-align:center;font-size:13px;color:var(--text3);">
       Already have a company? <span style="color:var(--blue);font-weight:700;cursor:pointer;" onclick="showScreen('scr-login')">Sign in</span>
@@ -3627,6 +3637,7 @@ async function doCompanySignup(){
   if(!adminName){toast('Enter the admin name','warning');return;}
   if(!phone){toast('Enter your mobile number','warning');return;}
   if(!pass||pass.length<6){toast('Password must be at least 6 characters','warning');return;}
+  if(!(document.getElementById('co-agree-terms')||{}).checked){toast('Please agree to the Terms of Service, Privacy Policy, and Refund Policy to continue','warning');return;}
 
   COMPANY_SIGNUP_BUSY=true;
   try{
@@ -24065,7 +24076,12 @@ function companyRender(){
         '<div style="font-size:11px;color:var(--text3);">\u20b9'+p.price_monthly+'/month'+(p.max_employees?' \u00b7 up to '+p.max_employees+' employees':' \u00b7 unlimited employees')+'</div></div>'+
         '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:#7C3AED;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;">Subscribe</button>'+
       '</div>';
-    }).join(''));
+    }).join(''))+
+    '<div style="text-align:center;margin-top:8px;font-size:11px;color:var(--text3);">'+
+      '<a href="/terms.html" target="_blank" style="color:var(--text3);">Terms of Service</a> &middot; '+
+      '<a href="/privacy.html" target="_blank" style="color:var(--text3);">Privacy Policy</a> &middot; '+
+      '<a href="/refund-policy.html" target="_blank" style="color:var(--text3);">Refund Policy</a>'+
+    '</div>';
 
   body.innerHTML =
     billingHtml +
