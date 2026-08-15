@@ -10,6 +10,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>AIPL — Construction Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <style>
 
 /* ═══════════════════════════════════════════
@@ -23984,13 +23985,21 @@ function getEmpDataScope(){
 // ════ COMPANY DETAILS ═══════════════════════════════════════════════════
 
 var COMPANY_DATA = {};
+var COMPANY_BILLING = {}, ALL_PLANS = [];
 
 async function initCompany(){
   var body = document.getElementById('company-body');
   body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">Loading...</div>';
   try{
-    var rows = await sbFetch('company_details',{select:'*',order:'id.asc'});
+    var r = await Promise.all([
+      sbFetch('company_details',{select:'*',order:'id.asc'}),
+      currentUser&&currentUser.companyId?sbFetch('companies',{select:'*',filter:'id=eq.'+currentUser.companyId}).catch(function(){return [];}):Promise.resolve([]),
+      sbFetch('plans',{select:'*',order:'price_monthly.asc'}).catch(function(){return [];})
+    ]);
+    var rows=r[0];
     COMPANY_DATA = (Array.isArray(rows)&&rows.length) ? rows[0] : {};
+    COMPANY_BILLING = (Array.isArray(r[1])&&r[1].length) ? r[1][0] : {};
+    ALL_PLANS = Array.isArray(r[2])?r[2]:[];
   }catch(e){
     COMPANY_DATA = {};
   }
@@ -24033,7 +24042,33 @@ function companyRender(){
     '</div>';
   }
 
+  var currentPlan = ALL_PLANS.find(function(p){return p.id===COMPANY_BILLING.plan_id;});
+  var statusMap={trialing:['#FEF3C7','#B45309','Trial'], active:['#D1FAE5','#047857','Active'], lapsed:['#FFE4E6','#E11D48','Lapsed'], suspended:['#F5F5F4','#57534E','Suspended']};
+  var st=statusMap[COMPANY_BILLING.subscription_status]||statusMap.trialing;
+  var billingHtml =
+    sec('&#128179;','Billing &amp; Subscription','#7C3AED')+
+    '<div style="background:#FAFAF9;border:1px solid #E7E5E4;border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+        '<div><div style="font-size:14px;font-weight:800;">'+(currentPlan?currentPlan.name:'—')+' Plan</div>'+
+          (currentPlan?'<div style="font-size:11px;color:var(--text3);">\u20b9'+currentPlan.price_monthly+'/month'+(currentPlan.max_employees?' \u00b7 up to '+currentPlan.max_employees+' employees':'')+(currentPlan.max_projects?' \u00b7 up to '+currentPlan.max_projects+' projects':'')+'</div>':'')+
+        '</div>'+
+        '<span style="background:'+st[0]+';color:'+st[1]+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;">'+st[2]+'</span>'+
+      '</div>'+
+      (COMPANY_BILLING.subscription_status==='trialing' && COMPANY_BILLING.trial_ends_at?
+        '<div style="font-size:11px;color:var(--text3);margin-top:6px;">Trial ends '+fmtDate(String(COMPANY_BILLING.trial_ends_at).slice(0,10))+'</div>':'')+
+      (COMPANY_BILLING.subscription_status==='lapsed'?
+        '<div style="font-size:11px;color:#E11D48;font-weight:700;margin-top:6px;">Your subscription has lapsed — you have read-only access until you subscribe again.</div>':'')+
+    '</div>'+
+    (ALL_PLANS.filter(function(p){return p.id!==COMPANY_BILLING.plan_id && parseFloat(p.price_monthly)>0;}).map(function(p){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;background:white;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
+        '<div><div style="font-size:12.5px;font-weight:700;">'+p.name+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);">\u20b9'+p.price_monthly+'/month'+(p.max_employees?' \u00b7 up to '+p.max_employees+' employees':' \u00b7 unlimited employees')+'</div></div>'+
+        '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:#7C3AED;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;">Subscribe</button>'+
+      '</div>';
+    }).join(''));
+
   body.innerHTML =
+    billingHtml +
     // Basic Info
     sec('&#127968;','Company Information','#1565C0')+
     (currentUser&&currentUser.companySlug?
@@ -24100,6 +24135,63 @@ function companyRender(){
     '</div>'+
     finp('bank_acc_name','Account Holder Name',d.bank_acc_name,'As per bank records')+
     docBox('cheque_doc','Cancelled Cheque',d.cheque_doc_url,'Upload Cancelled Cheque');
+}
+
+// ── BILLING: Razorpay checkout ──────────────────────────────────────
+// Order creation and payment verification both happen server-side
+// (Supabase Edge Functions — see supabase/functions/), never trusting
+// the client alone. This just drives the Razorpay Checkout popup and
+// hands off to those two functions at each step.
+async function companySubscribeToPlan(planId){
+  if(!currentUser || !currentUser.accessToken){ toast('Please log in again','warning'); return; }
+  try{
+    toast('Preparing checkout...','info');
+    var orderRes = await fetch(SUPABASE_URL+'/functions/v1/create-razorpay-order',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+currentUser.accessToken,'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+      body:JSON.stringify({plan_id:planId})
+    });
+    var order = await orderRes.json();
+    if(!orderRes.ok || order.error){ toast('Could not start checkout: '+(order.error||'unknown error'),'error'); return; }
+
+    if(typeof Razorpay==='undefined'){ toast('Payment system failed to load — check your connection and try again','error'); return; }
+
+    var rzp = new Razorpay({
+      key: order.key_id,
+      amount: order.amount,
+      currency: order.currency,
+      name: 'Rydax',
+      description: order.plan_name+' Plan Subscription',
+      order_id: order.order_id,
+      handler: async function(response){
+        toast('Verifying payment...','info');
+        try{
+          var verifyRes = await fetch(SUPABASE_URL+'/functions/v1/verify-razorpay-payment',{
+            method:'POST',
+            headers:{'Authorization':'Bearer '+currentUser.accessToken,'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+            body:JSON.stringify({
+              razorpay_order_id:response.razorpay_order_id,
+              razorpay_payment_id:response.razorpay_payment_id,
+              razorpay_signature:response.razorpay_signature,
+              company_id: order.company_id, plan_id: order.plan_id, amount: order.amount
+            })
+          });
+          var verify = await verifyRes.json();
+          if(verifyRes.ok && verify.success){
+            toast('Subscription activated! Thank you.','success');
+            initCompany();
+          } else {
+            toast('Payment verification failed: '+(verify.error||'unknown error')+' — contact support if you were charged','error');
+          }
+        }catch(e){ toast('Verification error: '+e.message,'error'); }
+      },
+      modal:{ ondismiss:function(){ toast('Checkout cancelled','info'); } },
+      theme:{ color:'#7C3AED' }
+    });
+    rzp.open();
+  }catch(e){
+    toast('Error: '+e.message,'error');
+  }
 }
 
 // Track pending file uploads
