@@ -69,11 +69,19 @@ body.has-rail .app-nav{display:none !important;}
 
 :root{
   --navy:#0D2137;--navy2:#122840;--navy3:#1A3A5C;--blue:#1565C0;--blue2:#1976D2;
-  --green:#2E7D32;--greenl:#E8F5E9;--amber:#F57F17;--amberl:#FFF8E1;
-  --red:#C62828;--redl:#FFEBEE;--teal:#00838F;--purple:#6A1B9A;
+  --accent:#EA580C;--accent-hover:#C2410C;--accent-light:#FFF0E6;
+  --green:#2E7D32;--greenl:#E8F5E9;--greenb:#A5D6A7;
+  --red:#C62828;--redl:#FFEBEE;--redb:#EF9A9A;
+  --amber:#F57F17;--amberl:#FFF8E1;--amberb:#FFE082;
+  --teal:#00838F;--teall:#E0F7FA;--tealb:#80DEEA;
+  --purple:#6A1B9A;--purplel:#F3E5F5;--purpleb:#CE93D8;
+  --orange:#E65100;--orangel:#FFF3E0;--orangeb:#FFCC80;
+  --rose:#880E4F;--rosel:#FCE4EC;--roseb:#F48FB1;
+  --indigo:#283593;--indigol:#E8EAF6;--indigob:#9FA8DA;
   --bg:#F0F4F8;--white:#fff;--border:#E2E8F0;
   --text:#0D2137;--text2:#475569;--text3:#94A3B8;
-  --shadow:0 2px 12px rgba(13,33,55,.08);--shadow2:0 8px 32px rgba(13,33,55,.18);
+  --shadow:0 2px 12px rgba(13,33,55,.08);--shadow2:0 8px 32px rgba(13,33,55,.15);
+  --top:56px;--bot:68px;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;}
@@ -1043,10 +1051,6 @@ body[data-app="registry"] .scroll{visibility:visible;pointer-events:auto;}
 /* ═══════════════════════════════════════════
    MASTER REGISTRY CSS
 ═══════════════════════════════════════════ */
-
-:root{--navy:#0D2137;--blue:#1565C0;--green:#2E7D32;--greenl:#E8F5E9;--greenb:#A5D6A7;--red:#C62828;--redl:#FFEBEE;--redb:#EF9A9A;--amber:#F57F17;--amberl:#FFF8E1;--amberb:#FFE082;--teal:#00838F;--teall:#E0F7FA;--tealb:#80DEEA;--purple:#6A1B9A;--purplel:#F3E5F5;--purpleb:#CE93D8;--orange:#E65100;--orangel:#FFF3E0;--orangeb:#FFCC80;--rose:#880E4F;--rosel:#FCE4EC;--roseb:#F48FB1;--indigo:#283593;--indigol:#E8EAF6;--indigob:#9FA8DA;--bg:#F0F4F8;--white:#fff;--border:#E2E8F0;--text:#0D2137;--text2:#475569;--text3:#94A3B8;--shadow:0 2px 12px rgba(13,33,55,.08);--shadow2:0 8px 32px rgba(13,33,55,.15);--top:56px;--bot:68px;}
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;}
 .topbar{position:fixed;top:0;left:0;right:0;height:var(--top);background:var(--navy);display:flex;align-items:center;padding:0 14px;gap:10px;z-index:49;box-shadow:0 2px 16px rgba(0,0,0,.3);}
 .tb-btn{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.1);border:none;font-size:16px;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;}
 .tb-info{flex:1;}.tb-title{font-size:16px;font-weight:800;color:white;}.tb-sub{font-size:10px;color:rgba(255,255,255,.5);}
@@ -8527,7 +8531,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
 
 <!-- ═══════════ EMPLOYEE MANAGEMENT MODULE ═══════════ -->
 <div class="app-screen" id="app-employees">
-  <div style="background:#1B5E20;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128101; Employee Management</div>
     <button class="tb-btn" id="emp-refresh-btn" title="Refresh" onclick="EMP_LIST=[];EMP_PAY=[];EMP_LEAVEFIX=[];EMP_ORDERS=[];SALARY_RECORDS=[];initEmpMgmt();" style="font-size:16px;">&#8635;</button>
@@ -11965,7 +11969,7 @@ async function empSavePay(){
 <!-- PROJECTS -->
 <!-- PROJECT MODULE (unified) -->
 <div class="app-screen" id="app-projects">
-  <div style="background:#1B5E20;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127959; Project Module</div>
     <div id="proj-mod-sel-badge" style="flex-shrink:0;"></div>
@@ -12001,7 +12005,7 @@ async function empSavePay(){
 
 <!-- ACCOUNTS -->
 <div class="app-screen" id="app-accounts">
-  <div style="background:#1A237E;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128176; Accounts</div>
     <button class="tb-btn" id="acc-add-btn" onclick="accQuickAdd()" style="font-size:20px;">&#43;</button>
@@ -12013,7 +12017,7 @@ async function empSavePay(){
 <div class="sheet" id="sh-acc"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="acc-sheet-title">New Voucher</div><span class="sh-close" onclick="closeAccSheet()">&#10005;</span></div><div class="sh-body" id="acc-sheet-body"></div><div class="sh-foot" id="acc-sheet-foot"></div></div>
 
 <div class="app-screen" id="app-loans">
-  <div style="background:#00695C;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127974; Loans</div>
   </div>
@@ -12024,7 +12028,7 @@ async function empSavePay(){
 <div class="sheet" id="sh-ln"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="ln-sheet-title">Loans</div><span class="sh-close" onclick="closeSheet('ov-ln','sh-ln')">&#10005;</span></div><div class="sh-body" id="ln-sheet-body"></div><div class="sh-foot" id="ln-sheet-foot"></div></div>
 
 <div class="app-screen" id="app-overheads">
-  <div style="background:#4A148C;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127970; Company Overheads</div>
     <button class="tb-btn" id="oh-add-btn" onclick="ohOpenEntry()" style="font-size:20px;">&#43;</button>
@@ -12037,7 +12041,7 @@ async function empSavePay(){
 <!-- TOOLS, PLANT & MACHINERY -->
 <!-- RYDAX PLATFORM ADMIN CONSOLE -->
 <div class="app-screen" id="app-platform-console">
-  <div style="background:#1C1917;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128272; Rydax Platform Admin</div>
     <button class="tb-btn" onclick="paLogout()">Sign Out</button>
   </div>
@@ -12052,7 +12056,7 @@ async function empSavePay(){
 </div>
 
 <div class="app-screen" id="app-tpm">
-  <div style="background:#4E342E;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128295; Tools, Plant &amp; Machinery</div>
     <button class="tb-btn" id="tpm-add-btn" onclick="tpmOpenForm()" style="font-size:20px;">&#43;</button>
@@ -12075,7 +12079,7 @@ async function empSavePay(){
 
 <!-- ACCESS CONTROL -->
 <div class="app-screen" id="app-access">
-  <div style="background:#4A148C;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128274; Access Control</div>
   </div>
@@ -12119,7 +12123,7 @@ async function empSavePay(){
 </div>
 
 <div class="app-screen" id="app-company">
-  <div style="background:#1565C0;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--navy);height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#127970; Company Details</div>
     <button onclick="companySave()" style="background:rgba(255,255,255,.2);border:none;color:white;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128190; Save</button>
