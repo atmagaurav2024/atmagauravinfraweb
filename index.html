@@ -1279,6 +1279,9 @@ input,select,textarea{font-size:16px !important;}
 .ln-ledger .ln-tab{padding:9px 12px !important;font-size:12px;font-weight:600;font-family:'Nunito',sans-serif;white-space:nowrap;border:none;background:none !important;cursor:pointer;color:#A8A29E !important;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:0 !important;}
 .ln-ledger .ln-tab.ln-tab-active{color:#4338CA !important;border-bottom-color:#4F46E5;}
 
+.pa-tab{padding:10px 14px;font-size:12.5px;font-weight:700;font-family:'Nunito',sans-serif;white-space:nowrap;border:none;background:none;cursor:pointer;color:rgba(255,255,255,.6);border-bottom:2px solid transparent;margin-bottom:-1px;}
+.pa-tab.pa-tab-active{color:#fff;border-bottom-color:#EAB308;}
+
 /* ═══════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════ */
@@ -1496,6 +1499,35 @@ input,select,textarea{font-size:16px !important;}
 
     <div style="margin-top:16px;text-align:center;font-size:13px;color:var(--text3);">
       Already have a company? <span style="color:var(--blue);font-weight:700;cursor:pointer;" onclick="showScreen('scr-login')">Sign in</span>
+    </div>
+  </div>
+</div>
+
+<!-- PLATFORM ADMIN LOGIN / BOOTSTRAP (hidden entry — /#rydax-admin) -->
+<div class="screen" id="scr-platform-admin">
+  <div class="login-bg" style="background:linear-gradient(135deg,#1C1917,#44403C);">
+    <div class="login-logo">&#128272;</div>
+    <div class="login-brand">Rydax</div>
+    <div class="login-sub">Platform Admin</div>
+  </div>
+  <div class="login-card">
+    <div class="login-title" id="pa-title">Platform Admin Sign In</div>
+    <div class="login-desc" id="pa-desc">Manage every company on Rydax from here.</div>
+
+    <label class="flbl">Email</label>
+    <div class="inp-wrap"><input class="finp" type="email" placeholder="you@rydax.com" id="pa-email"></div>
+    <label class="flbl">Password</label>
+    <div class="inp-wrap"><input class="finp" type="password" placeholder="Password" id="pa-pass"></div>
+    <div id="pa-name-wrap" style="display:none;">
+      <label class="flbl">Your Name</label>
+      <div class="inp-wrap"><input class="finp" type="text" placeholder="Full name" id="pa-name"></div>
+    </div>
+
+    <button class="btn-primary" id="pa-login-btn" onclick="doPlatformAdminLogin()">&#128272; Sign In</button>
+    <button class="btn-primary" id="pa-setup-btn" style="display:none;background:#44403C;" onclick="doPlatformAdminBootstrap()">&#9889; Set Up Platform Admin</button>
+
+    <div style="margin-top:16px;text-align:center;font-size:12px;color:var(--text3);">
+      First time here? <span style="color:var(--blue);font-weight:700;cursor:pointer;" onclick="paToggleSetupMode()" id="pa-toggle-link">Set up the platform admin account</span>
     </div>
   </div>
 </div>
@@ -3184,9 +3216,11 @@ var currentApp = null;
 var appScreenIds = ['app-dashboard','app-attendance','app-registry'];
 
 function showApp(name){
-  // Permission check (admins bypass, dashboard always allowed)
+  // Permission check (admins bypass, dashboard always allowed, and a
+  // platform admin session isn't a member of any company at all, so
+  // it's never subject to this company-scoped permission system)
   var allProjTabs=['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
-  if(name!=='dashboard' && currentUser && currentUser.role!=='admin'){
+  if(name!=='dashboard' && name!=='platform-console' && currentUser && !currentUser.isPlatformAdmin && currentUser.role!=='admin'){
     // Map app name to AC_MODS key(s) for checking
     var checkKey = name;
     if(name==='employees'){
@@ -3234,6 +3268,7 @@ function showApp(name){
   else if(name==='petty-cash'){initPettyCash();}
   else if(name==='overheads'){initOverheads();}
   else if(name==='tpm'){initTPM();}
+  else if(name==='platform-console'){initPlatformConsole();}
   else if(name==='loans'){initLoans();}
   else if(name==='accounts'){initAccounts();}
   else if(name==='access'){acInitModule();}
@@ -3262,7 +3297,14 @@ function updateNavLayout(){
   var nav=document.getElementById('app-nav');
   if(!rail || !nav) return;
   // Only run the rail/bottom-nav swap once the user is actually inside
-  // the app (nav gets hidden again by doLogout).
+  // the app (nav gets hidden again by doLogout). A platform admin
+  // session stays out of this entirely — it has its own dedicated
+  // console shell, not the normal per-company navigation.
+  if(currentUser && currentUser.isPlatformAdmin){
+    rail.style.display='none'; nav.style.display='none';
+    document.body.classList.remove('has-rail');
+    return;
+  }
   var inApp = !!currentUser;
   var useRail = inApp && window.innerWidth >= RAIL_BREAKPOINT;
   document.body.classList.toggle('has-rail', useRail);
@@ -3648,6 +3690,281 @@ async function doCompanySignup(){
     COMPANY_SIGNUP_BUSY=false;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// RYDAX PLATFORM ADMIN — separate identity from any company's own
+// employees, reached only via /#rydax-admin. Reuses currentUser as
+// the token carrier (sbFetch/sbInsert/etc. all key off
+// currentUser.accessToken already) with isPlatformAdmin:true marking
+// it apart — currentUser.companyId stays undefined for this session,
+// which is correct: a platform admin isn't a member of any company.
+// ═══════════════════════════════════════════════════════════════════
+
+// Real email, not the phone@slug.rydax.internal synthesis regular
+// employee auth uses — a platform admin isn't tied to any company.
+async function paAuthSignUp(email, password){
+  var res = await fetch(SUPABASE_AUTH_URL+'/signup',{
+    method:'POST', headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:email, password:password})
+  });
+  return res.json();
+}
+async function paAuthSignIn(email, password){
+  var res = await fetch(SUPABASE_AUTH_URL+'/token?grant_type=password',{
+    method:'POST', headers:{'apikey':SUPABASE_ANON_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:email, password:password})
+  });
+  return res.json();
+}
+
+var PA_SETUP_MODE=false;
+function paToggleSetupMode(){
+  PA_SETUP_MODE=!PA_SETUP_MODE;
+  document.getElementById('pa-title').textContent=PA_SETUP_MODE?'Set Up Platform Admin':'Platform Admin Sign In';
+  document.getElementById('pa-desc').textContent=PA_SETUP_MODE?'One-time setup — only works if no platform admin exists yet.':'Manage every company on Rydax from here.';
+  document.getElementById('pa-name-wrap').style.display=PA_SETUP_MODE?'':'none';
+  document.getElementById('pa-login-btn').style.display=PA_SETUP_MODE?'none':'';
+  document.getElementById('pa-setup-btn').style.display=PA_SETUP_MODE?'':'none';
+  document.getElementById('pa-toggle-link').textContent=PA_SETUP_MODE?'Already set up — sign in instead':'Set up the platform admin account';
+}
+
+async function doPlatformAdminBootstrap(){
+  var email=gv('pa-email'), pass=gv('pa-pass'), name=gv('pa-name');
+  if(!email||!pass||!name){toast('Fill in all fields','warning');return;}
+  if(pass.length<6){toast('Password must be at least 6 characters','warning');return;}
+  try{
+    toast('Setting up...','info');
+    var authResult=await paAuthSignUp(email, pass);
+    var authUserId=authResult && (authResult.user?authResult.user.id:authResult.id);
+    if(!authUserId){ toast('Could not create account — '+(authResult&&(authResult.error_description||authResult.msg)||'unknown error'),'error'); return; }
+    // Only succeeds if platform_admins is still empty (RLS-enforced) —
+    // if someone already set one up, this fails cleanly here.
+    await sbInsertMinimal('platform_admins',{auth_id:authUserId, name:name, email:email});
+    toast('Platform admin created — signing you in...','success');
+    await doPlatformAdminLogin(email, pass);
+  }catch(e){
+    toast('Setup failed — a platform admin may already exist. Try signing in instead. ('+e.message+')','error');
+  }
+}
+
+async function doPlatformAdminLogin(emailArg, passArg){
+  var email=emailArg||gv('pa-email'), pass=passArg||gv('pa-pass');
+  if(!email||!pass){toast('Enter email and password','warning');return;}
+  try{
+    var result=await paAuthSignIn(email, pass);
+    if(!result.access_token){ toast('Sign in failed — check your email and password','error'); return; }
+    currentUser={accessToken:result.access_token, isPlatformAdmin:true};
+    var authUserId=result.user?result.user.id:result.id;
+    var rows=await sbFetch('platform_admins',{select:'*',filter:'auth_id=eq.'+authUserId});
+    if(!rows||!rows.length){ toast('This account is not a platform admin','error'); currentUser=null; return; }
+    currentUser.name=rows[0].name; currentUser.platformAdminId=rows[0].id;
+    document.getElementById('app-nav').style.display='none';
+    showApp('platform-console');
+    toast('Welcome, '+currentUser.name+'!','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function paLogout(){
+  currentUser=null; currentSession=null;
+  document.querySelectorAll('.app-screen').forEach(function(s){s.classList.remove('on');});
+  location.hash='';
+  showScreen('scr-platform-admin');
+  toast('Signed out','success');
+}
+
+var PA_COMPANIES=[], PA_PLANS=[], PA_TAB='companies';
+
+async function initPlatformConsole(){
+  var cont=document.getElementById('pa-content');
+  cont.innerHTML='<div style="text-align:center;padding:40px;color:#78716C;">Loading...</div>';
+  try{
+    var r=await Promise.all([
+      sbFetch('companies',{select:'*',order:'created_at.desc'}),
+      sbFetch('plans',{select:'*',order:'price_monthly.asc'}),
+      sbFetch('employees',{select:'id,company_id'}).catch(function(){return [];})
+    ]);
+    PA_COMPANIES=Array.isArray(r[0])?r[0]:[];
+    PA_PLANS=Array.isArray(r[1])?r[1]:[];
+    PA_EMP_COUNTS={};
+    (Array.isArray(r[2])?r[2]:[]).forEach(function(e){ PA_EMP_COUNTS[e.company_id]=(PA_EMP_COUNTS[e.company_id]||0)+1; });
+    paSwitchTab(PA_TAB);
+  }catch(e){
+    cont.innerHTML='<div style="text-align:center;padding:40px;color:#DC2626;">Error loading console: '+e.message+'</div>';
+  }
+}
+
+function paSwitchTab(tab){
+  PA_TAB=tab;
+  document.getElementById('pa-tab-companies').classList.toggle('pa-tab-active',tab==='companies');
+  document.getElementById('pa-tab-plans').classList.toggle('pa-tab-active',tab==='plans');
+  if(tab==='companies') paRenderCompanies(); else paRenderPlans();
+}
+
+var PA_EMP_COUNTS={};
+function paPlanName(planId){ var p=PA_PLANS.find(function(x){return x.id===planId;}); return p?p.name:'—'; }
+function paStatusBadge(status){
+  var m={trialing:['#FEF3C7','#B45309'], active:['#D1FAE5','#047857'], lapsed:['#FFE4E6','#E11D48'], suspended:['#F5F5F4','#57534E']};
+  var c=m[status]||m.trialing;
+  return '<span style="background:'+c[0]+';color:'+c[1]+';font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;text-transform:capitalize;">'+status+'</span>';
+}
+
+function paRenderCompanies(){
+  var cont=document.getElementById('pa-content');
+  cont.innerHTML=
+    '<div style="font-family:Georgia,serif;font-size:19px;font-weight:600;margin-bottom:14px;">Companies ('+PA_COMPANIES.length+')</div>'+
+    (PA_COMPANIES.length?PA_COMPANIES.map(function(c){
+      var empCount=PA_EMP_COUNTS[c.id]||0;
+      var trial=c.trial_ends_at?new Date(c.trial_ends_at):null;
+      var trialPassed=trial && trial<new Date();
+      return '<div onclick="paOpenCompanyDetail(\''+c.id+'\')" style="background:#fff;border:1px solid #E7E5E4;border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">'+
+          '<div><div style="font-size:13.5px;font-weight:700;">'+c.name+'</div>'+
+          '<div style="font-size:11px;color:#78716C;">'+c.slug+' &middot; '+empCount+' employee'+(empCount!==1?'s':'')+' &middot; plan: '+paPlanName(c.plan_id)+'</div></div>'+
+          paStatusBadge(c.subscription_status)+
+        '</div>'+
+        (c.subscription_status==='trialing'?'<div style="font-size:10.5px;color:'+(trialPassed?'#E11D48':'#78716C')+';margin-top:4px;">'+(trialPassed?'Trial ended ':'Trial ends ')+fmtDate((c.trial_ends_at||'').slice(0,10))+'</div>':'')+
+      '</div>';
+    }).join(''):'<div style="text-align:center;padding:30px;color:#78716C;">No companies yet.</div>');
+}
+
+function paOpenCompanyDetail(companyId){
+  var c=PA_COMPANIES.find(function(x){return x.id===companyId;});
+  if(!c) return;
+  document.getElementById('pa-sheet-title').textContent=c.name;
+  document.getElementById('pa-sheet-body').innerHTML=
+    '<div class="fgrp"><label class="flbl">Plan</label><select class="fsel" id="pa-plan-sel">'+
+      PA_PLANS.map(function(p){return '<option value="'+p.id+'"'+(c.plan_id===p.id?' selected':'')+'>'+p.name+' (\u20b9'+p.price_monthly+'/mo)</option>';}).join('')+
+    '</select></div>'+
+    '<div class="fgrp"><label class="flbl">Subscription Status</label><select class="fsel" id="pa-status-sel">'+
+      ['trialing','active','lapsed','suspended'].map(function(s){return '<option value="'+s+'"'+(c.subscription_status===s?' selected':'')+'>'+s.charAt(0).toUpperCase()+s.slice(1)+'</option>';}).join('')+
+    '</select></div>'+
+    '<div class="fgrp"><label class="flbl">Trial Ends</label><input class="finp" id="pa-trial-date" type="date" value="'+(c.trial_ends_at||'').slice(0,10)+'"></div>'+
+    '<button class="btn btn-navy" style="width:100%;margin-bottom:14px;" onclick="paSaveCompanySettings(\''+companyId+'\')">Save Changes</button>'+
+    '<div style="border-top:1px solid var(--border);padding-top:12px;">'+
+      '<label class="flbl">Record a Payment</label>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+        '<input class="finp" id="pa-pay-amount" type="number" step="0.01" placeholder="Amount (\u20b9)">'+
+        '<input class="finp" id="pa-pay-period" type="text" placeholder="e.g. Aug 2026">'+
+      '</div>'+
+      '<input class="finp" id="pa-pay-notes" placeholder="Notes (optional)" style="margin-top:8px;">'+
+      '<button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="paRecordPayment(\''+companyId+'\')">+ Record Payment</button>'+
+    '</div>'+
+    '<div id="pa-payment-history" style="margin-top:14px;"></div>';
+  document.getElementById('pa-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-pa\',\'sh-pa\')">Close</button>';
+  openSheet('ov-pa','sh-pa');
+  paLoadPaymentHistory(companyId);
+}
+
+async function paLoadPaymentHistory(companyId){
+  var el=document.getElementById('pa-payment-history'); if(!el) return;
+  try{
+    var rows=await sbFetch('payment_history',{select:'*',filter:'company_id=eq.'+companyId,order:'created_at.desc'});
+    el.innerHTML='<label class="flbl">Payment History</label>'+
+      (rows&&rows.length?rows.map(function(p){
+        return '<div style="font-size:11px;border-top:1px solid var(--border);padding:6px 0;">'+
+          '<b>\u20b9'+p.amount+'</b> '+(p.period_start_label||p.notes||'')+' &middot; '+fmtDate((p.created_at||'').slice(0,10))+' &middot; '+p.status+
+        '</div>';
+      }).join(''):'<div style="font-size:11px;color:var(--text3);">No payments recorded yet.</div>');
+  }catch(e){ el.innerHTML=''; }
+}
+
+async function paSaveCompanySettings(companyId){
+  try{
+    await sbUpdate('companies', companyId, {
+      plan_id: gv('pa-plan-sel'),
+      subscription_status: gv('pa-status-sel'),
+      trial_ends_at: gv('pa-trial-date')||null
+    });
+    toast('Company updated','success');
+    closeSheet('ov-pa','sh-pa');
+    initPlatformConsole();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function paRecordPayment(companyId){
+  var amount=parseFloat(gv('pa-pay-amount'));
+  if(!amount||amount<=0){ toast('Enter a valid amount','warning'); return; }
+  try{
+    await sbInsert('payment_history',{
+      company_id:companyId, amount:amount, status:'recorded', method:'manual',
+      notes:(gv('pa-pay-period')?gv('pa-pay-period')+' — ':'')+(gv('pa-pay-notes')||''),
+      recorded_by: currentUser.platformAdminId||null
+    });
+    toast('Payment recorded','success');
+    document.getElementById('pa-pay-amount').value='';
+    document.getElementById('pa-pay-period').value='';
+    document.getElementById('pa-pay-notes').value='';
+    paLoadPaymentHistory(companyId);
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+function paRenderPlans(){
+  var cont=document.getElementById('pa-content');
+  cont.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
+      '<div style="font-family:Georgia,serif;font-size:19px;font-weight:600;">Plans</div>'+
+      '<button onclick="paOpenPlanForm()" style="background:#1C1917;color:white;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;">+ New Plan</button>'+
+    '</div>'+
+    PA_PLANS.map(function(p){
+      return '<div style="background:#fff;border:1px solid #E7E5E4;border-radius:10px;padding:12px 14px;margin-bottom:8px;">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;">'+
+          '<div><div style="font-size:13.5px;font-weight:700;">'+p.name+(p.is_default?' <span style="font-size:9px;color:#78716C;">(default for new signups)</span>':'')+'</div>'+
+          '<div style="font-size:11px;color:#78716C;">\u20b9'+p.price_monthly+'/mo &middot; max '+(p.max_employees||'\u221e')+' employees &middot; max '+(p.max_projects||'\u221e')+' projects</div>'+
+          '<div style="font-size:11px;color:#78716C;">Locked modules: '+(p.locked_modules&&p.locked_modules.length?p.locked_modules.join(', '):'none')+'</div></div>'+
+          '<button onclick="paOpenPlanForm(\''+p.id+'\')" style="background:none;border:1px solid #D6D3D1;color:#44403C;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;height:fit-content;">Edit</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+}
+
+function paOpenPlanForm(planId){
+  var p=planId?PA_PLANS.find(function(x){return x.id===planId;}):null;
+  var ALL_MODULES=['loans','tpm','overheads','registry','access'];
+  document.getElementById('pa-sheet-title').textContent=p?'Edit Plan':'New Plan';
+  document.getElementById('pa-sheet-body').innerHTML=
+    '<div class="fgrp"><label class="flbl">Plan Name</label><input class="finp" id="pa-plan-name" value="'+(p?p.name:'')+'" placeholder="e.g. Pro"></div>'+
+    '<div class="fgrp"><label class="flbl">Price per Month (\u20b9)</label><input class="finp" id="pa-plan-price" type="number" step="0.01" value="'+(p?p.price_monthly:'0')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Max Employees (blank = unlimited)</label><input class="finp" id="pa-plan-maxemp" type="number" value="'+(p&&p.max_employees!=null?p.max_employees:'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Max Projects (blank = unlimited)</label><input class="finp" id="pa-plan-maxproj" type="number" value="'+(p&&p.max_projects!=null?p.max_projects:'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Locked Modules</label>'+
+      ALL_MODULES.map(function(m){
+        var checked=p&&p.locked_modules&&p.locked_modules.indexOf(m)>-1;
+        return '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;margin-bottom:4px;"><input type="checkbox" class="pa-plan-lockmod" value="'+m+'"'+(checked?' checked':'')+'> '+m+'</label>';
+      }).join('')+
+    '</div>'+
+    '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="pa-plan-default"'+(p&&p.is_default?' checked':'')+'> Default plan for new signups</label>';
+  document.getElementById('pa-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-pa\',\'sh-pa\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="paSavePlan('+(p?'\''+p.id+'\'':'null')+')">Save Plan</button>';
+  openSheet('ov-pa','sh-pa');
+}
+
+async function paSavePlan(planId){
+  var name=gv('pa-plan-name');
+  if(!name){ toast('Enter a plan name','warning'); return; }
+  var lockedModules=Array.prototype.slice.call(document.querySelectorAll('.pa-plan-lockmod:checked')).map(function(el){return el.value;});
+  var fields={
+    name:name,
+    price_monthly:parseFloat(gv('pa-plan-price'))||0,
+    max_employees:gv('pa-plan-maxemp')?parseInt(gv('pa-plan-maxemp'),10):null,
+    max_projects:gv('pa-plan-maxproj')?parseInt(gv('pa-plan-maxproj'),10):null,
+    locked_modules:lockedModules,
+    is_default:!!(document.getElementById('pa-plan-default')||{}).checked
+  };
+  try{
+    if(fields.is_default){
+      // Only one plan can be default — clear it on every other plan first.
+      await Promise.all(PA_PLANS.filter(function(p){return p.id!==planId;}).map(function(p){
+        return sbUpdate('plans', p.id, {is_default:false});
+      }));
+    }
+    if(planId) await sbUpdate('plans', planId, fields);
+    else await sbInsert('plans', fields);
+    toast('Plan saved','success');
+    closeSheet('ov-pa','sh-pa');
+    initPlatformConsole();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
 function verifyOTP(){
   var code=['otp-1','otp-2','otp-3','otp-4','otp-5','otp-6'].map(function(id){return document.getElementById(id).value;}).join('');
   if(code.length<6){toast('Enter all 6 digits','warning');return;}
@@ -3988,7 +4305,10 @@ function toast(msg,type){
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────
-setTimeout(function(){showScreen('scr-login');},2200);
+setTimeout(function(){
+  if(location.hash==='#rydax-admin'){ showScreen('scr-platform-admin'); }
+  else{ showScreen('scr-login'); }
+},2200);
 
 
 // Override verifyOTP to go to app dashboard
@@ -11538,6 +11858,22 @@ async function empSavePay(){
 <div class="sheet" id="sh-oh"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="oh-sheet-title">New Overhead Expense</div><span class="sh-close" onclick="closeSheet('ov-oh','sh-oh')">&#10005;</span></div><div class="sh-body" id="oh-sheet-body"></div><div class="sh-foot" id="oh-sheet-foot"></div></div>
 
 <!-- TOOLS, PLANT & MACHINERY -->
+<!-- RYDAX PLATFORM ADMIN CONSOLE -->
+<div class="app-screen" id="app-platform-console">
+  <div style="background:#1C1917;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+    <div style="font-size:16px;font-weight:800;color:white;flex:1;">&#128272; Rydax Platform Admin</div>
+    <button class="tb-btn" onclick="paLogout()">Sign Out</button>
+  </div>
+  <div style="display:flex;background:#292524;padding:0 14px;gap:4px;flex-shrink:0;">
+    <button onclick="paSwitchTab('companies')" id="pa-tab-companies" class="pa-tab">Companies</button>
+    <button onclick="paSwitchTab('plans')" id="pa-tab-plans" class="pa-tab">Plans</button>
+  </div>
+  <div id="pa-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;background:#FAFAF9;"></div>
+
+  <div class="sh-overlay" id="ov-pa" onclick="closeSheet('ov-pa','sh-pa')"></div>
+  <div class="sheet" id="sh-pa"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="pa-sheet-title">Company</div><span class="sh-close" onclick="closeSheet('ov-pa','sh-pa')">&#10005;</span></div><div class="sh-body" id="pa-sheet-body"></div><div class="sh-foot" id="pa-sheet-foot"></div></div>
+</div>
+
 <div class="app-screen" id="app-tpm">
   <div style="background:#4E342E;height:52px;display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
