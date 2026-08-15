@@ -3503,6 +3503,15 @@ async function doLoginInner(ph,pw,co){
       currentSession = result;
       var authUserId = result.user ? result.user.id : (result.id||null);
       if(splashMsg) splashMsg.textContent = 'Loading your profile...';
+      // The employee lookup below needs to run as this just-authenticated
+      // user, not the anonymous key — otherwise, with RLS now correctly
+      // enforced, an anon request can never find any employee row at all
+      // (current_company_id() resolves to NULL with no auth.uid()), and
+      // this would always fall through to the "could be admin" branch
+      // further down, which doesn't set an id. currentUser is populated
+      // properly below once the real employee record is found; this is
+      // just enough for sbFetch to authenticate this one lookup correctly.
+      currentUser = {accessToken: result.access_token};
       // Looked up by auth_id (exact match on this specific auth account)
       // rather than a fuzzy phone match — the same phone number can now
       // legitimately exist under different companies, and this is both
@@ -3531,8 +3540,11 @@ async function doLoginInner(ph,pw,co){
         initRealtimeSync();
         toast('Welcome back, '+currentUser.name+'!','success');
       } else {
-        // Auth succeeded but no employee record — could be admin
-        currentUser = {name:'Admin', role:'admin', accessToken:result.access_token, companySlug:co.toLowerCase()};
+        // Auth succeeded but no employee record — could be admin. Uses
+        // the auth user's own id as a stand-in so downstream lookups
+        // (loadUserPermissions etc.) get a valid uuid instead of
+        // undefined, even in this edge case.
+        currentUser = {id:authUserId, name:'Admin', role:'admin', accessToken:result.access_token, companySlug:co.toLowerCase()};
         updateDashboardUser();
         showApp('dashboard');
         loadPendingApprovals();
