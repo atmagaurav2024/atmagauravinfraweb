@@ -73,17 +73,21 @@ end $$;
 -- Verify — every table listed above should now show exactly 1 policy
 -- and no permissive flag.
 select string_agg(
-  tablename || ': ' || count(*) ||
-  case when bool_or(qual = 'true' or with_check = 'true') then ' ⚠ STILL PERMISSIVE' else ' ok' end,
+  tablename || ': ' || policy_count ||
+  case when has_permissive_true then ' ⚠ STILL PERMISSIVE' else ' ok' end,
   E'\n'
   order by tablename
 ) as result
-from pg_policies
-where tablename in (
-  'accounts','bill_payments','bills','boq_execution','daily_progress',
-  'departments','gst_entries','hr_orders','jm_records','labour',
-  'letter_numbers','petty_cash_expense','project_activities',
-  'punch_logs','salary_increments','show_cause_notices','tds_entries',
-  'voucher_items','work_allotments'
-)
-group by tablename;
+from (
+  select tablename, count(*) as policy_count,
+    bool_or(qual = 'true' or with_check = 'true') as has_permissive_true
+  from pg_policies
+  where tablename in (
+    'accounts','bill_payments','bills','boq_execution','daily_progress',
+    'departments','gst_entries','hr_orders','jm_records','labour',
+    'letter_numbers','petty_cash_expense','project_activities',
+    'punch_logs','salary_increments','show_cause_notices','tds_entries',
+    'voucher_items','work_allotments'
+  )
+  group by tablename
+) x;
