@@ -24087,8 +24087,19 @@ function companyRender(){
   }
 
   var currentPlan = ALL_PLANS.find(function(p){return p.id===COMPANY_BILLING.plan_id;});
+  var currentPrice = currentPlan ? parseFloat(currentPlan.price_monthly)||0 : 0;
   var statusMap={trialing:['#FEF3C7','#B45309','Trial'], active:['#D1FAE5','#047857','Active'], lapsed:['#FFE4E6','#E11D48','Lapsed'], suspended:['#F5F5F4','#57534E','Suspended']};
   var st=statusMap[COMPANY_BILLING.subscription_status]||statusMap.trialing;
+
+  // Plans worth more than what's currently active get a prominent
+  // "Upgrade to X" card — this is the primary action we want a company
+  // to notice. Cheaper paid plans (a downgrade) are still offered, just
+  // less prominently, since someone might genuinely want to switch down.
+  var upgrades = ALL_PLANS.filter(function(p){return p.id!==COMPANY_BILLING.plan_id && parseFloat(p.price_monthly)>currentPrice;})
+    .sort(function(a,b){return parseFloat(a.price_monthly)-parseFloat(b.price_monthly);});
+  var downgrades = ALL_PLANS.filter(function(p){return p.id!==COMPANY_BILLING.plan_id && parseFloat(p.price_monthly)>0 && parseFloat(p.price_monthly)<=currentPrice;})
+    .sort(function(a,b){return parseFloat(a.price_monthly)-parseFloat(b.price_monthly);});
+
   var billingHtml =
     sec('&#128179;','Billing &amp; Subscription','#7C3AED')+
     '<div style="background:#FAFAF9;border:1px solid #E7E5E4;border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
@@ -24103,11 +24114,18 @@ function companyRender(){
       (COMPANY_BILLING.subscription_status==='lapsed'?
         '<div style="font-size:11px;color:#E11D48;font-weight:700;margin-top:6px;">Your subscription has lapsed — you have read-only access until you subscribe again.</div>':'')+
     '</div>'+
-    (ALL_PLANS.filter(function(p){return p.id!==COMPANY_BILLING.plan_id && parseFloat(p.price_monthly)>0;}).map(function(p){
+    (upgrades.map(function(p){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#F5F3FF,#FFFFFF);border:1.5px solid #C4B5FD;border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
+        '<div><div style="font-size:12.5px;font-weight:800;color:#5B21B6;">&#11088; '+p.name+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);">\u20b9'+p.price_monthly+'/month'+(p.max_employees?' \u00b7 up to '+p.max_employees+' employees':' \u00b7 unlimited employees')+'</div></div>'+
+        '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:#7C3AED;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;">Upgrade to '+p.name+'</button>'+
+      '</div>';
+    }).join(''))+
+    (downgrades.map(function(p){
       return '<div style="display:flex;justify-content:space-between;align-items:center;background:white;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
         '<div><div style="font-size:12.5px;font-weight:700;">'+p.name+'</div>'+
         '<div style="font-size:11px;color:var(--text3);">\u20b9'+p.price_monthly+'/month'+(p.max_employees?' \u00b7 up to '+p.max_employees+' employees':' \u00b7 unlimited employees')+'</div></div>'+
-        '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:#7C3AED;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;">Subscribe</button>'+
+        '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:none;color:#44403C;border:1px solid #D6D3D1;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Switch to '+p.name+'</button>'+
       '</div>';
     }).join(''))+
     '<div style="text-align:center;margin-top:8px;font-size:11px;color:var(--text3);">'+
