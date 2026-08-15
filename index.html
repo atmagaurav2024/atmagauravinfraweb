@@ -102,15 +102,23 @@ html,body{height:100%;font-family:'Nunito',sans-serif;background:var(--bg);color
 @keyframes pulse{0%,100%{background:rgba(255,255,255,.2)}50%{background:rgba(255,255,255,.8)}}
 
 /* LOGIN */
-#scr-login,#scr-co-signup{background:linear-gradient(160deg,var(--navy) 0%,var(--navy3) 50%,#1565C0 100%);}
+#scr-login,#scr-co-signup{background:var(--bg);}
 #scr-platform-admin{background:linear-gradient(160deg,#1C1917 0%,#292524 60%,#44403C 100%);}
 #scr-login,#scr-co-signup,#scr-platform-admin{align-items:center;justify-content:center;padding:16px;overflow:hidden;}
-.login-bg{flex:none;width:100%;max-width:400px;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;padding:16px 20px;border-radius:22px 22px 0 0;}
-.login-logo{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:0;}
+.login-bg{flex:none;width:100%;max-width:400px;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;padding:16px 20px;border-radius:12px 12px 0 0;}
+#scr-login .login-bg,#scr-co-signup .login-bg{background:#fff;border:1px solid var(--border);border-bottom:none;}
+.login-logo{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:0;}
+#scr-login .login-logo,#scr-co-signup .login-logo{background:var(--bg);border-color:var(--border);}
 .login-brand{font-size:20px;font-weight:900;color:white;line-height:1.1;}.login-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:1px;}
-.login-card{flex:none;width:100%;max-width:400px;background:var(--white);border-radius:0 0 22px 22px;padding:20px 24px 26px;box-shadow:0 24px 70px rgba(0,0,0,.35);}
+#scr-login .login-brand,#scr-co-signup .login-brand{color:var(--text);}
+#scr-login .login-sub,#scr-co-signup .login-sub{color:var(--text3);}
+.login-card{flex:none;width:100%;max-width:400px;background:var(--white);border-radius:0 0 12px 12px;padding:20px 24px 26px;box-shadow:0 24px 70px rgba(0,0,0,.35);}
+#scr-login .login-card,#scr-co-signup .login-card{border:1px solid var(--border);box-shadow:none;}
 .login-title{font-size:19px;font-weight:900;margin-bottom:3px;}
 .login-desc{font-size:12.5px;color:var(--text2);margin-bottom:14px;}
+.btn-spinner{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:btn-spin .7s linear infinite;vertical-align:-3px;margin-right:6px;}
+@keyframes btn-spin{to{transform:rotate(360deg);}}
+button:disabled{opacity:.6;cursor:not-allowed;}
 .flbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);display:block;margin-bottom:5px;}
 .inp-wrap{position:relative;margin-bottom:14px;}
 .screen .finp{width:100%;padding:14px 16px;background:var(--bg);border:1.5px solid var(--border);border-radius:14px;font-size:16px;font-family:'Nunito',sans-serif;color:var(--text);outline:none;}
@@ -1262,7 +1270,7 @@ input,select,textarea{font-size:16px !important;}
 .ln-ledger .ln-lbl{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#A8A29E;margin-bottom:4px;}
 .ln-ledger .ln-val{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;color:#1C1917;}
 .ln-ledger .ln-val-amber{color:#B45309;} .ln-ledger .ln-val-indigo{color:#4338CA;}
-.ln-ledger .ln-val-rose{color:#E11D48;} .ln-ledger .ln-val-emerald{color:#047857;}
+.ln-ledger .ln-val-rose{color:var(--text);} .ln-ledger .ln-val-emerald{color:var(--text);}
 .ln-ledger table.ln-table{width:100%;border-collapse:collapse;font-size:12.5px;}
 .ln-ledger table.ln-table thead th{text-align:left;padding:8px 10px;background:#F5F5F4;color:#78716C;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;}
 .ln-ledger table.ln-table thead th.ln-r{text-align:right;}
@@ -1277,7 +1285,7 @@ input,select,textarea{font-size:16px !important;}
 .ln-ledger .ln-btn-danger-ghost{background:none;border:1px solid #FECDD3;color:#A8A29E;cursor:pointer;padding:3px 7px;border-radius:6px;font-size:11px;}
 .ln-ledger .ln-btn-danger-ghost:hover{color:#E11D48;}
 .ln-ledger .ln-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;display:inline-block;}
-.ln-ledger .ln-badge-emerald{background:#D1FAE5;color:#047857;} .ln-ledger .ln-badge-rose{background:#FFE4E6;color:#E11D48;}
+.ln-ledger .ln-badge-emerald{background:var(--accent-light);color:var(--text);} .ln-ledger .ln-badge-rose{background:var(--accent-light);color:var(--text);}
 .ln-ledger .ln-badge-amber{background:#FEF3C7;color:#B45309;} .ln-ledger .ln-badge-indigo{background:#E0E7FF;color:#4338CA;}
 .ln-ledger .ln-input{border:1px solid #D6D3D1;border-radius:6px;padding:6px 10px;font-size:12.5px;font-family:'Nunito',sans-serif;color:#1C1917;background:#fff;width:100%;box-sizing:border-box;}
 .ln-ledger .ln-input:focus{outline:none;border-color:#818CF8;box-shadow:0 0 0 3px rgba(79,70,229,0.12);}
@@ -1419,7 +1427,7 @@ input,select,textarea{font-size:16px !important;}
 
 
 <!-- SPLASH -->
-<div class="screen on" id="scr-splash">
+<div class="screen" id="scr-splash">
   <div class="splash-logo">&#127959;</div>
   <div class="splash-name" id="splash-name">AIPL</div>
   <div class="splash-tag">Construction Management Platform</div>
@@ -1466,7 +1474,7 @@ input,select,textarea{font-size:16px !important;}
       <span style="font-size:13px;color:var(--blue);font-weight:700;cursor:pointer;" onclick="toast('Password reset OTP sent!','success')">Forgot password?</span>
     </div>
 
-    <button class="btn-primary" onclick="doLogin()">&#9889; Sign In to Dashboard</button>
+    <button class="btn-primary" id="login-submit-btn" onclick="doLogin()">&#9889; Sign In to Dashboard</button>
 
     <div style="margin-top:16px;text-align:center;font-size:13px;color:var(--text3);">
       New to Rydax? <span style="color:var(--blue);font-weight:700;cursor:pointer;" onclick="showScreen('scr-co-signup')">Create your company</span>
@@ -3549,6 +3557,21 @@ function toggleRemember(){
   b.textContent=remembered?'✓':'';
 }
 var LOGIN_BUSY=false;
+function setLoginBusy(busy){
+  var btn=document.getElementById('login-submit-btn');
+  ['inp-cocode','inp-phone','inp-pass'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.disabled=busy;
+  });
+  if(!btn) return;
+  if(busy){
+    btn.dataset.origText=btn.innerHTML;
+    btn.innerHTML='<span class="btn-spinner"></span>Signing in...';
+    btn.disabled=true;
+  } else {
+    if(btn.dataset.origText) btn.innerHTML=btn.dataset.origText;
+    btn.disabled=false;
+  }
+}
 async function doLogin(){
   // Enter makes it easy to fire this twice before the first attempt
   // returns, which produces two auth requests and a confusing double toast
@@ -3560,20 +3583,16 @@ async function doLogin(){
   if(!ph){toast('Please enter your mobile number','warning');return;}
   if(!pw){toast('Please enter your password','warning');return;}
   LOGIN_BUSY=true;
-  try{ await doLoginInner(ph,pw,co); } finally { LOGIN_BUSY=false; }
+  setLoginBusy(true);
+  try{ await doLoginInner(ph,pw,co); } finally { LOGIN_BUSY=false; setLoginBusy(false); }
 }
 
 async function doLoginInner(ph,pw,co){
   try{
-    // Show splash loading screen
-    var splashMsg = document.getElementById('splash-msg');
-    if(splashMsg) splashMsg.textContent = 'Signing in...';
-    showScreen('scr-splash');
     var result = await authSignIn(ph, pw, co);
     if(result.access_token){
       currentSession = result;
       var authUserId = result.user ? result.user.id : (result.id||null);
-      if(splashMsg) splashMsg.textContent = 'Loading your profile...';
       // The employee lookup below needs to run as this just-authenticated
       // user, not the anonymous key — otherwise, with RLS now correctly
       // enforced, an anon request can never find any employee row at all
@@ -3628,17 +3647,14 @@ async function doLoginInner(ph,pw,co){
     } else if(result.error_description||result.msg){
       var msg = result.error_description||result.msg||'Invalid credentials';
       if(msg.includes('Invalid')||msg.includes('invalid')){
-        showScreen('scr-login');
-      toast('Wrong company code, mobile number, or password','error');
+        toast('Wrong company code, mobile number, or password','error');
       } else {
         toast(msg,'error');
       }
     } else {
       toast('Login failed. Try again.','error');
-      showScreen('scr-login');
     }
   } catch(e){
-    showScreen('scr-login');
     toast('Connection error. Check internet.','error');
     console.error(e);
   }
@@ -4361,10 +4377,8 @@ function toast(msg,type){
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────
-setTimeout(function(){
-  if(location.hash==='#rydax-admin'){ showScreen('scr-platform-admin'); }
-  else{ showScreen('scr-login'); }
-},2200);
+if(location.hash==='#rydax-admin'){ showScreen('scr-platform-admin'); }
+else{ showScreen('scr-login'); }
 
 
 // Override verifyOTP to go to app dashboard
@@ -12126,7 +12140,7 @@ async function empSavePay(){
   <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127970; Company Details</div>
-    <button onclick="companySave()" style="background:rgba(255,255,255,.2);border:none;color:white;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128190; Save</button>
+    <button onclick="companySave()" style="background:var(--text);border:none;color:#fff;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128190; Save</button>
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;" id="company-body">
     <div style="text-align:center;padding:40px;color:var(--text3);">Loading...</div>
