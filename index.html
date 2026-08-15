@@ -7264,7 +7264,9 @@ renderUsers();
 // ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
-setTimeout(function(){showScreen('scr-login');},2200);
+// (screen routing on load — including the /#rydax-admin platform
+// admin entry point — is handled once, elsewhere in this file; this
+// duplicate used to unconditionally override it back to scr-login)
 
 function pickDate(id){var el=document.getElementById(id);if(!el)return;try{el.showPicker();}catch(e){el.click();}}
 
