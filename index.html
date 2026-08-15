@@ -1700,6 +1700,7 @@ input,select,textarea{font-size:16px !important;}
     <div class="dt-row">
       <button class="ham-btn" onclick="openDrawer()"><div class="ham-line"></div><div class="ham-line"></div><div class="ham-line"></div></button>
       <div style="flex:1;margin-left:12px;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-name" id="dash-name">—</div><div class="dt-role" id="dash-role">—</div></div>
+      <div id="dash-sub-badge" onclick="showApp('company')" style="display:none;cursor:pointer;margin-right:8px;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;"></div>
       <div class="dt-avatar" id="dash-avatar" style="cursor:pointer;font-size:14px;font-weight:900;" onclick="showProfile()">👤</div>
     </div>
     <div style="margin-top:14px;">
@@ -3587,6 +3588,7 @@ async function doLoginInner(ph,pw,co){
         currentUser.companyId = emp.company_id;
         currentUser.companySlug = co.toLowerCase();
         updateDashboardUser();
+        loadSubscriptionBadge();
         showApp('dashboard');
         loadPendingApprovals();
         loadUserPermissions();
@@ -3599,6 +3601,7 @@ async function doLoginInner(ph,pw,co){
         // undefined, even in this edge case.
         currentUser = {id:authUserId, name:'Admin', role:'admin', accessToken:result.access_token, companySlug:co.toLowerCase()};
         updateDashboardUser();
+        loadSubscriptionBadge();
         showApp('dashboard');
         loadPendingApprovals();
         loadUserPermissions();
@@ -8126,6 +8129,36 @@ function updateDashboardUser(){
       el.style.fontSize = '14px';
     }
   });
+}
+
+// Small status pill next to the avatar — Trial (with days left), Active,
+// Lapsed (in red, since that's when access is read-only), or Suspended.
+// Click takes them straight to Company Details > Billing to act on it.
+async function loadSubscriptionBadge(){
+  var el = document.getElementById('dash-sub-badge');
+  if(!el || !currentUser || currentUser.isPlatformAdmin || !currentUser.companyId) return;
+  try{
+    var rows = await sbFetch('companies',{select:'subscription_status,trial_ends_at',filter:'id=eq.'+currentUser.companyId});
+    var co = (Array.isArray(rows)&&rows.length) ? rows[0] : null;
+    if(!co){ el.style.display='none'; return; }
+
+    var map = {
+      trialing:  ['rgba(251,191,36,.2)', '#FBBF24'],
+      active:    ['rgba(52,211,153,.2)', '#34D399'],
+      lapsed:    ['rgba(244,63,94,.25)', '#FB7185'],
+      suspended: ['rgba(255,255,255,.15)', 'rgba(255,255,255,.7)']
+    };
+    var c = map[co.subscription_status] || map.trialing;
+    var label = co.subscription_status.charAt(0).toUpperCase()+co.subscription_status.slice(1);
+    if(co.subscription_status==='trialing' && co.trial_ends_at){
+      var daysLeft = Math.ceil((new Date(co.trial_ends_at) - new Date())/86400000);
+      label = daysLeft>0 ? ('Trial · '+daysLeft+'d left') : 'Trial ended';
+    }
+    el.textContent = label;
+    el.style.background = c[0];
+    el.style.color = c[1];
+    el.style.display = 'block';
+  }catch(e){ el.style.display='none'; }
 }
 
 
