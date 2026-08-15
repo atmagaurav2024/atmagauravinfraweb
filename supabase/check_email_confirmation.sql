@@ -6,13 +6,17 @@
 -- addresses (phone@slug.rydax.internal), no such email can ever
 -- actually be received or clicked.
 
-select
-  u.email,
-  u.email_confirmed_at,
-  u.created_at,
-  e.emp_id,
-  e.role
-from auth.users u
-left join employees e on e.auth_id = u.id
-where u.email like '%.rydax.internal'
-order by u.created_at desc;
+select string_agg(
+  email || ' | confirmed=' || coalesce(email_confirmed_at::text, 'NULL (not confirmed)') ||
+  ' | created=' || created_at || ' | emp_id=' || coalesce(emp_id,'—') || ' | role=' || coalesce(role,'—'),
+  E'\n'
+  order by created_at desc
+) as result
+from (
+  select
+    u.email, u.email_confirmed_at, u.created_at,
+    e.emp_id, e.role
+  from auth.users u
+  left join employees e on e.auth_id = u.id
+  where u.email like '%.rydax.internal'
+) x;
