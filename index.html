@@ -1703,6 +1703,10 @@ input,select,textarea{font-size:16px !important;}
       <div id="dash-sub-badge" onclick="showApp('company')" style="display:none;cursor:pointer;margin-right:8px;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;"></div>
       <div class="dt-avatar" id="dash-avatar" style="cursor:pointer;font-size:14px;font-weight:900;" onclick="showProfile()">👤</div>
     </div>
+    <div id="dash-upgrade-banner" onclick="showApp('company')" style="display:none;cursor:pointer;margin-top:10px;background:linear-gradient(135deg,rgba(124,58,237,.25),rgba(124,58,237,.1));border:1px solid rgba(196,181,253,.5);border-radius:10px;padding:9px 12px;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="font-size:12px;font-weight:700;color:white;">&#11088; Upgrade to <span id="dash-upgrade-plan-name">—</span> for more features</div>
+      <div style="background:white;color:#5B21B6;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:800;white-space:nowrap;">Upgrade &#8594;</div>
+    </div>
     <div style="margin-top:14px;">
       <select id="dash-proj-filter" onchange="loadDashboardInsights(this.value)" style="width:100%;background:rgba(255,255,255,.1);color:white;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:'Nunito',sans-serif;outline:none;">
         <option value="" style="color:#111827;background:white;">&#128203; All Projects</option>
@@ -8133,14 +8137,21 @@ function updateDashboardUser(){
 
 // Small status pill next to the avatar — Trial (with days left), Active,
 // Lapsed (in red, since that's when access is read-only), or Suspended.
-// Click takes them straight to Company Details > Billing to act on it.
+// Also drives the upgrade banner further down the header, if a plan
+// worth more than the current one exists. Click on either takes them
+// straight to Company Details > Billing to act on it.
 async function loadSubscriptionBadge(){
   var el = document.getElementById('dash-sub-badge');
+  var banner = document.getElementById('dash-upgrade-banner');
   if(!el || !currentUser || currentUser.isPlatformAdmin || !currentUser.companyId) return;
   try{
-    var rows = await sbFetch('companies',{select:'subscription_status,trial_ends_at',filter:'id=eq.'+currentUser.companyId});
+    var r = await Promise.all([
+      sbFetch('companies',{select:'subscription_status,trial_ends_at,plan_id',filter:'id=eq.'+currentUser.companyId}),
+      sbFetch('plans',{select:'id,name,price_monthly'}).catch(function(){return [];})
+    ]);
+    var rows=r[0], allPlans=Array.isArray(r[1])?r[1]:[];
     var co = (Array.isArray(rows)&&rows.length) ? rows[0] : null;
-    if(!co){ el.style.display='none'; return; }
+    if(!co){ el.style.display='none'; if(banner)banner.style.display='none'; return; }
 
     var map = {
       trialing:  ['rgba(251,191,36,.2)', '#FBBF24'],
@@ -8158,7 +8169,24 @@ async function loadSubscriptionBadge(){
     el.style.background = c[0];
     el.style.color = c[1];
     el.style.display = 'block';
-  }catch(e){ el.style.display='none'; }
+
+    // Upgrade banner: only shown when a plan priced above the current
+    // one genuinely exists — same "more valuable" comparison Company
+    // Details > Billing uses, just surfaced here too since that's where
+    // people actually land first.
+    if(banner){
+      var currentPlan = allPlans.find(function(p){return p.id===co.plan_id;});
+      var currentPrice = currentPlan?parseFloat(currentPlan.price_monthly)||0:0;
+      var nextUp = allPlans.filter(function(p){return p.id!==co.plan_id && parseFloat(p.price_monthly)>currentPrice;})
+        .sort(function(a,b){return parseFloat(a.price_monthly)-parseFloat(b.price_monthly);})[0];
+      if(nextUp){
+        document.getElementById('dash-upgrade-plan-name').textContent = nextUp.name;
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+  }catch(e){ el.style.display='none'; if(banner)banner.style.display='none'; }
 }
 
 
