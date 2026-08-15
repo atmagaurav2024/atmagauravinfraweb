@@ -96,13 +96,13 @@ html,body{height:100%;font-family:'Nunito',sans-serif;background:var(--bg);color
 /* LOGIN */
 #scr-login,#scr-co-signup{background:linear-gradient(160deg,var(--navy) 0%,var(--navy3) 50%,#1565C0 100%);}
 #scr-platform-admin{background:linear-gradient(160deg,#1C1917 0%,#292524 60%,#44403C 100%);}
-#scr-login,#scr-co-signup,#scr-platform-admin{align-items:center;justify-content:center;padding:24px 16px;}
-.login-bg{flex:none;width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px 18px;border-radius:22px 22px 0 0;}
-.login-logo{width:64px;height:64px;border-radius:18px;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:14px;}
-.login-brand{font-size:26px;font-weight:900;color:white;}.login-sub{font-size:12px;color:rgba(255,255,255,.45);margin-top:3px;}
-.login-card{flex:none;width:100%;max-width:400px;background:var(--white);border-radius:0 0 22px 22px;padding:24px 24px 32px;box-shadow:0 24px 70px rgba(0,0,0,.35);}
-.login-title{font-size:22px;font-weight:900;margin-bottom:4px;}
-.login-desc{font-size:13px;color:var(--text2);margin-bottom:20px;}
+#scr-login,#scr-co-signup,#scr-platform-admin{align-items:center;justify-content:center;padding:16px;overflow:hidden;}
+.login-bg{flex:none;width:100%;max-width:400px;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;padding:16px 20px;border-radius:22px 22px 0 0;}
+.login-logo{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:0;}
+.login-brand{font-size:20px;font-weight:900;color:white;line-height:1.1;}.login-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:1px;}
+.login-card{flex:none;width:100%;max-width:400px;background:var(--white);border-radius:0 0 22px 22px;padding:20px 24px 26px;box-shadow:0 24px 70px rgba(0,0,0,.35);}
+.login-title{font-size:19px;font-weight:900;margin-bottom:3px;}
+.login-desc{font-size:12.5px;color:var(--text2);margin-bottom:14px;}
 .flbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);display:block;margin-bottom:5px;}
 .inp-wrap{position:relative;margin-bottom:14px;}
 .screen .finp{width:100%;padding:14px 16px;background:var(--bg);border:1.5px solid var(--border);border-radius:14px;font-size:16px;font-family:'Nunito',sans-serif;color:var(--text);outline:none;}
@@ -1427,8 +1427,7 @@ input,select,textarea{font-size:16px !important;}
 <div class="screen" id="scr-login">
   <div class="login-bg">
     <div class="login-logo">&#127959;</div>
-    <div class="login-brand" id="login-brand">Rydax</div>
-    <div class="login-sub">Construction Management</div>
+    <div style="text-align:left;"><div class="login-brand" id="login-brand">Rydax</div><div class="login-sub">Construction Management</div></div>
   </div>
   <div class="login-card">
     <div class="login-title">Welcome back</div>
@@ -1480,8 +1479,7 @@ input,select,textarea{font-size:16px !important;}
 <div class="screen" id="scr-co-signup">
   <div class="login-bg">
     <div class="login-logo">&#127959;</div>
-    <div class="login-brand">Rydax</div>
-    <div class="login-sub">Set up your company</div>
+    <div style="text-align:left;"><div class="login-brand">Rydax</div><div class="login-sub">Set up your company</div></div>
   </div>
   <div class="login-card">
     <div class="login-title">Create your company</div>
@@ -1520,8 +1518,7 @@ input,select,textarea{font-size:16px !important;}
 <div class="screen" id="scr-platform-admin">
   <div class="login-bg" style="background:linear-gradient(135deg,#1C1917,#44403C);">
     <div class="login-logo">&#128272;</div>
-    <div class="login-brand">Rydax</div>
-    <div class="login-sub">Platform Admin</div>
+    <div style="text-align:left;"><div class="login-brand">Rydax</div><div class="login-sub">Platform Admin</div></div>
   </div>
   <div class="login-card">
     <div class="login-title" id="pa-title">Platform Admin Sign In</div>
