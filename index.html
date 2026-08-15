@@ -3233,6 +3233,18 @@ var currentApp = null;
 var appScreenIds = ['app-dashboard','app-attendance','app-registry'];
 
 function showApp(name){
+  // Plan-based lock check — applies to EVERYONE in the company,
+  // including its own admin (unlike the role-based check just below,
+  // which admins bypass). A locked module here means the company's
+  // current plan doesn't include it, not that this particular user
+  // lacks permission — those are different reasons to be blocked, so
+  // this is checked first and separately, with its own message.
+  if(currentUser && !currentUser.isPlatformAdmin && name!=='dashboard' && name!=='company' && name!=='profile' && isTopModuleLockedByPlan(name)){
+    toast('This feature isn\'t included in your current plan — upgrade to unlock it','warning');
+    showApp('company');
+    return;
+  }
+
   // Permission check (admins bypass, dashboard always allowed, and a
   // platform admin session isn't a member of any company at all, so
   // it's never subject to this company-scoped permission system)
@@ -3277,6 +3289,7 @@ function showApp(name){
   });
   collapseRail();
   applyDrawerPermissions();
+  applyPlanLocks();
   if(name==='attendance'){initAttendance();}
   if(name==='dashboard'){ loadDashboardInsights(); if(!window._coLoaded){window._coLoaded=true;preloadCompanyData();} }
   if(name==='registry'){initRegistry();startSync();}
@@ -8165,6 +8178,8 @@ function updateDashboardUser(){
 // Also drives the upgrade banner further down the header, if a plan
 // worth more than the current one exists. Click on either takes them
 // straight to Company Details > Billing to act on it.
+var CURRENT_LOCKED_MODULES = [];
+
 async function loadSubscriptionBadge(){
   var el = document.getElementById('dash-sub-badge');
   var banner = document.getElementById('dash-upgrade-banner');
@@ -8173,7 +8188,7 @@ async function loadSubscriptionBadge(){
   try{
     var r = await Promise.all([
       sbFetch('companies',{select:'subscription_status,trial_ends_at,plan_id',filter:'id=eq.'+currentUser.companyId}),
-      sbFetch('plans',{select:'id,name,price_monthly'}).catch(function(){return [];})
+      sbFetch('plans',{select:'id,name,price_monthly,locked_modules'}).catch(function(){return [];})
     ]);
     var rows=r[0], allPlans=Array.isArray(r[1])?r[1]:[];
     var co = (Array.isArray(rows)&&rows.length) ? rows[0] : null;
@@ -8204,6 +8219,9 @@ async function loadSubscriptionBadge(){
     var currentPrice = currentPlan?parseFloat(currentPlan.price_monthly)||0:0;
     var nextUp = allPlans.filter(function(p){return p.id!==co.plan_id && parseFloat(p.price_monthly)>currentPrice;})
       .sort(function(a,b){return parseFloat(a.price_monthly)-parseFloat(b.price_monthly);})[0];
+
+    CURRENT_LOCKED_MODULES = (currentPlan && currentPlan.locked_modules) ? currentPlan.locked_modules : [];
+    applyPlanLocks();
 
     if(btn){
       if(nextUp){ btn.textContent = '\u2191 Upgrade'; btn.style.display = 'block'; }
@@ -8242,6 +8260,7 @@ function openDrawer(){
   }
   // Hide drawer items user has no access to
   applyDrawerPermissions();
+  applyPlanLocks();
   var _dr=document.getElementById('app-drawer');var _dov=document.getElementById('drawer-overlay');
   if(_dr)_dr.classList.add('on');if(_dov)_dov.classList.add('on');
 }
@@ -8292,6 +8311,73 @@ function applyDrawerPermissions(){
 function closeDrawer(){
   document.getElementById('app-drawer').classList.remove('on');
   document.getElementById('drawer-overlay').classList.remove('on');
+}
+
+// Same top-module → sub-key mapping applyDrawerPermissions() uses for
+// role-based checks (kept in sync manually — both read from the same
+// underlying AC_MODS/EMP_TAB_KEYS shape, just for a different purpose
+// here: plan-based locking instead of role-based permission).
+function planSubKeys(topName){
+  var map = {
+    'dashboard':  ['dashboard'],
+    'projects':   ['proj-projects','proj-boq','proj-jm','proj-planning','proj-execution'],
+    'employees':  Object.keys(EMP_TAB_KEYS).map(function(t){return EMP_TAB_KEYS[t];}).concat(['attendance']),
+    'attendance': ['attendance'],
+    'accounts':   ['accounts'],
+    'petty-cash': ['petty-cash'],
+    'overheads':  ['overheads'],
+    'tpm':        ['tpm'],
+    'loans':      ['loans'],
+    'access':     ['access'],
+    'company':    ['company'],
+    'registry':   ['registry']
+  };
+  return map[topName]||[];
+}
+
+// A top-level module is locked by the current plan if ANY of its
+// sub-keys are in CURRENT_LOCKED_MODULES — a platform admin locking
+// even one sub-tab of, say, Projects is treated as locking the whole
+// module, since there's no separate per-tab enforcement inside these
+// multi-tab screens (only the top-level rail/drawer/showApp gate).
+function isTopModuleLockedByPlan(topName){
+  if(!CURRENT_LOCKED_MODULES || !CURRENT_LOCKED_MODULES.length) return false;
+  return planSubKeys(topName).some(function(k){return CURRENT_LOCKED_MODULES.indexOf(k)>-1;});
+}
+
+// Greys out (not hides — the point is to be seen and prompt an
+// upgrade, unlike role-based hiding) rail/drawer items for modules the
+// current plan locks, and swaps their click to an upgrade prompt
+// instead of navigating in. Admins are NOT exempt here, unlike
+// canAccess()/applyDrawerPermissions() — plan limits apply to
+// everyone in the company, including its own admin.
+function applyPlanLocks(){
+  var lockedTops = ['dashboard','projects','employees','attendance','accounts','petty-cash','overheads','tpm','loans','access','company','registry']
+    .filter(function(t){return isTopModuleLockedByPlan(t);});
+
+  document.querySelectorAll('#side-rail .sr-item[data-mod], .drawer-item[onclick]').forEach(function(item){
+    var mod = item.getAttribute('data-mod');
+    if(!mod){
+      var match = (item.getAttribute('onclick')||'').match(/showApp\('([^']+)'\)/);
+      mod = match ? match[1] : null;
+    }
+    if(!mod || item.style.display==='none') return; // already hidden by role permissions — leave it
+    if(lockedTops.indexOf(mod)>-1){
+      item.style.opacity = '0.4';
+      item.setAttribute('data-plan-locked','1');
+      if(!item.querySelector('.plan-lock-ic')){
+        var ic=document.createElement('span');
+        ic.className='plan-lock-ic';
+        ic.textContent=' 🔒';
+        ic.style.fontSize='10px';
+        item.appendChild(ic);
+      }
+    } else if(item.getAttribute('data-plan-locked')){
+      item.style.opacity = '';
+      item.removeAttribute('data-plan-locked');
+      var ic2=item.querySelector('.plan-lock-ic'); if(ic2) ic2.remove();
+    }
+  });
 }
 
 
