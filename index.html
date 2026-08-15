@@ -3918,6 +3918,18 @@ async function paRecordPayment(companyId){
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
+// Translates locked_modules keys into their AC_MODS labels for display
+// (falls back to the raw key if a module was since renamed/removed
+// from AC_MODS but is still referenced by an existing plan).
+function paLockedModuleLabels(keys){
+  var labels = keys.map(function(k){
+    var mod = AC_MODS.find(function(m){return m.key===k;});
+    return mod ? mod.label : k;
+  });
+  if(labels.length>4) return labels.slice(0,4).join(', ')+' +'+(labels.length-4)+' more';
+  return labels.join(', ');
+}
+
 function paRenderPlans(){
   var cont=document.getElementById('pa-content');
   cont.innerHTML=
@@ -3930,7 +3942,7 @@ function paRenderPlans(){
         '<div style="display:flex;justify-content:space-between;gap:8px;">'+
           '<div><div style="font-size:13.5px;font-weight:700;">'+p.name+(p.is_default?' <span style="font-size:9px;color:#78716C;">(default for new signups)</span>':'')+'</div>'+
           '<div style="font-size:11px;color:#78716C;">\u20b9'+p.price_monthly+'/mo &middot; max '+(p.max_employees||'\u221e')+' employees &middot; max '+(p.max_projects||'\u221e')+' projects</div>'+
-          '<div style="font-size:11px;color:#78716C;">Locked modules: '+(p.locked_modules&&p.locked_modules.length?p.locked_modules.join(', '):'none')+'</div></div>'+
+          '<div style="font-size:11px;color:#78716C;">Locked modules: '+(p.locked_modules&&p.locked_modules.length?paLockedModuleLabels(p.locked_modules):'none')+'</div></div>'+
           '<button onclick="paOpenPlanForm(\''+p.id+'\')" style="background:none;border:1px solid #D6D3D1;color:#44403C;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;height:fit-content;">Edit</button>'+
         '</div>'+
       '</div>';
@@ -3939,7 +3951,16 @@ function paRenderPlans(){
 
 function paOpenPlanForm(planId){
   var p=planId?PA_PLANS.find(function(x){return x.id===planId;}):null;
-  var ALL_MODULES=['loans','tpm','overheads','registry','access'];
+  // Sourced directly from AC_MODS (the same list Access Control uses,
+  // defined further down this file) rather than a separate hardcoded
+  // list — any module added/removed/renamed there automatically shows
+  // up here too, since this reads the same array at render time.
+  var acGroups={}, acGroupOrder=[];
+  AC_MODS.forEach(function(mod){
+    var g=mod.group||'Other';
+    if(!acGroups[g]){acGroups[g]=[];acGroupOrder.push(g);}
+    acGroups[g].push(mod);
+  });
   document.getElementById('pa-sheet-title').textContent=p?'Edit Plan':'New Plan';
   document.getElementById('pa-sheet-body').innerHTML=
     '<div class="fgrp"><label class="flbl">Plan Name</label><input class="finp" id="pa-plan-name" value="'+(p?p.name:'')+'" placeholder="e.g. Pro"></div>'+
@@ -3947,9 +3968,12 @@ function paOpenPlanForm(planId){
     '<div class="fgrp"><label class="flbl">Max Employees (blank = unlimited)</label><input class="finp" id="pa-plan-maxemp" type="number" value="'+(p&&p.max_employees!=null?p.max_employees:'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Max Projects (blank = unlimited)</label><input class="finp" id="pa-plan-maxproj" type="number" value="'+(p&&p.max_projects!=null?p.max_projects:'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Locked Modules</label>'+
-      ALL_MODULES.map(function(m){
-        var checked=p&&p.locked_modules&&p.locked_modules.indexOf(m)>-1;
-        return '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;margin-bottom:4px;"><input type="checkbox" class="pa-plan-lockmod" value="'+m+'"'+(checked?' checked':'')+'> '+m+'</label>';
+      acGroupOrder.map(function(grp){
+        return '<div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px;">'+grp+'</div>'+
+          acGroups[grp].map(function(mod){
+            var checked=p&&p.locked_modules&&p.locked_modules.indexOf(mod.key)>-1;
+            return '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;margin-bottom:4px;"><input type="checkbox" class="pa-plan-lockmod" value="'+mod.key+'"'+(checked?' checked':'')+'> '+mod.label+'</label>';
+          }).join('');
       }).join('')+
     '</div>'+
     '<label style="display:flex;align-items:center;gap:6px;font-size:12.5px;"><input type="checkbox" id="pa-plan-default"'+(p&&p.is_default?' checked':'')+'> Default plan for new signups</label>';
