@@ -1430,7 +1430,7 @@ input,select,textarea{font-size:16px !important;}
 
     <label class="flbl">Company Code</label>
     <div class="inp-wrap">
-      <input class="finp" type="text" placeholder="e.g. atmagaurav" id="inp-cocode" style="padding-right:44px;text-transform:lowercase;"
+      <input class="finp" type="text" placeholder="e.g. abcpl" id="inp-cocode" style="padding-right:44px;text-transform:lowercase;"
              onkeydown="if(event.key==='Enter'){event.preventDefault();var p=document.getElementById('inp-phone');if(p)p.focus();}">
       <span class="inp-ic">&#127970;</span>
     </div>
@@ -1477,10 +1477,10 @@ input,select,textarea{font-size:16px !important;}
     <div class="login-desc">You'll be the first admin — invite your team once you're in.</div>
 
     <label class="flbl">Company Name</label>
-    <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. Atmagaurav Infra Pvt Ltd" id="co-name"></div>
+    <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. ABC Pvt Ltd" id="co-name"></div>
 
     <label class="flbl">Company Code</label>
-    <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. atmagaurav (used to sign in)" id="co-slug" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')"></div>
+    <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. abcpl (used to sign in)" id="co-slug" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')"></div>
     <div style="font-size:11px;color:var(--text3);margin:-10px 0 14px;">Lowercase letters, numbers, and hyphens only. This is what you and your team will enter to sign in.</div>
 
     <label class="flbl">Your Name</label>
@@ -8876,7 +8876,7 @@ function salDownloadPDF(month, year, label){
   if(!records.length){toast('No records for '+label,'warning');return;}
 
   var total = records.reduce(function(s,r){return s+Number(r.net_payable||0);},0);
-  var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
+  var compName = typeof coName==='function'?coName():'Your Company';
   var compAddr = typeof coAddr==='function'?coAddr():'';
   var compGST  = typeof coGST==='function'?coGST():'';
   var today    = fmtDate(new Date());
@@ -23678,9 +23678,9 @@ function companyRender(){
   body.innerHTML =
     // Basic Info
     sec('&#127968;','Company Information','#1565C0')+
-    finp('name','Company Name',d.name,'e.g. Atmagaurav Infra Pvt. Ltd.')+
+    finp('name','Company Name',d.name,'e.g. ABC Pvt Ltd')+
     '<div class="g2">'+
-      finp('short_name','Short Name',d.short_name,'e.g. AIPL')+
+      finp('short_name','Short Name',d.short_name,'e.g. ABCPL')+
       finp('type','Company Type',d.type,'e.g. Private Limited')+
     '</div>'+
     '<label class="flbl">Registered Address</label>'+
@@ -23829,7 +23829,7 @@ async function companySave(){
 function coGet(field, fallback){
   return (COMPANY_DATA&&COMPANY_DATA[field])||fallback||'';
 }
-function coName(){  return coGet('name','Atmagaurav Infra Pvt. Ltd.'); }
+function coName(){  return coGet('name','Your Company'); }
 function coShortName(){ return coGet('short_name', (coName().split(' ')[0])||'AIPL'); }
 function coAddr(){  return coGet('address',''); }
 function coCIN(){   return coGet('cin',''); }
@@ -23983,7 +23983,7 @@ function downloadIncrementLetter(empId, newBasic, oldBasic, effectiveDate, remar
   var wefFmt = effectiveDate ? fmtDate(effectiveDate) : today;
   var increment = Number(newBasic) - Number(oldBasic);
   var pct = Number(oldBasic)>0 ? ((increment/Number(oldBasic))*100).toFixed(1) : '0';
-  var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
+  var compName = typeof coName==='function'?coName():'Your Company';
   var compAddr = typeof coAddr==='function'?coAddr():'';
   var compGST  = typeof coGST==='function'?coGST():'';
   var compCIN  = typeof coCIN==='function'?coCIN():'';
@@ -24167,7 +24167,7 @@ function downloadTransferOrder(empId, type, details){
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
   var code  = emp.employee_code||emp.emp_id||'—';
   var today = fmtDate(new Date());
-  var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
+  var compName = typeof coName==='function'?coName():'Your Company';
   var compAddr = typeof coAddr==='function'?coAddr():'';
   var compCIN  = typeof coCIN==='function'?coCIN():'';
   var compGST  = typeof coGST==='function'?coGST():'';
@@ -24264,7 +24264,7 @@ async function downloadShowCauseNotice(empId, orderId){
   var name = ((emp.first_name||'')+(emp.last_name?' '+emp.last_name:'')).trim()||'—';
   var code  = emp.employee_code||emp.emp_id||'—';
   var today = fmtDate(new Date());
-  var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
+  var compName = typeof coName==='function'?coName():'Your Company';
   var compAddr = typeof coAddr==='function'?coAddr():'';
   var compGST  = typeof coGST==='function'?coGST():'';
 
@@ -24713,7 +24713,7 @@ function downloadPayFixationOrder(empId, effectiveDate, details){
   var dept  = emp.department||'—';
   var today = fmtDate(new Date());
   var wefFmt= effectiveDate?fmtDate(effectiveDate):today;
-  var compName = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
+  var compName = typeof coName==='function'?coName():'Your Company';
   var compAddr = typeof coAddr==='function'?coAddr():'';
   var compCIN  = typeof coCIN==='function'?coCIN():'';
   var compGST  = typeof coGST==='function'?coGST():'';
@@ -24806,7 +24806,7 @@ function downloadIDCard(empId){
   var dojFmt= doj ? fmtDate(doj) : '—';
   var initials = name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();
 
-  var compName  = typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
+  var compName  = typeof coName==='function'?coName():'Your Company';
   var compAddr  = typeof coAddr==='function'?coAddr():'';
   var compEmail = typeof coEmail==='function'?coEmail():'';
 
@@ -25051,7 +25051,7 @@ function downloadResignationLetter(empId){
   var resDate = emp.resignation_date||'—';
   var lwd     = emp.last_working_day||'—';
   var reason  = emp.resignation_reason||emp.rejection_reason||'Personal reasons';
-  var compName= typeof coName==='function'?coName():'Atmagaurav Infra Pvt. Ltd.';
+  var compName= typeof coName==='function'?coName():'Your Company';
   var compAddr= typeof coAddr==='function'?coAddr():'';
   var compCIN = typeof coCIN==='function'?coCIN():'';
   var compGST = typeof coGST==='function'?coGST():'';
