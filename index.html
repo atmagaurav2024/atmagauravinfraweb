@@ -3580,9 +3580,13 @@ async function doCompanySignup(){
     if(existing && existing.length){ toast('That company code is already taken — try another','warning'); return; }
 
     toast('Creating your company...','info');
-    var coRes=await sbInsert('companies',{name:name, short_name:name.split(' ')[0], slug:slug, status:'active', plan:'trial'});
-    var company=(coRes&&coRes[0])?coRes[0]:null;
-    if(!company){ toast('Could not create company — try again','error'); return; }
+    // return=minimal (via sbInsertMinimal), not sbInsert's usual
+    // return=representation — RETURNING * would require satisfying
+    // companies' own SELECT policy too, which can't be true yet since
+    // there's no employees row for this brand-new user at all. Id is
+    // generated here instead of read back from the response.
+    var companyId=crypto.randomUUID();
+    await sbInsertMinimal('companies',{id:companyId, name:name, short_name:name.split(' ')[0], slug:slug, status:'active', plan:'trial'});
 
     toast('Setting up your admin account...','info');
     var authResult=await authSignUp(phone, pass, slug);
@@ -3593,13 +3597,15 @@ async function doCompanySignup(){
     }
 
     var nameParts=adminName.split(' ');
-    var empRes=await sbInsert('employees',{
-      company_id:company.id, auth_id:authUserId,
+    // Same reasoning as the companies insert above — this request is
+    // still running as anon at this point (no session yet), so the
+    // employees SELECT policy can't resolve either.
+    await sbInsertMinimal('employees',{
+      company_id:companyId, auth_id:authUserId,
       emp_id:slug.toUpperCase()+'-001', badge_no:slug.toUpperCase()+'-001',
       first_name:nameParts[0]||adminName, last_name:nameParts.length>1?nameParts[nameParts.length-1]:'',
       phone:phone, role:'admin', designation:'Admin', status:'active'
     });
-    if(!empRes || !empRes[0]){ toast('Company created, but the admin profile failed — contact support','error'); return; }
 
     toast('Company created! Signing you in...','success');
     await doLoginInner(phone, pass, slug);
@@ -4004,26 +4010,24 @@ verifyOTP=async function(){
       if(rAadhar) data.aadhar_doc_url = await uploadToCloudinary(rAadhar,'kyc','r-uaadhar-doc');
       if(rPan) data.pan_doc_url = await uploadToCloudinary(rPan,'kyc','r-upan-doc');
       toast('Saving registration...','info');
-      // Retry with unique emp_id if duplicate conflict
-      var result;
+      // Same RETURNING/SELECT-policy issue as company signup: this
+      // request has no employees row yet to resolve current_company_id()
+      // against, so return=representation's RETURNING would always fail
+      // even though the INSERT itself is genuinely permitted. Uses
+      // minimal-return, and reads emp_id back from what was already set
+      // on data (computed above) rather than the response body.
       try{
-        result=await sbInsert('employees',data);
+        await sbInsertMinimal('employees',data);
       }catch(insErr){
         if(insErr.message&&(insErr.message.includes('duplicate')||insErr.message.includes('23505'))){
           data.emp_id='AIPL-T'+String(Date.now()).slice(-6);
           data.badge_no=data.emp_id;
-          result=await sbInsert('employees',data);
+          await sbInsertMinimal('employees',data);
         } else { throw insErr; }
       }
-      if(result&&result[0]){
-        var refId=result[0].emp_id||newEmpId;
-        document.getElementById('pending-ref-id').textContent='Ref: '+refId;
-        showScreen('scr-pending');
-        toast('Registration submitted! Awaiting admin approval.','success');
-      } else {
-        toast('Submission failed. Try again.','error');
-        console.error(result);
-      }
+      document.getElementById('pending-ref-id').textContent='Ref: '+data.emp_id;
+      showScreen('scr-pending');
+      toast('Registration submitted! Awaiting admin approval.','success');
     } catch(e){
       toast('Error: '+e.message,'error');
       console.error(e);
@@ -5682,6 +5686,26 @@ async function sbInsert(table, data){
   });
   if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
   return res.json();
+}
+
+// return=representation (used by sbInsert above) makes PostgREST
+// RETURNING * the inserted row, which requires satisfying the table's
+// SELECT policy, not just its INSERT policy — fine for normal,
+// already-authenticated use, but wrong for the two signup inserts
+// (a brand-new company, and its first employee), where no employees
+// row exists yet to resolve current_company_id() against, so the
+// SELECT policy can never be satisfied even though the INSERT itself
+// is genuinely permitted. This uses return=minimal instead, which
+// skips RETURNING entirely — the caller must already know the row's
+// id (generated client-side) since nothing comes back to read.
+async function sbInsertMinimal(table, data){
+  var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify(data)
+  });
+  if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
+  return true;
 }
 
 async function sbUpdate(table, id, data){
