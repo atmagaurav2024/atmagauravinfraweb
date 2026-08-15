@@ -5,10 +5,7 @@
 -- not something a lower-privileged role could hijack by redefining.
 
 select string_agg(
-  p.proname ||
-  ' | security_definer=' || p.prosecdef::text ||
-  ' | owner=' || r.rolname ||
-  ' | volatility=' || p.provolatile,
+  p.proname || ' | security_definer=' || p.prosecdef::text || ' | owner=' || r.rolname || ' | volatility=' || p.provolatile::text,
   E'\n'
 ) as result
 from pg_proc p
