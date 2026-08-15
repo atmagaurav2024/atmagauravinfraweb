@@ -1483,8 +1483,8 @@ input,select,textarea{font-size:16px !important;}
     <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. abcpl (used to sign in)" id="co-slug" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')"></div>
     <div style="font-size:11px;color:var(--text3);margin:-10px 0 14px;">Lowercase letters, numbers, and hyphens only. This is what you and your team will enter to sign in.</div>
 
-    <label class="flbl">Your Name (optional)</label>
-    <div class="inp-wrap"><input class="finp" type="text" placeholder="Full name — defaults to &quot;Admin&quot;" id="co-admin-name"></div>
+    <label class="flbl">Admin Name</label>
+    <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. Rajesh Kumar" id="co-admin-name"></div>
 
     <label class="flbl">Your Mobile Number</label>
     <div class="inp-wrap"><input class="finp" type="tel" placeholder="+91 98765 43210" id="co-admin-phone"></div>
@@ -3576,11 +3576,12 @@ async function doCompanySignup(){
   if(COMPANY_SIGNUP_BUSY) return;
   var name=(document.getElementById('co-name')||{}).value.trim();
   var slug=(document.getElementById('co-slug')||{}).value.trim().toLowerCase();
-  var adminName=(document.getElementById('co-admin-name')||{}).value.trim() || 'Admin';
+  var adminName=(document.getElementById('co-admin-name')||{}).value.trim();
   var phone=(document.getElementById('co-admin-phone')||{}).value.trim();
   var pass=(document.getElementById('co-admin-pass')||{}).value;
   if(!name){toast('Enter your company name','warning');return;}
   if(!slug||slug.length<3){toast('Company code must be at least 3 characters (letters, numbers, hyphens)','warning');return;}
+  if(!adminName){toast('Enter the admin name','warning');return;}
   if(!phone){toast('Enter your mobile number','warning');return;}
   if(!pass||pass.length<6){toast('Password must be at least 6 characters','warning');return;}
 
