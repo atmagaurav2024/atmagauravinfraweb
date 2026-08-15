@@ -1483,8 +1483,8 @@ input,select,textarea{font-size:16px !important;}
     <div class="inp-wrap"><input class="finp" type="text" placeholder="e.g. abcpl (used to sign in)" id="co-slug" style="text-transform:lowercase;" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')"></div>
     <div style="font-size:11px;color:var(--text3);margin:-10px 0 14px;">Lowercase letters, numbers, and hyphens only. This is what you and your team will enter to sign in.</div>
 
-    <label class="flbl">Your Name</label>
-    <div class="inp-wrap"><input class="finp" type="text" placeholder="Full name" id="co-admin-name"></div>
+    <label class="flbl">Your Name (optional)</label>
+    <div class="inp-wrap"><input class="finp" type="text" placeholder="Full name — defaults to &quot;Admin&quot;" id="co-admin-name"></div>
 
     <label class="flbl">Your Mobile Number</label>
     <div class="inp-wrap"><input class="finp" type="tel" placeholder="+91 98765 43210" id="co-admin-phone"></div>
@@ -3576,12 +3576,11 @@ async function doCompanySignup(){
   if(COMPANY_SIGNUP_BUSY) return;
   var name=(document.getElementById('co-name')||{}).value.trim();
   var slug=(document.getElementById('co-slug')||{}).value.trim().toLowerCase();
-  var adminName=(document.getElementById('co-admin-name')||{}).value.trim();
+  var adminName=(document.getElementById('co-admin-name')||{}).value.trim() || 'Admin';
   var phone=(document.getElementById('co-admin-phone')||{}).value.trim();
   var pass=(document.getElementById('co-admin-pass')||{}).value;
   if(!name){toast('Enter your company name','warning');return;}
   if(!slug||slug.length<3){toast('Company code must be at least 3 characters (letters, numbers, hyphens)','warning');return;}
-  if(!adminName){toast('Enter your name','warning');return;}
   if(!phone){toast('Enter your mobile number','warning');return;}
   if(!pass||pass.length<6){toast('Password must be at least 6 characters','warning');return;}
 
@@ -3598,7 +3597,8 @@ async function doCompanySignup(){
     // there's no employees row for this brand-new user at all. Id is
     // generated here instead of read back from the response.
     var companyId=crypto.randomUUID();
-    await sbInsertMinimal('companies',{id:companyId, name:name, short_name:name.split(' ')[0], slug:slug, status:'active', plan:'trial'});
+    var shortName=name.split(' ')[0];
+    await sbInsertMinimal('companies',{id:companyId, name:name, short_name:shortName, slug:slug, status:'active', plan:'trial'});
 
     toast('Setting up your admin account...','info');
     var authResult=await authSignUp(phone, pass, slug);
@@ -3621,6 +3621,18 @@ async function doCompanySignup(){
 
     toast('Company created! Signing you in...','success');
     await doLoginInner(phone, pass, slug);
+
+    // Pre-fills Company Details with what was entered above, so it
+    // isn't empty after login — done here (after login, not before)
+    // because company_details has no special anonymous-signup policy
+    // the way companies/employees do; this insert needs a real
+    // authenticated session (now available via currentUser, set by
+    // doLoginInner above) for current_company_id() to resolve at all.
+    if(currentUser && currentUser.accessToken){
+      await sbInsertMinimal('company_details',{company_id:companyId, name:name, short_name:shortName}).catch(function(e){
+        console.warn('Pre-filling company_details failed (non-fatal):', e);
+      });
+    }
   }catch(e){
     console.error(e);
     toast('Error: '+e.message,'error');
@@ -23678,6 +23690,12 @@ function companyRender(){
   body.innerHTML =
     // Basic Info
     sec('&#127968;','Company Information','#1565C0')+
+    (currentUser&&currentUser.companySlug?
+      '<div><label class="flbl">Company Code</label>'+
+        '<input class="finp" type="text" value="'+currentUser.companySlug+'" disabled style="background:#F5F5F4;color:var(--text3);cursor:not-allowed;">'+
+        '<div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Used to sign in — not editable here.</div>'+
+      '</div>'
+      :'')+
     finp('name','Company Name',d.name,'e.g. ABC Pvt Ltd')+
     '<div class="g2">'+
       finp('short_name','Short Name',d.short_name,'e.g. ABCPL')+
