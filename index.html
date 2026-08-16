@@ -3575,6 +3575,7 @@ async function doLoginInner(ph,pw,co){
     var result = await authSignIn(ph, pw, co);
     if(result.access_token){
       currentSession = result;
+      try{ localStorage.setItem('rydax_last_co', co.toLowerCase()); }catch(e){}
       var authUserId = result.user ? result.user.id : (result.id||null);
       // The employee lookup below needs to run as this just-authenticated
       // user, not the anonymous key — otherwise, with RLS now correctly
@@ -4361,7 +4362,22 @@ function toast(msg,type){
 
 // ── INIT ───────────────────────────────────────────────────────────────
 if(location.hash==='#rydax-admin'){ showScreen('scr-platform-admin'); }
-else{ showScreen('scr-login'); }
+else{
+  showScreen('scr-login');
+  // Company code doesn't need to be typed every time: a URL param
+  // (?co=slug, for an admin to share a bookmarkable link with their
+  // team) takes priority, falling back to whatever was remembered from
+  // the last successful login on this browser. Neither is sensitive
+  // data, unlike the password, so no explicit consent needed for this.
+  var cocodeEl=document.getElementById('inp-cocode');
+  if(cocodeEl){
+    var urlCo=new URLSearchParams(location.search).get('co');
+    var rememberedCo=localStorage.getItem('rydax_last_co');
+    if(urlCo) cocodeEl.value=urlCo.toLowerCase();
+    else if(rememberedCo) cocodeEl.value=rememberedCo;
+    if(cocodeEl.value){ var phoneEl=document.getElementById('inp-phone'); if(phoneEl) phoneEl.focus(); }
+  }
+}
 
 
 // Override verifyOTP to go to app dashboard
