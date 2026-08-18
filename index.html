@@ -3242,7 +3242,7 @@ function showApp(name){
   // Permission check (admins bypass, dashboard always allowed, and a
   // platform admin session isn't a member of any company at all, so
   // it's never subject to this company-scoped permission system)
-  var allProjTabs=['projects','boq','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
+  var allProjTabs=['projects','boq','schh','schb','jm','planning','rr','execution','allotted','daily','grn','store','bills','orders','preconstruction','construction'];
   if(name!=='dashboard' && name!=='platform-console' && currentUser && !currentUser.isPlatformAdmin && currentUser.role!=='admin'){
     // Map app name to AC_MODS key(s) for checking
     var checkKey = name;
@@ -8288,7 +8288,7 @@ function applyDrawerPermissions(){
   // Module → check function
   var checks = {
     'dashboard':    function(){ return canAccess('dashboard','view'); },
-    'projects':     function(){ return ['projects','boq','jm','planning','execution'].some(function(t){return canAccess('proj-'+t,'view');}); },
+    'projects':     function(){ return ['projects','boq','schh','schb','jm','planning','execution'].some(function(t){return canAccess('proj-'+t,'view');}); },
     'employees':    function(){ return Object.keys(EMP_TAB_KEYS).some(function(t){return canAccess(EMP_TAB_KEYS[t],'view');}); },
     'attendance':   function(){ return canAccess('attendance','view'); },
     'accounts':     function(){ return canAccess('accounts','view'); },
@@ -8338,7 +8338,7 @@ function closeDrawer(){
 function planSubKeys(topName){
   var map = {
     'dashboard':  ['dashboard'],
-    'projects':   ['proj-projects','proj-boq','proj-jm','proj-planning','proj-execution'],
+    'projects':   ['proj-projects','proj-boq','proj-schh','proj-schb','proj-jm','proj-planning','proj-execution'],
     'employees':  Object.keys(EMP_TAB_KEYS).map(function(t){return EMP_TAB_KEYS[t];}).concat(['attendance']),
     'attendance': ['attendance'],
     'accounts':   ['accounts'],
@@ -12011,6 +12011,12 @@ async function empSavePay(){
   <div class="sheet" id="sh-proj"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="proj-sheet-title">New Project</div><span class="sh-close" onclick="closeProjSheet()">&#10005;</span></div><div class="sh-body" id="proj-sheet-body"></div><div class="sh-foot" id="proj-sheet-foot"></div></div>
   <div class="sh-overlay" id="ov-boq" onclick="closeBOQSheet()"></div>
   <div class="sheet" id="sh-boq"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="boq-sheet-title">New BOQ Item</div><span class="sh-close" onclick="closeBOQSheet()">&#10005;</span></div><div class="sh-body" id="boq-sheet-body"></div><div class="sh-foot" id="boq-sheet-foot"></div></div>
+
+  <div class="sh-overlay" id="ov-schh" onclick="closeSchhSheet()"></div>
+  <div class="sheet" id="sh-schh"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="schh-sheet-title">New Component</div><span class="sh-close" onclick="closeSchhSheet()">&#10005;</span></div><div class="sh-body" id="schh-sheet-body"></div><div class="sh-foot" id="schh-sheet-foot"></div></div>
+
+  <div class="sh-overlay" id="ov-schb" onclick="closeSchbSheet()"></div>
+  <div class="sheet" id="sh-schb"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="schb-sheet-title">New Scope Item</div><span class="sh-close" onclick="closeSchbSheet()">&#10005;</span></div><div class="sh-body" id="schb-sheet-body"></div><div class="sh-foot" id="schb-sheet-foot"></div></div>
   <div class="sh-overlay" id="ov-jm" onclick="closeSheet('ov-jm','sh-jm')"></div>
   <div class="sheet" id="sh-jm"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="jm-sheet-title">Add JM</div><span class="sh-close" onclick="closeSheet('ov-jm','sh-jm')">&#10005;</span></div><div class="sh-body" id="jm-sheet-body"></div><div class="sh-foot" id="jm-sheet-foot"></div></div>
   <div class="sh-overlay" id="ov-plan" onclick="closeSheet('ov-plan','sh-plan')"></div>
@@ -12220,7 +12226,7 @@ var PROJ_MOD_SEL_ID = '';           // selected project id
 // Sub-tabs of construction: rr | execution | allotted | daily | grn | store
 
 var PMT_GROUPS = {
-  preconstruction: ['boq','jm','planning'],
+  preconstruction: ['boq','schh','schb','jm','planning'],
   construction:    ['rr','execution','allotted','daily','executedwork','grn','store']
 };
 
@@ -12239,7 +12245,7 @@ function projModRenderNav(){
   var hasProjId=!!PROJ_MOD_SEL_ID;
   var onProjects=PROJ_MOD_TAB==='projects';
 
-  var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',executedwork:'Executed Work',grn:'GRN',store:'Store'};
+  var subLabels={boq:'BOQ',schh:'Schedule H',schb:'Schedule B',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',executedwork:'Executed Work',grn:'GRN',store:'Store'};
   var activeGroup='';
   if(PMT_GROUPS.preconstruction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='preconstruction';
   else if(PMT_GROUPS.construction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='construction';
@@ -12301,7 +12307,7 @@ function projModRenderNav(){
   }
 
   var addBtn=document.getElementById('proj-mod-add-btn');
-  if(addBtn) addBtn.style.display=(PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq')?'':'none';
+  if(addBtn) addBtn.style.display=(PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq'||PROJ_MOD_TAB==='schh'||PROJ_MOD_TAB==='schb')?'':'none';
 }
 
 
@@ -12364,6 +12370,8 @@ function projModLoadTab(){
 
   var configs = {
     boq:       {cont:'boq-content',   sel:'boq-proj-sel',   fn: function(){ boqLoadItems(); }},
+    schh:      {cont:'schh-content',  sel:'schh-proj-sel',  fn: function(){ schhLoadItems(); }},
+    schb:      {cont:'schb-content',  sel:'schb-proj-sel',  fn: function(){ schbLoadItems(); }},
     jm:        {cont:'jm-content',    sel:'jm-proj-sel',    fn: function(){ jmLoadItems(); }},
     planning:  {cont:'plan-content',  sel:'plan-proj-sel',  fn: function(){ planLoadItems(); }},
     rr:        {cont:'rr-content',    sel:'rr-proj-sel',    fn: function(){ rrLoadItems(); }},
@@ -12387,6 +12395,8 @@ function projModLoadTab(){
 function projModAdd(){
   if(PROJ_MOD_TAB==='projects') openProjForm(null);
   else if(PROJ_MOD_TAB==='boq') boqOpenAddItem(null);
+  else if(PROJ_MOD_TAB==='schh') schhOpenAdd(null);
+  else if(PROJ_MOD_TAB==='schb') schbOpenAdd(null);
 }
 
 
@@ -12922,6 +12932,199 @@ async function boqDeleteItem(id){
   boqRender();
   try{await sbDelete('boq_items',id);}catch(e){console.error(e);}
   toast('BOQ item and all related records deleted','success');
+}
+
+// ════ SCHEDULE H (EPC billing components/sub-components, % of Contract Price) ════
+var SCHH_ITEMS=[], SCHH_CONTRACT_VALUE=0;
+async function schhLoadItems(){
+  var projId=PROJ_MOD_SEL_ID;
+  var el=document.getElementById('schh-content');
+  if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';SCHH_ITEMS=[];return;}
+  if(el)el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+  try{
+    var r=await Promise.all([
+      sbFetch('schedule_h',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'}),
+      sbFetch('projects',{select:'id,contract_value',filter:'id=eq.'+projId})
+    ]);
+    SCHH_ITEMS=Array.isArray(r[0])?r[0]:[];
+    SCHH_CONTRACT_VALUE=(Array.isArray(r[1])&&r[1].length)?parseFloat(r[1][0].contract_value)||0:0;
+  }catch(e){SCHH_ITEMS=[];console.error(e);}
+  schhRender();
+}
+function schhRender(){
+  var el=document.getElementById('schh-content');if(!el)return;
+  var mains=SCHH_ITEMS.filter(function(i){return !i.parent_id;});
+  if(!mains.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128202;</div><div style="font-weight:700;margin-top:10px;">No Schedule H components yet</div><div style="font-size:12px;margin-top:6px;">Tap + to add a main component (e.g. Highway Work)</div></div>';return;}
+
+  var totalPct=mains.reduce(function(s,m){return s+(parseFloat(m.percentage)||0);},0);
+  var totalOk=Math.abs(totalPct-100)<0.01;
+
+  var html='<div style="background:white;border-radius:12px;padding:12px;margin-bottom:12px;border-left:3px solid '+(totalOk?'#2E7D32':'#C62828')+';">'+
+    '<div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL ALLOCATED (SHOULD BE 100%)</div>'+
+    '<div style="font-size:20px;font-weight:900;color:'+(totalOk?'#2E7D32':'#C62828')+';">'+totalPct.toFixed(2)+'%</div>'+
+    (SCHH_CONTRACT_VALUE?'<div style="font-size:11px;color:var(--text3);margin-top:2px;">Contract Price: '+fmtINR(SCHH_CONTRACT_VALUE)+'</div>':'<div style="font-size:11px;color:#B45309;margin-top:2px;">No Contract Price set on this project — showing % only, no \u20b9 amounts</div>')+
+  '</div>';
+
+  html+=mains.map(function(m){
+    var children=SCHH_ITEMS.filter(function(c){return c.parent_id===m.id;});
+    var childSum=children.reduce(function(s,c){return s+(parseFloat(c.percentage)||0);},0);
+    var mPct=parseFloat(m.percentage)||0;
+    var mAmt=SCHH_CONTRACT_VALUE*mPct/100;
+    var childMismatch=children.length && Math.abs(childSum-mPct)>0.01;
+
+    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+      '<div style="padding:12px 14px;background:#F5F5F4;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">'+
+        '<div style="flex:1;"><div style="font-size:14px;font-weight:800;">'+m.component_name+'</div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+mPct+'% of Contract Price'+(SCHH_CONTRACT_VALUE?' \u00b7 '+fmtINR(mAmt):'')+'</div></div>'+
+        '<div style="display:flex;gap:6px;flex-shrink:0;">'+
+          '<button onclick="schhOpenAdd(null,\''+m.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:10px;font-weight:800;cursor:pointer;padding:4px 8px;white-space:nowrap;">+ Sub</button>'+
+          '<button onclick="schhOpenAdd(\''+m.id+'\',null)" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:10px;font-weight:800;cursor:pointer;padding:4px 8px;">&#9998;</button>'+
+          '<button onclick="schhDelete(\''+m.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:10px;font-weight:800;cursor:pointer;padding:4px 8px;">&#128465;</button>'+
+        '</div>'+
+      '</div>'+
+      (children.length?'<div style="padding:6px 14px;">'+
+        (childMismatch?'<div style="font-size:10px;color:#C62828;font-weight:700;padding:4px 0;">&#9888; Sub-components total '+childSum.toFixed(2)+'%, should equal '+mPct+'%</div>':'')+
+        children.map(function(c){
+          var cPct=parseFloat(c.percentage)||0;
+          var cAmt=SCHH_CONTRACT_VALUE*cPct/100;
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);">'+
+            '<div style="padding-left:12px;border-left:2px solid var(--border);"><div style="font-size:12.5px;font-weight:700;">'+c.component_name+'</div>'+
+            '<div style="font-size:10.5px;color:var(--text3);">'+cPct+'%'+(SCHH_CONTRACT_VALUE?' \u00b7 '+fmtINR(cAmt):'')+'</div></div>'+
+            '<div style="display:flex;gap:10px;">'+
+              '<button onclick="schhOpenAdd(\''+c.id+'\',\''+m.id+'\')" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;">&#9998;</button>'+
+              '<button onclick="schhDelete(\''+c.id+'\')" style="background:none;border:none;color:#C62828;font-size:13px;cursor:pointer;">&#128465;</button>'+
+            '</div>'+
+          '</div>';
+        }).join('')+
+      '</div>':'');
+  }).join('');
+
+  el.innerHTML=html;
+}
+// editId: existing row being edited (null = adding new). parentId: the
+// parent component (null = this is/becomes a top-level main component).
+function schhOpenAdd(editId, parentId){
+  var v=editId?(SCHH_ITEMS.find(function(i){return i.id===editId;})||{}):{};
+  var effectiveParentId = editId ? v.parent_id : parentId;
+  var parent = effectiveParentId ? SCHH_ITEMS.find(function(i){return i.id===effectiveParentId;}) : null;
+
+  document.getElementById('schh-sheet-title').textContent = editId?'Edit Component':(parent?'New Sub-Component':'New Main Component');
+  document.getElementById('schh-sheet-body').innerHTML=
+    (parent?'<div style="background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:var(--text3);">Under: <b style="color:var(--text);">'+parent.component_name+'</b> ('+parent.percentage+'%)</div>':'')+
+    '<label class="flbl">Component Name *</label><input id="schh-name" class="finp" value="'+(v.component_name||'')+'" placeholder="e.g. Highway Work">'+
+    '<label class="flbl">Percentage of '+(parent?'Parent Component':'Contract Price')+' *</label><input id="schh-pct" class="finp" type="number" step="0.01" value="'+(v.percentage||'')+'" placeholder="e.g. 60">';
+  document.getElementById('schh-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSchhSheet()">Cancel</button>'+
+    '<button class="btn" style="background:var(--accent);color:white;" onclick="schhSave(\''+(editId||'')+'\',\''+(effectiveParentId||'')+'\')">&#10003; '+(editId?'Save':'Add')+'</button>';
+  openSchhSheet();
+}
+function openSchhSheet(){openSheet('ov-schh','sh-schh');}
+function closeSchhSheet(){closeSheet('ov-schh','sh-schh');}
+async function schhSave(editId, parentId){
+  var name=gv('schh-name'), pct=parseFloat(gv('schh-pct'));
+  if(!name){toast('Enter a component name','warning');return;}
+  if(isNaN(pct)||pct<=0){toast('Enter a valid percentage','warning');return;}
+  var data={project_id:PROJ_MOD_SEL_ID, parent_id:parentId||null, component_name:name, percentage:pct};
+  try{
+    toast('Saving...','info');
+    if(editId) await sbUpdate('schedule_h', editId, data);
+    else await sbInsert('schedule_h', data);
+    closeSchhSheet();
+    schhLoadItems();
+    toast('Saved','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function schhDelete(id){
+  if(!confirm('Delete this component?\nAny sub-components under it will also be deleted.'))return;
+  try{
+    await sbDelete('schedule_h', id);
+    schhLoadItems();
+    toast('Deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ════ SCHEDULE B (Scope of Project, linked to Schedule H components) ════
+var SCHB_ITEMS=[], SCHB_SCHH_OPTIONS=[];
+async function schbLoadItems(){
+  var projId=PROJ_MOD_SEL_ID;
+  var el=document.getElementById('schb-content');
+  if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';SCHB_ITEMS=[];return;}
+  if(el)el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+  try{
+    var r=await Promise.all([
+      sbFetch('schedule_b',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'}),
+      sbFetch('schedule_h',{select:'id,component_name,parent_id',filter:'project_id=eq.'+projId})
+    ]);
+    SCHB_ITEMS=Array.isArray(r[0])?r[0]:[];
+    SCHB_SCHH_OPTIONS=Array.isArray(r[1])?r[1]:[];
+  }catch(e){SCHB_ITEMS=[];console.error(e);}
+  schbRender();
+}
+function schhLabel(id){
+  var item=SCHB_SCHH_OPTIONS.find(function(i){return i.id===id;});
+  if(!item) return null;
+  var parent=item.parent_id?SCHB_SCHH_OPTIONS.find(function(i){return i.id===item.parent_id;}):null;
+  return parent ? (parent.component_name+' \u2192 '+item.component_name) : item.component_name;
+}
+function schbRender(){
+  var el=document.getElementById('schb-content');if(!el)return;
+  if(!SCHB_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128220;</div><div style="font-weight:700;margin-top:10px;">No Scope of Project items yet</div><div style="font-size:12px;margin-top:6px;">Tap + to add, optionally linked to a Schedule H component</div></div>';return;}
+
+  el.innerHTML=SCHB_ITEMS.map(function(item){
+    var linkLabel=item.linked_schedule_h_id?schhLabel(item.linked_schedule_h_id):null;
+    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;padding:12px 14px;">'+
+      '<div style="font-size:13px;font-weight:700;line-height:1.4;">'+item.scope_description+'</div>'+
+      (linkLabel?'<div style="margin-top:6px;"><span style="font-size:10px;background:var(--bg);color:var(--text2);border:1px solid var(--border);padding:3px 9px;border-radius:6px;font-weight:700;">&#128202; '+linkLabel+'</span></div>':'')+
+      '<div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;">'+
+        '<button onclick="schbOpenAdd(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button>'+
+        '<button onclick="schbDelete(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+function schbOpenAdd(editId){
+  var v=editId?(SCHB_ITEMS.find(function(i){return i.id===editId;})||{}):{};
+  var schhOpts='<option value="">\u2014 Not linked \u2014</option>'+
+    SCHB_SCHH_OPTIONS.filter(function(i){return !i.parent_id;}).map(function(main){
+      var opt='<option value="'+main.id+'"'+(v.linked_schedule_h_id===main.id?' selected':'')+'>'+main.component_name+'</option>';
+      var children=SCHB_SCHH_OPTIONS.filter(function(c){return c.parent_id===main.id;});
+      opt+=children.map(function(c){return '<option value="'+c.id+'"'+(v.linked_schedule_h_id===c.id?' selected':'')+'>&nbsp;&nbsp;\u2192 '+main.component_name+' \u2192 '+c.component_name+'</option>';}).join('');
+      return opt;
+    }).join('');
+
+  document.getElementById('schb-sheet-title').textContent = editId?'Edit Scope Item':'New Scope Item';
+  document.getElementById('schb-sheet-body').innerHTML=
+    '<label class="flbl">Scope Description *</label><textarea id="schb-desc" class="ftxt" rows="4" placeholder="Describe this scope of work item...">'+(v.scope_description||'')+'</textarea>'+
+    '<label class="flbl">Linked Schedule H Component</label><select id="schb-link" class="fsel">'+schhOpts+'</select>'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">Optional \u2014 ties this scope item to the billing component it belongs to.</div>';
+  document.getElementById('schb-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSchbSheet()">Cancel</button>'+
+    '<button class="btn" style="background:var(--accent);color:white;" onclick="schbSave(\''+(editId||'')+'\')">&#10003; '+(editId?'Save':'Add')+'</button>';
+  openSchbSheet();
+}
+function openSchbSheet(){openSheet('ov-schb','sh-schb');}
+function closeSchbSheet(){closeSheet('ov-schb','sh-schb');}
+async function schbSave(editId){
+  var desc=gv('schb-desc');
+  var link=(document.getElementById('schb-link')||{}).value||null;
+  if(!desc){toast('Enter a scope description','warning');return;}
+  var data={project_id:PROJ_MOD_SEL_ID, scope_description:desc, linked_schedule_h_id:link||null};
+  try{
+    toast('Saving...','info');
+    if(editId) await sbUpdate('schedule_b', editId, data);
+    else await sbInsert('schedule_b', data);
+    closeSchbSheet();
+    schbLoadItems();
+    toast('Saved','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function schbDelete(id){
+  if(!confirm('Delete this scope item?'))return;
+  try{
+    await sbDelete('schedule_b', id);
+    schbLoadItems();
+    toast('Deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 // ════ JM ════════════════════════════════════════════════
@@ -23764,6 +23967,8 @@ var AC_MODS=[
   // Project Module — each tab individual, with view/edit/add/delete
   {key:'proj-projects',    label:'Projects',           icon:'&#127959;',group:'Project Module',params:['view','add','edit','delete']},
   {key:'proj-boq',         label:'BOQ Items',          icon:'&#128203;',group:'Project Module',params:['view','add','edit','delete']},
+  {key:'proj-schh',        label:'Schedule H',         icon:'&#128202;',group:'Project Module',params:['view','add','edit','delete']},
+  {key:'proj-schb',        label:'Schedule B',         icon:'&#128220;',group:'Project Module',params:['view','add','edit','delete']},
   {key:'proj-jm',          label:'Joint Measurements', icon:'&#128208;',group:'Project Module',params:['view','add','edit','delete']},
   {key:'proj-planning',    label:'Planning',           icon:'&#128230;',group:'Project Module',params:['view','add','edit','delete']},
   {key:'proj-execution',   label:'Work Allotment',     icon:'&#128221;',group:'Project Module',params:['view','add','edit','delete']},
