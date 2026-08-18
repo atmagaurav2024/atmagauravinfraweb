@@ -8166,8 +8166,20 @@ function updateDashboardUser(){
   var role = currentUser.access||currentUser.role||'—';
   var project = currentUser.project||'All Projects';
 
-  // Update name
-  document.querySelectorAll('#dash-name').forEach(function(el){ el.textContent = name; });
+  // Update name — font-size set directly here via JS (not left to a CSS
+  // media query alone) specifically because this kept reappearing at
+  // the old larger size on mobile even after three separate CSS fixes,
+  // most likely stale Mobile Safari tab caching. Setting it inline,
+  // every time this function runs (i.e. on every login), guarantees the
+  // correct size regardless of what CSS the browser has cached.
+  document.querySelectorAll('#dash-name').forEach(function(el){
+    el.textContent = name;
+    if(window.innerWidth<=600){
+      var size = name.length>18 ? 15 : name.length>12 ? 17 : 20;
+      el.style.setProperty('font-size', size+'px', 'important');
+      el.style.setProperty('line-height', '1.25', 'important');
+    }
+  });
   document.querySelectorAll('#dash-role').forEach(function(el){ el.textContent = role + ' • ' + project; });
 
   // Update greeting
