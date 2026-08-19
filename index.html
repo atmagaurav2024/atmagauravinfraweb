@@ -6106,6 +6106,34 @@ async function sbFetch(table, options={}){
   document.title = 'Rydax — Construction Management';
 })();
 
+// Fire-and-forget audit logging: never awaited by callers, wrapped in
+// its own try/catch, so a logging failure (network blip, RLS issue,
+// whatever) can never surface as an error in the actual operation
+// that triggered it. Deliberately excludes audit_log itself (no
+// point logging the logger) and skips when there's no company
+// context yet (e.g. pre-login signup inserts, which aren't
+// meaningfully "auditable" against a company that doesn't exist yet).
+var AUDIT_EXCLUDE_TABLES = ['audit_log'];
+function logAudit(action, table, recordId, changes){
+  if(AUDIT_EXCLUDE_TABLES.indexOf(table)>-1) return;
+  if(typeof currentUser==='undefined' || !currentUser || !currentUser.companyId) return;
+  try{
+    fetch(SUPABASE_URL+'/rest/v1/audit_log',{
+      method:'POST',
+      headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(currentUser.accessToken||SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({
+        company_id: currentUser.companyId,
+        user_id: currentUser.id||null,
+        user_name: currentUser.name||'Unknown',
+        action: action,
+        table_name: table,
+        record_id: recordId!=null?String(recordId):null,
+        changes: changes!=null?changes:null
+      })
+    }).catch(function(){});
+  }catch(e){}
+}
+
 async function sbInsert(table, data){
   var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
     method:'POST',
@@ -6113,7 +6141,10 @@ async function sbInsert(table, data){
     body:JSON.stringify(data)
   });
   if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
-  return res.json();
+  var result = await res.json();
+  var newRow = Array.isArray(result)&&result.length?result[0]:result;
+  logAudit('create', table, newRow&&newRow.id, data);
+  return result;
 }
 
 // return=representation (used by sbInsert above) makes PostgREST
@@ -6143,7 +6174,9 @@ async function sbUpdate(table, id, data){
     body:JSON.stringify(data)
   });
   if(!res.ok){var e=await res.json().catch(function(){return{};});throw Object.assign(new Error(e.message||res.statusText),{status:res.status,data:e});}
-  return res.json();
+  var result = await res.json();
+  logAudit('update', table, id, data);
+  return result;
 }
 
 async function sbDelete(table, id){
@@ -6151,6 +6184,7 @@ async function sbDelete(table, id){
     method:'DELETE',
     headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json'}
   });
+  if(res.ok) logAudit('delete', table, id, null);
   return res.ok;
 }
 
@@ -12137,7 +12171,9 @@ async function empSavePay(){
     <div style="display:flex;gap:8px;margin-bottom:14px;">
       <button id="ac-tab-emp" onclick="acSwitchTab('emp')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:none;font-family:'Nunito',sans-serif;background:var(--navy);color:white;">By Employee</button>
       <button id="ac-tab-role" onclick="acSwitchTab('role')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);font-family:'Nunito',sans-serif;background:white;color:var(--text2);">By Role</button>
+      <button id="ac-tab-audit" onclick="acSwitchTab('audit')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);font-family:'Nunito',sans-serif;background:white;color:var(--text2);">Audit Log</button>
     </div>
+    <div id="ac-perms-wrap">
     <div id="ac-selector" style="margin-bottom:14px;"><select id="ac-emp-sel" class="fsel" style="width:100%;" onchange="acLoadPerms()"><option value="">&#9203; Loading employees...</option></select></div>
 
     <!-- Data Access Scope -->
@@ -12166,8 +12202,28 @@ async function empSavePay(){
     </div>
 
     <div id="ac-modules-list"><div style="text-align:center;padding:40px;color:var(--text3);">Select employee or role</div></div>
+    </div>
+
+    <div id="ac-audit-wrap" style="display:none;">
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="audit-f-table" class="fsel" style="flex:1;min-width:120px;" onchange="auditLoad()"><option value="">All Modules</option></select>
+        <select id="audit-f-user" class="fsel" style="flex:1;min-width:120px;" onchange="auditLoad()"><option value="">All Users</option></select>
+        <select id="audit-f-action" class="fsel" style="flex:1;min-width:100px;" onchange="auditLoad()">
+          <option value="">All Actions</option>
+          <option value="create">Created</option>
+          <option value="update">Updated</option>
+          <option value="delete">Deleted</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <input type="date" id="audit-f-from" class="finp" style="flex:1;" onchange="auditLoad()">
+        <input type="date" id="audit-f-to" class="finp" style="flex:1;" onchange="auditLoad()">
+      </div>
+      <div id="audit-list"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
+      <button id="audit-load-more" onclick="auditLoadMore()" style="display:none;width:100%;padding:10px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--text2);font-weight:700;font-size:12.5px;cursor:pointer;margin-top:8px;">Load more</button>
+    </div>
   </div>
-  <div style="padding:12px 14px;background:white;border-top:1px solid var(--border);flex-shrink:0;padding-bottom:calc(12px + 60px);">
+  <div id="ac-save-bar" style="padding:12px 14px;background:white;border-top:1px solid var(--border);flex-shrink:0;padding-bottom:calc(12px + 60px);">
     <button onclick="acSavePermissions()" style="width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:12px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;">&#128190; Save Permissions</button>
   </div>
 </div>
@@ -24307,21 +24363,120 @@ function initAccess(){ acInitModule(); }
 
 async function acSwitchTab(tab){
   AC_TAB=tab; AC_TARGET=null; AC_PERMISSIONS={};
-  var eb=document.getElementById('ac-tab-emp'),rb=document.getElementById('ac-tab-role'),sd=document.getElementById('ac-selector');
+  var eb=document.getElementById('ac-tab-emp'),rb=document.getElementById('ac-tab-role'),ab=document.getElementById('ac-tab-audit');
+  var sd=document.getElementById('ac-selector');
   var ml=document.getElementById('ac-modules-list');
+  var permsWrap=document.getElementById('ac-perms-wrap'), auditWrap=document.getElementById('ac-audit-wrap'), saveBar=document.getElementById('ac-save-bar');
+  [eb,rb,ab].forEach(function(b){ if(b){b.style.background='white';b.style.color='var(--text2)';b.style.border='1.5px solid var(--border)';} });
+
+  if(tab==='audit'){
+    if(ab){ab.style.background='var(--navy)';ab.style.color='white';ab.style.border='none';}
+    if(permsWrap) permsWrap.style.display='none';
+    if(saveBar) saveBar.style.display='none';
+    if(auditWrap) auditWrap.style.display='block';
+    auditInit();
+    return;
+  }
+  if(permsWrap) permsWrap.style.display='block';
+  if(saveBar) saveBar.style.display='block';
+  if(auditWrap) auditWrap.style.display='none';
+
   if(tab==='emp'){
     if(eb){eb.style.background='var(--navy)';eb.style.color='white';eb.style.border='none';}
-    if(rb){rb.style.background='white';rb.style.color='var(--text2)';rb.style.border='1.5px solid var(--border)';}
     if(sd) sd.innerHTML='<select id="ac-emp-sel" class="fsel" style="width:100%;" onchange="acLoadPerms()"><option value="">&#9203; Loading employees...</option></select>';
     if(ml) ml.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select an employee to manage permissions</div>';
     await acEmpLoad();
   } else {
     if(rb){rb.style.background='var(--navy)';rb.style.color='white';rb.style.border='none';}
-    if(eb){eb.style.background='white';eb.style.color='var(--text2)';eb.style.border='1.5px solid var(--border)';}
     if(sd) sd.innerHTML='<select id="ac-role-sel" class="fsel" style="width:100%;" onchange="acLoadPerms()"><option value="">&#9203; Loading roles...</option></select>';
     if(ml) ml.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a role to manage permissions</div>';
     await acRoleLoad();
   }
+}
+
+// ════ AUDIT LOG VIEWER ════════════════════════════════════════════
+var AUDIT_ROWS=[], AUDIT_OFFSET=0, AUDIT_PAGE_SIZE=50, AUDIT_EMPS_BY_ID={};
+var AUDIT_TABLE_LABELS={
+  projects:'Projects', boq_items:'BOQ', schedule_h:'Schedule H', schedule_b:'Schedule B',
+  employees:'Employees', attendance:'Attendance',
+  accounts:'Accounts', petty_cash_in:'Petty Cash (Fund)', petty_cash_expenses:'Petty Cash (Expense)',
+  loans_taken:'Loans Taken', loans_given:'Loans Given', loan_payments:'Loan Payments',
+  tpm_assets:'Tools, Plant & Machinery', overheads:'Overheads',
+  registry_items:'Master Registry', access_permissions:'Access Control',
+  companies:'Company Details', plans:'Plans', payment_history:'Payments'
+};
+var AUDIT_ACTION_LABELS={create:['&#10133;','#047857','Created'],update:['&#9998;','#B45309','Updated'],delete:['&#128465;','#E11D48','Deleted']};
+
+async function auditInit(){
+  var tableSel=document.getElementById('audit-f-table'), userSel=document.getElementById('audit-f-user');
+  try{
+    var emps = await sbFetch('employees',{select:'id,first_name,last_name'});
+    (Array.isArray(emps)?emps:[]).forEach(function(e){ AUDIT_EMPS_BY_ID[e.id]=((e.first_name||'')+' '+(e.last_name||'')).trim(); });
+    if(userSel) userSel.innerHTML='<option value="">All Users</option>'+
+      (Array.isArray(emps)?emps:[]).map(function(e){return '<option value="'+e.id+'">'+((e.first_name||'')+' '+(e.last_name||'')).trim()+'</option>';}).join('');
+  }catch(e){}
+  if(tableSel) tableSel.innerHTML='<option value="">All Modules</option>'+
+    Object.keys(AUDIT_TABLE_LABELS).map(function(t){return '<option value="'+t+'">'+AUDIT_TABLE_LABELS[t]+'</option>';}).join('');
+  auditLoad();
+}
+
+function auditBuildFilter(offset){
+  var parts=[];
+  var t=gv('audit-f-table'); if(t) parts.push('table_name=eq.'+t);
+  var u=gv('audit-f-user'); if(u) parts.push('user_id=eq.'+u);
+  var a=gv('audit-f-action'); if(a) parts.push('action=eq.'+a);
+  var from=gv('audit-f-from'); if(from) parts.push('created_at=gte.'+from+'T00:00:00');
+  var to=gv('audit-f-to'); if(to) parts.push('created_at=lte.'+to+'T23:59:59');
+  parts.push('limit='+AUDIT_PAGE_SIZE);
+  parts.push('offset='+(offset||0));
+  return parts.join('&');
+}
+
+async function auditLoad(){
+  AUDIT_OFFSET=0; AUDIT_ROWS=[];
+  var list=document.getElementById('audit-list');
+  if(list) list.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+  try{
+    var rows=await sbFetch('audit_log',{select:'*',filter:auditBuildFilter(0),order:'created_at.desc'});
+    AUDIT_ROWS=Array.isArray(rows)?rows:[];
+    AUDIT_OFFSET=AUDIT_ROWS.length;
+  }catch(e){ AUDIT_ROWS=[]; console.error(e); }
+  auditRender();
+}
+
+async function auditLoadMore(){
+  try{
+    var rows=await sbFetch('audit_log',{select:'*',filter:auditBuildFilter(AUDIT_OFFSET),order:'created_at.desc'});
+    var newRows=Array.isArray(rows)?rows:[];
+    AUDIT_ROWS=AUDIT_ROWS.concat(newRows);
+    AUDIT_OFFSET+=newRows.length;
+  }catch(e){}
+  auditRender();
+}
+
+function auditRender(){
+  var list=document.getElementById('audit-list'), more=document.getElementById('audit-load-more');
+  if(!list) return;
+  if(!AUDIT_ROWS.length){ list.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No matching activity found</div>'; if(more)more.style.display='none'; return; }
+
+  list.innerHTML=AUDIT_ROWS.map(function(r){
+    var al=AUDIT_ACTION_LABELS[r.action]||['&#9679;','#57534E',r.action];
+    var moduleLabel=AUDIT_TABLE_LABELS[r.table_name]||r.table_name;
+    var dt=new Date(r.created_at);
+    var dateStr=dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    var timeStr=dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'+
+        '<div style="display:flex;align-items:center;gap:8px;">'+
+          '<span style="font-size:9.5px;font-weight:800;background:'+al[1]+'20;color:'+al[1]+';padding:3px 9px;border-radius:10px;white-space:nowrap;">'+al[0]+' '+al[2]+'</span>'+
+          '<span style="font-size:12.5px;font-weight:800;">'+moduleLabel+'</span>'+
+        '</div>'+
+        '<div style="font-size:10.5px;color:var(--text3);text-align:right;white-space:nowrap;">'+dateStr+' &middot; '+timeStr+'</div>'+
+      '</div>'+
+      '<div style="font-size:11.5px;color:var(--text2);margin-top:6px;">by <b>'+(r.user_name||'Unknown')+'</b>'+(r.record_id?' &middot; record '+String(r.record_id).slice(0,8):'')+'</div>'+
+    '</div>';
+  }).join('');
+  if(more) more.style.display = (AUDIT_ROWS.length>0 && AUDIT_ROWS.length%AUDIT_PAGE_SIZE===0) ? 'block' : 'none';
 }
 
 // Banner explaining where an employee's permissions come from
