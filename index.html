@@ -3984,6 +3984,7 @@ function paOpenPlanForm(planId){
     '<div class="fgrp"><label class="flbl">Price per Month (\u20b9)</label><input class="finp" id="pa-plan-price" type="number" step="0.01" value="'+(p?p.price_monthly:'0')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Max Employees (blank = unlimited)</label><input class="finp" id="pa-plan-maxemp" type="number" value="'+(p&&p.max_employees!=null?p.max_employees:'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Max Projects (blank = unlimited)</label><input class="finp" id="pa-plan-maxproj" type="number" value="'+(p&&p.max_projects!=null?p.max_projects:'')+'"></div>'+
+    '<div class="fgrp"><label class="flbl">Razorpay Plan ID (for autopay)</label><input class="finp" id="pa-plan-rzpid" value="'+(p&&p.razorpay_plan_id?p.razorpay_plan_id:'')+'" placeholder="plan_..."><div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Create a matching recurring Plan in Razorpay Dashboard \u2192 Subscriptions \u2192 Plans (same amount, monthly interval), then paste its ID here. Leave blank and this plan can\'t be subscribed to via autopay.</div></div>'+
     '<div class="fgrp"><label class="flbl">Locked Modules</label>'+
       acGroupOrder.map(function(grp){
         return '<div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px;">'+grp+'</div>'+
@@ -4009,6 +4010,7 @@ async function paSavePlan(planId){
     price_monthly:parseFloat(gv('pa-plan-price'))||0,
     max_employees:gv('pa-plan-maxemp')?parseInt(gv('pa-plan-maxemp'),10):null,
     max_projects:gv('pa-plan-maxproj')?parseInt(gv('pa-plan-maxproj'),10):null,
+    razorpay_plan_id:gv('pa-plan-rzpid')||null,
     locked_modules:lockedModules,
     is_default:!!(document.getElementById('pa-plan-default')||{}).checked
   };
@@ -24630,6 +24632,11 @@ function companyRender(){
         '<div style="font-size:11px;color:var(--text3);margin-top:6px;">Trial ends '+fmtDate(String(COMPANY_BILLING.trial_ends_at).slice(0,10))+'</div>':'')+
       (COMPANY_BILLING.subscription_status==='lapsed'?
         '<div style="font-size:11px;color:#E11D48;font-weight:700;margin-top:6px;">Your subscription has lapsed — you have read-only access until you subscribe again.</div>':'')+
+      (COMPANY_BILLING.subscription_status==='active' && COMPANY_BILLING.razorpay_subscription_id?
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #E7E5E4;">'+
+          '<div style="font-size:11px;color:var(--text3);">&#128257; Autopay active'+(COMPANY_BILLING.next_billing_date?' \u00b7 next charge '+fmtDate(COMPANY_BILLING.next_billing_date):'')+'</div>'+
+          '<button onclick="companyCancelAutopay()" style="background:none;border:none;color:#E11D48;font-size:11px;font-weight:700;cursor:pointer;text-decoration:underline;">Cancel autopay</button>'+
+        '</div>':'')+
     '</div>'+
     (upgrades.map(function(p){
       return '<div style="display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#F5F3FF,#FFFFFF);border:1.5px solid #C4B5FD;border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
@@ -24795,39 +24802,37 @@ async function companySubscribeToPlan(planId){
   if(!currentUser || !currentUser.accessToken){ toast('Please log in again','warning'); return; }
   try{
     toast('Preparing checkout...','info');
-    var orderRes = await fetch(SUPABASE_URL+'/functions/v1/create-razorpay-order',{
+    var subRes = await fetch(SUPABASE_URL+'/functions/v1/create-razorpay-subscription',{
       method:'POST',
       headers:{'Authorization':'Bearer '+currentUser.accessToken,'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
       body:JSON.stringify({plan_id:planId})
     });
-    var order = await orderRes.json();
-    if(!orderRes.ok || order.error){ toast('Could not start checkout: '+(order.error||'unknown error'),'error'); return; }
+    var sub = await subRes.json();
+    if(!subRes.ok || sub.error){ toast('Could not start checkout: '+(sub.error||'unknown error'),'error'); return; }
 
     if(typeof Razorpay==='undefined'){ toast('Payment system failed to load — check your connection and try again','error'); return; }
 
     var rzp = new Razorpay({
-      key: order.key_id,
-      amount: order.amount,
-      currency: order.currency,
+      key: sub.key_id,
+      subscription_id: sub.subscription_id,
       name: 'Rydax',
-      description: order.plan_name+' Plan Subscription',
-      order_id: order.order_id,
+      description: sub.plan_name+' Plan — Autopay Subscription',
       handler: async function(response){
         toast('Verifying payment...','info');
         try{
-          var verifyRes = await fetch(SUPABASE_URL+'/functions/v1/verify-razorpay-payment',{
+          var verifyRes = await fetch(SUPABASE_URL+'/functions/v1/verify-razorpay-subscription',{
             method:'POST',
             headers:{'Authorization':'Bearer '+currentUser.accessToken,'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
             body:JSON.stringify({
-              razorpay_order_id:response.razorpay_order_id,
+              razorpay_subscription_id:response.razorpay_subscription_id,
               razorpay_payment_id:response.razorpay_payment_id,
               razorpay_signature:response.razorpay_signature,
-              company_id: order.company_id, plan_id: order.plan_id, amount: order.amount
+              company_id: sub.company_id, plan_id: sub.plan_id, amount: sub.amount
             })
           });
           var verify = await verifyRes.json();
           if(verifyRes.ok && verify.success){
-            toast('Subscription activated! Thank you.','success');
+            toast('Autopay activated! You\'ll be billed automatically each month.','success');
             initCompany();
           } else {
             toast('Payment verification failed: '+(verify.error||'unknown error')+' — contact support if you were charged','error');
@@ -24835,12 +24840,30 @@ async function companySubscribeToPlan(planId){
         }catch(e){ toast('Verification error: '+e.message,'error'); }
       },
       modal:{ ondismiss:function(){ toast('Checkout cancelled','info'); } },
-      theme:{ color:'#7C3AED' }
+      theme:{ color:'#0D2137' }
     });
     rzp.open();
   }catch(e){
     toast('Error: '+e.message,'error');
   }
+}
+
+async function companyCancelAutopay(){
+  if(!confirm('Cancel autopay?\nYou\'ll keep access until the end of your current billing period, then won\'t be charged again.'))return;
+  try{
+    toast('Cancelling...','info');
+    var res = await fetch(SUPABASE_URL+'/functions/v1/cancel-razorpay-subscription',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+currentUser.accessToken,'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY}
+    });
+    var result = await res.json();
+    if(res.ok && result.success){
+      toast('Autopay cancelled — you\'ll keep access until your current period ends','success');
+      initCompany();
+    } else {
+      toast('Could not cancel: '+(result.error||'unknown error'),'error');
+    }
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 // Track pending file uploads
