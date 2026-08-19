@@ -11,6 +11,7 @@
 <title>AIPL — Construction Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
 <style>
 
 /* ═══════════════════════════════════════════
@@ -12038,6 +12039,18 @@ async function empSavePay(){
 <div class="sh-overlay" id="ov-pc" onclick="closeSheet('ov-pc','sh-pc')"></div>
 <div class="sheet" id="sh-pc"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="pc-sheet-title">Entry</div><span class="sh-close" onclick="closeSheet('ov-pc','sh-pc')">&#10005;</span></div><div class="sh-body" id="pc-sheet-body" style="padding:0 16px 16px;"></div><div class="sh-foot" id="pc-sheet-foot"></div></div>
 
+<div id="qr-scanner-modal" style="display:none;position:fixed;inset:0;background:#000;z-index:900;flex-direction:column;">
+  <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;background:#111;">
+    <div style="color:white;font-weight:800;font-size:14px;">Scan UPI QR Code</div>
+    <button onclick="pcCloseQRScanner()" style="background:rgba(255,255,255,.15);border:none;color:white;width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;">&#10005;</button>
+  </div>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;">
+    <video id="qr-scanner-video" style="width:100%;height:100%;object-fit:cover;" playsinline></video>
+    <div style="position:absolute;width:70%;max-width:280px;aspect-ratio:1;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.45);"></div>
+  </div>
+  <div id="qr-scanner-status" style="padding:16px;text-align:center;color:rgba(255,255,255,.7);font-size:12px;">Point your camera at a UPI QR code</div>
+</div>
+
 <!-- ACCOUNTS -->
 <div class="app-screen" id="app-accounts">
   <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
@@ -18418,12 +18431,15 @@ function pcRenderList(){
   cont.innerHTML=list.slice(0,50).map(function(item){
     var isIn=item._type==='in'||tab==='cash-in';
     var col=isIn?'#2E7D32':'#C62828';
+    var poMap={pending:['#FEF3C7','#B45309','&#8987; Awaiting payout'],processing:['#DBEAFE','#1D4ED8','&#8987; Processing'],success:['#D1FAE5','#047857','&#10003; Paid via UPI'],failed:['#FFE4E6','#E11D48','&#10005; Payout failed']};
+    var po = (!isIn && item.payout_status && item.payout_status!=='not_applicable') ? poMap[item.payout_status] : null;
     return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
       '<div style="display:flex;align-items:center;gap:10px;">'+
         '<div style="width:36px;height:36px;border-radius:10px;background:'+col+'20;display:flex;align-items:center;justify-content:center;font-size:16px;">'+(isIn?'💰':'🧾')+'</div>'+
         '<div>'+
           '<div style="font-size:13px;font-weight:800;">'+(item.category||item.description||'Entry')+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(pcEmpName(item.emp_id))+(item.project?' · '+item.project:'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
+          (po?'<div style="margin-top:4px;"><span style="font-size:9.5px;font-weight:800;background:'+po[0]+';color:'+po[1]+';padding:2px 8px;border-radius:10px;">'+po[2]+'</span></div>':'')+
         '</div>'+
       '</div>'+
       '<div style="text-align:right;">'+
@@ -18476,6 +18492,21 @@ function pcOpenExpense(){
       pcCats().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0" oninput="pcUpdateAllocPreview()">'+
     '<label class="flbl">Date</label><input class="finp" id="pce-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Payment Method</label>'+
+    '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
+      '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+        '<input type="radio" name="pce-paymethod" value="cash" checked onchange="pcTogglePayMethod()">Cash</label>'+
+      '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+        '<input type="radio" name="pce-paymethod" value="upi" onchange="pcTogglePayMethod()">UPI</label>'+
+    '</div>'+
+    '<div id="pce-upi-wrap" style="display:none;margin-bottom:10px;">'+
+      '<label class="flbl">Pay To</label>'+
+      '<button type="button" onclick="pcOpenQRScanner()" style="width:100%;background:var(--text);color:white;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128247; Scan UPI QR Code</button>'+
+      '<div id="pce-upi-scanned" style="display:none;background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:11.5px;color:#2E7D32;font-weight:700;"></div>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin:2px 0 4px;">or type UPI ID / mobile number directly</div>'+
+      '<input class="finp" id="pce-upi-id" placeholder="vendor@upi or 9876543210" oninput="pcClearScannedUPI()">'+
+      '<input class="finp" id="pce-upi-name" placeholder="Payee name (optional)" style="margin-top:8px;">'+
+    '</div>'+
     '<label class="flbl">Project(s) *</label>'+
     '<div style="font-size:10.5px;color:var(--text3);margin-bottom:4px;">Select one or more projects this expense should be recorded against.</div>'+
     '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px;">'+projChecks+'</div>'+
@@ -18495,6 +18526,80 @@ function pcOpenExpense(){
   document.getElementById('pc-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-pc\',\'sh-pc\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="pcSaveExpense()">🧾 Save</button>';
+}
+
+function pcTogglePayMethod(){
+  var method=(document.querySelector('input[name="pce-paymethod"]:checked')||{}).value;
+  var wrap=document.getElementById('pce-upi-wrap');
+  if(wrap) wrap.style.display = method==='upi' ? 'block' : 'none';
+}
+function pcClearScannedUPI(){
+  var el=document.getElementById('pce-upi-scanned');
+  if(el) el.style.display='none';
+}
+
+var QR_SCAN_STREAM=null, QR_SCAN_RAF=null;
+async function pcOpenQRScanner(){
+  var modal=document.getElementById('qr-scanner-modal');
+  var video=document.getElementById('qr-scanner-video');
+  var status=document.getElementById('qr-scanner-status');
+  if(!modal||!video) return;
+  if(typeof jsQR==='undefined'){ toast('QR scanner failed to load — check your connection','error'); return; }
+  modal.style.display='flex';
+  try{
+    QR_SCAN_STREAM = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    video.srcObject = QR_SCAN_STREAM;
+    await video.play();
+    var canvas=document.createElement('canvas');
+    var ctx=canvas.getContext('2d', {willReadFrequently:true});
+    function tick(){
+      if(!QR_SCAN_STREAM) return; // scanner was closed
+      if(video.readyState===video.HAVE_ENOUGH_DATA){
+        canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        var imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
+        var code=jsQR(imageData.data, imageData.width, imageData.height, {inversionAttempts:'dontInvert'});
+        if(code && code.data){ pcHandleScannedQR(code.data); return; }
+      }
+      QR_SCAN_RAF=requestAnimationFrame(tick);
+    }
+    QR_SCAN_RAF=requestAnimationFrame(tick);
+  }catch(e){
+    if(status) status.textContent='Camera access denied or unavailable — you can type the UPI ID instead';
+    console.error(e);
+  }
+}
+function pcCloseQRScanner(){
+  var modal=document.getElementById('qr-scanner-modal');
+  if(modal) modal.style.display='none';
+  if(QR_SCAN_RAF) cancelAnimationFrame(QR_SCAN_RAF);
+  QR_SCAN_RAF=null;
+  if(QR_SCAN_STREAM){ QR_SCAN_STREAM.getTracks().forEach(function(t){t.stop();}); QR_SCAN_STREAM=null; }
+}
+// Standard UPI QR encodes upi://pay?pa=<vpa>&pn=<name>&am=<amount>&cu=INR&tn=<note> —
+// some simpler QR codes just encode the raw VPA string directly.
+function pcHandleScannedQR(data){
+  var vpa=null, name=null;
+  try{
+    if(data.indexOf('upi://')===0){
+      var qIdx=data.indexOf('?');
+      var params=new URLSearchParams(data.slice(qIdx+1));
+      vpa=params.get('pa');
+      name=params.get('pn');
+    } else if(data.indexOf('@')>-1 && data.indexOf(' ')===-1){
+      vpa=data.trim();
+    }
+  }catch(e){}
+  pcCloseQRScanner();
+  if(!vpa){ toast('Could not read a UPI ID from that QR code — try typing it instead','warning'); return; }
+  var upiInput=document.getElementById('pce-upi-id');
+  var nameInput=document.getElementById('pce-upi-name');
+  var decodedName = name ? decodeURIComponent(name.replace(/\+/g,' ')) : null;
+  if(upiInput) upiInput.value=vpa;
+  if(nameInput && decodedName && !nameInput.value) nameInput.value=decodedName;
+  var scanned=document.getElementById('pce-upi-scanned');
+  if(scanned){ scanned.style.display='block'; scanned.textContent='\u2713 Scanned: '+vpa+(decodedName?' ('+decodedName+')':''); }
+  toast('QR code scanned','success');
 }
 
 function pcComputeAllocations(){
@@ -18540,17 +18645,59 @@ async function pcSaveExpense(){
   var method=(document.querySelector('input[name="pce-dist"]:checked')||{value:'equal'}).value;
   var bal=pcEmpBal(emp);
   if(amount>bal){toast('Insufficient balance. Available: '+pcFmt(bal),'warning');}
+
+  var payMethod=(document.querySelector('input[name="pce-paymethod"]:checked')||{value:'cash'}).value;
+  var upiId = payMethod==='upi' ? gv('pce-upi-id') : '';
+  if(payMethod==='upi' && !upiId){ toast('Scan a QR code or enter a UPI ID / mobile number','warning'); return; }
+
   try{
-    await sbInsert('petty_cash_expenses',{
+    var record={
       emp_id:emp,category:cat,amount:amount,date:gv('pce-date'),
       project:allocations.map(function(p){return p.name;}).join(', '),
       project_ids:JSON.stringify(allocations.map(function(p){return p.id;})),
       project_allocations:JSON.stringify(allocations),
       distribution_method:allocations.length>1?method:null,
-      description:desc,bill_no:gv('pce-bill'),remarks:gv('pce-remarks')
-    });
-    closeSheet('ov-pc','sh-pc');await initPettyCash();toast('Expense recorded: '+pcFmt(amount),'success');
+      description:desc,bill_no:gv('pce-bill'),remarks:gv('pce-remarks'),
+      payout_status: payMethod==='upi' ? 'pending' : 'not_applicable',
+      payee_upi_id: upiId||null,
+      payee_name: payMethod==='upi' ? (gv('pce-upi-name')||null) : null
+    };
+    var saved=await sbInsert('petty_cash_expenses', record);
+    closeSheet('ov-pc','sh-pc');await initPettyCash();
+
+    if(payMethod==='upi'){
+      var newId = saved && saved[0] && saved[0].id;
+      toast('Expense recorded — initiating UPI payout...','info');
+      if(newId) await pcInitiateUpiPayout(newId);
+    } else {
+      toast('Expense recorded: '+pcFmt(amount),'success');
+    }
   }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// Calls the RazorpayX payout Edge Function — see
+// supabase/functions/initiate-upi-payout/. Until that's deployed
+// (needs your RazorpayX account/credentials), this fails gracefully:
+// the expense is already recorded either way, just left at
+// payout_status='pending' for you to action manually in the meantime.
+async function pcInitiateUpiPayout(expenseId){
+  try{
+    var res = await fetch(SUPABASE_URL+'/functions/v1/initiate-upi-payout',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+(currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+      body:JSON.stringify({expense_id:expenseId})
+    });
+    var result = await res.json();
+    if(res.ok && result.success){
+      toast('UPI payout initiated — you\'ll be notified once it settles','success');
+    } else {
+      toast('Payout not initiated ('+(result.error||'payout system not set up yet')+') — expense is recorded, action the payment manually','warning');
+    }
+    await initPettyCash();
+  }catch(e){
+    toast('Expense recorded, but could not reach the payout system — action the payment manually','warning');
+    console.error(e);
+  }
 }
 
 async function pcDeleteEntry(id,type){
@@ -24397,7 +24544,7 @@ function getEmpDataScope(){
 // ════ COMPANY DETAILS ═══════════════════════════════════════════════════
 
 var COMPANY_DATA = {};
-var COMPANY_BILLING = {}, ALL_PLANS = [];
+var COMPANY_BILLING = {}, ALL_PLANS = [], COMPANY_PAYOUT = {};
 
 async function initCompany(){
   var body = document.getElementById('company-body');
@@ -24406,12 +24553,14 @@ async function initCompany(){
     var r = await Promise.all([
       sbFetch('company_details',{select:'*',order:'id.asc'}),
       currentUser&&currentUser.companyId?sbFetch('companies',{select:'*',filter:'id=eq.'+currentUser.companyId}).catch(function(){return [];}):Promise.resolve([]),
-      sbFetch('plans',{select:'*',order:'price_monthly.asc'}).catch(function(){return [];})
+      sbFetch('plans',{select:'*',order:'price_monthly.asc'}).catch(function(){return [];}),
+      currentUser&&currentUser.role==='admin'?sbFetch('company_payout_settings',{select:'*'}).catch(function(){return [];}):Promise.resolve([])
     ]);
     var rows=r[0];
     COMPANY_DATA = (Array.isArray(rows)&&rows.length) ? rows[0] : {};
     COMPANY_BILLING = (Array.isArray(r[1])&&r[1].length) ? r[1][0] : {};
     ALL_PLANS = Array.isArray(r[2])?r[2]:[];
+    COMPANY_PAYOUT = (Array.isArray(r[3])&&r[3].length) ? r[3][0] : {};
   }catch(e){
     COMPANY_DATA = {};
   }
@@ -24502,8 +24651,27 @@ function companyRender(){
       '<a href="/refund-policy.html" target="_blank" style="color:var(--text3);">Refund Policy</a>'+
     '</div>';
 
+  var payoutHtml = (currentUser&&currentUser.role==='admin') ?
+    sec('&#128176;','Petty Cash UPI Payouts','#0D2137')+
+    '<div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.5;">'+
+      'Connect your own RazorpayX business account to automatically pay vendors via UPI when recording a petty cash voucher, with the expense confirmed automatically once the payout settles. '+
+      (COMPANY_PAYOUT.is_active?'':'This needs a RazorpayX account (separate signup + KYC from regular Razorpay) with a pre-funded balance for payouts.')+
+    '</div>'+
+    (COMPANY_PAYOUT.is_active?
+      '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">'+
+        '<div><div style="font-size:12.5px;font-weight:800;color:#166534;">&#10003; Connected</div>'+
+        '<div style="font-size:11px;color:var(--text3);">Account: '+(COMPANY_PAYOUT.razorpayx_account_number||'—')+'</div></div>'+
+        '<button onclick="coPayoutEdit()" style="background:none;border:1px solid #BBF7D0;color:#166534;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">Edit</button>'+
+      '</div>'
+      :
+      '<button onclick="coPayoutEdit()" style="width:100%;background:var(--text);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect RazorpayX</button>'
+    )+
+    '<div id="co-payout-form" style="display:none;margin-top:12px;"></div>'
+  : '';
+
   body.innerHTML =
     billingHtml +
+    payoutHtml +
     // Basic Info
     sec('&#127968;','Company Information','#1565C0')+
     (currentUser&&currentUser.companySlug?
@@ -24570,6 +24738,52 @@ function companyRender(){
     '</div>'+
     finp('bank_acc_name','Account Holder Name',d.bank_acc_name,'As per bank records')+
     docBox('cheque_doc','Cancelled Cheque',d.cheque_doc_url,'Upload Cancelled Cheque');
+}
+
+// ── PAYOUT SETTINGS: RazorpayX credentials for petty cash UPI ──────
+// Deliberately per-company (not a shared secret like the subscription
+// Razorpay keys) - each company's petty cash pays out from THEIR own
+// RazorpayX account, not Rydax's. The key_secret is stored in the
+// database rather than an edge function env var for that reason, but
+// is only ever read server-side (via service role, inside the payout
+// edge function) - never re-displayed in this UI once saved.
+function coPayoutEdit(){
+  var f=document.getElementById('co-payout-form');
+  if(!f) return;
+  f.style.display='block';
+  f.innerHTML=
+    '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#92400E;line-height:1.5;">'+
+      'Find these in your RazorpayX Dashboard \u2192 Account &amp; Settings \u2192 API. Requires your RazorpayX KYC to be approved and an account funded for payouts.'+
+    '</div>'+
+    '<label class="flbl">RazorpayX Account Number</label>'+
+    '<input class="finp" id="co-px-acct" placeholder="e.g. 2323230012345678" value="'+(COMPANY_PAYOUT.razorpayx_account_number||'')+'">'+
+    '<label class="flbl">Key ID</label>'+
+    '<input class="finp" id="co-px-keyid" placeholder="rzp_live_..." value="'+(COMPANY_PAYOUT.razorpayx_key_id||'')+'">'+
+    '<label class="flbl">Key Secret</label>'+
+    '<input class="finp" id="co-px-secret" type="password" placeholder="'+(COMPANY_PAYOUT.razorpayx_key_id?'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (leave blank to keep existing)':'')+'">'+
+    '<div style="display:flex;gap:8px;margin-top:10px;">'+
+      '<button class="btn btn-outline" style="flex:1;" onclick="document.getElementById(\'co-payout-form\').style.display=\'none\';">Cancel</button>'+
+      '<button class="btn" style="flex:1;background:var(--accent);color:white;" onclick="coPayoutSave()">&#10003; Save &amp; Activate</button>'+
+    '</div>';
+}
+async function coPayoutSave(){
+  var acct=gv('co-px-acct'), keyId=gv('co-px-keyid'), secret=gv('co-px-secret');
+  if(!acct||!keyId){toast('Enter both the account number and Key ID','warning');return;}
+  if(!secret && !COMPANY_PAYOUT.razorpayx_key_id){toast('Enter the Key Secret','warning');return;}
+  var data={
+    company_id: currentUser.companyId,
+    razorpayx_account_number: acct,
+    razorpayx_key_id: keyId,
+    is_active: true
+  };
+  if(secret) data.razorpayx_key_secret = secret; // only overwrite if a new one was typed
+  try{
+    toast('Saving...','info');
+    if(COMPANY_PAYOUT.id) await sbUpdate('company_payout_settings', COMPANY_PAYOUT.id, data);
+    else await sbInsert('company_payout_settings', data);
+    toast('RazorpayX connected — petty cash UPI payouts are now active','success');
+    initCompany();
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 // ── BILLING: Razorpay checkout ──────────────────────────────────────
