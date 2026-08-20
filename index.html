@@ -11,7 +11,7 @@
 <title>AIPL — Construction Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<!-- jsQR loaded on-demand in pcOpenQRScanner(), not here — see loadJsQR() -->
 <style>
 
 /* ═══════════════════════════════════════════
@@ -18607,12 +18607,39 @@ function pcClearScannedUPI(){
 }
 
 var QR_SCAN_STREAM=null, QR_SCAN_RAF=null;
+
+// Loads jsQR on demand (not a static <head> script tag — that loaded
+// unconditionally on every page view even for users who never scan a
+// QR code, and gave no way to retry if it failed once, e.g. due to a
+// browser's tracking-prevention feature blocking the CDN). Tries
+// cdnjs first, falls back to jsdelivr if that fails, and caches the
+// in-flight promise so repeated scanner opens don't re-fetch.
+var JSQR_LOAD_PROMISE=null;
+function loadJsQR(){
+  if(typeof jsQR!=='undefined') return Promise.resolve();
+  if(JSQR_LOAD_PROMISE) return JSQR_LOAD_PROMISE;
+  function loadScript(src){
+    return new Promise(function(resolve,reject){
+      var s=document.createElement('script');
+      s.src=src; s.onload=resolve; s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
+  JSQR_LOAD_PROMISE = loadScript('https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js')
+    .catch(function(){ return loadScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'); });
+  return JSQR_LOAD_PROMISE;
+}
+
 async function pcOpenQRScanner(){
   var modal=document.getElementById('qr-scanner-modal');
   var video=document.getElementById('qr-scanner-video');
   var status=document.getElementById('qr-scanner-status');
   if(!modal||!video) return;
-  if(typeof jsQR==='undefined'){ toast('QR scanner failed to load — check your connection','error'); return; }
+  if(typeof jsQR==='undefined'){
+    toast('Loading QR scanner...','info');
+    try{ await loadJsQR(); }catch(e){}
+    if(typeof jsQR==='undefined'){ toast('QR scanner failed to load — check your connection or try disabling tracking prevention for this site','error'); return; }
+  }
   modal.style.display='flex';
   try{
     QR_SCAN_STREAM = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
