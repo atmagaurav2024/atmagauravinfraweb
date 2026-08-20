@@ -3170,14 +3170,14 @@ async function loadDashboardInsights(filterProjId){
     }).sort(function(a,b){return b.billing-a.billing;}).slice(0,5);
 
     // ── Recent activity feed, from the app-wide activity log ────────────
-    var activityIcons={create:['&#10133;','#047857'], update:['&#9998;','#B45309'], delete:['&#128465;','#E11D48']};
+    var activityIcons={create:['&#10133;','#047857','#D1FAE5'], update:['&#9998;','#B45309','#FEF3C7'], delete:['&#128465;','#E11D48','#FFE4E6']};
     var recentActivityHtml=(recentActivityRows||[]).map(function(a){
-      var ic=activityIcons[a.action]||['&#9679;','#57534E'];
+      var ic=activityIcons[a.action]||['&#9679;','#57534E','#F5F5F4'];
       var dt=new Date(a.created_at);
       var timeStr=dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
       var label=(a.table_name||'').replace(/_/g,' ');
       return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">'+
-        '<span style="width:26px;height:26px;border-radius:8px;background:'+ic[1]+'15;color:'+ic[1]+';display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">'+ic[0]+'</span>'+
+        '<span style="width:26px;height:26px;border-radius:8px;background:'+ic[2]+';color:'+ic[1]+';display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">'+ic[0]+'</span>'+
         '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:var(--text);text-transform:capitalize;">'+a.action+' — '+label+'</div>'+
         '<div style="font-size:10.5px;color:var(--text3);">by '+(a.user_name||'Someone')+'</div></div>'+
         '<div style="font-size:10px;color:var(--text3);white-space:nowrap;">'+timeStr+'</div>'+
@@ -3203,7 +3203,7 @@ async function loadDashboardInsights(filterProjId){
           '<div style="font-size:19px;font-weight:800;color:var(--text);">'+value+'</div>'+
         '</div>'+
         '<div style="font-size:11px;color:var(--text3);font-weight:600;">'+label+'</div>'+
-        (anchor?'<div style="font-size:10.5px;color:var(--accent);font-weight:700;margin-top:4px;">View all &#8594;</div>':'')+
+        (anchor?'<div style="font-size:10.5px;color:#2563EB;font-weight:700;margin-top:4px;">View all &#8594;</div>':'')+
       '</div>';
     }
     function overviewCard(icon,iconBg,value,label,trend){
@@ -3218,26 +3218,26 @@ async function loadDashboardInsights(filterProjId){
 
     var actionRequiredHtml =
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px;">'+
-        actionCard('&#128203;','#FFE4E620', pendingApprovalsCount, 'Pending Approvals', 'employees')+
-        actionCard('&#128722;','#FEF3C720', pendingRRs.length, 'Pending PO','projects')+
-        actionCard('&#128196;','#DBEAFE20', lowStock.length, 'Low Stock / GRN','projects')+
-        actionCard('&#128179;','#F3E8FF20', pendingBillsCount, 'Pending Bills', 'projects')+
-        actionCard('&#128101;','#D1FAE520', attendanceIssuesCount, 'Attendance Issues', 'attendance')+
-        actionCard('&#8377;','#FFE4E620', inr(revenueBilled), 'Receivables', 'accounts')+
+        actionCard('&#128203;','#FFE4E6', pendingApprovalsCount, 'Pending Approvals', 'employees')+
+        actionCard('&#128722;','#FEF3C7', pendingRRs.length, 'Pending PO','projects')+
+        actionCard('&#128196;','#DBEAFE', lowStock.length, 'Low Stock / GRN','projects')+
+        actionCard('&#128179;','#F3E8FF', pendingBillsCount, 'Pending Bills', 'projects')+
+        actionCard('&#128101;','#D1FAE5', attendanceIssuesCount, 'Attendance Issues', 'attendance')+
+        actionCard('&#8377;','#FFE4E6', inr(revenueBilled), 'Receivables', 'accounts')+
       '</div>';
 
     var businessOverviewHtml =
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px;">'+
-        overviewCard('&#127970;','#DBEAFE20', (filterProjId?1:activeProjects), 'Active Projects')+
-        overviewCard('&#8377;','#D1FAE520', inr(billingSeries[5]), 'This Month Billing', billingSeries[4]>0?Math.round((billingSeries[5]-billingSeries[4])/billingSeries[4]*100)+'%':'')+
-        overviewCard('&#128176;','#FEF3C720', inr(expenseSeries[5]), 'This Month Expenses', expenseSeries[4]>0?Math.round((expenseSeries[5]-expenseSeries[4])/expenseSeries[4]*100)+'%':'')+
-        overviewCard('&#128179;','#F3E8FF20', inr(costPaid-costBalance>=0?costPaid-costBalance:0), 'Cash Position')+
+        overviewCard('&#127970;','#DBEAFE', (filterProjId?1:activeProjects), 'Active Projects')+
+        overviewCard('&#8377;','#D1FAE5', inr(billingSeries[5]), 'This Month Billing', billingSeries[4]>0?Math.round((billingSeries[5]-billingSeries[4])/billingSeries[4]*100)+'%':'')+
+        overviewCard('&#128176;','#FEF3C7', inr(expenseSeries[5]), 'This Month Expenses', expenseSeries[4]>0?Math.round((expenseSeries[5]-expenseSeries[4])/expenseSeries[4]*100)+'%':'')+
+        overviewCard('&#128179;','#F3E8FF', inr(costPaid-costBalance>=0?costPaid-costBalance:0), 'Cash Position')+
       '</div>';
 
     var projectHealthRowsHtml = projHealthRows.length ? projHealthRows.map(function(p){
       return '<tr style="border-top:1px solid var(--border);">'+
         '<td style="padding:10px 12px;font-weight:700;color:var(--text);white-space:nowrap;">'+p.name+'</td>'+
-        '<td style="padding:10px 12px;min-width:120px;"><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+p.pct+'%;background:var(--accent);"></div></div><span style="font-size:11px;color:var(--text3);font-weight:700;">'+p.pct+'%</span></div></td>'+
+        '<td style="padding:10px 12px;min-width:120px;"><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+p.pct+'%;background:'+p.healthColor[1]+';"></div></div><span style="font-size:11px;color:var(--text3);font-weight:700;">'+p.pct+'%</span></div></td>'+
         '<td style="padding:10px 12px;text-align:right;color:var(--text2);">'+inr(p.billing)+'</td>'+
         '<td style="padding:10px 12px;text-align:right;color:var(--text2);">'+inr(p.expense)+'</td>'+
         '<td style="padding:10px 12px;text-align:right;"><span style="background:'+p.healthColor[0]+';color:'+p.healthColor[1]+';font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;">'+p.health+'</span></td>'+
@@ -3260,7 +3260,7 @@ async function loadDashboardInsights(filterProjId){
     var billingChartHtml =
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
         '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;">Billing vs Expenses <span style="font-weight:600;color:var(--text3);font-size:11px;">&middot; Last 6 Months</span></div>'+
-        barChartMonthly(monthLabels, billingSeries, expenseSeries, 'Billing (\u20b9)', 'Expenses (\u20b9)', '#4F46E5', '#F87171')+
+        barChartMonthly(monthLabels, billingSeries, expenseSeries, 'Billing (\u20b9)', 'Expenses (\u20b9)', '#2563EB', '#F87171')+
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">'+
           '<div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Contract</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalContractValue)+'</div></div>'+
           '<div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Billed</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalBilled)+'</div></div>'+
@@ -3269,20 +3269,20 @@ async function loadDashboardInsights(filterProjId){
         '</div>'+
       '</div>';
 
-    function procRow(label,count){
+    function procRow(label,count,badgeBg,badgeColor){
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);">'+
         '<div style="font-size:12px;font-weight:600;color:var(--text2);">'+label+'</div>'+
-        '<span style="background:var(--accent-light);color:var(--text);font-size:11px;font-weight:800;padding:2px 9px;border-radius:20px;min-width:22px;text-align:center;">'+count+'</span>'+
+        '<span style="background:'+badgeBg+';color:'+badgeColor+';font-size:11px;font-weight:800;padding:2px 9px;border-radius:20px;min-width:22px;text-align:center;">'+count+'</span>'+
       '</div>';
     }
     var procurementHtml =
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
         '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:6px;">Procurement Snapshot</div>'+
-        procRow('Low Stock Items', lowStock.length)+
-        procRow('Pending Purchase Orders', pendingRRs.length)+
-        procRow('Pending GRN / MR', lowStock.length?Math.max(0,Math.round(lowStock.length/2)):0)+
-        procRow('Pending Vendor Bills', pendingBillsCount)+
-        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">View all &#8594;</div>'+
+        procRow('Low Stock Items', lowStock.length, '#FFE4E6', '#E11D48')+
+        procRow('Pending Purchase Orders', pendingRRs.length, '#FEF3C7', '#B45309')+
+        procRow('Pending GRN / MR', lowStock.length?Math.max(0,Math.round(lowStock.length/2)):0, '#DBEAFE', '#2563EB')+
+        procRow('Pending Vendor Bills', pendingBillsCount, '#F3E8FF', '#9333EA')+
+        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:#2563EB;cursor:pointer;">View all &#8594;</div>'+
       '</div>';
 
     var workforceHtml =
@@ -3294,7 +3294,7 @@ async function loadDashboardInsights(filterProjId){
           '<div style="display:flex;justify-content:space-between;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#E11D48;display:inline-block;"></span>Absent</span><b>'+attAbsent+'</b></div>'+
           '<div style="display:flex;justify-content:space-between;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block;"></span>On Leave</span><b>'+attLeave+'</b></div>'+
         '</div>'+
-        '<div onclick="showApp(\'attendance\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">View attendance &#8594;</div>'+
+        '<div onclick="showApp(\'attendance\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:#2563EB;cursor:pointer;">View attendance &#8594;</div>'+
       '</div>';
 
     var statusMap2={'On Track':['#D1FAE5','#047857'],'Behind Schedule':['#FEF3C7','#B45309'],'Critical':['#FFE4E6','#E11D48']};
@@ -3315,7 +3315,7 @@ async function loadDashboardInsights(filterProjId){
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
         '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px;">Recent Activity</div>'+
         recentActivityHtml+
-        '<div onclick="showApp(\'access\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">View all activity &#8594;</div>'+
+        '<div onclick="showApp(\'access\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:#2563EB;cursor:pointer;">View all activity &#8594;</div>'+
       '</div>';
 
     gridEl.innerHTML =
