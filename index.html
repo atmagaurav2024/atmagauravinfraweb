@@ -6113,12 +6113,12 @@ async function sbFetch(table, options={}){
 // point logging the logger) and skips when there's no company
 // context yet (e.g. pre-login signup inserts, which aren't
 // meaningfully "auditable" against a company that doesn't exist yet).
-var AUDIT_EXCLUDE_TABLES = ['audit_log'];
+var AUDIT_EXCLUDE_TABLES = ['app_activity_log'];
 function logAudit(action, table, recordId, changes){
   if(AUDIT_EXCLUDE_TABLES.indexOf(table)>-1) return;
   if(typeof currentUser==='undefined' || !currentUser || !currentUser.companyId) return;
   try{
-    fetch(SUPABASE_URL+'/rest/v1/audit_log',{
+    fetch(SUPABASE_URL+'/rest/v1/app_activity_log',{
       method:'POST',
       headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(currentUser.accessToken||SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({
@@ -24483,7 +24483,7 @@ async function auditLoad(){
   var list=document.getElementById('audit-list');
   if(list) list.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
   try{
-    var rows=await sbFetch('audit_log',{select:'*',filter:auditBuildFilter(0),order:'created_at.desc'});
+    var rows=await sbFetch('app_activity_log',{select:'*',filter:auditBuildFilter(0),order:'created_at.desc'});
     AUDIT_ROWS=Array.isArray(rows)?rows:[];
     AUDIT_OFFSET=AUDIT_ROWS.length;
   }catch(e){ AUDIT_ROWS=[]; console.error(e); }
@@ -24492,7 +24492,7 @@ async function auditLoad(){
 
 async function auditLoadMore(){
   try{
-    var rows=await sbFetch('audit_log',{select:'*',filter:auditBuildFilter(AUDIT_OFFSET),order:'created_at.desc'});
+    var rows=await sbFetch('app_activity_log',{select:'*',filter:auditBuildFilter(AUDIT_OFFSET),order:'created_at.desc'});
     var newRows=Array.isArray(rows)?rows:[];
     AUDIT_ROWS=AUDIT_ROWS.concat(newRows);
     AUDIT_OFFSET+=newRows.length;
