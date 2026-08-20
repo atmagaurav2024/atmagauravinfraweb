@@ -1723,14 +1723,6 @@ input,select,textarea{font-size:16px !important;}
         <option value="" style="color:#111827;background:white;">&#128203; All Projects</option>
       </select>
     </div>
-    <div class="dt-kpis dt-kpis-6">
-      <div class="dk"><div class="dk-val" id="dk-ongoing">—</div><div class="dk-lbl">Ongoing</div></div>
-      <div class="dk"><div class="dk-val" id="dk-dlp">—</div><div class="dk-lbl">Under DLP</div></div>
-      <div class="dk"><div class="dk-val" id="dk-completed">—</div><div class="dk-lbl">Completed</div></div>
-      <div class="dk"><div class="dk-val" id="dk-workers-present">—</div><div class="dk-lbl">Workers Present</div></div>
-      <div class="dk"><div class="dk-val" id="dk-progress">—</div><div class="dk-lbl">Progress</div></div>
-      <div class="dk"><div class="dk-val" style="color:#FF6B6B;" id="dk-issues">—</div><div class="dk-lbl">Issues</div></div>
-    </div>
   </div>
   <div class="dash-body">
 
@@ -2725,20 +2717,6 @@ async function loadDashboardInsights(filterProjId){
     var activeStatuses=['active','in-progress','rr','planning'];
     var activeProjects=projects.filter(function(p){return activeStatuses.indexOf(p.status)>-1;}).length;
     var activeWorkforce=employees.filter(function(e){return e.status==='active';}).length;
-
-    // ── Header KPI strip: project status breakdown + workers present today ──
-    // Note: attendance records aren't linked to a project_id in the schema,
-    // so "Workers Present" is a company-wide count for today, not scoped to
-    // the selected project filter.
-    var ongoingCount = projects.filter(function(p){return p.status==='in-progress';}).length;
-    var dlpCount = projects.filter(function(p){return p.status==='under-dlp';}).length;
-    var completedCount = projects.filter(function(p){return p.status==='fully-completed';}).length;
-    var workersPresentToday = new Set((presentTodayRows||[]).map(function(a){return a.employee_id;})).size;
-    var setDk=function(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; };
-    setDk('dk-ongoing', ongoingCount);
-    setDk('dk-dlp', dlpCount);
-    setDk('dk-completed', completedCount);
-    setDk('dk-workers-present', workersPresentToday);
 
     // ── Profit/Loss per BOQ item ──────────────────────────────────────────
     // Revenue = qty executed (from daily progress) x BOQ contract rate
