@@ -18642,19 +18642,22 @@ async function pcOpenQRScanner(){
   }
   modal.style.display='flex';
   try{
-    QR_SCAN_STREAM = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    QR_SCAN_STREAM = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment', advanced:[{focusMode:'continuous'}]}});
     video.srcObject = QR_SCAN_STREAM;
     await video.play();
     var canvas=document.createElement('canvas');
     var ctx=canvas.getContext('2d', {willReadFrequently:true});
+    var scanStart=Date.now();
     function tick(){
       if(!QR_SCAN_STREAM) return; // scanner was closed
       if(video.readyState===video.HAVE_ENOUGH_DATA){
         canvas.width=video.videoWidth; canvas.height=video.videoHeight;
         ctx.drawImage(video,0,0,canvas.width,canvas.height);
         var imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
-        var code=jsQR(imageData.data, imageData.width, imageData.height, {inversionAttempts:'dontInvert'});
+        var code=jsQR(imageData.data, imageData.width, imageData.height, {inversionAttempts:'attemptBoth'});
         if(code && code.data){ pcHandleScannedQR(code.data); return; }
+      } else if(status && Date.now()-scanStart>4000){
+        status.textContent='No camera feed detected — try closing and reopening the scanner';
       }
       QR_SCAN_RAF=requestAnimationFrame(tick);
     }
