@@ -43,15 +43,21 @@ create policy app_activity_log_tenant_isolated on app_activity_log for all
 NOTIFY pgrst, 'reload schema';
 
 -- Cleanup: earlier troubleshooting (before this collision was
--- understood) added company_id/user_id/user_name/changes columns
--- directly onto the pre-existing audit_log table via ALTER TABLE,
--- trying to fix what looked like a missing column. Those don't belong
--- on the Loans module's audit_log and were never used by it - this
--- removes them, restoring that table to its original, correct shape
--- (entity_name/entity_id/action/field_changes/reason/cascade_ids/
--- performed_by/performed_at). Safe to run even if some or none of
--- these were actually added.
-alter table audit_log drop column if exists company_id;
+-- understood) added user_id/user_name/changes columns directly onto
+-- the pre-existing audit_log table, trying to fix what looked like a
+-- missing column. None of these were ever used by the Loans module's
+-- lnAuditWrite()/LN_AUDIT_LOG (which uses entity_name/entity_id/
+-- action/field_changes/reason/cascade_ids/performed_by), so they're
+-- confidently safe to remove.
+--
+-- Deliberately NOT touching company_id or its RLS policy here, even
+-- though they were also added during that same troubleshooting -
+-- this app went through an earlier, separate multi-tenancy migration
+-- that added company_id + RLS to many existing tables, and there's no
+-- way to confirm from here whether audit_log predates that and was
+-- already tenant-isolated before any of this session's changes.
+-- Getting that wrong risks either leaving a real tenant-isolation gap
+-- or breaking it outright - safer to leave both alone than guess.
 alter table audit_log drop column if exists user_id;
 alter table audit_log drop column if exists user_name;
 alter table audit_log drop column if exists changes;
