@@ -290,6 +290,21 @@ function pcOpenExpense(){
       pcCats().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0" oninput="pcUpdateAllocPreview()">'+
     '<label class="flbl">Date</label><input class="finp" id="pce-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Payment Method</label>'+
+    '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
+      '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+        '<input type="radio" name="pce-paymethod" value="cash" checked onchange="pcTogglePayMethod()">Cash</label>'+
+      '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+        '<input type="radio" name="pce-paymethod" value="upi" onchange="pcTogglePayMethod()">UPI</label>'+
+    '</div>'+
+    '<div id="pce-upi-wrap" style="display:none;margin-bottom:10px;">'+
+      '<label class="flbl">Pay To</label>'+
+      '<button type="button" onclick="pcOpenQRScanner()" style="width:100%;background:var(--text);color:white;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128247; Scan UPI QR Code</button>'+
+      '<div id="pce-upi-scanned" style="display:none;background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:11.5px;color:#2E7D32;font-weight:700;"></div>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin:2px 0 4px;">or type UPI ID / mobile number directly</div>'+
+      '<input class="finp" id="pce-upi-id" placeholder="vendor@upi or 9876543210" oninput="pcClearScannedUPI()">'+
+      '<input class="finp" id="pce-upi-name" placeholder="Payee name (optional)" style="margin-top:8px;">'+
+    '</div>'+
     '<label class="flbl">Project(s) *</label>'+
     '<div style="font-size:10.5px;color:var(--text3);margin-bottom:4px;">Select one or more projects this expense should be recorded against.</div>'+
     '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px;">'+projChecks+'</div>'+
@@ -357,6 +372,11 @@ async function pcSaveExpense(){
   var method=(document.querySelector('input[name="pce-dist"]:checked')||{value:'equal'}).value;
   var bal=pcEmpBal(emp);
   if(amount>bal){toast('Insufficient balance. Available: '+pcFmt(bal),'warning');}
+
+  var payMethod=(document.querySelector('input[name="pce-paymethod"]:checked')||{value:'cash'}).value;
+  var upiId = payMethod==='upi' ? gv('pce-upi-id') : '';
+  if(payMethod==='upi' && !upiId){ toast('Scan a QR code or enter a UPI ID / mobile number','warning'); return; }
+
   try{
     var res=await sbInsert('petty_cash_expenses',{
       emp_id:emp,category:cat,amount:amount,date:gv('pce-date'),
@@ -364,9 +384,18 @@ async function pcSaveExpense(){
       project_ids:JSON.stringify(allocations.map(function(p){return p.id;})),
       project_allocations:JSON.stringify(allocations),
       distribution_method:allocations.length>1?method:null,
-      description:desc,bill_no:gv('pce-bill'),remarks:gv('pce-remarks')
+      description:desc,bill_no:gv('pce-bill'),remarks:gv('pce-remarks'),
+      payout_status: payMethod==='upi' ? 'pending' : 'not_applicable',
+      payee_upi_id: upiId||null,
+      payee_name: payMethod==='upi' ? (gv('pce-upi-name')||null) : null
     });
-    closeSheet('ov-pc','sh-pc');await initPettyCash();toast('Expense recorded: '+pcFmt(amount),'success');
+    closeSheet('ov-pc','sh-pc');await initPettyCash();
+    if(payMethod==='upi'){
+      toast('Expense recorded — initiating UPI payout...','info');
+      if(res&&res[0]&&typeof pcInitiateUpiPayout==='function') await pcInitiateUpiPayout(res[0].id);
+    } else {
+      toast('Expense recorded: '+pcFmt(amount),'success');
+    }
 
     // Auto-post to Accounts: Dr [Category Expense], Cr Petty Cash in Hand
     if(res&&res[0]&&typeof accAutoPost==='function'&&typeof ACC_PETTY_CAT_CODES!=='undefined'){

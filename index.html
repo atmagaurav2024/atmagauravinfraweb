@@ -12296,6 +12296,11 @@ var PROJ_MOD_SEL_ID = '';           // selected project id
 // Sub-tabs of preconstruction: boq | jm | planning
 // Sub-tabs of construction: rr | execution | allotted | daily | grn | store
 
+// DEAD CODE — shadowed by js/projects.js, which loads after this and
+// silently overrides PMT_GROUPS/projModRenderNav/projModLoadTab/
+// projModAdd with its own definitions. Left in place rather than
+// deleted (lower risk), but the real, active versions are in
+// js/projects.js — edit changes there, not here.
 var PMT_GROUPS = {
   preconstruction: ['boq','schh','schb','jm','planning'],
   construction:    ['rr','execution','allotted','daily','executedwork','grn','store']
@@ -18534,6 +18539,11 @@ async function pcSaveCashIn(){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
+// DEAD CODE — shadowed by js/finance.js, which loads after this and
+// silently overrides pcOpenExpense/pcSaveExpense with its own
+// definitions. Left in place rather than deleted (lower risk), but
+// the real, active versions (with these same UPI/Payment Method
+// additions, ported over) are in js/finance.js — edit changes there.
 function pcOpenExpense(){
   openSheet('ov-pc','sh-pc');
   var projChecks=PC_PROJS.map(function(p){

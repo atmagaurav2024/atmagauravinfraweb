@@ -1,4 +1,14 @@
-// ════ PROJECTS — Navigation ═════════════════════════════
+// ── PROJECTS — Navigation ═════════════════════════════
+// This file loads AFTER index.html's inline <script> blocks (see the
+// <script src> tags near the end of index.html), so anything defined
+// here with the same name silently overrides the inline version —
+// same hazard documented at the bottom of finance.js re: Accounts.
+// PMT_GROUPS/projModRenderNav/projModLoadTab/projModAdd are the real,
+// active versions — index.html has stale duplicates of these left in
+// place as dead code (harmless, just never executed). Schedule H/B
+// (schhLoadItems, schbLoadItems, schhOpenAdd, schbOpenAdd, etc.) are
+// NOT duplicated here and should stay that way — they're defined once
+// in index.html and called from the configs/projModAdd below.
 // Global date formatter used throughout projects module
 function fmtD(d){if(!d)return '—';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 
@@ -43,7 +53,7 @@ var PROJ_MOD_SEL_ID = '';           // selected project id
 // Sub-tabs of construction: rr | execution | allotted | daily | grn | store
 
 var PMT_GROUPS = {
-  preconstruction: ['boq','jm','planning'],
+  preconstruction: ['boq','schh','schb','jm','planning'],
   construction:    ['rr','execution','allotted','daily','executedwork','grn','store']
 };
 
@@ -161,7 +171,7 @@ function projModRenderNav(){
   var hasProjId=!!PROJ_MOD_SEL_ID;
   var onProjects=PROJ_MOD_TAB==='projects';
 
-  var subLabels={boq:'BOQ',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',executedwork:'Executed Work',grn:'GRN',store:'Store'};
+  var subLabels={boq:'BOQ',schh:'Schedule H',schb:'Schedule B',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',executedwork:'Executed Work',grn:'GRN',store:'Store'};
   var activeGroup='';
   if(PMT_GROUPS.preconstruction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='preconstruction';
   else if(PMT_GROUPS.construction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='construction';
@@ -225,7 +235,7 @@ function projModRenderNav(){
   }
 
   var addBtn=document.getElementById('proj-mod-add-btn');
-  if(addBtn) addBtn.style.display=(PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq')?'':'none';
+  if(addBtn) addBtn.style.display=(PROJ_MOD_TAB==='projects'||PROJ_MOD_TAB==='boq'||PROJ_MOD_TAB==='schh'||PROJ_MOD_TAB==='schb')?'':'none';
 }
 
 
@@ -290,6 +300,8 @@ function projModLoadTab(){
 
   var configs = {
     boq:       {cont:'boq-content',   sel:'boq-proj-sel',   fn: function(){ boqLoadItems(); }},
+    schh:      {cont:'schh-content',  sel:'schh-proj-sel',  fn: function(){ schhLoadItems(); }},
+    schb:      {cont:'schb-content',  sel:'schb-proj-sel',  fn: function(){ schbLoadItems(); }},
     jm:        {cont:'jm-content',    sel:'jm-proj-sel',    fn: function(){ jmLoadItems(); }},
     planning:  {cont:'plan-content',  sel:'plan-proj-sel',  fn: function(){ planLoadItems(); }},
     rr:        {cont:'rr-content',    sel:'rr-proj-sel',    fn: function(){ rrLoadItems(); }},
@@ -316,6 +328,8 @@ function projModLoadTab(){
 function projModAdd(){
   if(PROJ_MOD_TAB==='projects') openProjForm(null);
   else if(PROJ_MOD_TAB==='boq') boqOpenAddItem(null);
+  else if(PROJ_MOD_TAB==='schh') schhOpenAdd(null);
+  else if(PROJ_MOD_TAB==='schb') schbOpenAdd(null);
 }
 
 
