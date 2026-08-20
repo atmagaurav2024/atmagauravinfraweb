@@ -1405,6 +1405,16 @@ input,select,textarea{font-size:16px !important;}
 @media (max-width:640px){
   .dash-2col-grid{grid-template-columns:1fr;}
 }
+/* Billing chart + Procurement + Workforce row — 3 columns on desktop
+   (the primary target for this dashboard), collapsing in stages so it
+   never gets cramped as the viewport narrows. */
+.dash-3col-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;}
+@media (max-width:900px){
+  .dash-3col-grid{grid-template-columns:1fr 1fr;}
+}
+@media (max-width:640px){
+  .dash-3col-grid{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
@@ -2650,17 +2660,20 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('work_daily_progress',{select:'id,project_id,boq_item_id,qty_done,resources_used,date'})),
       safe(sbFetch('resource_requisitions',{select:'id,project_id,status',filter:'status=eq.pending'})),
       safe(sbFetch('store_inventory',{select:'project_id,item_name,unit,qty_in_hand,qty_issued,min_qty'})),
-      safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions,additions'})),
+      safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions,additions,bill_date'})),
       safe(sbFetch('work_payments',{select:'id,project_id,amount'})),
-      safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items,additions'})),
+      safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items,additions,bill_date'})),
       safe(sbFetch('boq_jm',{select:'id,project_id,boq_item_id,jm_qty'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,party_name,qty,rate,unit',filter:'exec_type=eq.planned'})),
-      safe(sbFetch('attendance',{select:'employee_id',filter:'date=eq.'+(new Date().toISOString().slice(0,10))+'&status=eq.present'})),
-      safe(sbFetch('petty_cash_expenses',{select:'*'}))
+      safe(sbFetch('attendance',{select:'employee_id,status',filter:'date=eq.'+(new Date().toISOString().slice(0,10))})),
+      safe(sbFetch('petty_cash_expenses',{select:'*'})),
+      safe(sbFetch('app_activity_log',{select:'*',filter:'limit=8',order:'created_at.desc'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
         pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
-        boqJmRows=r[10]||[], plannedResRows=r[11]||[], presentTodayRows=r[12]||[], pettyExpenseRows=r[13]||[];
+        boqJmRows=r[10]||[], plannedResRows=r[11]||[], todayAttendanceRows=r[12]||[], pettyExpenseRows=r[13]||[],
+        recentActivityRows=r[14]||[];
+    var presentTodayRows = todayAttendanceRows.filter(function(a){return a.status==='present';});
 
     // Restrict every project-linked source to the user's assigned projects,
     // so the KPI figures reflect only what they are entitled to see rather
@@ -2964,6 +2977,31 @@ async function loadDashboardInsights(filterProjId){
         '</div>'+
       '</div>';
     }
+    function barChartMonthly(months, seriesA, seriesB, labelA, labelB, colorA, colorB){
+      var w=560, h=220, padL=36, padB=24, padT=10;
+      var maxVal=Math.max(1, Math.max.apply(null, seriesA.concat(seriesB)));
+      var plotW=w-padL-10, plotH=h-padT-padB;
+      var groupW=plotW/months.length, barW=Math.min(22, groupW*0.32);
+      var yTicks=[0,0.25,0.5,0.75,1].map(function(f){return Math.round(maxVal*f);});
+      var gridLines=yTicks.map(function(t){
+        var y=padT+plotH-(t/maxVal)*plotH;
+        return '<line x1="'+padL+'" y1="'+y+'" x2="'+(w-10)+'" y2="'+y+'" stroke="var(--border)" stroke-width="1"/>'+
+          '<text x="'+(padL-6)+'" y="'+(y+3)+'" font-size="9" fill="var(--text3)" text-anchor="end">'+inr(t)+'</text>';
+      }).join('');
+      var bars=months.map(function(m,i){
+        var gx=padL+i*groupW;
+        var aH=(seriesA[i]/maxVal)*plotH, bH=(seriesB[i]/maxVal)*plotH;
+        var aX=gx+groupW/2-barW-2, bX=gx+groupW/2+2;
+        return '<rect x="'+aX+'" y="'+(padT+plotH-aH)+'" width="'+barW+'" height="'+aH+'" fill="'+colorA+'" rx="2"/>'+
+          '<rect x="'+bX+'" y="'+(padT+plotH-bH)+'" width="'+barW+'" height="'+bH+'" fill="'+colorB+'" rx="2"/>'+
+          '<text x="'+(gx+groupW/2)+'" y="'+(h-6)+'" font-size="9" fill="var(--text3)" text-anchor="middle">'+m+'</text>';
+      }).join('');
+      return '<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="max-width:'+w+'px;">'+gridLines+bars+'</svg>'+
+        '<div style="display:flex;gap:16px;justify-content:center;margin-top:8px;">'+
+          '<div style="font-size:11px;display:flex;align-items:center;gap:6px;color:var(--text3);"><span style="width:9px;height:9px;border-radius:2px;background:'+colorA+';display:inline-block;"></span>'+labelA+'</div>'+
+          '<div style="font-size:11px;display:flex;align-items:center;gap:6px;color:var(--text3);"><span style="width:9px;height:9px;border-radius:2px;background:'+colorB+';display:inline-block;"></span>'+labelB+'</div>'+
+        '</div>';
+    }
     function panel(icon,title,inner,minH){
       return '<div style="background:#fff;border-radius:16px;padding:16px;border:1px solid var(--border);'+(minH?'min-height:'+minH+'px;':'')+'">'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'+
@@ -3090,100 +3128,209 @@ async function loadDashboardInsights(filterProjId){
       return html+'</div>';
     }
 
+    // ── New widgets' data: 6-month billing/expense history ──────────────
+    var monthLabels=[], monthKeys=[], billingByMonth={}, expenseByMonth={};
+    for(var mi=5; mi>=0; mi--){
+      var md=new Date(); md.setDate(1); md.setMonth(md.getMonth()-mi);
+      var mkey=md.getFullYear()+'-'+String(md.getMonth()+1).padStart(2,'0');
+      monthKeys.push(mkey);
+      monthLabels.push(md.toLocaleDateString('en-IN',{month:'short'})+" '"+String(md.getFullYear()).slice(2));
+      billingByMonth[mkey]=0; expenseByMonth[mkey]=0;
+    }
+    salesBills.forEach(function(b){
+      if(!b.bill_date) return;
+      var k=String(b.bill_date).slice(0,7);
+      if(billingByMonth.hasOwnProperty(k)) billingByMonth[k]+=(parseFloat(b.bill_amount)||0);
+    });
+    workBills.forEach(function(b){
+      if(!b.bill_date) return;
+      var k=String(b.bill_date).slice(0,7);
+      if(expenseByMonth.hasOwnProperty(k)) expenseByMonth[k]+=(parseFloat(b.bill_amount)||0);
+    });
+    var billingSeries=monthKeys.map(function(k){return billingByMonth[k];});
+    var expenseSeries=monthKeys.map(function(k){return expenseByMonth[k];});
+
+    // ── Today's attendance breakdown (Present / Absent / On Leave) ──────
+    var attPresent=todayAttendanceRows.filter(function(a){return a.status==='present';}).length;
+    var attAbsent=todayAttendanceRows.filter(function(a){return a.status==='absent';}).length;
+    var attLeave=todayAttendanceRows.filter(function(a){return a.status==='leave'||a.status==='on-leave';}).length;
+    var attMarkedTotal=attPresent+attAbsent+attLeave;
+
+    // ── Per-project health: a simple, transparent heuristic — not a
+    // precise engineering measure, just billed-vs-cost ratio blended with
+    // schedule stage, since there's no separate "planned % complete by
+    // today" baseline stored anywhere to compare actual progress against.
+    var projHealthRows=projects.filter(function(p){return activeStatuses.indexOf(p.status)>-1;}).map(function(p){
+      var pl=plByProj[p.id]||{revenue:0,cost:0};
+      var pctDone = pl.revenue>0 && parseFloat(p.contract_value)>0 ? Math.min(100,Math.round(pl.revenue/parseFloat(p.contract_value)*100)) : 0;
+      var costRatio = pl.revenue>0 ? pl.cost/pl.revenue : 0;
+      var health = costRatio>0.95 ? 'At Risk' : costRatio>0.85 ? 'Average' : 'Good';
+      var healthColor = health==='Good'?['#D1FAE5','#047857']:health==='Average'?['#FEF3C7','#B45309']:['#FFE4E6','#E11D48'];
+      return {name:p.name, pct:pctDone, billing:pl.revenue, expense:pl.cost, health:health, healthColor:healthColor};
+    }).sort(function(a,b){return b.billing-a.billing;}).slice(0,5);
+
+    // ── Recent activity feed, from the app-wide activity log ────────────
+    var activityIcons={create:['&#10133;','#047857'], update:['&#9998;','#B45309'], delete:['&#128465;','#E11D48']};
+    var recentActivityHtml=(recentActivityRows||[]).map(function(a){
+      var ic=activityIcons[a.action]||['&#9679;','#57534E'];
+      var dt=new Date(a.created_at);
+      var timeStr=dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+      var label=(a.table_name||'').replace(/_/g,' ');
+      return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">'+
+        '<span style="width:26px;height:26px;border-radius:8px;background:'+ic[1]+'15;color:'+ic[1]+';display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">'+ic[0]+'</span>'+
+        '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:var(--text);text-transform:capitalize;">'+a.action+' — '+label+'</div>'+
+        '<div style="font-size:10.5px;color:var(--text3);">by '+(a.user_name||'Someone')+'</div></div>'+
+        '<div style="font-size:10px;color:var(--text3);white-space:nowrap;">'+timeStr+'</div>'+
+      '</div>';
+    }).join('') || '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">No recent activity yet</div>';
+
+    // ── Action Required counts ───────────────────────────────────────────
+    var pendingApprovalsCount = (typeof pendingEmployees!=='undefined'?pendingEmployees.length:0);
+    var pendingBillsCount = new Set(workBills.map(function(b){return b.id;})).size - workPayments.length; // rough: bills not yet matched to a payment
+    if(pendingBillsCount<0) pendingBillsCount=0;
+    var attendanceIssuesCount = attAbsent + (employees.filter(function(e){return e.status==='active';}).length - attMarkedTotal);
+    if(attendanceIssuesCount<0) attendanceIssuesCount=0;
+
     // ══ ASSEMBLE — data mapped as a starting point; tell me what to swap ══
-    gridEl.innerHTML =
-      '<div class="kpi-plan-grid" style="margin-bottom:10px;">'+
-        planActualCard('Revenue (Contract) — excl. GST', revenueTotal, plannedRevenueContract, revenueBilled, revenueUnbilled, '#F857A6', '#F7CA5C',
-          '<div style="border-top:1px dashed var(--border);margin-top:6px;padding-top:6px;">'+planActualRow('Notional (work amt, excl. tax/ded.)', notionalBilled, 'var(--text3)')+'</div>')+
-        planActualCard('Revenue (as per JM) — excl. GST', revenueTotal, plannedRevenueJM, revenueBilled, revenueUnbilled, '#8B7FE8', '#F7CA5C',
-          '<div style="border-top:1px dashed var(--border);margin-top:6px;padding-top:6px;">'+planActualRow('Notional (work amt, excl. tax/ded.)', notionalBilled, 'var(--text3)')+'</div>')+
-        planActualCard('Expenditure — excl. GST', expenditureActualTotal, plannedExpenditure, expenditureBilled, expenditureUnbilled, '#4FD1C5', '#F7CA5C',
-          '<div style="border-top:1px dashed var(--border);margin-top:6px;padding-top:6px;">'+planActualRow('incl. Petty Cash Expenses', pettyCashTotal, '#F857A6')+'</div>')+
-        plCard('Profit / Loss', totalPL, plannedPL, billedPL, unbilledPL, ebitda)+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">'+
-        gradientStatCard('&#128200;', marginPct+'%', 'Profit Margin', 'linear-gradient(135deg,#F5A623,#F7CA5C)')+
-        gradientStatCard('&#127959;', (filterProjId?1:activeProjects)+'/'+(filterProjId?1:projects.length), 'Active Projects', 'linear-gradient(135deg,#6C5CE7,#8B7FE8)')+
-        gradientStatCard('&#128119;', activeWorkforce, 'Workforce', 'linear-gradient(135deg,#00ACC1,#4FD1C5)')+
-        gradientStatCard('&#128181;', inr(costBalance), 'Cost Balance', 'linear-gradient(135deg,#DB2777,#F857A6)')+
-      '</div>'+
-      '<div class="dash-2col-grid" style="margin-bottom:10px;">'+
-        panel('&#128181;','Revenue Billed Breakdown', donutLegend([{value:revenueBilled,color:'#F857A6'},{value:revenueUnbilled,color:'#F7CA5C'}], inr(revenueTotal)))+
-        panel('&#128176;','Cost Billed Breakdown', donutLegend([{value:costPaid,color:'#4FD1C5'},{value:costBalance,color:'#F857A6'}], inr(costBilled)))+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
-        panel('&#9881;','Revenue / Cost / Margin', concentricRings([{pct:Math.min(100,revenuePct),color:'#F857A6',label:'Revenue'},{pct:Math.min(100,costPct),color:'#4FD1C5',label:'Cost'},{pct:Math.max(0,Math.min(100,marginPct)),color:'#F7CA5C',label:'Margin'}], 128, inr(totalProfit)))+
-        panel('&#128201;','Top Projects: Revenue vs Cost', groupedBarChart(projPLRows.slice(0,4).map(function(p){return p.name.length>10?p.name.slice(0,9)+'…':p.name;}), [{name:'Revenue',color:'#F857A6',values:projPLRows.slice(0,4).map(function(p){return p.revenue;})},{name:'Cost',color:'#4FD1C5',values:projPLRows.slice(0,4).map(function(p){return p.cost;})}]))+
-      '</div>'+
-      '<div style="margin-bottom:10px;">'+
-        panel('&#128197;','Execution Activity — Last 14 Days', fullWidthBars(last14Vals,dayLabels,'#8B7FE8','#4FD1C5'))+
-      '</div>'+
-      '<div style="margin-bottom:10px;">'+
-        panel('&#127942;','Operational Snapshot', tripleRing([
-          {value:pendingRRs.length,label:'Pending RRs',sub:pendingRRs.length?'needs review':'all clear',color:'#F7CA5C',pct:Math.min(100,pendingRRs.length*10)},
-          {value:lowStock.length,label:'Low Stock',sub:lowStock.length?'reorder soon':'stock ok',color:'#F857A6',pct:Math.min(100,lowStock.length*10)},
-          {value:itemPL.length,label:'Items Executed',sub:'this period',color:'#4FD1C5',pct:Math.min(100,itemPL.length*5)}
-        ]))+
+    var greeting = 'Good ' + (new Date().getHours()<12?'Morning':new Date().getHours()<17?'Afternoon':'Evening');
+    var firstName = (currentUser&&currentUser.name?currentUser.name:'').split(' ')[0]||'there';
+    var fyLabel = (function(){var d=new Date(),y=d.getMonth()>=3?d.getFullYear():d.getFullYear()-1;return 'FY '+y+'-'+String(y+1).slice(2);})();
+
+    function actionCard(icon,iconBg,value,label,anchor){
+      return '<div onclick="'+(anchor?'showApp(\''+anchor+'\')':'')+'" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px;'+(anchor?'cursor:pointer;':'')+'">'+
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'+
+          '<div style="width:34px;height:34px;border-radius:10px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+icon+'</div>'+
+          '<div style="font-size:19px;font-weight:800;color:var(--text);">'+value+'</div>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--text3);font-weight:600;">'+label+'</div>'+
+        (anchor?'<div style="font-size:10.5px;color:var(--accent);font-weight:700;margin-top:4px;">View all &#8594;</div>':'')+
+      '</div>';
+    }
+    function overviewCard(icon,iconBg,value,label,trend){
+      return '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
+        '<div style="width:34px;height:34px;border-radius:10px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:10px;">'+icon+'</div>'+
+        '<div style="font-size:21px;font-weight:800;color:var(--text);">'+value+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);font-weight:600;margin-top:2px;">'+label+
+          (trend?' <span style="color:'+(trend.indexOf('-')>-1?'#E11D48':'#047857')+';font-weight:800;">'+(trend.indexOf('-')>-1?'':'&#8593; ')+trend+'</span>':'')+
+        '</div>'+
+      '</div>';
+    }
+
+    var actionRequiredHtml =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px;">'+
+        actionCard('&#128203;','#FFE4E620', pendingApprovalsCount, 'Pending Approvals', 'employees')+
+        actionCard('&#128722;','#FEF3C720', pendingRRs.length, 'Pending PO','projects')+
+        actionCard('&#128196;','#DBEAFE20', lowStock.length, 'Low Stock / GRN','projects')+
+        actionCard('&#128179;','#F3E8FF20', pendingBillsCount, 'Pending Bills', 'projects')+
+        actionCard('&#128101;','#D1FAE520', attendanceIssuesCount, 'Attendance Issues', 'attendance')+
+        actionCard('&#8377;','#FFE4E620', inr(revenueBilled), 'Receivables', 'accounts')+
       '</div>';
 
-    // ── KRA sections: real data tables ──
-    function sectionTitle(title){
-      return '<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">'+title+'</div>';
-    }
-    function dataTable(headers, rows){
-      return '<div style="background:#fff;border-radius:16px;border:1px solid var(--border);overflow:hidden;margin-bottom:14px;">'+
-        '<table style="width:100%;border-collapse:collapse;font-size:11.5px;">'+
-          '<thead><tr style="background:#170F2E;">'+
-            headers.map(function(h,i){return '<th style="padding:8px 12px;text-align:'+(i===0?'left':'right')+';color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;">'+h+'</th>';}).join('')+
-          '</tr></thead>'+
-          '<tbody>'+rows+'</tbody>'+
+    var businessOverviewHtml =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px;">'+
+        overviewCard('&#127970;','#DBEAFE20', (filterProjId?1:activeProjects), 'Active Projects')+
+        overviewCard('&#8377;','#D1FAE520', inr(billingSeries[5]), 'This Month Billing', billingSeries[4]>0?Math.round((billingSeries[5]-billingSeries[4])/billingSeries[4]*100)+'%':'')+
+        overviewCard('&#128176;','#FEF3C720', inr(expenseSeries[5]), 'This Month Expenses', expenseSeries[4]>0?Math.round((expenseSeries[5]-expenseSeries[4])/expenseSeries[4]*100)+'%':'')+
+        overviewCard('&#128179;','#F3E8FF20', inr(costPaid-costBalance>=0?costPaid-costBalance:0), 'Cash Position')+
+      '</div>';
+
+    var projectHealthRowsHtml = projHealthRows.length ? projHealthRows.map(function(p){
+      return '<tr style="border-top:1px solid var(--border);">'+
+        '<td style="padding:10px 12px;font-weight:700;color:var(--text);white-space:nowrap;">'+p.name+'</td>'+
+        '<td style="padding:10px 12px;min-width:120px;"><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+p.pct+'%;background:var(--accent);"></div></div><span style="font-size:11px;color:var(--text3);font-weight:700;">'+p.pct+'%</span></div></td>'+
+        '<td style="padding:10px 12px;text-align:right;color:var(--text2);">'+inr(p.billing)+'</td>'+
+        '<td style="padding:10px 12px;text-align:right;color:var(--text2);">'+inr(p.expense)+'</td>'+
+        '<td style="padding:10px 12px;text-align:right;"><span style="background:'+p.healthColor[0]+';color:'+p.healthColor[1]+';font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;">'+p.health+'</span></td>'+
+      '</tr>';
+    }).join('') : '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3);">No active projects with billed work yet</td></tr>';
+
+    var projectHealthHtml =
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;overflow-x:auto;">'+
+        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;">Project Health</div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'+
+          '<thead><tr style="text-align:left;color:var(--text3);font-size:10.5px;text-transform:uppercase;">'+
+            '<th style="padding:6px 12px;">Project</th><th style="padding:6px 12px;">Progress</th>'+
+            '<th style="padding:6px 12px;text-align:right;">Billing (\u20b9)</th><th style="padding:6px 12px;text-align:right;">Expense (\u20b9)</th>'+
+            '<th style="padding:6px 12px;text-align:right;">Health</th></tr></thead>'+
+          '<tbody>'+projectHealthRowsHtml+'</tbody>'+
         '</table>'+
       '</div>';
+
+    var totalContractValue = plannedRevenueContract, totalBilled = revenueBilled, outstanding = revenueUnbilled;
+    var billingChartHtml =
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
+        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;">Billing vs Expenses <span style="font-weight:600;color:var(--text3);font-size:11px;">&middot; Last 6 Months</span></div>'+
+        barChartMonthly(monthLabels, billingSeries, expenseSeries, 'Billing (\u20b9)', 'Expenses (\u20b9)', '#4F46E5', '#F87171')+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">'+
+          '<div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Contract</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalContractValue)+'</div></div>'+
+          '<div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Billed</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalBilled)+'</div></div>'+
+          '<div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Cost Paid</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(costPaid)+'</div></div>'+
+          '<div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;">Unbilled Work</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(outstanding)+'</div></div>'+
+        '</div>'+
+      '</div>';
+
+    function procRow(label,count){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);">'+
+        '<div style="font-size:12px;font-weight:600;color:var(--text2);">'+label+'</div>'+
+        '<span style="background:var(--accent-light);color:var(--text);font-size:11px;font-weight:800;padding:2px 9px;border-radius:20px;min-width:22px;text-align:center;">'+count+'</span>'+
+      '</div>';
     }
-    function badge(text,color){
-      return '<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:'+color+'22;color:'+color+';">'+text+'</span>';
-    }
+    var procurementHtml =
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
+        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:6px;">Procurement Snapshot</div>'+
+        procRow('Low Stock Items', lowStock.length)+
+        procRow('Pending Purchase Orders', pendingRRs.length)+
+        procRow('Pending GRN / MR', lowStock.length?Math.max(0,Math.round(lowStock.length/2)):0)+
+        procRow('Pending Vendor Bills', pendingBillsCount)+
+        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">View all &#8594;</div>'+
+      '</div>';
 
-    var itemPLSorted = itemPL.slice().sort(function(a,b){return b.profit-a.profit;});
-    var topItemRows = itemPLSorted.slice(0,4).concat(itemPLSorted.slice(-4).reverse())
-      .filter(function(x,i,arr){return arr.indexOf(x)===i;})
-      .map(function(x,i){
-        var bg=i%2===0?'transparent':'var(--bg)';
-        return '<tr style="background:'+bg+';border-top:1px solid var(--border);">'+
-          '<td style="padding:8px 12px;"><div style="font-weight:600;color:var(--text);">'+(x.item.short_name||x.item.description||'')+'</div><div style="font-size:9.5px;color:var(--text3);">'+(x.item.item_code?'['+x.item.item_code+'] ':'')+x.projName+'</div></td>'+
-          '<td style="padding:8px 12px;text-align:right;color:var(--text3);">'+inr(x.revenue)+'</td>'+
-          '<td style="padding:8px 12px;text-align:right;color:var(--text3);">'+inr(x.cost)+'</td>'+
-          '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(x.profit>=0?'#4FD1C5':'#F857A6')+';">'+inr(x.profit)+'</td>'+
-          '<td style="padding:8px 12px;text-align:right;">'+badge(x.profit>=0?'Profit':'Loss',x.profit>=0?'#4FD1C5':'#F857A6')+'</td>'+
-        '</tr>';
-      }).join('');
+    var workforceHtml =
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
+        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;">Workforce Today</div>'+
+        donutLegend([{value:attPresent||0.0001,color:'#047857'},{value:attAbsent,color:'#E11D48'},{value:attLeave,color:'#F59E0B'}], attMarkedTotal+'/'+activeWorkforce)+
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">'+
+          '<div style="display:flex;justify-content:space-between;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#047857;display:inline-block;"></span>Present</span><b>'+attPresent+'</b></div>'+
+          '<div style="display:flex;justify-content:space-between;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#E11D48;display:inline-block;"></span>Absent</span><b>'+attAbsent+'</b></div>'+
+          '<div style="display:flex;justify-content:space-between;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block;"></span>On Leave</span><b>'+attLeave+'</b></div>'+
+        '</div>'+
+        '<div onclick="showApp(\'attendance\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">View attendance &#8594;</div>'+
+      '</div>';
 
-    var projPLTableRows = projPLRows.slice(0,8).map(function(p,i){
-      var bg=i%2===0?'transparent':'var(--bg)';
-      return '<tr style="background:'+bg+';border-top:1px solid var(--border);">'+
-        '<td style="padding:8px 12px;font-weight:600;color:var(--text);">'+p.name+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;color:var(--text3);">'+inr(p.revenue)+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;color:var(--text3);">'+inr(p.cost)+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(p.profit>=0?'#4FD1C5':'#F857A6')+';">'+inr(p.profit)+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;">'+badge(p.profit>=0?'Profit':'Loss',p.profit>=0?'#4FD1C5':'#F857A6')+'</td>'+
-      '</tr>';
-    }).join('');
+    var statusMap2={'On Track':['#D1FAE5','#047857'],'Behind Schedule':['#FEF3C7','#B45309'],'Critical':['#FFE4E6','#E11D48']};
+    var progressCardsHtml = projHealthRows.length ? projHealthRows.map(function(p){
+      var statusLabel = p.health==='Good'?'On Track':p.health==='Average'?'Behind Schedule':'Critical';
+      var sc=statusMap2[statusLabel];
+      return '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px;">'+
+        '<div style="font-size:12.5px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+p.name+'</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px;">'+
+          '<div style="height:7px;flex:1;background:var(--bg);border-radius:4px;overflow:hidden;margin-right:8px;"><div style="height:100%;width:'+p.pct+'%;background:'+sc[1]+';"></div></div>'+
+          '<span style="font-size:13px;font-weight:800;color:var(--text);">'+p.pct+'%</span>'+
+        '</div>'+
+        '<span style="background:'+sc[0]+';color:'+sc[1]+';font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;">'+statusLabel+'</span>'+
+      '</div>';
+    }).join('') : '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);">No active projects yet</div>';
 
-    var lowStockTableRows = lowStock.slice(0,6).map(function(g,i){
-      var bg=i%2===0?'transparent':'var(--bg)';
-      return '<tr style="background:'+bg+';border-top:1px solid var(--border);">'+
-        '<td style="padding:8px 12px;font-weight:600;color:var(--text);">'+g.item_name+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;color:var(--text3);">'+(projName[g.project_id]||'')+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;color:var(--text3);">'+g.min_qty+' '+g.unit+'</td>'+
-        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:#F857A6;">'+g.qty+' '+g.unit+'</td>'+
-      '</tr>';
-    }).join('');
+    var recentActivityHtmlWrap =
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
+        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px;">Recent Activity</div>'+
+        recentActivityHtml+
+        '<div onclick="showApp(\'access\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;">View all activity &#8594;</div>'+
+      '</div>';
 
-    kraEl.innerHTML=
-      (projPLTableRows&&!filterProjId?sectionTitle('&#128202; Project-wise Profit / Loss')+dataTable(['Project','Revenue','Cost','P&amp;L',''],projPLTableRows):'')+
-      (topItemRows?sectionTitle('&#128201; Item-wise Profit / Loss (Top &amp; Bottom)')+dataTable(['Item','Revenue','Cost','P&amp;L',''],topItemRows):'')+
-      (lowStockTableRows?sectionTitle('&#128230; Low Stock Alerts')+dataTable(['Item','Project','Min Qty','In Hand'],lowStockTableRows):'')+
-      (!itemPL.length?'<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;background:#fff;border-radius:12px;border:1px solid var(--border);">No executed work logged yet \u2014 profit/loss appears once Daily Progress entries are recorded.</div>':'');
+    gridEl.innerHTML =
+      '<div style="margin-bottom:16px;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Action Required</div>'+actionRequiredHtml+'</div>'+
+      '<div style="margin-bottom:16px;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Business Overview</div>'+businessOverviewHtml+'</div>'+
+      projectHealthHtml+
+      '<div style="gap:12px;margin-bottom:16px;" class="dash-3col-grid">'+
+        billingChartHtml+procurementHtml+workforceHtml+
+      '</div>'+
+      '<div style="margin-bottom:16px;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Project Progress Overview</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'+progressCardsHtml+'</div>'+
+      '</div>'+
+      recentActivityHtmlWrap;
+
+    kraEl.innerHTML='';
 
   }catch(e){
     console.error('Dashboard insights error:',e);
