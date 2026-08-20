@@ -6130,6 +6130,12 @@ function logAudit(action, table, recordId, changes){
         record_id: recordId!=null?String(recordId):null,
         changes: changes!=null?changes:null
       })
+    }).then(function(res){
+      // fetch() only rejects on network-level failure, not on HTTP
+      // error statuses like 400 — without this, a failing audit log
+      // insert shows only a bare "400" in the network tab with no way
+      // to see PostgREST's actual reason.
+      if(!res.ok) res.text().then(function(body){ console.warn('[audit log] insert failed:', res.status, body); });
     }).catch(function(){});
   }catch(e){}
 }
