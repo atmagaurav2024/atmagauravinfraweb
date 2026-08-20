@@ -24749,6 +24749,11 @@ function getEmpDataScope(){
 var COMPANY_DATA = {};
 var COMPANY_BILLING = {}, ALL_PLANS = [], COMPANY_PAYOUT = {};
 
+// DEAD CODE — shadowed by js/settings.js, which loads after this and
+// silently overrides initCompany/companyRender with its own
+// definitions (now including this Billing/Payout HTML, ported over).
+// Left in place rather than deleted (lower risk), but the real,
+// active versions are in js/settings.js — edit changes there.
 async function initCompany(){
   var body = document.getElementById('company-body');
   body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">Loading...</div>';

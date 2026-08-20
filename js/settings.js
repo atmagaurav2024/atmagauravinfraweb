@@ -297,14 +297,33 @@ async function acSavePermissions() {
 }
 
 // ════ COMPANY DETAILS ════════════════════════════════════════════════
+// This file loads AFTER index.html's inline <script> blocks, so
+// initCompany/companyRender here are the REAL, active versions -
+// index.html has stale duplicates left in place as dead code. Same
+// shadowing hazard already documented in finance.js (re: Accounts)
+// and projects.js (re: Schedule H/B) - this is the third time it's
+// bitten a feature (Billing/Autopay/Payout Settings) in this same
+// codebase. Supporting functions referenced from the HTML below
+// (coPayoutEdit, coPayoutSave, companySubscribeToPlan,
+// companyCancelAutopay, etc.) are NOT duplicated here and should stay
+// that way - they're defined once in index.html.
 var COMPANY_DATA = {};
 
 async function initCompany() {
   var body = document.getElementById('company-body');
   body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">Loading...</div>';
   try {
-    var rows = await sbFetch('company_details', { select: '*', order: 'id.asc' });
+    var r = await Promise.all([
+      sbFetch('company_details', { select: '*', order: 'id.asc' }),
+      currentUser&&currentUser.companyId?sbFetch('companies',{select:'*',filter:'id=eq.'+currentUser.companyId}).catch(function(){return [];}):Promise.resolve([]),
+      sbFetch('plans',{select:'*',order:'price_monthly.asc'}).catch(function(){return [];}),
+      currentUser&&currentUser.role==='admin'?sbFetch('company_payout_settings',{select:'*'}).catch(function(){return [];}):Promise.resolve([])
+    ]);
+    var rows = r[0];
     COMPANY_DATA = (Array.isArray(rows) && rows.length) ? rows[0] : {};
+    COMPANY_BILLING = (Array.isArray(r[1])&&r[1].length) ? r[1][0] : {};
+    ALL_PLANS = Array.isArray(r[2])?r[2]:[];
+    COMPANY_PAYOUT = (Array.isArray(r[3])&&r[3].length) ? r[3][0] : {};
   } catch (e) { COMPANY_DATA = {}; }
   companyRender();
 }
@@ -342,7 +361,79 @@ function companyRender() {
     '</div>';
   }
 
+  var currentPlan = ALL_PLANS.find(function(p){return p.id===COMPANY_BILLING.plan_id;});
+  var currentPrice = currentPlan ? parseFloat(currentPlan.price_monthly)||0 : 0;
+  var statusMap={trialing:['#FEF3C7','#B45309','Trial'], active:['#D1FAE5','#047857','Active'], lapsed:['#FFE4E6','#E11D48','Lapsed'], suspended:['#F5F5F4','#57534E','Suspended']};
+  var st=statusMap[COMPANY_BILLING.subscription_status]||statusMap.trialing;
+
+  // Plans worth more than what's currently active get a prominent
+  // "Upgrade to X" card. Cheaper paid plans (a downgrade) are still
+  // offered, just less prominently.
+  var upgrades = ALL_PLANS.filter(function(p){return p.id!==COMPANY_BILLING.plan_id && parseFloat(p.price_monthly)>currentPrice;})
+    .sort(function(a,b){return parseFloat(a.price_monthly)-parseFloat(b.price_monthly);});
+  var downgrades = ALL_PLANS.filter(function(p){return p.id!==COMPANY_BILLING.plan_id && parseFloat(p.price_monthly)>0 && parseFloat(p.price_monthly)<=currentPrice;})
+    .sort(function(a,b){return parseFloat(a.price_monthly)-parseFloat(b.price_monthly);});
+
+  var billingHtml =
+    sec('&#128179;','Billing &amp; Subscription','#7C3AED')+
+    '<div style="background:#FAFAF9;border:1px solid #E7E5E4;border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+        '<div><div style="font-size:14px;font-weight:800;">'+(currentPlan?currentPlan.name:'—')+' Plan</div>'+
+          (currentPlan?'<div style="font-size:11px;color:var(--text3);">\u20b9'+currentPlan.price_monthly+'/month'+(currentPlan.max_employees?' \u00b7 up to '+currentPlan.max_employees+' employees':'')+(currentPlan.max_projects?' \u00b7 up to '+currentPlan.max_projects+' projects':'')+'</div>':'')+
+        '</div>'+
+        '<span style="background:'+st[0]+';color:'+st[1]+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;">'+st[2]+'</span>'+
+      '</div>'+
+      (COMPANY_BILLING.subscription_status==='trialing' && COMPANY_BILLING.trial_ends_at?
+        '<div style="font-size:11px;color:var(--text3);margin-top:6px;">Trial ends '+fmtDate(String(COMPANY_BILLING.trial_ends_at).slice(0,10))+'</div>':'')+
+      (COMPANY_BILLING.subscription_status==='lapsed'?
+        '<div style="font-size:11px;color:#E11D48;font-weight:700;margin-top:6px;">Your subscription has lapsed — you have read-only access until you subscribe again.</div>':'')+
+      (COMPANY_BILLING.subscription_status==='active' && COMPANY_BILLING.razorpay_subscription_id?
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #E7E5E4;">'+
+          '<div style="font-size:11px;color:var(--text3);">&#128257; Autopay active'+(COMPANY_BILLING.next_billing_date?' \u00b7 next charge '+fmtDate(COMPANY_BILLING.next_billing_date):'')+'</div>'+
+          '<button onclick="companyCancelAutopay()" style="background:none;border:none;color:#E11D48;font-size:11px;font-weight:700;cursor:pointer;text-decoration:underline;">Cancel autopay</button>'+
+        '</div>':'')+
+    '</div>'+
+    (upgrades.map(function(p){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#F5F3FF,#FFFFFF);border:1.5px solid #C4B5FD;border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
+        '<div><div style="font-size:12.5px;font-weight:800;color:#5B21B6;">&#11088; '+p.name+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);">\u20b9'+p.price_monthly+'/month'+(p.max_employees?' \u00b7 up to '+p.max_employees+' employees':' \u00b7 unlimited employees')+'</div></div>'+
+        '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:var(--accent);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;">Upgrade to '+p.name+'</button>'+
+      '</div>';
+    }).join(''))+
+    (downgrades.map(function(p){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;background:white;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
+        '<div><div style="font-size:12.5px;font-weight:700;">'+p.name+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);">\u20b9'+p.price_monthly+'/month'+(p.max_employees?' \u00b7 up to '+p.max_employees+' employees':' \u00b7 unlimited employees')+'</div></div>'+
+        '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:none;color:#44403C;border:1px solid #D6D3D1;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Switch to '+p.name+'</button>'+
+      '</div>';
+    }).join(''))+
+    '<div style="text-align:center;margin-top:8px;font-size:11px;color:var(--text3);">'+
+      '<a href="/terms.html" target="_blank" style="color:var(--text3);">Terms of Service</a> &middot; '+
+      '<a href="/privacy.html" target="_blank" style="color:var(--text3);">Privacy Policy</a> &middot; '+
+      '<a href="/refund-policy.html" target="_blank" style="color:var(--text3);">Refund Policy</a>'+
+    '</div>';
+
+  var payoutHtml = (currentUser&&currentUser.role==='admin') ?
+    sec('&#128176;','Petty Cash UPI Payouts','#0D2137')+
+    '<div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.5;">'+
+      'Connect your own RazorpayX business account to automatically pay vendors via UPI when recording a petty cash voucher, with the expense confirmed automatically once the payout settles. '+
+      (COMPANY_PAYOUT.is_active?'':'This needs a RazorpayX account (separate signup + KYC from regular Razorpay) with a pre-funded balance for payouts.')+
+    '</div>'+
+    (COMPANY_PAYOUT.is_active?
+      '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">'+
+        '<div><div style="font-size:12.5px;font-weight:800;color:#166534;">&#10003; Connected</div>'+
+        '<div style="font-size:11px;color:var(--text3);">Account: '+(COMPANY_PAYOUT.razorpayx_account_number||'—')+'</div></div>'+
+        '<button onclick="coPayoutEdit()" style="background:none;border:1px solid #BBF7D0;color:#166534;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">Edit</button>'+
+      '</div>'
+      :
+      '<button onclick="coPayoutEdit()" style="width:100%;background:var(--text);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect RazorpayX</button>'
+    )+
+    '<div id="co-payout-form" style="display:none;margin-top:12px;"></div>'
+  : '';
+
   body.innerHTML =
+    billingHtml +
+    payoutHtml +
     sec('&#127968;', 'Company Information', '#1565C0') +
     '<div class="g2">' + finp('name','Company Name',d.name,'e.g. Atmagaurav Infra Pvt. Ltd.') + finp('type','Company Type',d.type,'e.g. Private Limited') + '</div>' +
     '<label class="flbl">Registered Address</label>' +
