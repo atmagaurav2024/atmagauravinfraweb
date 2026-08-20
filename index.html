@@ -1706,12 +1706,17 @@ input,select,textarea{font-size:16px !important;}
   <div class="dash-top">
     <div class="dt-row">
       <button class="ham-btn" onclick="openDrawer()"><div class="ham-line"></div><div class="ham-line"></div><div class="ham-line"></div></button>
-      <div style="flex:1;margin-left:12px;min-width:0;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-name" id="dash-name">—</div><div class="dt-role" id="dash-role">—</div></div>
-      <div class="dt-badges" style="display:flex;align-items:center;flex-shrink:0;">
-        <div id="dash-sub-badge" onclick="showApp('company')" style="display:none;cursor:pointer;margin-right:6px;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;"></div>
-        <div id="dash-upgrade-btn" onclick="showApp('company')" style="display:none;cursor:pointer;margin-right:8px;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;background:var(--accent);color:white;"></div>
+      <div style="flex:1;margin-left:12px;min-width:0;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-name" id="dash-name">—</div><div class="dt-role" id="dash-role">Here's what's happening with your projects today.</div></div>
+      <div class="dt-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <div id="dash-sub-badge" onclick="showApp('company')" style="display:none;cursor:pointer;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;"></div>
+        <div id="dash-upgrade-btn" onclick="showApp('company')" style="display:none;cursor:pointer;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;background:var(--accent);color:white;"></div>
+        <div id="dash-fy-label" style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;">&#128197; <span id="dash-fy-text">FY —</span></div>
+        <div style="position:relative;cursor:pointer;" onclick="showApp('access')">
+          <div style="width:32px;height:32px;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:15px;">&#128276;</div>
+          <div id="dash-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#E11D48;color:white;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;"></div>
+        </div>
       </div>
-      <div class="dt-avatar" id="dash-avatar" style="cursor:pointer;font-size:14px;font-weight:900;" onclick="showProfile()">👤</div>
+      <div class="dt-avatar" id="dash-avatar" style="cursor:pointer;font-size:14px;font-weight:900;margin-left:8px;" onclick="showProfile()">👤</div>
     </div>
     <div style="margin-top:14px;">
       <select id="dash-proj-filter" onchange="loadDashboardInsights(this.value)" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:'Nunito',sans-serif;outline:none;">
@@ -3259,7 +3264,7 @@ async function loadDashboardInsights(filterProjId){
     var totalContractValue = plannedRevenueContract, totalBilled = revenueBilled, outstanding = revenueUnbilled;
     var billingChartHtml =
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
-        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;">Billing vs Expenses <span style="font-weight:600;color:var(--text3);font-size:11px;">&middot; Last 6 Months</span></div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-size:13px;font-weight:800;color:var(--text);">Billing vs Expenses</div><div style="display:flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;">Last 6 Months <span style="font-size:9px;">&#9662;</span></div></div>'+
         barChartMonthly(monthLabels, billingSeries, expenseSeries, 'Billing (\u20b9)', 'Expenses (\u20b9)', '#2563EB', '#F87171')+
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">'+
           '<div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Contract</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalContractValue)+'</div></div>'+
@@ -3329,6 +3334,15 @@ async function loadDashboardInsights(filterProjId){
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'+progressCardsHtml+'</div>'+
       '</div>'+
       recentActivityHtmlWrap;
+
+    var fyTextEl=document.getElementById('dash-fy-text');
+    if(fyTextEl) fyTextEl.textContent=fyLabel;
+    var notifCount = pendingApprovalsCount + pendingRRs.length + lowStock.length + pendingBillsCount + attendanceIssuesCount;
+    var notifBadge=document.getElementById('dash-notif-badge');
+    if(notifBadge){
+      if(notifCount>0){ notifBadge.textContent=notifCount>99?'99+':notifCount; notifBadge.style.display='flex'; }
+      else notifBadge.style.display='none';
+    }
 
     kraEl.innerHTML='';
 
