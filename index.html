@@ -1708,8 +1708,6 @@ input,select,textarea{font-size:16px !important;}
       <button class="ham-btn" onclick="openDrawer()"><div class="ham-line"></div><div class="ham-line"></div><div class="ham-line"></div></button>
       <div style="flex:1;margin-left:12px;min-width:0;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-name" id="dash-name">—</div><div class="dt-role" id="dash-subtitle">Here's what's happening with your projects today.</div></div>
       <div class="dt-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <div id="dash-sub-badge" onclick="showApp('company')" style="display:none;cursor:pointer;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;"></div>
-        <div id="dash-upgrade-btn" onclick="showApp('company')" style="display:none;cursor:pointer;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;background:var(--accent);color:white;"></div>
         <div id="dash-fy-label" style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;">&#128197; <span id="dash-fy-text">FY —</span></div>
         <div style="position:relative;cursor:pointer;" onclick="showApp('access')">
           <div style="width:32px;height:32px;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:15px;">&#128276;</div>
@@ -1724,11 +1722,6 @@ input,select,textarea{font-size:16px !important;}
         </div>
         <span style="font-size:10px;color:var(--text3);">&#9662;</span>
       </div>
-    </div>
-    <div style="margin-top:14px;">
-      <select id="dash-proj-filter" onchange="loadDashboardInsights(this.value)" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:'Nunito',sans-serif;outline:none;">
-        <option value="" style="color:#111827;background:white;">&#128203; All Projects</option>
-      </select>
     </div>
   </div>
   <div class="dash-body">
