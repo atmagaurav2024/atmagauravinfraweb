@@ -1706,7 +1706,7 @@ input,select,textarea{font-size:16px !important;}
   <div class="dash-top">
     <div class="dt-row">
       <button class="ham-btn" onclick="openDrawer()"><div class="ham-line"></div><div class="ham-line"></div><div class="ham-line"></div></button>
-      <div style="flex:1;margin-left:12px;min-width:0;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-name" id="dash-name">—</div><div class="dt-role" id="dash-role">Here's what's happening with your projects today.</div></div>
+      <div style="flex:1;margin-left:12px;min-width:0;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-name" id="dash-name">—</div><div class="dt-role" id="dash-subtitle">Here's what's happening with your projects today.</div></div>
       <div class="dt-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
         <div id="dash-sub-badge" onclick="showApp('company')" style="display:none;cursor:pointer;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;"></div>
         <div id="dash-upgrade-btn" onclick="showApp('company')" style="display:none;cursor:pointer;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:800;white-space:nowrap;background:var(--accent);color:white;"></div>
@@ -1716,7 +1716,14 @@ input,select,textarea{font-size:16px !important;}
           <div id="dash-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#E11D48;color:white;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;"></div>
         </div>
       </div>
-      <div class="dt-avatar" id="dash-avatar" style="cursor:pointer;font-size:14px;font-weight:900;margin-left:8px;" onclick="showProfile()">👤</div>
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px;" onclick="showProfile()">
+        <div class="dt-avatar" id="dash-avatar" style="font-size:14px;font-weight:900;">👤</div>
+        <div style="text-align:left;">
+          <div id="dash-header-name" style="font-size:12.5px;font-weight:800;color:var(--text);line-height:1.2;white-space:nowrap;">—</div>
+          <div id="dash-header-role" style="font-size:10.5px;color:var(--text3);line-height:1.2;">—</div>
+        </div>
+        <span style="font-size:10px;color:var(--text3);">&#9662;</span>
+      </div>
     </div>
     <div style="margin-top:14px;">
       <select id="dash-proj-filter" onchange="loadDashboardInsights(this.value)" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:'Nunito',sans-serif;outline:none;">
@@ -8343,6 +8350,8 @@ function updateDashboardUser(){
     }
   });
   document.querySelectorAll('#dash-role').forEach(function(el){ el.textContent = role + ' • ' + project; });
+  var headerNameEl=document.getElementById('dash-header-name'); if(headerNameEl) headerNameEl.textContent=name;
+  var headerRoleEl=document.getElementById('dash-header-role'); if(headerRoleEl){ var r=currentUser.role||'—'; headerRoleEl.textContent=r.charAt(0).toUpperCase()+r.slice(1); }
 
   // Update greeting
   var hr = new Date().getHours();
