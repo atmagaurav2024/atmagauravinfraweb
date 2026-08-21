@@ -3243,13 +3243,21 @@ async function loadDashboardInsights(filterProjId){
     var workforceHtml =
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
         '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;">Workforce Today</div>'+
-        donutLegend([{value:attPresent||0.0001,color:'#047857'},{value:attAbsent,color:'#E11D48'},{value:attLeave,color:'#F59E0B'}], attMarkedTotal+'/'+activeWorkforce)+
-        '<div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">'+
-          '<div style="display:flex;justify-content:space-between;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#047857;display:inline-block;"></span>Present</span><b>'+attPresent+'</b></div>'+
-          '<div style="display:flex;justify-content:space-between;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#E11D48;display:inline-block;"></span>Absent</span><b>'+attAbsent+'</b></div>'+
-          '<div style="display:flex;justify-content:space-between;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block;"></span>On Leave</span><b>'+attLeave+'</b></div>'+
+        '<div style="display:flex;align-items:center;gap:16px;">'+
+          '<div style="flex:1;display:flex;flex-direction:column;gap:8px;">'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#047857;display:inline-block;"></span>Present</span><b style="color:var(--text);">'+attPresent+'</b></div>'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#E11D48;display:inline-block;"></span>Absent</span><b style="color:var(--text);">'+attAbsent+'</b></div>'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block;"></span>On Leave</span><b style="color:var(--text);">'+attLeave+'</b></div>'+
+          '</div>'+
+          '<div style="position:relative;width:104px;height:104px;flex-shrink:0;">'+
+            ringArcs([{value:attPresent||0.0001,color:'#047857'},{value:attAbsent,color:'#E11D48'},{value:attLeave,color:'#F59E0B'}], 104, 16, 'var(--bg)')+
+            '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">'+
+              '<div style="font-size:14px;font-weight:800;color:var(--text);">'+attMarkedTotal+'/'+activeWorkforce+'</div>'+
+              '<div style="font-size:8.5px;color:var(--text3);font-weight:700;">Total</div>'+
+            '</div>'+
+          '</div>'+
         '</div>'+
-        '<div onclick="showApp(\'attendance\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:#2563EB;cursor:pointer;">View attendance &#8594;</div>'+
+        '<div onclick="showApp(\'attendance\')" style="text-align:right;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;font-weight:700;color:#2563EB;cursor:pointer;">View attendance &#8594;</div>'+
       '</div>';
 
     var statusMap2={'On Track':['#D1FAE5','#047857'],'Behind Schedule':['#FEF3C7','#B45309'],'Critical':['#FFE4E6','#E11D48']};
