@@ -1415,6 +1415,13 @@ input,select,textarea{font-size:16px !important;}
 @media (max-width:640px){
   .dash-3col-grid{grid-template-columns:1fr;}
 }
+/* Business Overview + Project Health row — side by side on desktop,
+   matching the mockup's roughly 65/35 split, stacking on narrower
+   screens same as the other dashboard grids. */
+.dash-overview-health-grid{display:grid;grid-template-columns:1.8fr 1fr;gap:12px;align-items:start;}
+@media (max-width:900px){
+  .dash-overview-health-grid{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
@@ -3182,7 +3189,7 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
 
     var businessOverviewHtml =
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px;">'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">'+
         overviewCard('&#127970;','#DBEAFE', (filterProjId?1:activeProjects), 'Active Projects')+
         overviewCard('&#8377;','#D1FAE5', inr(billingSeries[5]), 'This Month Billing', billingSeries[4]>0?Math.round((billingSeries[5]-billingSeries[4])/billingSeries[4]*100)+'%':'')+
         overviewCard('&#128176;','#FEF3C7', inr(expenseSeries[5]), 'This Month Expenses', expenseSeries[4]>0?Math.round((expenseSeries[5]-expenseSeries[4])/expenseSeries[4]*100)+'%':'')+
@@ -3200,7 +3207,7 @@ async function loadDashboardInsights(filterProjId){
     }).join('') : '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3);">No active projects with billed work yet</td></tr>';
 
     var projectHealthHtml =
-      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;overflow-x:auto;">'+
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;overflow-x:auto;">'+
         '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;">Project Health</div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'+
           '<thead><tr style="text-align:left;color:var(--text3);font-size:10.5px;text-transform:uppercase;">'+
@@ -3283,8 +3290,10 @@ async function loadDashboardInsights(filterProjId){
 
     gridEl.innerHTML =
       '<div style="margin-bottom:16px;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Action Required</div>'+actionRequiredHtml+'</div>'+
-      '<div style="margin-bottom:16px;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Business Overview</div>'+businessOverviewHtml+'</div>'+
-      projectHealthHtml+
+      '<div class="dash-overview-health-grid" style="margin-bottom:16px;">'+
+        '<div><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Business Overview</div>'+businessOverviewHtml+'</div>'+
+        projectHealthHtml+
+      '</div>'+
       '<div style="gap:12px;margin-bottom:16px;" class="dash-3col-grid">'+
         billingChartHtml+procurementHtml+workforceHtml+
       '</div>'+
