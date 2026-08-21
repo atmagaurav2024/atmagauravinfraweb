@@ -3297,10 +3297,12 @@ async function loadDashboardInsights(filterProjId){
       '<div style="gap:12px;margin-bottom:16px;" class="dash-3col-grid">'+
         billingChartHtml+procurementHtml+workforceHtml+
       '</div>'+
-      '<div style="margin-bottom:16px;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Project Progress Overview</div>'+
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'+progressCardsHtml+'</div>'+
-      '</div>'+
-      recentActivityHtmlWrap;
+      '<div class="dash-overview-health-grid" style="margin-bottom:16px;">'+
+        '<div><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Project Progress Overview</div>'+
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">'+progressCardsHtml+'</div>'+
+        '</div>'+
+        recentActivityHtmlWrap+
+      '</div>';
 
     var fyTextEl=document.getElementById('dash-fy-text');
     if(fyTextEl) fyTextEl.textContent=fyLabel;
