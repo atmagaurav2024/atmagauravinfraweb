@@ -199,7 +199,7 @@ body[data-app="registry"] .reg-foot{display:flex;}
 .dk{background:rgba(255,255,255,.09);border-radius:12px;padding:10px;text-align:center;}
 .dk-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:white;}
 .dk-lbl{font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-top:2px;}
-.dash-body{padding:10px 14px;overflow-y:auto;flex:1;}
+.dash-body{padding:10px 14px;overflow-y:auto;overflow-x:hidden;flex:1;}
 .mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
 .mod-item{background:white;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow);padding:12px;text-align:center;cursor:pointer;transition:transform .15s;}
 .mod-item:active{transform:scale(.94);}
@@ -1284,7 +1284,7 @@ input,select,textarea{font-size:16px !important;}
 /* ═══════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════ */
-#app-dashboard{background:#F8FAFC;overflow-y:auto;padding-bottom:80px;font-family:'Inter',sans-serif;}
+#app-dashboard{background:#F8FAFC;overflow-y:auto;overflow-x:hidden;padding-bottom:80px;font-family:'Inter',sans-serif;}
 #app-dashboard *{font-family:'Inter',sans-serif;}
 #app-dashboard.on{display:block;}
 #app-dashboard .dash-top{background:#fff;border-bottom:1px solid var(--border);padding:8px 16px;padding-top:max(8px,env(safe-area-inset-top));}
@@ -1311,7 +1311,7 @@ input,select,textarea{font-size:16px !important;}
   .dt-name{font-size:15px!important;line-height:1.25!important;word-break:break-word;}
   .dt-badges{width:100%;order:10;justify-content:flex-end;margin-top:8px;}
 }
-.dash-body{padding:10px 14px;flex:1;overflow-y:auto;min-height:0;}
+.dash-body{padding:10px 14px;flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;}
 .sec-title{font-size:14px;font-weight:800;margin-bottom:10px;font-family:'Nunito',sans-serif;}
 .mod-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
 .mod-card{background:white;border-radius:16px;border:1px solid #E2E8F0;box-shadow:0 2px 12px rgba(13,33,55,.08);padding:18px 16px;cursor:pointer;transition:transform .15s;display:flex;align-items:center;gap:14px;}
