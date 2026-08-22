@@ -2709,7 +2709,7 @@ async function loadDashboardInsights(filterProjId){
     }
 
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
-    var activeStatuses=['active','in-progress','rr','planning'];
+    var activeStatuses=['planning','in-progress','under-dlp'];
     var activeProjects=projects.filter(function(p){return activeStatuses.indexOf(p.status)>-1;}).length;
     var activeWorkforce=employees.filter(function(e){return e.status==='active';}).length;
 
