@@ -2798,7 +2798,8 @@ async function loadDashboardInsights(filterProjId){
     }
 
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
-    var activeProjects=projects.length;
+    var activeProjects=projects.filter(function(p){return p.status==='planning'||p.status==='in-progress';}).length;
+    var underDlpProjects=projects.filter(function(p){return p.status==='under-dlp';}).length;
     var activeWorkforce=employees.filter(function(e){return e.status==='active';}).length;
 
     // ── Profit/Loss per BOQ item ──────────────────────────────────────────
@@ -3308,8 +3309,9 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
 
     var businessOverviewHtml =
-      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:1;">'+
+      '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:1;">'+
         overviewCard(dIcon('building','#2563EB'),'#DBEAFE', (filterProjId?1:activeProjects), 'Active Projects')+
+        overviewCard(dIcon('clipboard','#E11D48'),'#FFE4E6', (filterProjId?0:underDlpProjects), 'Under DLP Projects')+
         overviewCard(dIcon('rupee','#047857'),'#D1FAE5', inr(billingSeries[5]), 'This Month Billing', billingSeries[4]>0?Math.round((billingSeries[5]-billingSeries[4])/billingSeries[4]*100)+'%':'')+
         overviewCard(dIcon('moneybag','#B45309'),'#FEF3C7', inr(expenseSeries[5]), 'This Month Expenses', expenseSeries[4]>0?Math.round((expenseSeries[5]-expenseSeries[4])/expenseSeries[4]*100)+'%':'')+
         overviewCard(dIcon('wallet','#9333EA'),'#F3E8FF', inr(costPaid-costBalance>=0?costPaid-costBalance:0), 'Cash Position')+
