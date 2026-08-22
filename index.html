@@ -57,7 +57,7 @@ html,body{height:100%;overflow:hidden;}
 .sr-item.on .sr-ic{background:rgba(255,255,255,0.18);}
 .sr-lb{font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap;font-family:'Nunito',sans-serif;}
 .side-rail:not(.expanded) .sr-lb{display:none;}
-.side-rail:not(.expanded) .sr-logo-txt{display:none;}
+.side-rail:not(.expanded) .sr-logo-txt-wrap{display:none;}
 .sr-foot{flex-shrink:0;padding:8px 0;border-top:1px solid rgba(255,255,255,0.08);}
 .side-rail-backdrop{display:none;position:fixed;inset:0;z-index:249;background:rgba(0,0,0,0.15);}
 .side-rail-backdrop.on{display:block;}
@@ -2557,7 +2557,7 @@ input,select,textarea{font-size:16px !important;}
 <div class="side-rail" id="side-rail">
   <div class="sr-logo" onclick="toggleRail()" title="Expand / collapse">
     <div class="sr-logo-ic" style="background:transparent;"><img src="assets/rydax-icon.png" style="width:100%;height:100%;object-fit:contain;" alt="Rydax"></div>
-    <div style="line-height:1.15;">
+    <div class="sr-logo-txt-wrap" style="line-height:1.15;">
       <div class="sr-logo-txt">RYDAX</div>
       <div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.4);letter-spacing:1px;white-space:nowrap;">ERP</div>
     </div>
