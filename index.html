@@ -1716,7 +1716,10 @@ input,select,textarea{font-size:16px !important;}
       <button class="ham-btn" onclick="openDrawer()"><div class="ham-line"></div><div class="ham-line"></div><div class="ham-line"></div></button>
       <div style="flex:1;margin-left:12px;min-width:0;"><div class="dt-greeting">Good morning &#9728;&#65039;</div><div class="dt-role" id="dash-subtitle">Here's what's happening with your projects today.</div></div>
       <div class="dt-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <div id="dash-fy-label" style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;">&#128197; <span id="dash-fy-text">FY —</span></div>
+        <div style="position:relative;">
+          <div id="dash-fy-label" onclick="toggleFYMenu(event)" style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;cursor:pointer;">&#128197; <span id="dash-fy-text">FY —</span> <span style="font-size:8px;">&#9662;</span></div>
+          <div id="dash-fy-menu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);min-width:110px;z-index:50;overflow:hidden;max-height:260px;overflow-y:auto;"></div>
+        </div>
         <div style="position:relative;cursor:pointer;" onclick="showApp('access')">
           <div style="width:32px;height:32px;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg></div>
           <div id="dash-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#E11D48;color:white;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;"></div>
@@ -2628,6 +2631,55 @@ var COMPANY_DATA={};
 async function preloadCompanyData(){try{var r=await sbFetch('company_details',{select:'*',order:'id.asc'});COMPANY_DATA=(Array.isArray(r)&&r.length)?r[0]:{};}catch(e){COMPANY_DATA={};}}
 
 // ── DASHBOARD: KPI + KRA INSIGHTS ─────────────────────────────────────────
+// DASH_SELECTED_FY holds the starting calendar year of the selected
+// fiscal year (e.g. 2026 means "FY 2026-27", i.e. 1 Apr 2026 - 31 Mar
+// 2027). null means "not yet chosen" - defaults to the current FY the
+// first time the dashboard loads.
+var DASH_SELECTED_FY = null;
+function fyRange(startYear){
+  return { from: startYear+'-04-01', to: (startYear+1)+'-03-31' };
+}
+function currentFYStartYear(){
+  var d=new Date();
+  return d.getMonth()>=3 ? d.getFullYear() : d.getFullYear()-1;
+}
+function toggleFYMenu(ev){
+  if(ev) ev.stopPropagation();
+  var menu = document.getElementById('dash-fy-menu');
+  if(!menu) return;
+  var opening = menu.style.display==='none' || !menu.style.display;
+  if(opening){
+    if(DASH_SELECTED_FY===null) DASH_SELECTED_FY = currentFYStartYear();
+    var curFY = currentFYStartYear();
+    var years = [];
+    for(var y=curFY+1; y>=curFY-5; y--) years.push(y);
+    menu.innerHTML = years.map(function(y){
+      var label = 'FY '+y+'-'+String(y+1).slice(2);
+      var active = y===DASH_SELECTED_FY;
+      return '<div onclick="selectFY('+y+')" style="padding:10px 14px;cursor:pointer;font-size:12.5px;font-weight:'+(active?'800':'600')+';color:'+(active?'#2563EB':'var(--text)')+';background:'+(active?'#EFF6FF':'transparent')+';">'+label+'</div>';
+    }).join('');
+    menu.style.display = 'block';
+    setTimeout(function(){ document.addEventListener('click', closeFYMenuOnOutsideClick); }, 0);
+  } else {
+    closeFYMenu();
+  }
+}
+function closeFYMenuOnOutsideClick(ev){
+  var menu = document.getElementById('dash-fy-menu');
+  var label = document.getElementById('dash-fy-label');
+  if(menu && !menu.contains(ev.target) && label && !label.contains(ev.target)) closeFYMenu();
+}
+function closeFYMenu(){
+  var menu = document.getElementById('dash-fy-menu');
+  if(menu) menu.style.display='none';
+  document.removeEventListener('click', closeFYMenuOnOutsideClick);
+}
+function selectFY(startYear){
+  DASH_SELECTED_FY = startYear;
+  closeFYMenu();
+  loadDashboardInsights();
+}
+
 async function loadDashboardInsights(filterProjId){
   filterProjId = filterProjId || '';
   var gridEl=document.getElementById('dash-kpi-grid');
@@ -2645,7 +2697,7 @@ async function loadDashboardInsights(filterProjId){
   var safe=function(p){return p.catch(function(){return [];});};
   try{
     var r=await Promise.all([
-      safe(sbFetch('projects',{select:'id,name,short_name,status,contract_value'})),
+      safe(sbFetch('projects',{select:'*'})),
       safe(sbFetch('employees',{select:'id,status'})),
       safe(sbFetch('boq_items',{select:'id,project_id,item_code,short_name,description,unit,boq_qty,rate'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,exec_type,rate',filter:'exec_type=neq.planned'})),
@@ -2684,6 +2736,43 @@ async function loadDashboardInsights(filterProjId){
       plannedResRows = scopeRows(plannedResRows);
       pettyExpenseRows = scopeRows(pettyExpenseRows, {nameField:'project'});
     }
+
+    // ── Restrict to projects whose construction-through-DLP lifespan
+    // overlaps the selected fiscal year. A project's lifespan runs from
+    // wo_date (work order / construction start) to dlp_date (end of the
+    // Defects Liability Period that follows completion) - so a project
+    // still under DLP in this FY counts as "in" this FY too, not just
+    // ones actively under construction.
+    var fyStart = DASH_SELECTED_FY===null ? currentFYStartYear() : DASH_SELECTED_FY;
+    var fyR = fyRange(fyStart);
+    projects = projects.filter(function(p){
+      if(!p.wo_date){
+        // Not yet started (still in planning) - only counts toward the
+        // current FY, since it isn't tied to any specific past/future one.
+        return fyStart===currentFYStartYear();
+      }
+      var end = p.dlp_date || p.revised_completion_date || p.completion_date || null; // null = still ongoing, no upper bound yet
+      if(end && end < fyR.from) return false;
+      if(p.wo_date > fyR.to) return false;
+      return true;
+    });
+    var fyProjIds = projects.map(function(p){return String(p.id);});
+    function filterByFYProjects(list, idField){
+      idField = idField || 'project_id';
+      return (list||[]).filter(function(r){
+        var pid = r[idField];
+        return pid ? fyProjIds.indexOf(String(pid))>-1 : true; // not project-linked rows pass through
+      });
+    }
+    boqItems       = filterByFYProjects(boqItems);
+    execResources  = filterByFYProjects(execResources);
+    dailyProgress  = filterByFYProjects(dailyProgress);
+    pendingRRs     = filterByFYProjects(pendingRRs);
+    workBills      = filterByFYProjects(workBills);
+    workPayments   = filterByFYProjects(workPayments);
+    salesBills     = filterByFYProjects(salesBills);
+    boqJmRows      = filterByFYProjects(boqJmRows);
+    plannedResRows = filterByFYProjects(plannedResRows);
 
     // ── Populate / preserve the project filter dropdown ──
     var selectedProject=projects.find(function(p){return p.id===filterProjId;});
@@ -3172,7 +3261,7 @@ async function loadDashboardInsights(filterProjId){
     // ══ ASSEMBLE — data mapped as a starting point; tell me what to swap ══
     var greeting = 'Good ' + (new Date().getHours()<12?'Morning':new Date().getHours()<17?'Afternoon':'Evening');
     var firstName = (currentUser&&currentUser.name?currentUser.name:'').split(' ')[0]||'there';
-    var fyLabel = (function(){var d=new Date(),y=d.getMonth()>=3?d.getFullYear():d.getFullYear()-1;return 'FY '+y+'-'+String(y+1).slice(2);})();
+    var fyLabel = 'FY '+fyStart+'-'+String(fyStart+1).slice(2);
 
     function dIcon(name,color){
       var paths={
