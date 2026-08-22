@@ -2983,9 +2983,9 @@ async function loadDashboardInsights(filterProjId){
     // ══ WIDGET LIBRARY (reusable shapes matching the reference layout) ══
     function gradientStatCard(icon,value,label,grad){
       return '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px 8px;">'+
-        '<div style="font-size:15px;color:var(--text3);margin-bottom:6px;">'+icon+'</div>'+
-        '<div style="font-size:15px;font-weight:800;color:var(--text);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+value+'</div>'+
-        '<div style="font-size:7.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.2px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+label+'</div>'+
+        '<div style="font-size:16px;color:var(--text3);margin-bottom:6px;">'+icon+'</div>'+
+        '<div style="font-size:16px;font-weight:800;color:var(--text);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+value+'</div>'+
+        '<div style="font-size:8.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.2px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+label+'</div>'+
       '</div>';
     }
     function planActualCard(title,actualVal,planVal,billedVal,unbilledVal,billedColor,unbilledColor,extraRowsHtml){
@@ -2995,13 +2995,13 @@ async function loadDashboardInsights(filterProjId){
       var billedPct = Math.min(100,billedPctRaw);
       var unbilledPct = Math.min(100-billedPct,unbilledPctRaw);
       return '<div style="background:#fff;border-radius:14px;padding:16px 18px;border:1px solid var(--border);">'+
-        '<div style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
+        '<div style="font-size:14px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
         '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;gap:8px;">'+
-          '<span style="font-size:22px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</span>'+
-          '<span style="font-size:17px;font-weight:800;color:'+billedColor+';flex-shrink:0;">'+pct+'%</span>'+
+          '<span style="font-size:23px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</span>'+
+          '<span style="font-size:18px;font-weight:800;color:'+billedColor+';flex-shrink:0;">'+pct+'%</span>'+
         '</div>'+
-        '<div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:10px;">Plan: '+inr(planVal)+'</div>'+
-        '<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:4px;">'+
+        '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px;">Plan: '+inr(planVal)+'</div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:4px;">'+
           '<span style="color:'+billedColor+';">Billed '+Math.round(billedPctRaw)+'%</span>'+
           '<span style="color:'+unbilledColor+';">Unbilled '+Math.round(unbilledPctRaw)+'%</span>'+
         '</div>'+
@@ -3016,7 +3016,7 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
     }
     function planActualRow(label,val,color){
-      return '<div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--text3);margin-bottom:3px;"><span>'+label+'</span><span style="font-weight:700;color:'+(color||'var(--text)')+';">'+inr(val)+'</span></div>';
+      return '<div style="display:flex;justify-content:space-between;font-size:13.5px;color:var(--text3);margin-bottom:3px;"><span>'+label+'</span><span style="font-weight:700;color:'+(color||'var(--text)')+';">'+inr(val)+'</span></div>';
     }
     function plCard(title,actualVal,planVal,billedVal,unbilledVal,ebitdaVal){
       var actColor=actualVal>=0?'#2ECC71':'#E74C3C', planColor=planVal>=0?'#2ECC71':'#E74C3C';
@@ -3026,9 +3026,9 @@ async function loadDashboardInsights(filterProjId){
       var actBarPct=Math.max(0,Math.min(100,(Math.abs(actualVal)/maxAbs)*100));
       var planBarPct=Math.max(0,Math.min(100,(Math.abs(planVal)/maxAbs)*100));
       return '<div style="background:#fff;border-radius:14px;padding:16px 18px;border:1px solid var(--border);">'+
-        '<div style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
-        '<div style="font-size:22px;font-weight:800;color:'+actColor+';margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</div>'+
-        '<div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:10px;">Plan: '+inr(planVal)+'</div>'+
+        '<div style="font-size:14px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
+        '<div style="font-size:23px;font-weight:800;color:'+actColor+';margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</div>'+
+        '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px;">Plan: '+inr(planVal)+'</div>'+
         '<div style="height:9px;background:#33285A;border-radius:5px;overflow:hidden;margin-bottom:6px;">'+
           '<div style="height:100%;width:'+actBarPct+'%;background:'+actColor+';"></div>'+
         '</div>'+
@@ -3055,7 +3055,7 @@ async function loadDashboardInsights(filterProjId){
       var gridLines=yTicks.map(function(t){
         var y=padT+plotH-(t/maxVal)*plotH;
         return '<line x1="'+padL+'" y1="'+y+'" x2="'+(w-10)+'" y2="'+y+'" stroke="var(--border)" stroke-width="1"/>'+
-          '<text x="'+(padL-6)+'" y="'+(y+3)+'" font-size="9" fill="var(--text3)" text-anchor="end">'+inr(t)+'</text>';
+          '<text x="'+(padL-6)+'" y="'+(y+3)+'" font-size="10" fill="var(--text3)" text-anchor="end">'+inr(t)+'</text>';
       }).join('');
       var bars=months.map(function(m,i){
         var gx=padL+i*groupW;
@@ -3063,19 +3063,19 @@ async function loadDashboardInsights(filterProjId){
         var aX=gx+groupW/2-barW-2, bX=gx+groupW/2+2;
         return '<rect x="'+aX+'" y="'+(padT+plotH-aH)+'" width="'+barW+'" height="'+aH+'" fill="'+colorA+'" rx="2"/>'+
           '<rect x="'+bX+'" y="'+(padT+plotH-bH)+'" width="'+barW+'" height="'+bH+'" fill="'+colorB+'" rx="2"/>'+
-          '<text x="'+(gx+groupW/2)+'" y="'+(h-6)+'" font-size="9" fill="var(--text3)" text-anchor="middle">'+m+'</text>';
+          '<text x="'+(gx+groupW/2)+'" y="'+(h-6)+'" font-size="10" fill="var(--text3)" text-anchor="middle">'+m+'</text>';
       }).join('');
       return '<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="max-width:'+w+'px;">'+gridLines+bars+'</svg>'+
         '<div style="display:flex;gap:16px;justify-content:center;margin-top:8px;">'+
-          '<div style="font-size:11px;display:flex;align-items:center;gap:6px;color:var(--text3);"><span style="width:9px;height:9px;border-radius:2px;background:'+colorA+';display:inline-block;"></span>'+labelA+'</div>'+
-          '<div style="font-size:11px;display:flex;align-items:center;gap:6px;color:var(--text3);"><span style="width:9px;height:9px;border-radius:2px;background:'+colorB+';display:inline-block;"></span>'+labelB+'</div>'+
+          '<div style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--text3);"><span style="width:9px;height:9px;border-radius:2px;background:'+colorA+';display:inline-block;"></span>'+labelA+'</div>'+
+          '<div style="font-size:12px;display:flex;align-items:center;gap:6px;color:var(--text3);"><span style="width:9px;height:9px;border-radius:2px;background:'+colorB+';display:inline-block;"></span>'+labelB+'</div>'+
         '</div>';
     }
     function panel(icon,title,inner,minH){
       return '<div style="background:#fff;border-radius:16px;padding:16px;border:1px solid var(--border);'+(minH?'min-height:'+minH+'px;':'')+'">'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'+
-          '<span style="font-size:14px;color:var(--text3);">'+icon+'</span>'+
-          '<span style="font-size:12.5px;font-weight:700;color:var(--text);letter-spacing:.2px;">'+title+'</span>'+
+          '<span style="font-size:15px;color:var(--text3);">'+icon+'</span>'+
+          '<span style="font-size:13.5px;font-weight:700;color:var(--text);letter-spacing:.2px;">'+title+'</span>'+
         '</div>'+
         inner+
       '</div>';
@@ -3100,12 +3100,12 @@ async function loadDashboardInsights(filterProjId){
         '<div style="flex:1;">'+segments.map(function(s){
           return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
             '<span style="width:9px;height:9px;border-radius:50%;background:'+s.color+';display:inline-block;flex-shrink:0;"></span>'+
-            '<span style="font-size:12px;font-weight:700;color:var(--text);">'+inr(s.value)+'</span>'+
+            '<span style="font-size:13px;font-weight:700;color:var(--text);">'+inr(s.value)+'</span>'+
           '</div>';
         }).join('')+'</div>'+
         '<div style="position:relative;width:'+size+'px;height:'+size+'px;flex-shrink:0;">'+
           ringArcs(segments,size,sw)+
-          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:var(--text);">'+centerLabel+'</div>'+
+          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:var(--text);">'+centerLabel+'</div>'+
         '</div>'+
       '</div>';
     }
@@ -3119,10 +3119,10 @@ async function loadDashboardInsights(filterProjId){
       });
       return '<div style="position:relative;width:'+size+'px;height:'+size+'px;margin:0 auto;">'+
         '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+svgParts+'</svg>'+
-        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:var(--text);text-align:center;padding:0 16px;">'+centerLabel+'</div>'+
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:var(--text);text-align:center;padding:0 16px;">'+centerLabel+'</div>'+
       '</div>'+
       '<div style="display:flex;justify-content:center;gap:12px;margin-top:12px;flex-wrap:wrap;">'+
-        rings.map(function(r){return '<div style="font-size:9px;display:flex;align-items:center;gap:4px;color:var(--text3);"><span style="width:7px;height:7px;border-radius:50%;background:'+r.color+';display:inline-block;"></span>'+r.label+'</div>';}).join('')+
+        rings.map(function(r){return '<div style="font-size:10px;display:flex;align-items:center;gap:4px;color:var(--text3);"><span style="width:7px;height:7px;border-radius:50%;background:'+r.color+';display:inline-block;"></span>'+r.label+'</div>';}).join('')+
       '</div>';
     }
     function tripleRing(items){
@@ -3137,10 +3137,10 @@ async function loadDashboardInsights(filterProjId){
                 '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#33285A" stroke-width="'+sw+'"/>'+
                 '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+it.color+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+len+' '+(circ-len)+'" transform="rotate(-90 '+cx+' '+cy+')"/>'+
               '</svg>'+
-              '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--text);">'+it.value+'</div>'+
+              '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:var(--text);">'+it.value+'</div>'+
             '</div>'+
-            '<div style="font-size:9.5px;font-weight:700;color:var(--text);margin-top:8px;">'+it.label+'</div>'+
-            '<div style="font-size:8.5px;color:'+it.color+';margin-top:1px;">'+it.sub+'</div>'+
+            '<div style="font-size:10.5px;font-weight:700;color:var(--text);margin-top:8px;">'+it.label+'</div>'+
+            '<div style="font-size:9.5px;color:'+it.color+';margin-top:1px;">'+it.sub+'</div>'+
           '</div>';
         }).join('')+
       '</div>';
@@ -3151,7 +3151,7 @@ async function loadDashboardInsights(filterProjId){
         var lp=Math.min(100,(r.leftVal/maxVal)*100), rp=Math.min(100,(r.rightVal/maxVal)*100);
         return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:11px;">'+
           '<div style="flex:1;display:flex;justify-content:flex-end;"><div style="height:7px;width:'+lp+'%;background:'+leftColor+';border-radius:4px;min-width:2px;"></div></div>'+
-          '<div style="min-width:64px;text-align:center;font-size:9.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.label+'</div>'+
+          '<div style="min-width:64px;text-align:center;font-size:10.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.label+'</div>'+
           '<div style="flex:1;"><div style="height:7px;width:'+rp+'%;background:'+rightColor+';border-radius:4px;min-width:2px;"></div></div>'+
         '</div>';
       }).join('');
@@ -3168,12 +3168,12 @@ async function loadDashboardInsights(filterProjId){
                 return '<div style="width:7px;height:'+h+'px;background:'+s.color+';border-radius:2px 2px 0 0;"></div>';
               }).join('')+
             '</div>'+
-            '<div style="font-size:8.5px;color:var(--text3);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px;">'+cat+'</div>'+
+            '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px;">'+cat+'</div>'+
           '</div>';
         }).join('')+
       '</div>'+
       '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">'+
-        series.map(function(s){return '<div style="font-size:9px;display:flex;align-items:center;gap:4px;color:var(--text);"><span style="width:7px;height:7px;border-radius:2px;background:'+s.color+';display:inline-block;"></span>'+s.name+'</div>';}).join('')+
+        series.map(function(s){return '<div style="font-size:10px;display:flex;align-items:center;gap:4px;color:var(--text);"><span style="width:7px;height:7px;border-radius:2px;background:'+s.color+';display:inline-block;"></span>'+s.name+'</div>';}).join('')+
       '</div>';
     }
     function fullWidthBars(values,labels,gradTop,gradBottom){
@@ -3186,7 +3186,7 @@ async function loadDashboardInsights(filterProjId){
         }).join('')+
       '</div>'+
       '<div style="display:flex;justify-content:space-between;margin-top:6px;">'+
-        labels.filter(function(l,i){return i%2===0;}).map(function(l){return '<span style="font-size:8px;color:var(--text3);">'+l+'</span>';}).join('')+
+        labels.filter(function(l,i){return i%2===0;}).map(function(l){return '<span style="font-size:9px;color:var(--text3);">'+l+'</span>';}).join('')+
       '</div>';
     }
     function dotMatrix(rows,cols,filledCount,color){
@@ -3246,12 +3246,12 @@ async function loadDashboardInsights(filterProjId){
       var timeStr=dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
       var label=(a.table_name||'').replace(/_/g,' ');
       return '<div style="display:flex;align-items:flex-start;gap:9px;padding:6px 0;border-bottom:1px solid var(--border);">'+
-        '<span style="width:24px;height:24px;border-radius:7px;background:'+ic[2]+';color:'+ic[1]+';display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;">'+ic[0]+'</span>'+
-        '<div style="flex:1;min-width:0;"><div style="font-size:11.5px;font-weight:700;color:var(--text);text-transform:capitalize;">'+a.action+' — '+label+'</div>'+
-        '<div style="font-size:10px;color:var(--text3);">by '+(a.user_name||'Someone')+'</div></div>'+
-        '<div style="font-size:9.5px;color:var(--text3);white-space:nowrap;">'+timeStr+'</div>'+
+        '<span style="width:24px;height:24px;border-radius:7px;background:'+ic[2]+';color:'+ic[1]+';display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">'+ic[0]+'</span>'+
+        '<div style="flex:1;min-width:0;"><div style="font-size:12.5px;font-weight:700;color:var(--text);text-transform:capitalize;">'+a.action+' — '+label+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);">by '+(a.user_name||'Someone')+'</div></div>'+
+        '<div style="font-size:10.5px;color:var(--text3);white-space:nowrap;">'+timeStr+'</div>'+
       '</div>';
-    }).join('') || '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">No recent activity yet</div>';
+    }).join('') || '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">No recent activity yet</div>';
 
     // ── Action Required counts ───────────────────────────────────────────
     var pendingApprovalsCount = (typeof pendingEmployees!=='undefined'?pendingEmployees.length:0);
@@ -3331,18 +3331,18 @@ async function loadDashboardInsights(filterProjId){
       var onclickExpr = customOnclick || (anchor?'showApp(\''+anchor+'\')':'');
       return '<div onclick="'+onclickExpr+'" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:11px 12px;'+(onclickExpr?'cursor:pointer;':'')+'">'+
         '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px;">'+
-          '<div style="width:30px;height:30px;border-radius:9px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">'+icon+'</div>'+
-          '<div style="font-size:17px;font-weight:800;color:var(--text);">'+value+'</div>'+
+          '<div style="width:30px;height:30px;border-radius:9px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">'+icon+'</div>'+
+          '<div style="font-size:18px;font-weight:800;color:var(--text);">'+value+'</div>'+
         '</div>'+
-        '<div style="font-size:10.5px;color:var(--text3);font-weight:600;">'+label+'</div>'+
-        (onclickExpr?'<div style="font-size:10px;color:#2563EB;font-weight:700;margin-top:3px;">View all &#8594;</div>':'')+
+        '<div style="font-size:11.5px;color:var(--text3);font-weight:600;">'+label+'</div>'+
+        (onclickExpr?'<div style="font-size:11px;color:#2563EB;font-weight:700;margin-top:3px;">View all &#8594;</div>':'')+
       '</div>';
     }
     function overviewCard(icon,iconBg,value,label,trend){
       return '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 12px;min-height:88px;display:flex;flex-direction:column;justify-content:center;">'+
-        '<div style="width:30px;height:30px;border-radius:9px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:14px;margin-bottom:8px;">'+icon+'</div>'+
-        '<div style="font-size:19px;font-weight:800;color:var(--text);line-height:1.1;">'+value+'</div>'+
-        '<div style="font-size:10.5px;color:var(--text3);font-weight:600;margin-top:3px;">'+label+
+        '<div style="width:30px;height:30px;border-radius:9px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:15px;margin-bottom:8px;">'+icon+'</div>'+
+        '<div style="font-size:20px;font-weight:800;color:var(--text);line-height:1.1;">'+value+'</div>'+
+        '<div style="font-size:11.5px;color:var(--text3);font-weight:600;margin-top:3px;">'+label+
           (trend?' <span style="color:'+(trend.indexOf('-')>-1?'#E11D48':'#047857')+';font-weight:800;">'+(trend.indexOf('-')>-1?'':'&#8593; ')+trend+'</span>':'')+
         '</div>'+
       '</div>';
@@ -3405,73 +3405,73 @@ async function loadDashboardInsights(filterProjId){
     var projectHealthRowsHtml = projHealthRows.length ? projHealthRows.map(function(p){
       return '<tr style="border-top:1px solid var(--border);">'+
         '<td style="padding:7px 12px;font-weight:700;color:var(--text);white-space:nowrap;">'+p.name+'</td>'+
-        '<td style="padding:7px 12px;min-width:120px;"><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+p.pct+'%;background:'+p.healthColor[1]+';"></div></div><span style="font-size:11px;color:var(--text3);font-weight:700;">'+p.pct+'%</span></div></td>'+
+        '<td style="padding:7px 12px;min-width:120px;"><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--bg);border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+p.pct+'%;background:'+p.healthColor[1]+';"></div></div><span style="font-size:12px;color:var(--text3);font-weight:700;">'+p.pct+'%</span></div></td>'+
         '<td style="padding:7px 12px;text-align:right;color:var(--text2);">'+inr(p.billing)+'</td>'+
         '<td style="padding:7px 12px;text-align:right;color:var(--text2);">'+inr(p.expense)+'</td>'+
-        '<td style="padding:7px 12px;text-align:right;"><span style="background:'+p.healthColor[0]+';color:'+p.healthColor[1]+';font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;">'+p.health+'</span></td>'+
+        '<td style="padding:7px 12px;text-align:right;"><span style="background:'+p.healthColor[0]+';color:'+p.healthColor[1]+';font-size:11.5px;font-weight:800;padding:3px 10px;border-radius:20px;">'+p.health+'</span></td>'+
       '</tr>';
     }).join('') : '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3);">No active projects with billed work yet</td></tr>';
 
     var projectHealthHtml =
-      '<div style="height:100%;display:flex;flex-direction:column;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Project Health</div>'+
+      '<div style="height:100%;display:flex;flex-direction:column;"><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Project Health</div>'+
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;overflow-x:auto;flex:1;display:flex;flex-direction:column;">'+
-        '<table style="width:100%;border-collapse:collapse;font-size:12px;">'+
-          '<thead><tr style="text-align:left;color:var(--text3);font-size:10px;text-transform:uppercase;">'+
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">'+
+          '<thead><tr style="text-align:left;color:var(--text3);font-size:11px;text-transform:uppercase;">'+
             '<th style="padding:4px 12px;">Project</th><th style="padding:4px 12px;">Progress</th>'+
             '<th style="padding:4px 12px;text-align:right;">Billing (\u20b9)</th><th style="padding:4px 12px;text-align:right;">Expense (\u20b9)</th>'+
             '<th style="padding:4px 12px;text-align:right;">Health</th></tr></thead>'+
           '<tbody>'+projectHealthRowsHtml+'</tbody>'+
         '</table>'+
-        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:auto;padding-top:6px;font-size:10.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all projects &#8594;</div>'+
+        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:auto;padding-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all projects &#8594;</div>'+
       '</div></div>';
 
     var totalContractValue = plannedRevenueContract, totalBilled = revenueBilled, outstanding = revenueUnbilled;
     var billingChartHtml =
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:13px;font-weight:800;color:var(--text);">Billing vs Expenses</div><div style="display:flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--border);border-radius:8px;font-size:10.5px;font-weight:700;color:var(--text2);white-space:nowrap;">Last 6 Months <span style="font-size:9px;">&#9662;</span></div></div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:14px;font-weight:800;color:var(--text);">Billing vs Expenses</div><div style="display:flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--border);border-radius:8px;font-size:11.5px;font-weight:700;color:var(--text2);white-space:nowrap;">Last 6 Months <span style="font-size:10px;">&#9662;</span></div></div>'+
         barChartMonthly(monthLabels, billingSeries, expenseSeries, 'Billing (\u20b9)', 'Expenses (\u20b9)', '#2563EB', '#F87171')+
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
-          '<div><div style="font-size:9.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Contract</div><div style="font-size:13px;font-weight:800;color:var(--text);">'+inr(totalContractValue)+'</div></div>'+
-          '<div><div style="font-size:9.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Billed</div><div style="font-size:13px;font-weight:800;color:var(--text);">'+inr(totalBilled)+'</div></div>'+
-          '<div><div style="font-size:9.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Cost Paid</div><div style="font-size:13px;font-weight:800;color:var(--text);">'+inr(costPaid)+'</div></div>'+
-          '<div><div style="font-size:9.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Unbilled Work</div><div style="font-size:13px;font-weight:800;color:var(--text);">'+inr(outstanding)+'</div></div>'+
+          '<div><div style="font-size:10.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Contract</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalContractValue)+'</div></div>'+
+          '<div><div style="font-size:10.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Billed</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalBilled)+'</div></div>'+
+          '<div><div style="font-size:10.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Cost Paid</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(costPaid)+'</div></div>'+
+          '<div><div style="font-size:10.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Unbilled Work</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(outstanding)+'</div></div>'+
         '</div>'+
       '</div>';
 
     function procRow(label,count,badgeBg,badgeColor){
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">'+
-        '<div style="font-size:11.5px;font-weight:600;color:var(--text2);">'+label+'</div>'+
-        '<span style="background:'+badgeBg+';color:'+badgeColor+';font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:20px;min-width:22px;text-align:center;">'+count+'</span>'+
+        '<div style="font-size:12.5px;font-weight:600;color:var(--text2);">'+label+'</div>'+
+        '<span style="background:'+badgeBg+';color:'+badgeColor+';font-size:11.5px;font-weight:800;padding:2px 9px;border-radius:20px;min-width:22px;text-align:center;">'+count+'</span>'+
       '</div>';
     }
     var procurementHtml =
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
-        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px;">Procurement Snapshot</div>'+
+        '<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px;">Procurement Snapshot</div>'+
         procRow('Low Stock Items', lowStock.length, '#FFE4E6', '#E11D48')+
         procRow('Pending Purchase Orders', pendingRRs.length, '#FEF3C7', '#B45309')+
         procRow('Pending GRN / MR', lowStock.length?Math.max(0,Math.round(lowStock.length/2)):0, '#DBEAFE', '#2563EB')+
         procRow('Pending Vendor Bills', pendingBillsCount, '#F3E8FF', '#9333EA')+
-        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:6px;font-size:10.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all &#8594;</div>'+
+        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all &#8594;</div>'+
       '</div>';
 
     var workforceHtml =
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
-        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:6px;">Workforce Today</div>'+
+        '<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:6px;">Workforce Today</div>'+
         '<div style="display:flex;align-items:center;gap:14px;">'+
           '<div style="flex:1;display:flex;flex-direction:column;gap:6px;">'+
-            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#047857;display:inline-block;"></span>Present</span><b style="color:var(--text);">'+attPresent+'</b></div>'+
-            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#E11D48;display:inline-block;"></span>Absent</span><b style="color:var(--text);">'+attAbsent+'</b></div>'+
-            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block;"></span>On Leave</span><b style="color:var(--text);">'+attLeave+'</b></div>'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#047857;display:inline-block;"></span>Present</span><b style="color:var(--text);">'+attPresent+'</b></div>'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#E11D48;display:inline-block;"></span>Absent</span><b style="color:var(--text);">'+attAbsent+'</b></div>'+
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;"><span style="display:flex;align-items:center;gap:6px;color:var(--text2);"><span style="width:8px;height:8px;border-radius:50%;background:#F59E0B;display:inline-block;"></span>On Leave</span><b style="color:var(--text);">'+attLeave+'</b></div>'+
           '</div>'+
           '<div style="position:relative;width:84px;height:84px;flex-shrink:0;">'+
             ringArcs([{value:attPresent||0.0001,color:'#047857'},{value:attAbsent,color:'#E11D48'},{value:attLeave,color:'#F59E0B'}], 84, 13, 'var(--bg)')+
             '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">'+
-              '<div style="font-size:12px;font-weight:800;color:var(--text);">'+attMarkedTotal+'/'+activeWorkforce+'</div>'+
-              '<div style="font-size:7.5px;color:var(--text3);font-weight:700;">Total</div>'+
+              '<div style="font-size:13px;font-weight:800;color:var(--text);">'+attMarkedTotal+'/'+activeWorkforce+'</div>'+
+              '<div style="font-size:8.5px;color:var(--text3);font-weight:700;">Total</div>'+
             '</div>'+
           '</div>'+
         '</div>'+
-        '<div onclick="showApp(\'attendance\')" style="text-align:right;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:10.5px;font-weight:700;color:#2563EB;cursor:pointer;">View attendance &#8594;</div>'+
+        '<div onclick="showApp(\'attendance\')" style="text-align:right;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View attendance &#8594;</div>'+
       '</div>';
 
     var statusMap2={'On Track':['#D1FAE5','#047857'],'Behind Schedule':['#FEF3C7','#B45309'],'Critical':['#FFE4E6','#E11D48']};
@@ -3479,33 +3479,33 @@ async function loadDashboardInsights(filterProjId){
       var statusLabel = p.health==='Good'?'On Track':p.health==='Average'?'Behind Schedule':'Critical';
       var sc=statusMap2[statusLabel];
       return '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:11px 12px;">'+
-        '<div style="font-size:12px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+p.name+'</div>'+
+        '<div style="font-size:13px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+p.name+'</div>'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin:7px 0 5px;">'+
           '<div style="height:6px;flex:1;background:var(--bg);border-radius:4px;overflow:hidden;margin-right:8px;"><div style="height:100%;width:'+p.pct+'%;background:'+sc[1]+';"></div></div>'+
-          '<span style="font-size:12px;font-weight:800;color:var(--text);">'+p.pct+'%</span>'+
+          '<span style="font-size:13px;font-weight:800;color:var(--text);">'+p.pct+'%</span>'+
         '</div>'+
-        '<span style="background:'+sc[0]+';color:'+sc[1]+';font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;">'+statusLabel+'</span>'+
+        '<span style="background:'+sc[0]+';color:'+sc[1]+';font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;">'+statusLabel+'</span>'+
       '</div>';
     }).join('') : '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);">No active projects yet</div>';
 
     var recentActivityHtmlWrap =
-      '<div><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Recent Activity</div>'+
+      '<div><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Recent Activity</div>'+
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
         recentActivityHtml+
-        '<div onclick="showApp(\'access\')" style="text-align:right;margin-top:6px;font-size:10.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all activity &#8594;</div>'+
+        '<div onclick="showApp(\'access\')" style="text-align:right;margin-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all activity &#8594;</div>'+
       '</div></div>';
 
     gridEl.innerHTML =
-      '<div style="margin-bottom:10px;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Action Required</div>'+actionRequiredHtml+'</div>'+
+      '<div style="margin-bottom:10px;"><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Action Required</div>'+actionRequiredHtml+'</div>'+
       '<div class="dash-overview-health-grid" style="margin-bottom:10px;">'+
-        '<div style="height:100%;display:flex;flex-direction:column;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Business Overview</div>'+businessOverviewHtml+'</div>'+
+        '<div style="height:100%;display:flex;flex-direction:column;"><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Business Overview</div>'+businessOverviewHtml+'</div>'+
         projectHealthHtml+
       '</div>'+
       '<div style="gap:10px;margin-bottom:10px;" class="dash-3col-grid">'+
         billingChartHtml+procurementHtml+workforceHtml+
       '</div>'+
       '<div class="dash-overview-health-grid" style="margin-bottom:10px;">'+
-        '<div><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Project Progress Overview</div>'+
+        '<div><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Project Progress Overview</div>'+
           '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">'+progressCardsHtml+'</div>'+
         '</div>'+
         recentActivityHtmlWrap+
@@ -3526,7 +3526,7 @@ async function loadDashboardInsights(filterProjId){
 
   }catch(e){
     console.error('Dashboard insights error:',e);
-    gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F857A6;font-size:12px;background:#fff;border-radius:12px;border:1px solid var(--border);">Could not load insights. Pull to refresh.</div>';
+    gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F857A6;font-size:13px;background:#fff;border-radius:12px;border:1px solid var(--border);">Could not load insights. Pull to refresh.</div>';
   }
 }
 
