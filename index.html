@@ -2636,6 +2636,9 @@ async function preloadCompanyData(){try{var r=await sbFetch('company_details',{s
 // 2027). null means "not yet chosen" - defaults to the current FY the
 // first time the dashboard loads.
 var DASH_SELECTED_FY = null;
+// How many months the Billing vs Expenses chart shows — user-selectable
+// via the chart's own "Last N Months" dropdown.
+var DASH_CHART_MONTHS = 6;
 function fyRange(startYear){
   return { from: startYear+'-04-01', to: (startYear+1)+'-03-31' };
 }
@@ -2677,6 +2680,39 @@ function closeFYMenu(){
 function selectFY(startYear){
   DASH_SELECTED_FY = startYear;
   closeFYMenu();
+  loadDashboardInsights();
+}
+
+function toggleChartMonthsMenu(ev){
+  if(ev) ev.stopPropagation();
+  var menu = document.getElementById('dash-chart-months-menu');
+  if(!menu) return;
+  var opening = menu.style.display==='none' || !menu.style.display;
+  if(opening){
+    var options=[3,6,12];
+    menu.innerHTML = options.map(function(n){
+      var active = n===DASH_CHART_MONTHS;
+      return '<div onclick="selectChartMonths('+n+')" style="padding:9px 14px;cursor:pointer;font-size:12px;font-weight:'+(active?'800':'600')+';color:'+(active?'#2563EB':'var(--text)')+';background:'+(active?'#EFF6FF':'transparent')+';white-space:nowrap;">Last '+n+' Months</div>';
+    }).join('');
+    menu.style.display = 'block';
+    setTimeout(function(){ document.addEventListener('click', closeChartMonthsMenuOnOutsideClick); }, 0);
+  } else {
+    closeChartMonthsMenu();
+  }
+}
+function closeChartMonthsMenuOnOutsideClick(ev){
+  var menu = document.getElementById('dash-chart-months-menu');
+  var label = document.getElementById('dash-chart-months-label');
+  if(menu && !menu.contains(ev.target) && label && !label.contains(ev.target)) closeChartMonthsMenu();
+}
+function closeChartMonthsMenu(){
+  var menu = document.getElementById('dash-chart-months-menu');
+  if(menu) menu.style.display='none';
+  document.removeEventListener('click', closeChartMonthsMenuOnOutsideClick);
+}
+function selectChartMonths(n){
+  DASH_CHART_MONTHS = n;
+  closeChartMonthsMenu();
   loadDashboardInsights();
 }
 
@@ -3197,9 +3233,11 @@ async function loadDashboardInsights(filterProjId){
       return html+'</div>';
     }
 
-    // ── New widgets' data: 6-month billing/expense history ──────────────
+    // ── New widgets' data: N-month billing/expense history (N is
+    // user-selectable via the chart's own dropdown, see DASH_CHART_MONTHS) ──
+    var chartMonths = DASH_CHART_MONTHS || 6;
     var monthLabels=[], monthKeys=[], billingByMonth={}, expenseByMonth={};
-    for(var mi=5; mi>=0; mi--){
+    for(var mi=chartMonths-1; mi>=0; mi--){
       var md=new Date(); md.setDate(1); md.setMonth(md.getMonth()-mi);
       var mkey=md.getFullYear()+'-'+String(md.getMonth()+1).padStart(2,'0');
       monthKeys.push(mkey);
@@ -3397,8 +3435,8 @@ async function loadDashboardInsights(filterProjId){
       '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:1;">'+
         overviewCard(dIcon('building','#2563EB'),'#DBEAFE', (filterProjId?1:activeProjects), 'Active Projects')+
         overviewCard(dIcon('clipboard','#E11D48'),'#FFE4E6', (filterProjId?0:underDlpProjects), 'Under DLP Projects')+
-        overviewCard(dIcon('rupee','#047857'),'#D1FAE5', inr(billingSeries[5]), 'This Month Billing', billingSeries[4]>0?Math.round((billingSeries[5]-billingSeries[4])/billingSeries[4]*100)+'%':'')+
-        overviewCard(dIcon('moneybag','#B45309'),'#FEF3C7', inr(expenseSeries[5]), 'This Month Expenses', expenseSeries[4]>0?Math.round((expenseSeries[5]-expenseSeries[4])/expenseSeries[4]*100)+'%':'')+
+        overviewCard(dIcon('rupee','#047857'),'#D1FAE5', inr(billingSeries[billingSeries.length-1]), 'This Month Billing', billingSeries[billingSeries.length-2]>0?Math.round((billingSeries[billingSeries.length-1]-billingSeries[billingSeries.length-2])/billingSeries[billingSeries.length-2]*100)+'%':'')+
+        overviewCard(dIcon('moneybag','#B45309'),'#FEF3C7', inr(expenseSeries[expenseSeries.length-1]), 'This Month Expenses', expenseSeries[expenseSeries.length-2]>0?Math.round((expenseSeries[expenseSeries.length-1]-expenseSeries[expenseSeries.length-2])/expenseSeries[expenseSeries.length-2]*100)+'%':'')+
         overviewCard(dIcon('wallet','#9333EA'),'#F3E8FF', inr(costPaid-costBalance>=0?costPaid-costBalance:0), 'Cash Position')+
       '</div>';
 
@@ -3428,7 +3466,7 @@ async function loadDashboardInsights(filterProjId){
     var totalContractValue = plannedRevenueContract, totalBilled = revenueBilled, outstanding = revenueUnbilled;
     var billingChartHtml =
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:14px;font-weight:800;color:var(--text);">Billing vs Expenses</div><div style="display:flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--border);border-radius:8px;font-size:11.5px;font-weight:700;color:var(--text2);white-space:nowrap;">Last 6 Months <span style="font-size:10px;">&#9662;</span></div></div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:14px;font-weight:800;color:var(--text);">Billing vs Expenses</div><div style="position:relative;"><div id="dash-chart-months-label" onclick="toggleChartMonthsMenu(event)" style="display:flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--border);border-radius:8px;font-size:11.5px;font-weight:700;color:var(--text2);white-space:nowrap;cursor:pointer;">Last '+chartMonths+' Months <span style="font-size:10px;">&#9662;</span></div><div id="dash-chart-months-menu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:50;overflow:hidden;"></div></div></div>'+
         barChartMonthly(monthLabels, billingSeries, expenseSeries, 'Billing (\u20b9)', 'Expenses (\u20b9)', '#2563EB', '#F87171')+
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
           '<div><div style="font-size:10.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Contract</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalContractValue)+'</div></div>'+
