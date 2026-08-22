@@ -2707,6 +2707,7 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('work_bills',{select:'id,project_id,bill_amount,deductions,additions,bill_date'})),
       safe(sbFetch('work_payments',{select:'id,project_id,bill_id,amount'})),
       safe(sbFetch('sales_bills',{select:'id,project_id,bill_amount,selected_items,additions,bill_date'})),
+      safe(sbFetch('sales_payments',{select:'id,project_id,sales_bill_id,amount'})),
       safe(sbFetch('boq_jm',{select:'id,project_id,boq_item_id,jm_qty'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,party_name,qty,rate,unit',filter:'exec_type=eq.planned'})),
       safe(sbFetch('attendance',{select:'employee_id,status',filter:'date=eq.'+(new Date().toISOString().slice(0,10))})),
@@ -2715,8 +2716,8 @@ async function loadDashboardInsights(filterProjId){
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
         pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
-        boqJmRows=r[10]||[], plannedResRows=r[11]||[], todayAttendanceRows=r[12]||[], pettyExpenseRows=r[13]||[],
-        recentActivityRows=r[14]||[];
+        salesPayments=r[10]||[], boqJmRows=r[11]||[], plannedResRows=r[12]||[], todayAttendanceRows=r[13]||[], pettyExpenseRows=r[14]||[],
+        recentActivityRows=r[15]||[];
     var presentTodayRows = todayAttendanceRows.filter(function(a){return a.status==='present';});
 
     // Restrict every project-linked source to the user's assigned projects,
@@ -2771,6 +2772,7 @@ async function loadDashboardInsights(filterProjId){
     workBills      = filterByFYProjects(workBills);
     workPayments   = filterByFYProjects(workPayments);
     salesBills     = filterByFYProjects(salesBills);
+    salesPayments  = filterByFYProjects(salesPayments);
     boqJmRows      = filterByFYProjects(boqJmRows);
     plannedResRows = filterByFYProjects(plannedResRows);
 
@@ -3278,6 +3280,30 @@ async function loadDashboardInsights(filterProjId){
         }
       }
     });
+    // Receivables — the sales-side mirror of Pending Bills above: sales
+    // bills generated but not yet fully received from the client, using
+    // the same per-bill matching approach (sales_payments.sales_bill_id
+    // links a payment to its specific bill, same as work_payments.bill_id
+    // does on the purchase side).
+    var receivedBySalesBillId = {};
+    salesPayments.forEach(function(pmt){
+      if(pmt.sales_bill_id) receivedBySalesBillId[pmt.sales_bill_id] = (receivedBySalesBillId[pmt.sales_bill_id]||0) + (parseFloat(pmt.amount)||0);
+    });
+    var receivablesCount = 0, receivablesAmount = 0;
+    var receivablesAmountByProj = {}, receivablesCountByProj = {};
+    salesBills.forEach(function(b){
+      var received = receivedBySalesBillId[b.id] || 0;
+      var outstanding = (parseFloat(b.bill_amount)||0) - received;
+      if(outstanding > 0.5){
+        receivablesCount++;
+        receivablesAmount += outstanding;
+        if(b.project_id){
+          receivablesAmountByProj[b.project_id] = (receivablesAmountByProj[b.project_id]||0) + outstanding;
+          receivablesCountByProj[b.project_id] = (receivablesCountByProj[b.project_id]||0) + 1;
+        }
+      }
+    });
+
     var attendanceIssuesCount = attAbsent + (employees.filter(function(e){return e.status==='active';}).length - attMarkedTotal);
     if(attendanceIssuesCount<0) attendanceIssuesCount=0;
 
@@ -3345,6 +3371,18 @@ async function loadDashboardInsights(filterProjId){
       ? 'goToProjectSubTab(\''+pendingBillsProjIds[0]+'\',\'\',\'bills\',\'genbills\')'
       : (pendingBillsProjIds.length>1 ? 'showProjectPicker(\'Pending Purchase Bills\',DASH_PENDING_BILLS_PROJECTS,\'\',\'bills\',\'genbills\')' : 'showApp(\'projects\')');
 
+    // Receivables — sales bills only, generated but not yet fully
+    // received from the client. Lands on the Sales tab's "View Bills"
+    // sub-view, mirroring Pending Bills above exactly.
+    window.DASH_RECEIVABLES_PROJECTS = Object.keys(receivablesAmountByProj).map(function(pid){
+      var proj = projects.find(function(p){return String(p.id)===String(pid);});
+      return { id: pid, name: proj?(proj.short_name||proj.name):'Unknown project', count: receivablesCountByProj[pid], amountLabel: inr(receivablesAmountByProj[pid]) };
+    }).sort(function(a,b){return receivablesAmountByProj[b.id]-receivablesAmountByProj[a.id];});
+    var receivablesProjIds = Object.keys(receivablesAmountByProj);
+    var receivablesOnclick = receivablesProjIds.length===1
+      ? 'goToProjectSubTab(\''+receivablesProjIds[0]+'\',\'\',\'sales\',\'viewbills\')'
+      : (receivablesProjIds.length>1 ? 'showProjectPicker(\'Receivables\',DASH_RECEIVABLES_PROJECTS,\'\',\'sales\',\'viewbills\')' : 'showApp(\'projects\')');
+
     var actionRequiredHtml =
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">'+
         actionCard(dIcon('clipboard','#E11D48'),'#FFE4E6', pendingApprovalsCount, 'Pending Approvals', 'employees')+
@@ -3352,7 +3390,7 @@ async function loadDashboardInsights(filterProjId){
         actionCard(dIcon('doc','#2563EB'),'#DBEAFE', lowStock.length, 'Low Stock / GRN','projects')+
         actionCard(dIcon('card','#9333EA'),'#F3E8FF', inr(pendingBillsAmount), pendingBillsCount+' Pending Bill'+(pendingBillsCount===1?'':'s'), null, pendingBillsOnclick)+
         actionCard(dIcon('people','#047857'),'#D1FAE5', attendanceIssuesCount, 'Attendance Issues', 'attendance')+
-        actionCard(dIcon('rupee','#E11D48'),'#FFE4E6', inr(revenueBilled), 'Receivables', 'accounts')+
+        actionCard(dIcon('rupee','#E11D48'),'#FFE4E6', inr(receivablesAmount), receivablesCount+' Receivable'+(receivablesCount===1?'':'s'), null, receivablesOnclick)+
       '</div>';
 
     var businessOverviewHtml =
@@ -3683,12 +3721,13 @@ window.addEventListener('resize', function(){
 // find and open the right project themselves.
 // projModSubTab is for sub-tabs within a group (Pre-construction/
 // Construction, e.g. 'rr'). Some project sections aren't part of
-// either group though — 'bills' (Bills & Payments) is its own
-// top-level tab, switched via projModTab instead, and has its own
-// further inner sub-tab (BILL_SUBTAB) for things like "View Bills"
-// vs "Payments". group=null signals a top-level tab; innerSubTab is
-// optional and only applies to tabs that have their own further
-// sub-navigation like this.
+// either group though — 'bills' (Bills & Payments) and 'sales'
+// (Sales) are their own top-level tabs, switched via projModTab
+// instead, each with their own further inner sub-tab for things like
+// "View Bills" vs "Payments" (BILL_SUBTAB on the purchase side,
+// SALES_SUBTAB on the sales side). group=null signals a top-level
+// tab; innerSubTab is optional and only applies to tabs that have
+// their own further sub-navigation like these two.
 function goToProjectSubTab(projId, group, subTab, innerSubTab){
   showApp('projects');
   setTimeout(function(){
@@ -3702,6 +3741,9 @@ function goToProjectSubTab(projId, group, subTab, innerSubTab){
       if(innerSubTab==='genbills' && typeof window.BILL_SUBTAB!=='undefined'){
         window.BILL_SUBTAB='genbills';
         if(typeof execRenderBills==='function') execRenderBills();
+      } else if(innerSubTab==='viewbills' && typeof window.SALES_SUBTAB!=='undefined'){
+        window.SALES_SUBTAB='viewbills';
+        if(typeof execRenderSales==='function') execRenderSales();
       }
     }, 50);
   }, 50);
