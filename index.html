@@ -1287,7 +1287,7 @@ input,select,textarea{font-size:16px !important;}
 #app-dashboard{background:#F8FAFC;overflow-y:auto;padding-bottom:80px;font-family:'Inter',sans-serif;}
 #app-dashboard *{font-family:'Inter',sans-serif;}
 #app-dashboard.on{display:block;}
-#app-dashboard .dash-top{background:#fff;border-bottom:1px solid var(--border);}
+#app-dashboard .dash-top{background:#fff;border-bottom:1px solid var(--border);padding:14px 16px;padding-top:max(14px,env(safe-area-inset-top));}
 #app-dashboard .dt-greeting{color:#0F172A;font-weight:600;}
 #app-dashboard .dt-name{color:var(--text);}
 #app-dashboard .dt-role{color:var(--text3);}
@@ -3401,11 +3401,11 @@ async function loadDashboardInsights(filterProjId){
     }).join('') : '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);">No active projects yet</div>';
 
     var recentActivityHtmlWrap =
+      '<div><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Recent Activity</div>'+
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;">'+
-        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px;">Recent Activity</div>'+
         recentActivityHtml+
         '<div onclick="showApp(\'access\')" style="text-align:right;margin-top:8px;font-size:11px;font-weight:700;color:#2563EB;cursor:pointer;">View all activity &#8594;</div>'+
-      '</div>';
+      '</div></div>';
 
     gridEl.innerHTML =
       '<div style="margin-bottom:16px;"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Action Required</div>'+actionRequiredHtml+'</div>'+
