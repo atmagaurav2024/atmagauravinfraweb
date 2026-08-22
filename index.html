@@ -3308,7 +3308,7 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
 
     var businessOverviewHtml =
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'+
         overviewCard(dIcon('building','#2563EB'),'#DBEAFE', (filterProjId?1:activeProjects), 'Active Projects')+
         overviewCard(dIcon('rupee','#047857'),'#D1FAE5', inr(billingSeries[5]), 'This Month Billing', billingSeries[4]>0?Math.round((billingSeries[5]-billingSeries[4])/billingSeries[4]*100)+'%':'')+
         overviewCard(dIcon('moneybag','#B45309'),'#FEF3C7', inr(expenseSeries[5]), 'This Month Expenses', expenseSeries[4]>0?Math.round((expenseSeries[5]-expenseSeries[4])/expenseSeries[4]*100)+'%':'')+
@@ -3326,8 +3326,8 @@ async function loadDashboardInsights(filterProjId){
     }).join('') : '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3);">No active projects with billed work yet</td></tr>';
 
     var projectHealthHtml =
+      '<div><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Project Health</div>'+
       '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;overflow-x:auto;">'+
-        '<div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;">Project Health</div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'+
           '<thead><tr style="text-align:left;color:var(--text3);font-size:10.5px;text-transform:uppercase;">'+
             '<th style="padding:6px 12px;">Project</th><th style="padding:6px 12px;">Progress</th>'+
@@ -3335,7 +3335,7 @@ async function loadDashboardInsights(filterProjId){
             '<th style="padding:6px 12px;text-align:right;">Health</th></tr></thead>'+
           '<tbody>'+projectHealthRowsHtml+'</tbody>'+
         '</table>'+
-      '</div>';
+      '</div></div>';
 
     var totalContractValue = plannedRevenueContract, totalBilled = revenueBilled, outstanding = revenueUnbilled;
     var billingChartHtml =
