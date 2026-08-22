@@ -3278,14 +3278,15 @@ async function loadDashboardInsights(filterProjId){
       };
       return '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="'+color+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(paths[name]||'')+'</svg>';
     }
-    function actionCard(icon,iconBg,value,label,anchor){
-      return '<div onclick="'+(anchor?'showApp(\''+anchor+'\')':'')+'" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:11px 12px;'+(anchor?'cursor:pointer;':'')+'">'+
+    function actionCard(icon,iconBg,value,label,anchor,customOnclick){
+      var onclickExpr = customOnclick || (anchor?'showApp(\''+anchor+'\')':'');
+      return '<div onclick="'+onclickExpr+'" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:11px 12px;'+(onclickExpr?'cursor:pointer;':'')+'">'+
         '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px;">'+
           '<div style="width:30px;height:30px;border-radius:9px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">'+icon+'</div>'+
           '<div style="font-size:17px;font-weight:800;color:var(--text);">'+value+'</div>'+
         '</div>'+
         '<div style="font-size:10.5px;color:var(--text3);font-weight:600;">'+label+'</div>'+
-        (anchor?'<div style="font-size:10px;color:#2563EB;font-weight:700;margin-top:3px;">View all &#8594;</div>':'')+
+        (onclickExpr?'<div style="font-size:10px;color:#2563EB;font-weight:700;margin-top:3px;">View all &#8594;</div>':'')+
       '</div>';
     }
     function overviewCard(icon,iconBg,value,label,trend){
@@ -3298,10 +3299,15 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
     }
 
+    var pendingRRProjIds = Array.from(new Set(pendingRRs.map(function(r){return r.project_id;}).filter(Boolean)));
+    var pendingPOOnclick = pendingRRProjIds.length===1
+      ? 'goToProjectSubTab(\''+pendingRRProjIds[0]+'\',\'rr\')'
+      : 'showApp(\'projects\')';
+
     var actionRequiredHtml =
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">'+
         actionCard(dIcon('clipboard','#E11D48'),'#FFE4E6', pendingApprovalsCount, 'Pending Approvals', 'employees')+
-        actionCard(dIcon('cart','#B45309'),'#FEF3C7', pendingRRs.length, 'Pending PO','projects')+
+        actionCard(dIcon('cart','#B45309'),'#FEF3C7', pendingRRs.length, 'Pending PO', null, pendingPOOnclick)+
         actionCard(dIcon('doc','#2563EB'),'#DBEAFE', lowStock.length, 'Low Stock / GRN','projects')+
         actionCard(dIcon('card','#9333EA'),'#F3E8FF', pendingBillsCount, 'Pending Bills', 'projects')+
         actionCard(dIcon('people','#047857'),'#D1FAE5', attendanceIssuesCount, 'Attendance Issues', 'attendance')+
@@ -3628,6 +3634,21 @@ window.addEventListener('resize', function(){
   if(window._railResizeT) clearTimeout(window._railResizeT);
   window._railResizeT = setTimeout(updateNavLayout, 150);
 });
+
+// Navigates into a specific project and lands on one of its sub-tabs
+// (e.g. 'rr' for Pending PO/Resource Requisitions) — used by dashboard
+// cards that represent project-specific data, where just opening the
+// Projects module's list screen would leave the person needing to
+// find and open the right project themselves.
+function goToProjectSubTab(projId, subTab){
+  showApp('projects');
+  setTimeout(function(){
+    if(typeof projSelectAndGo==='function') projSelectAndGo(projId);
+    setTimeout(function(){
+      if(typeof projModSubTab==='function') projModSubTab('construction', subTab);
+    }, 50);
+  }, 50);
+}
 
 function toggleUserMenu(ev){
   if(ev) ev.stopPropagation();
