@@ -551,13 +551,16 @@ async function openProjForm(id){
   }).join('');
 
   var html =
-    // ── Row 1: Code + Name ──
-    '<div class="g2" style="margin-bottom:8px;">'+
+    // ── Row 1: Code + Name + Short Name ──
+    '<div class="g3" style="margin-bottom:8px;">'+
       '<div><label class="flbl">Project Code</label>'+
         '<input id="pf-code" class="finp" value="'+esc(autoCode)+'" placeholder="Auto-generated">'+
       '</div>'+
       '<div><label class="flbl">Project Name *</label>'+
         '<input id="pf-name" class="finp" value="'+esc(p.name||'')+'">'+
+      '</div>'+
+      '<div><label class="flbl">Short Name</label>'+
+        '<input id="pf-short-name" class="finp" value="'+esc(p.short_name||'')+'" placeholder="e.g. NH-161G">'+
       '</div>'+
     '</div>'+
     // ── Row 2: Length ──
@@ -766,6 +769,7 @@ async function saveProjForm(editId){
 
   // Optional columns — only add if non-null (Supabase will 400 if column missing)
   function addCol(key, val){ if(val!==null&&val!==undefined&&val!=='') data[key]=val; }
+  addCol('short_name',       (document.getElementById('pf-short-name')||{value:''}).value.trim()||null);
   addCol('tender_cost',     parseFloat((document.getElementById('pf-tender')||{value:''}).value)||null);
   addCol('tender_pct',      parseFloat((document.getElementById('pf-pct')||{value:''}).value)||null);
   addCol('contract_value',  parseFloat((document.getElementById('pf-contract')||{value:''}).value)||null);
