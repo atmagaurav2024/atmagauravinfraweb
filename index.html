@@ -1419,7 +1419,7 @@ input,select,textarea{font-size:16px !important;}
 /* Business Overview + Project Health row — side by side on desktop,
    matching the mockup's roughly 65/35 split, stacking on narrower
    screens same as the other dashboard grids. */
-.dash-overview-health-grid{display:grid;grid-template-columns:1.8fr 1fr;gap:12px;align-items:start;}
+.dash-overview-health-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;}
 @media (max-width:900px){
   .dash-overview-health-grid{grid-template-columns:1fr;}
 }
@@ -3308,7 +3308,7 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
 
     var businessOverviewHtml =
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
         overviewCard(dIcon('building','#2563EB'),'#DBEAFE', (filterProjId?1:activeProjects), 'Active Projects')+
         overviewCard(dIcon('rupee','#047857'),'#D1FAE5', inr(billingSeries[5]), 'This Month Billing', billingSeries[4]>0?Math.round((billingSeries[5]-billingSeries[4])/billingSeries[4]*100)+'%':'')+
         overviewCard(dIcon('moneybag','#B45309'),'#FEF3C7', inr(expenseSeries[5]), 'This Month Expenses', expenseSeries[4]>0?Math.round((expenseSeries[5]-expenseSeries[4])/expenseSeries[4]*100)+'%':'')+
