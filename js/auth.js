@@ -66,7 +66,7 @@ function renderRegStep() {
     body.innerHTML =
       '<div style="font-size:13px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">Step 1 of 3 — Select Category</div>' +
       '<div class="cat-grid" id="cat-grid">' +
-        '<div class="cat-item" onclick="selCat(this,\'employee\')"><div class="cat-ic">👤</div><div class="cat-name">Employee</div><div class="cat-desc">AIPL Staff</div></div>' +
+        '<div class="cat-item" onclick="selCat(this,\'employee\')"><div class="cat-ic">👤</div><div class="cat-name">Employee</div><div class="cat-desc">RYDAX Staff</div></div>' +
         '<div class="cat-item" onclick="selCat(this,\'subcontractor\')"><div class="cat-ic">🔧</div><div class="cat-name">Subcontractor</div><div class="cat-desc">SC Company</div></div>' +
         '<div class="cat-item" onclick="selCat(this,\'labour\')"><div class="cat-ic">👷</div><div class="cat-name">Labour</div><div class="cat-desc">Labour Contractor</div></div>' +
       '</div>';
@@ -138,7 +138,7 @@ function nextRegStep() {
       regData.password = pw;
     }
     regData.name = (fname + ' ' + lname).trim(); regData.phone = phone;
-    regData.email = gv('r-email'); regData.company = gv('r-company') || 'AIPL';
+    regData.email = gv('r-email'); regData.company = gv('r-company') || 'RYDAX';
     regData.gst = gv('r-gst') || ''; regData.project = gv('r-project') || 'All Projects';
     regStep = 3;
   } else { return; }
@@ -158,7 +158,7 @@ async function verifyOTP() {
   var code = ['otp-1','otp-2','otp-3','otp-4','otp-5','otp-6'].map(function(id) { return document.getElementById(id).value; }).join('');
   if (code.length < 6) { toast('Enter all 6 digits', 'warning'); return; }
   if (otpSource === 'register') {
-    var newEmpId = await getNextAIPLId();
+    var newEmpId = await getNextRYDAXId();
     var data = {
       emp_id: newEmpId, badge_no: newEmpId,
       first_name: regData.name.split(' ')[0] || '', last_name: regData.name.split(' ').slice(1).join(' ') || '',

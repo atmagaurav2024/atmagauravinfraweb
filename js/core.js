@@ -426,19 +426,19 @@ async function rejectEmployee(id, name) {
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
-async function getNextAIPLId() {
+async function getNextRYDAXId() {
   try {
     var data = await sbFetch('employees', { select: 'emp_id', order: 'created_at.desc' });
-    if (!data || !data.length) return 'AIPL-001';
+    if (!data || !data.length) return 'RYDAX-001';
     var max = 0;
     data.forEach(function(e) {
-      if (e.emp_id && e.emp_id.startsWith('AIPL-')) {
-        var num = parseInt(e.emp_id.replace('AIPL-','')) || 0;
+      if (e.emp_id && e.emp_id.startsWith('RYDAX-')) {
+        var num = parseInt(e.emp_id.replace('RYDAX-','')) || 0;
         if (num > max) max = num;
       }
     });
-    return 'AIPL-' + String(max + 1).padStart(3, '0');
-  } catch(e) { return 'AIPL-T' + String(Date.now()).slice(-6); }
+    return 'RYDAX-' + String(max + 1).padStart(3, '0');
+  } catch(e) { return 'RYDAX-T' + String(Date.now()).slice(-6); }
 }
 
 // ── INIT ─────────────────────────────────────────────────

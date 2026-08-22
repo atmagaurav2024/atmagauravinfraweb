@@ -439,7 +439,7 @@ function searchProj(q){
 
 // ── Auto-generate project code ──────────────────────────────
 function genProjCode(){
-  var prefix='AIPL';
+  var prefix='RYDAX';
   var existing=PROJ_DATA.map(function(p){
     var m=(p.code||'').match(/^[A-Z]+-(\d+)$/);
     return m?parseInt(m[1]):0;
@@ -917,7 +917,7 @@ function boqProjName(){var projId=(document.getElementById('boq-proj-sel')||{}).
 function boqDownloadExcel(){
   if(!BOQ_ITEMS.length){toast('No BOQ items to export','warning');return;}
   var projName=boqProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var header=['Item Code','Description','Short Name','Unit','BOQ Qty','Rate','Amount','Remarks'];
   var lines=[[compName],['Bill of Quantities - '+projName],[''],header];
   var total=0;
@@ -944,7 +944,7 @@ function boqDownloadExcel(){
 function boqDownloadPDF(){
   if(!BOQ_ITEMS.length){toast('No BOQ items to export','warning');return;}
   var projName=boqProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -1130,7 +1130,7 @@ function jmProjName(){var projId=(document.getElementById('jm-proj-sel')||{}).va
 function jmDownloadExcel(){
   if(!JM_ITEMS.length){toast('No BOQ items to export','warning');return;}
   var projName=jmProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var header=['Item Code','Description','Unit','BOQ Qty','JM No','Date','JM Qty','Reference','Item Balance'];
   var lines=[[compName],['Joint Measurement (JM) Statement - '+projName],[''],header];
   JM_ITEMS.forEach(function(item){
@@ -1163,7 +1163,7 @@ function jmDownloadExcel(){
 function jmDownloadPDF(){
   if(!JM_ITEMS.length){toast('No BOQ items to export','warning');return;}
   var projName=jmProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -1434,7 +1434,7 @@ function planDownloadExcel(){
   var rows=planFlattenRows();
   if(!rows.length){toast('No planned resources to export','warning');return;}
   var projName=planProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var header=['Item Code','Description','Activity','Party Name','Category','Qty','Unit','Rate','Amount'];
   var lines=[[compName],['Resource Planning Statement - '+projName],[''],header];
   var total=0;
@@ -1462,7 +1462,7 @@ function planDownloadPDF(){
   var rows=planFlattenRows();
   if(!rows.length){toast('No planned resources to export','warning');return;}
   var projName=planProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -2222,7 +2222,7 @@ function rrProjName(){var projSel=document.getElementById('proj-mod-sel');return
 function rrDownloadAllExcel(){
   if(!RR_ITEMS.length){toast('No requisitions to export','warning');return;}
   var projName=rrProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
   var stLbl={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
   function fmtD(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
@@ -2249,7 +2249,7 @@ function rrDownloadAllExcel(){
 function rrDownloadAllPDF(){
   if(!RR_ITEMS.length){toast('No requisitions to export','warning');return;}
   var projName=rrProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -2727,7 +2727,7 @@ function execAllotDownloadExcel(){
   var rows=execAllotFlattenRows();
   if(!rows.length){toast('No planned resources to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var header=['Item Code','Description','Party Name','Type','Planned Qty','Unit','RR Approved','Allotted','Balance'];
   var lines=[[compName],['Work Allotment Statement - '+projName],[''],header];
@@ -2752,7 +2752,7 @@ function execAllotDownloadPDF(){
   var rows=execAllotFlattenRows();
   if(!rows.length){toast('No planned resources to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -4791,7 +4791,7 @@ function salesRegDownloadExcel(){
   var rows=salesRegRows();
   if(!rows.length){toast('No sales bills to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   function fmtD3(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var header=['Bill Number','Bill Ref','Date','Work Amount','Additions','Deductions','GST','Bill Amount','Paid Amount','Balance Due'];
   var lines=[[compName],['Sales Register - '+projName],[''],header];
@@ -4820,7 +4820,7 @@ function salesRegDownloadPDF(){
   var rows=salesRegRows();
   if(!rows.length){toast('No sales bills to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -5131,7 +5131,7 @@ function execOrdersDownloadExcel(){
   var grouped=execOrdersGrouped();
   if(!grouped.wo.length&&!grouped.po.length){toast('No orders to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   function fmtD4(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var header=['Doc No','Party','Party Type','Date','Items','Total Amount'];
@@ -5167,7 +5167,7 @@ function execOrdersDownloadPDF(){
   var grouped=execOrdersGrouped();
   if(!grouped.wo.length&&!grouped.po.length){toast('No orders to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -5414,7 +5414,7 @@ function execRenderAllotted(){
 function execAllottedDownloadExcel(){
   if(!WA_ALLOT.length){toast('No allotments to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   var header=['Item Code','Description','Resource','Party (Paid To)','Type','Qty','Unit','Rate','Amount','Date','Doc Status','Advance Paid'];
   var lines=[[compName],['Work Allotment Register - '+projName],[''],header];
@@ -5447,7 +5447,7 @@ function execAllottedDownloadExcel(){
 function execAllottedDownloadPDF(){
   if(!WA_ALLOT.length){toast('No allotments to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -6014,7 +6014,7 @@ function execDailyDownloadExcel(){
   var rows=execDailyFlattenRows();
   if(!rows.length){toast('No daily progress entries to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var header=['Date','Item Code','Description','Qty Done','Unit','Resource Type','Resource Party','Resource Qty','Resource Unit','Rate','Amount','Remarks'];
   var lines=[[compName],['Daily Progress Statement - '+projName],[''],header];
   var grandTotal=0;
@@ -6057,7 +6057,7 @@ function execDailyDownloadPDF(){
   var rows=execDailyFlattenRows();
   if(!rows.length){toast('No daily progress entries to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -7623,7 +7623,7 @@ function purchaseBillsRegDownloadExcel(){
   var rows=purchaseBillsRegRows();
   if(!rows.length){toast('No purchase bills to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
   function fmtD5(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var header=['Bill Ref/No','Date','Party','Party Type','Description','Work Amount','Additions','Gross Amount','Deductions Held','Net Payable','Paid','Balance Due'];
@@ -7653,7 +7653,7 @@ function purchaseBillsRegDownloadPDF(){
   var rows=purchaseBillsRegRows();
   if(!rows.length){toast('No purchase bills to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -10325,7 +10325,7 @@ function grnRender(){
 function grnDownloadAllExcel(){
   if(!GRN_ITEMS.length){toast('No GRN records to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var stLbl={accepted:'Accepted',rejected:'Rejected',partial:'Partial'};
   function fmtD2(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var header=['GRN Number','Date','Resource','Party','BOQ Item','Ordered Qty','Received Qty','Unit','Status','Approval Status','Created By','Remarks'];
@@ -10354,7 +10354,7 @@ function grnDownloadAllExcel(){
 function grnDownloadAllPDF(){
   if(!GRN_ITEMS.length){toast('No GRN records to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
@@ -10932,7 +10932,7 @@ function storeDownloadExcel(){
   var items=storeGroupedItems();
   if(!items.length){toast('Store is empty, nothing to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   function fmtD2(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var header=['Material','In Hand','Issued','Total In','Unit','Last GRN Date'];
   var lines=[[compName],['Store Inventory - '+projName],[''],header];
@@ -10966,7 +10966,7 @@ function storeDownloadPDF(){
   var items=storeGroupedItems();
   if(!items.length){toast('Store is empty, nothing to export','warning');return;}
   var projName=execProjName();
-  var compName=typeof coName==='function'?coName():'AIPL';
+  var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();

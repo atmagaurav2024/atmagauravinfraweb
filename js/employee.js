@@ -3223,7 +3223,7 @@ async function empFormSave(){
       }
     } else {
       // New — get next ID
-      var newEmpId=await getNextAIPLId();
+      var newEmpId=await getNextRYDAXId();
       data.emp_id=newEmpId; data.badge_no=newEmpId; data.status='pending';
 
       // Create Supabase Auth account with entered password
@@ -3248,7 +3248,7 @@ async function empFormSave(){
         result=await sbInsert('employees',data);
       }catch(insErr){
         if(insErr.message&&(insErr.message.includes('duplicate')||insErr.message.includes('23505'))){
-          data.emp_id='AIPL-T'+String(Date.now()).slice(-6);
+          data.emp_id='RYDAX-T'+String(Date.now()).slice(-6);
           data.badge_no=data.emp_id;
           result=await sbInsert('employees',data);
         } else { throw insErr; }
