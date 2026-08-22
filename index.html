@@ -1722,13 +1722,25 @@ input,select,textarea{font-size:16px !important;}
           <div id="dash-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#E11D48;color:white;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;"></div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px;" onclick="showProfile()">
-        <div class="dt-avatar" id="dash-avatar" style="font-size:14px;font-weight:900;">👤</div>
-        <div style="text-align:left;">
-          <div id="dash-header-name" style="font-size:12.5px;font-weight:800;color:var(--text);line-height:1.2;white-space:nowrap;">—</div>
-          <div id="dash-header-role" style="font-size:10.5px;color:var(--text3);line-height:1.2;">—</div>
+      <div style="position:relative;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px;" onclick="toggleUserMenu(event)">
+          <div class="dt-avatar" id="dash-avatar" style="font-size:14px;font-weight:900;">👤</div>
+          <div style="text-align:left;">
+            <div id="dash-header-name" style="font-size:12.5px;font-weight:800;color:var(--text);line-height:1.2;white-space:nowrap;">—</div>
+            <div id="dash-header-role" style="font-size:10.5px;color:var(--text3);line-height:1.2;">—</div>
+          </div>
+          <span style="font-size:10px;color:var(--text3);">&#9662;</span>
         </div>
-        <span style="font-size:10px;color:var(--text3);">&#9662;</span>
+        <div id="dash-user-menu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12);min-width:170px;z-index:50;overflow:hidden;">
+          <div onclick="closeUserMenu();showProfile();" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg>
+            My Account
+          </div>
+          <div onclick="closeUserMenu();doLogout();" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;font-size:13px;font-weight:700;color:#E11D48;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E11D48" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+            Logout
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -3490,6 +3502,32 @@ window.addEventListener('resize', function(){
   if(window._railResizeT) clearTimeout(window._railResizeT);
   window._railResizeT = setTimeout(updateNavLayout, 150);
 });
+
+function toggleUserMenu(ev){
+  if(ev) ev.stopPropagation();
+  var menu = document.getElementById('dash-user-menu');
+  if(!menu) return;
+  var opening = menu.style.display==='none' || !menu.style.display;
+  menu.style.display = opening ? 'block' : 'none';
+  if(opening){
+    // Close on next outside click. Attached once per open (removed on
+    // close) rather than a permanent document listener, so it doesn't
+    // fire on every click across the whole app for a menu that's
+    // almost always closed.
+    setTimeout(function(){
+      document.addEventListener('click', closeUserMenuOnOutsideClick);
+    }, 0);
+  }
+}
+function closeUserMenuOnOutsideClick(ev){
+  var menu = document.getElementById('dash-user-menu');
+  if(menu && !menu.contains(ev.target)) closeUserMenu();
+}
+function closeUserMenu(){
+  var menu = document.getElementById('dash-user-menu');
+  if(menu) menu.style.display='none';
+  document.removeEventListener('click', closeUserMenuOnOutsideClick);
+}
 
 function showProfile(){
   var u = currentUser;
