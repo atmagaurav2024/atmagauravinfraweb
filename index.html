@@ -3435,11 +3435,46 @@ async function loadDashboardInsights(filterProjId){
 
     kraEl.innerHTML='';
 
+    setTimeout(fitDashboardToScreen, 30);
+
   }catch(e){
     console.error('Dashboard insights error:',e);
     gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F857A6;font-size:12px;background:#fff;border-radius:12px;border:1px solid var(--border);">Could not load insights. Pull to refresh.</div>';
   }
 }
+
+// Measures the dashboard's actual rendered content height against the
+// visible viewport (below the header) and, only if it doesn't fit,
+// scales it down just enough to fit without scrolling. Scrolling stays
+// technically available (the container still allows overflow) as a
+// fallback, but this makes it unnecessary in normal use rather than
+// hoping fixed padding/font-size values happen to fit every screen
+// size and every amount of real data (project count, activity count,
+// etc. all vary).
+function fitDashboardToScreen(){
+  var gridEl = document.getElementById('dash-kpi-grid');
+  var dashTop = document.querySelector('#app-dashboard .dash-top');
+  var dashBody = document.querySelector('#app-dashboard .dash-body');
+  if(!gridEl || !dashBody) return;
+  // Reset before measuring — otherwise a previous scale factor throws
+  // off the natural (unscaled) content height we need to measure now.
+  gridEl.style.transform=''; gridEl.style.width=''; gridEl.style.height=''; gridEl.style.transformOrigin='';
+  var bodyStyle = window.getComputedStyle(dashBody);
+  var bodyPadding = parseFloat(bodyStyle.paddingTop)+parseFloat(bodyStyle.paddingBottom);
+  var availableH = window.innerHeight - (dashTop?dashTop.offsetHeight:0) - bodyPadding - 4;
+  var contentH = gridEl.scrollHeight;
+  if(contentH > availableH && availableH > 200){
+    var scale = Math.max(0.6, availableH/contentH); // floor of 0.6 keeps text legible; scrolling remains available as a fallback below that
+    gridEl.style.transformOrigin='top left';
+    gridEl.style.transform='scale('+scale+')';
+    gridEl.style.width=(100/scale)+'%';
+    gridEl.style.height=(contentH*scale)+'px';
+  }
+}
+window.addEventListener('resize', function(){
+  if(window._dashFitResizeT) clearTimeout(window._dashFitResizeT);
+  window._dashFitResizeT = setTimeout(fitDashboardToScreen, 150);
+});
 
 function canAccess(m,p){if(!currentUser)return false;if(currentUser.role==='admin')return true;if(!Object.keys(USER_PERMISSIONS).length)return true;var mp=USER_PERMISSIONS[m];return mp?mp[p]!==false:false;}
 // Permissions resolve in two layers: whatever is granted to the user's role
