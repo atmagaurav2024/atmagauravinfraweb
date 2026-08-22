@@ -2798,8 +2798,7 @@ async function loadDashboardInsights(filterProjId){
     }
 
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
-    var activeStatuses=['planning','in-progress','under-dlp'];
-    var activeProjects=projects.filter(function(p){return activeStatuses.indexOf(p.status)>-1;}).length;
+    var activeProjects=projects.length;
     var activeWorkforce=employees.filter(function(e){return e.status==='active';}).length;
 
     // ── Profit/Loss per BOQ item ──────────────────────────────────────────
@@ -3227,7 +3226,7 @@ async function loadDashboardInsights(filterProjId){
     // precise engineering measure, just billed-vs-cost ratio blended with
     // schedule stage, since there's no separate "planned % complete by
     // today" baseline stored anywhere to compare actual progress against.
-    var projHealthRows=projects.filter(function(p){return activeStatuses.indexOf(p.status)>-1;}).map(function(p){
+    var projHealthRows=projects.map(function(p){
       var pl=plByProj[p.id]||{revenue:0,cost:0};
       var pctDone = pl.revenue>0 && parseFloat(p.contract_value)>0 ? Math.min(100,Math.round(pl.revenue/parseFloat(p.contract_value)*100)) : 0;
       var costRatio = pl.revenue>0 ? pl.cost/pl.revenue : 0;
