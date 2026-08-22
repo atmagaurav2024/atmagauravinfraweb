@@ -3551,7 +3551,7 @@ function fitDashboardToScreen(){
   var availableH = window.innerHeight - (dashTop?dashTop.offsetHeight:0) - bodyPadding - 4;
   var contentH = gridEl.scrollHeight;
   if(contentH > availableH && availableH > 200){
-    var scale = Math.max(0.6, availableH/contentH); // floor of 0.6 keeps text legible; scrolling remains available as a fallback below that
+    var scale = Math.max(0.94, availableH/contentH); // high floor by design — only smooths minor overflow; scrolling is the fallback for anything more, so a real font-size increase isn't scaled back down to look unchanged
     gridEl.style.transformOrigin='top left';
     gridEl.style.transform='scale('+scale+')';
     gridEl.style.width=(100/scale)+'%';
