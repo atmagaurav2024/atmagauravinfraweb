@@ -2645,7 +2645,7 @@ async function loadDashboardInsights(filterProjId){
   var safe=function(p){return p.catch(function(){return [];});};
   try{
     var r=await Promise.all([
-      safe(sbFetch('projects',{select:'id,name,status,contract_value'})),
+      safe(sbFetch('projects',{select:'id,name,short_name,status,contract_value'})),
       safe(sbFetch('employees',{select:'id,status'})),
       safe(sbFetch('boq_items',{select:'id,project_id,item_code,short_name,description,unit,boq_qty,rate'})),
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,exec_type,rate',filter:'exec_type=neq.planned'})),
@@ -3144,7 +3144,7 @@ async function loadDashboardInsights(filterProjId){
       var costRatio = pl.revenue>0 ? pl.cost/pl.revenue : 0;
       var health = costRatio>0.95 ? 'At Risk' : costRatio>0.85 ? 'Average' : 'Good';
       var healthColor = health==='Good'?['#D1FAE5','#047857']:health==='Average'?['#FEF3C7','#B45309']:['#FFE4E6','#E11D48'];
-      return {name:p.name, pct:pctDone, billing:pl.revenue, expense:pl.cost, health:health, healthColor:healthColor};
+      return {name:(p.short_name||p.name), pct:pctDone, billing:pl.revenue, expense:pl.cost, health:health, healthColor:healthColor};
     }).sort(function(a,b){return b.billing-a.billing;}).slice(0,5);
 
     // ── Recent activity feed, from the app-wide activity log ────────────
