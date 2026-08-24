@@ -188,7 +188,7 @@ function projModRenderNav(){
 
   // ── Main tab row ──
   // Non-project tabs only shown when a project is selected
-  var mainRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 10px;gap:4px;background:white;">'+
+  var mainRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 10px;gap:4px;background:var(--card-bg);">'+
     mainTabs.map(function(t){
       var isActive=(PROJ_MOD_TAB===t.id)||(t.group&&activeGroup===t.id);
       // Hide non-project tabs when no project selected OR when on Projects tab
@@ -207,7 +207,7 @@ function projModRenderNav(){
   var subRow='';
   if(hasProjId&&activeGroup&&!onProjects){
     subRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;'+
-      'padding:0 10px 8px;gap:4px;background:white;border-top:1px solid #F3F4F6;">'+
+      'padding:0 10px 8px;gap:4px;background:var(--card-bg);border-top:1px solid #F3F4F6;">'+
       PMT_GROUPS[activeGroup].map(function(s){
         var sa=PROJ_MOD_TAB===s;
         return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
@@ -392,7 +392,7 @@ function renderProjList(list){
     var inrFmt=function(n){return n?'\u20b9'+Number(n).toLocaleString('en-IN'):'';};
     var coords=[];try{coords=p.coordinates?JSON.parse(p.coordinates):[];}catch(e){}
     var files=[];try{files=p.attachments?JSON.parse(p.attachments):[];}catch(e){}
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       // ── Header row (click to select + go to BOQ) ──
       '<div style="padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="projSelectAndGo(\''+p.id+'\')" title="Click to open project">'+
         '<div style="width:44px;height:44px;border-radius:12px;background:'+st.col+'20;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">&#127959;</div>'+
@@ -912,9 +912,9 @@ function boqRender(){
   if(!BOQ_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128203;</div><div style="font-weight:700;margin-top:10px;">No BOQ items yet</div><div style="font-size:12px;margin-top:6px;">Tap + to add</div></div>';return;}
   var total=BOQ_ITEMS.reduce(function(s,i){return s+(parseFloat(i.boq_qty)||0)*(parseFloat(i.rate)||0);},0);
   el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="boqDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="boqDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(total)+'</div></div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(total)+'</div></div></div>'+
     BOQ_ITEMS.map(function(item){var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0;var subs=BOQ_SUBITEMS.filter(function(s){return s.boq_item_id===item.id;});
-      return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:var(--text3);">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR(bq*rate)+'</div><div style="font-size:10px;color:var(--text3);">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--navy);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:var(--text3);">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR(bq*rate)+'</div><div style="font-size:10px;color:var(--text3);">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--navy);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
     }).join('');
 }
 function boqProjName(){var projId=(document.getElementById('boq-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -1127,7 +1127,7 @@ function jmRender(){
     var balance=boqQty-totalJM;var pct=boqQty>0?Math.min(100,Math.round(totalJM/boqQty*100)):0;
     var rate=parseFloat(item.rate)||0;
     var jmAmt=totalJM*rate, boqAmt=boqQty*rate;
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;">'+(item.short_name||item.description)+'</div><div style=\"text-align:right;flex-shrink:0;margin-right:6px;\"><div style=\"font-size:13px;font-weight:900;color:#283593;\">'+fmtINR(jmAmt)+'</div><div style=\"font-size:9.5px;color:var(--text3);\">of '+fmtINR(boqAmt)+'</div></div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:var(--text3);background:#F3F4F6;display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' &#215; &#8377;'+rate+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+' <span style=\"color:#283593;\">= '+fmtINR((parseFloat(jm.jm_qty)||0)*rate)+'</span></div><div style="font-size:10px;color:var(--text3);">'+jmDate(jm.date)+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;">'+(item.short_name||item.description)+'</div><div style=\"text-align:right;flex-shrink:0;margin-right:6px;\"><div style=\"font-size:13px;font-weight:900;color:#283593;\">'+fmtINR(jmAmt)+'</div><div style=\"font-size:9.5px;color:var(--text3);\">of '+fmtINR(boqAmt)+'</div></div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:var(--text3);background:#F3F4F6;display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' &#215; &#8377;'+rate+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+' <span style=\"color:#283593;\">= '+fmtINR((parseFloat(jm.jm_qty)||0)*rate)+'</span></div><div style="font-size:10px;color:var(--text3);">'+jmDate(jm.date)+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
   }).join('');
 }
 function jmProjName(){var projId=(document.getElementById('jm-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -1288,7 +1288,7 @@ function jmCompleteAllPrompt(){
   var d=document.createElement('div');
   d.id='jm-cmpl-ov';
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  d.innerHTML='<div style="background:white;border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
+  d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#E65100;margin-bottom:6px;">&#9888; Complete All JMs</div>'+
     '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will raise a joint measurement for the <b>full outstanding balance</b> on <b>'+pending.length+' item'+(pending.length!==1?'s':'')+'</b>, bringing every item to 100% of its BOQ quantity.<br><b style="color:#C62828;">This affects billing and cannot be undone in bulk</b> — each JM would have to be deleted individually.</div>'+
     '<div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
@@ -1303,7 +1303,7 @@ function jmCompleteAllPrompt(){
     '<input type="password" id="jm-cmpl-pass" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
     '<div id="jm-cmpl-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;"></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
-      '<button onclick="document.getElementById(\'jm-cmpl-ov\').remove()" style="background:white;border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button onclick="document.getElementById(\'jm-cmpl-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
       '<button id="jm-cmpl-go" onclick="jmCompleteAllConfirm()" style="background:#F57F17;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Complete</button>'+
     '</div></div>';
   document.body.appendChild(d);
@@ -1412,7 +1412,7 @@ function planRender(){
   var jmLine=links.length?'<div style="font-size:9px;margin-top:2px;color:#1565C0;">'+links.map(function(l){return 'JM-'+(l.jm_number||'?')+': '+l.plan_qty;}).join(' | ')+' | <b>Total: '+jmTotal+'</b>'+(jmBal!==null?' | Bal: '+jmBal.toFixed(2).replace(/\.?0+$/,''):'')+'</div>':'';
   return '<div style="padding:5px 10px;background:#F8F9FF;border-radius:8px;margin-top:3px;"><div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;font-size:11px;font-weight:600;">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+jmLine+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:10px;color:var(--text3);">'+r.qty+' '+(r.unit||'')+' @ \u20b9'+r.rate+'</div><div style="font-size:11px;font-weight:800;color:#1565C0;">'+fmtINR((r.qty||0)*(r.rate||0))+'</div></div><button onclick="planEditRes(\''+r.id+'\',\''+r.boq_subitem_id+'\',\''+r.boq_item_id+'\')" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button><button onclick="planDelRes(\''+r.id+'\')" style="background:none;border:none;color:#C62828;font-size:13px;cursor:pointer;">\u00d7</button></div></div>';
 })();}).join(''):'';
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;justify-content:space-between;"><div><span style="font-size:10px;font-family:monospace;background:#BBDEFB;color:#1565C0;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span><div style="font-size:10px;color:var(--text3);margin-top:2px;">BOQ: '+item.boq_qty+' '+item.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+(totalPlan?'<span style="font-size:12px;font-weight:900;color:#1565C0;">'+fmtINR(totalPlan)+'</span>':'')+'<button onclick="planAddSub(\''+item.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Activity</button></div></div><div style="padding:10px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No resources yet</div>')+'</div></div>';
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;justify-content:space-between;"><div><span style="font-size:10px;font-family:monospace;background:#BBDEFB;color:#1565C0;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span><div style="font-size:10px;color:var(--text3);margin-top:2px;">BOQ: '+item.boq_qty+' '+item.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+(totalPlan?'<span style="font-size:12px;font-weight:900;color:#1565C0;">'+fmtINR(totalPlan)+'</span>':'')+'<button onclick="planAddSub(\''+item.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Activity</button></div></div><div style="padding:10px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No resources yet</div>')+'</div></div>';
   }).join('');
 }
 function planProjName(){var projId=(document.getElementById('plan-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -2080,7 +2080,7 @@ async function rrLoadItems(){
 
   var projId=PROJ_MOD_SEL_ID||'';
   if(!projId){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">Select a project from the dropdown above</div>';
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">Select a project from the dropdown above</div>';
     return;
   }
 
@@ -2121,7 +2121,7 @@ function rrRender(){
   var summaryBar=
     '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">'+
       Object.keys(counts).filter(function(k){return counts[k]>0;}).map(function(k){
-        return '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid '+statusColors[k]+';flex:1;min-width:80px;">'+
+        return '<div style="background:var(--card-bg);border-radius:10px;padding:8px 14px;border-left:4px solid '+statusColors[k]+';flex:1;min-width:80px;">'+
           '<div style="font-size:18px;font-weight:900;color:'+statusColors[k]+';">'+counts[k]+'</div>'+
           '<div style="font-size:10px;color:var(--text3);font-weight:700;">'+statusLabels[k]+'</div>'+
         '</div>';
@@ -2192,7 +2192,7 @@ function rrRender(){
         }).join('')
       : '';
 
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:9px 14px;background:#E0F7FA;border-bottom:1px solid var(--border);">'+
         '<span style="font-size:10px;font-family:monospace;background:#B2EBF2;color:#00838F;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
         '<span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span>'+
@@ -2219,7 +2219,7 @@ function rrRender(){
       '</div>'+
     '</div>'+
     (Object.values(counts).some(function(v){return v>0;})?summaryBar:'')+
-    (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">No planned resources found. Add resources in Planning tab first.</div>');
+    (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">No planned resources found. Add resources in Planning tab first.</div>');
 }
 
 function rrProjName(){var projSel=document.getElementById('proj-mod-sel');return (projSel&&projSel.options&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'');}
@@ -2632,7 +2632,7 @@ function execRender(){
         .reduce(function(s,a){return s+(parseFloat(a.qty)||0);},0);
       return rrApproved > totalAllotted;
     });
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:#FFF3E0;display:flex;align-items:center;justify-content:space-between;">'+
         '<div><span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span></div>'+
         (itemHasUnallotted?'<button class="wa-allot-btn" data-item-id="'+item.id+'" style="background:#E65100;color:white;border:none;border-radius:7px;padding:5px 14px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Work</button>':'')+
@@ -2641,7 +2641,7 @@ function execRender(){
   }).join('');
 
   var orphanHtml=orphanRes.length?
-    '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:#FFF8E1;"><span style="font-size:11px;font-weight:800;color:#E65100;">&#9888; Uncategorized Resources</span></div>'+
       '<div style="padding:8px 14px;">'+orphanRes.map(function(r){return resRow(r,'',tCol,tLbl);}).join('')+'</div></div>':'';
 
@@ -2955,7 +2955,7 @@ async function execOpenMultiAllot(){
             '</div>'+
           '</div>'+
         '</div>'+
-        '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid #F0F0F0;background:white;">'+
+        '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid #F0F0F0;background:var(--card-bg);">'+
           '<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:4px;">Specification for this resource</label>'+
           '<textarea class="wa-spec-inp ftxt" data-res-id="'+res.id+'" rows="2"></textarea>'+
         '</div>'+
@@ -3251,7 +3251,7 @@ async function execOpenAllot(itemId){
         '</div>'+
       '</div>'+
       // Specification — shown when checkbox is checked
-      '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid #F0F0F0;background:white;">'+
+      '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid #F0F0F0;background:var(--card-bg);">'+
         '<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:4px;">Specification / Description for this item</label>'+
         '<textarea class="wa-spec-inp ftxt" data-res-id="'+res.id+'" rows="2" placeholder="Material grade, size, brand, make, model or any specific requirement..."></textarea>'+
       '</div>'+
@@ -4156,7 +4156,7 @@ var OTHEREXP_CATS=[
 
 function execRenderOtherExpenses(){
   var el=document.getElementById('exec-content');if(!el)return;
-  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;overflow-x:auto;">'+
+  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:var(--card-bg);position:sticky;top:0;z-index:10;overflow-x:auto;">'+
     OTHEREXP_CATS.map(function(t){
       var active=OTHEREXP_SUBTAB===t.id;
       return '<button onclick="otherExpSubTab(\''+t.id+'\')" style="'+
@@ -4218,7 +4218,7 @@ async function execRenderPettyExpenses(containerId){
     var total=filtered.reduce(function(s,x){return s+x._allocAmt;},0);
 
     var rowsHtml=filtered.map(function(x){
-      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
+      return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
         '<div style="display:flex;align-items:center;gap:10px;">'+
           '<div style="width:36px;height:36px;border-radius:10px;background:#FFEBEE;display:flex;align-items:center;justify-content:center;font-size:16px;">🧾</div>'+
           '<div>'+
@@ -4392,7 +4392,7 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
     }
 
     var rowsHtml=list.map(function(x){
-      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
+      return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
         '<div style="display:flex;align-items:center;gap:10px;">'+
           '<div style="width:36px;height:36px;border-radius:10px;background:#F3E5F5;display:flex;align-items:center;justify-content:center;font-size:16px;">'+icon+'</div>'+
           '<div>'+
@@ -4480,7 +4480,7 @@ function execRenderSales(){
     {id:'genbill', label:'Generate Bill'},
     {id:'viewbills',label:'View Bills'}
   ];
-  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;">'+
+  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:var(--card-bg);position:sticky;top:0;z-index:10;">'+
     tabs.map(function(t){
       var active=SALES_SUBTAB===t.id;
       return '<button onclick="salesSubTab(\''+t.id+'\')" style="'+
@@ -4537,7 +4537,7 @@ function execRenderSales(){
       var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var netBeforeGst=workAmt+addAmt-dedAmt;
       var collapseId='sb-'+b.id;
-      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+      return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;background:#F3E5F5;" '+
           'onclick="var bd=document.getElementById(\''+collapseId+'\');if(bd){var op=bd.style.display!==\'none\';bd.style.display=op?\'none\':\'block\';this.querySelector(\'.sb-arrow\').textContent=op?\'\u25b6\':\'\u25bc\';}">'+
           '<span class="sb-arrow" style="color:#7B1FA2;font-size:11px;">&#9654;</span>'+
@@ -4689,7 +4689,7 @@ function execRenderSales(){
 
   el.innerHTML=tabBar+
     '<div style="padding:10px;">'+
-      '<div style="background:white;border-radius:12px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
+      '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
         '<div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:center;gap:10px;">'+
           '<div style="flex:1;">'+
             '<div style="font-size:13px;font-weight:900;color:#4A148C;">Generate Sales Bill</div>'+
@@ -5092,7 +5092,7 @@ function execRenderOrders(){
       keys.map(function(num){
         var g=numMap[num];
         var docNo=docPrefix+'-'+num;
-        return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:10px;">'+
+        return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:10px;">'+
           '<div style="width:42px;height:42px;border-radius:10px;background:'+col+'15;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">&#128196;</div>'+
           '<div style="flex:1;min-width:0;">'+
             '<div style="font-size:13px;font-weight:800;">'+docNo+
@@ -5400,7 +5400,7 @@ function execRenderAllotted(){
         '<div style="display:flex;justify-content:flex-end;font-size:10px;font-weight:800;color:#F57F17;padding-top:4px;">Total Advance: '+inrFmt(totalBatchAdv)+'</div>'+
       '</div>':'';
 
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:13px;font-weight:800;">'+headerLabel+'</div>'+
@@ -5740,7 +5740,7 @@ async function execGenBatchDoc(batchKey, docType){
     '<title>'+titleStr+' — '+fullDocNo+'</title>'+
     '<style>'+
       '*{box-sizing:border-box;margin:0;padding:0;}'+
-      'body{font-family:"Arial",sans-serif;font-size:12px;color:#1a1a1a;background:#fff;}'+
+      'body{font-family:"Arial",sans-serif;font-size:12px;color:#1a1a1a;background:var(--card-bg);}'+
       '.page{max-width:800px;margin:0 auto;padding:32px 36px;}'+
       // Header strip
       '.top-strip{background:'+accentCol+';color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:8px 8px 0 0;}'+
@@ -5907,7 +5907,7 @@ function execRenderDaily(){
 
   // Render date picker + New Entry button at top
   el.innerHTML=
-    '<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
       '<div style="font-size:12px;font-weight:800;color:#1565C0;">&#128197;</div>'+
       '<input id="dp-view-date" type="date" value="'+WA_DAILY_DATE+'" '+
         'style="border:1.5px solid #1565C0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:#1565C0;outline:none;cursor:pointer;" '+
@@ -6215,7 +6215,7 @@ function execRenderExecutedWork(){
         '<td style="padding:6px 8px;font-size:11px;text-align:right;color:var(--text3);">'+inr(rateArrived)+'</td>'+
       '</tr>';
     }).join('');
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:#FFF3E0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'+
         '<div>'+
           '<span style="font-size:11px;font-family:monospace;font-weight:800;color:#E65100;">'+(s.item.item_code||'')+'</span>'+
@@ -6302,7 +6302,7 @@ function execRenderDailyContent(){
   }).join('');
 
   var summaryTable=
-    '<div style="background:white;border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
       '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #E8EAF6;">'+
         '<div style="font-size:12px;font-weight:800;color:#1565C0;">&#128202; BOQ Item Progress — Completed vs JM vs BOQ</div>'+
         '<div style="display:flex;gap:12px;margin-top:5px;font-size:9px;font-weight:700;">'+
@@ -6378,7 +6378,7 @@ function execRenderDailyContent(){
   }).join('');
 
   var resTable=resRows?
-    '<div style="background:white;border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
       '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #E8F5E9;">'+
         '<div style="font-size:12px;font-weight:800;color:#2E7D32;">&#128101; Resource Utilisation vs Allotted</div>'+
         '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Based on qty recorded in daily entries</div>'+
@@ -6470,7 +6470,7 @@ function execRenderDailyContent(){
         prevEntries.map(makeEntryRow).join('')
       : '';
 
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
       '<div style="padding:9px 14px;background:#FFF3E0;border-bottom:1px solid var(--border);">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
           '<div style="flex:1;min-width:0;">'+
@@ -7071,7 +7071,7 @@ function execRenderBills(){
     {id:'genbills',  label:'View Bills'},
     {id:'payments',  label:'Payments'}
   ];
-  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:white;position:sticky;top:0;z-index:10;">'+
+  var tabBar='<div style="display:flex;align-items:center;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;background:var(--card-bg);position:sticky;top:0;z-index:10;">'+
     tabs.map(function(t){
       var active=BILL_SUBTAB===t.id;
       return '<button onclick="billsSubTab(\''+t.id+'\')" style="'+
@@ -7592,7 +7592,7 @@ function execRenderBills(){
         : '<div style="padding:20px;text-align:center;color:var(--text3);font-size:11px;">No bills generated yet</div>';
     }
 
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">'+
       partyHeader+bodyHtml+
     '</div>';
   }).join('');
@@ -7883,14 +7883,14 @@ function execRenderPaymentsCore(el, projId){
 
     var summaryHtml=
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Billed Amount</div><div style="font-size:12px;font-weight:900;color:#1A237E;">'+inr(totalBilledAmt)+'</div></div>'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Net Payable</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(netPayableAmt)+'</div></div>'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Total Paid</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:'+(balanceDue>0?'#C62828':'#2E7D32')+';">Balance Due</div><div style="font-size:12px;font-weight:900;color:'+(balanceDue>0?'#C62828':'#2E7D32')+';">'+inr(Math.abs(balanceDue))+(balanceDue<0?' Cr':'')+'</div></div>'+
+        '<div style="text-align:center;background:var(--card-bg);padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Billed Amount</div><div style="font-size:12px;font-weight:900;color:#1A237E;">'+inr(totalBilledAmt)+'</div></div>'+
+        '<div style="text-align:center;background:var(--card-bg);padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Net Payable</div><div style="font-size:12px;font-weight:900;color:#1565C0;">'+inr(netPayableAmt)+'</div></div>'+
+        '<div style="text-align:center;background:var(--card-bg);padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Total Paid</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div></div>'+
+        '<div style="text-align:center;background:var(--card-bg);padding:6px;border-radius:6px;"><div style="font-size:9px;color:'+(balanceDue>0?'#C62828':'#2E7D32')+';">Balance Due</div><div style="font-size:12px;font-weight:900;color:'+(balanceDue>0?'#C62828':'#2E7D32')+';">'+inr(Math.abs(balanceDue))+(balanceDue<0?' Cr':'')+'</div></div>'+
       '</div>'+
       '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:8px;">'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Advances Paid</div><div style="font-size:12px;font-weight:900;color:#F57F17;">'+inr(totalAdv)+'</div></div>'+
-        '<div style="text-align:center;background:white;padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Cash/Bank Paid</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalCash)+'</div></div>'+
+        '<div style="text-align:center;background:var(--card-bg);padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Advances Paid</div><div style="font-size:12px;font-weight:900;color:#F57F17;">'+inr(totalAdv)+'</div></div>'+
+        '<div style="text-align:center;background:var(--card-bg);padding:6px;border-radius:6px;"><div style="font-size:9px;color:var(--text3);">Cash/Bank Paid</div><div style="font-size:12px;font-weight:900;color:#2E7D32;">'+inr(totalCash)+'</div></div>'+
       '</div>';
 
     var payCollapseId='pay-party-'+key.replace(/[^a-z0-9]/gi,'-');
@@ -10216,10 +10216,10 @@ function grnRender(){
 
   var summaryBar=
     '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
-      '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #558B2F;flex:1;">'+
+      '<div style="background:var(--card-bg);border-radius:10px;padding:8px 14px;border-left:4px solid #558B2F;flex:1;">'+
         '<div style="font-size:18px;font-weight:900;color:#558B2F;">'+totalGRNs+'</div>'+
         '<div style="font-size:10px;color:var(--text3);font-weight:700;">GRNs Created</div></div>'+
-      '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #E65100;flex:1;">'+
+      '<div style="background:var(--card-bg);border-radius:10px;padding:8px 14px;border-left:4px solid #E65100;flex:1;">'+
         '<div style="font-size:18px;font-weight:900;color:#E65100;">'+pendingAllots+'</div>'+
         '<div style="font-size:10px;color:var(--text3);font-weight:700;">Pending GRN</div></div>'+
     '</div>';
@@ -10240,7 +10240,7 @@ function grnRender(){
       var boqItem=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
       var planRes=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
       var resName=planRes.party_name||planRes.resource_category||'';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #F5F5F5;background:white;">'+
+      return '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #F5F5F5;background:var(--card-bg);">'+
         '<div style="flex:1;">'+
           (resName?'<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+''+
           '<div style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</div>'+
@@ -10253,7 +10253,7 @@ function grnRender(){
     }).join('');
 
     pendingSection=
-      '<div style="background:white;border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
+      '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
         '<div style="padding:10px 14px;background:#F1FBF4;border-bottom:2px solid #C8E6C9;">'+
           '<div style="font-size:12px;font-weight:800;color:#558B2F;">&#128230; Pending Material Receipt</div>'+
           '<div style="font-size:10px;color:var(--text3);">Materials ordered but GRN not yet created</div>'+
@@ -10308,7 +10308,7 @@ function grnRender(){
     }).join('');
 
     grnList=
-      '<div style="background:white;border-radius:14px;overflow:hidden;">'+
+      '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #DDD;">'+
           '<div style="font-size:12px;font-weight:800;color:#333;">&#128196; GRN Records</div>'+
         '</div>'+grnRows+
@@ -10324,7 +10324,7 @@ function grnRender(){
       '</div>'+
     '</div>'+
     summaryBar+pendingSection+
-    (grnList||(!pending.length?'<div style="text-align:center;padding:30px;color:var(--text3);background:white;border-radius:12px;">No vendor allotments found for this project</div>':''));
+    (grnList||(!pending.length?'<div style="text-align:center;padding:30px;color:var(--text3);background:var(--card-bg);border-radius:12px;">No vendor allotments found for this project</div>':''));
 }
 function grnDownloadAllExcel(){
   if(!GRN_ITEMS.length){toast('No GRN records to export','warning');return;}
@@ -10459,7 +10459,7 @@ function grnOpenForm(allotId, projId){
       document.body.appendChild(ov);
       var sh=document.createElement('div');
       sh.id='grn-sheet';
-      sh.style.cssText='position:fixed;bottom:0;left:0;right:0;background:white;border-radius:20px 20px 0 0;z-index:9999;display:none;max-height:85vh;overflow-y:auto;';
+      sh.style.cssText='position:fixed;bottom:0;left:0;right:0;background:var(--card-bg);border-radius:20px 20px 0 0;z-index:9999;display:none;max-height:85vh;overflow-y:auto;';
       sh.innerHTML='<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;"><div id="grn-sheet-title" style="font-size:14px;font-weight:800;"></div><span onclick="grnCloseSheet()" style="cursor:pointer;font-size:18px;color:var(--text3);">&#10005;</span></div><div id="grn-sheet-body" style="padding:14px;"></div><div id="grn-sheet-foot" style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;"></div>';
       document.body.appendChild(sh);
     }
@@ -10793,7 +10793,7 @@ function storeRender(){
 
   if(!STORE_ITEMS.length){
     el.innerHTML=
-      '<div style="text-align:center;padding:40px;color:var(--text3);background:white;border-radius:12px;">'+
+      '<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">'+
         '<div style="font-size:36px;margin-bottom:10px;">&#127981;</div>'+
         '<div style="font-weight:700;">Store is empty</div>'+
         '<div style="font-size:11px;margin-top:6px;">Materials are added to store when GRN is accepted</div>'+
@@ -10829,10 +10829,10 @@ function storeRender(){
 
   var summaryBar=
     '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
-      '<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #6A1B9A;flex:1;">'+
+      '<div style="background:var(--card-bg);border-radius:10px;padding:8px 14px;border-left:4px solid #6A1B9A;flex:1;">'+
         '<div style="font-size:18px;font-weight:900;color:#6A1B9A;">'+uniqueCount+'</div>'+
         '<div style="font-size:10px;color:var(--text3);font-weight:700;">Items in Store</div></div>'+
-      (lowStock>0?'<div style="background:white;border-radius:10px;padding:8px 14px;border-left:4px solid #C62828;flex:1;">'+
+      (lowStock>0?'<div style="background:var(--card-bg);border-radius:10px;padding:8px 14px;border-left:4px solid #C62828;flex:1;">'+
         '<div style="font-size:18px;font-weight:900;color:#C62828;">'+lowStock+'</div>'+
         '<div style="font-size:10px;color:var(--text3);font-weight:700;">Low Stock</div></div>':'')+''+
     '</div>';
@@ -10870,7 +10870,7 @@ function storeRender(){
       '</div>'+
     '</div>'+
     summaryBar+
-    '<div style="background:white;border-radius:14px;overflow:hidden;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;">'+
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
         '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
           '<thead><tr style="background:#6A1B9A;color:white;">'+
@@ -10889,7 +10889,7 @@ function storeRender(){
     (function(){
       var projLogs=STORE_ISSUE_LOG.filter(function(l){return l.project_id===(STORE_PROJ_ID||'');});
       if(!projLogs.length) return '';
-      return '<div style="background:white;border-radius:14px;margin-top:12px;overflow:hidden;">'+
+      return '<div style="background:var(--card-bg);border-radius:14px;margin-top:12px;overflow:hidden;">'+
         '<div style="padding:10px 14px;font-size:12px;font-weight:800;color:#6A1B9A;border-bottom:1px solid #F0F0F0;">&#128221; Issue Log</div>'+
         '<div style="overflow-x:auto;">'+
         '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
