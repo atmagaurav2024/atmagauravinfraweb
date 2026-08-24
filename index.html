@@ -1296,6 +1296,17 @@ input,select,textarea{font-size:16px !important;}
 #app-dashboard .dk-val{color:var(--text);}
 #app-dashboard .dk-lbl{color:var(--text3)!important;}
 #app-dashboard .sec-title{color:var(--text);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}
+body{--card-bg:#fff;}
+/* Dark mode — toggled via #dash-theme-toggle, persisted in localStorage.
+   Scoped to <body> rather than #app-dashboard specifically, so
+   elements appended directly to document.body (the FY/user/chart-
+   months dropdowns, the multi-project picker modal) still correctly
+   inherit these variables through normal CSS inheritance, rather than
+   falling outside a narrower container's scope and losing the theme. */
+body.dash-dark{--bg:#1E293B;--card-bg:#1E293B;--border:#334155;--text:#F1F5F9;--text2:#CBD5E1;--text3:#94A3B8;}
+body.dash-dark #app-dashboard{background:#0F172A;}
+body.dash-dark #app-dashboard .dash-top{background:#0F172A;border-bottom-color:#334155;}
+body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
 .dt-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;}
 .dt-greeting{font-size:14px;color:#0F172A;font-weight:600;}
 .dt-name{font-size:22px;font-weight:900;color:var(--text);font-family:'Nunito',sans-serif;}
@@ -1729,7 +1740,11 @@ input,select,textarea{font-size:16px !important;}
       <div class="dt-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
         <div style="position:relative;">
           <div id="dash-fy-label" onclick="toggleFYMenu(event)" style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;cursor:pointer;">&#128197; <span id="dash-fy-text">FY —</span> <span style="font-size:8px;">&#9662;</span></div>
-          <div id="dash-fy-menu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);min-width:110px;z-index:50;overflow:hidden;max-height:260px;overflow-y:auto;"></div>
+          <div id="dash-fy-menu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);min-width:110px;z-index:50;overflow:hidden;max-height:260px;overflow-y:auto;"></div>
+        </div>
+        <div id="dash-theme-toggle" onclick="toggleDashTheme()" title="Toggle dark / light mode" style="width:32px;height:32px;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg id="dash-theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
+          <svg id="dash-theme-icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#F1F5F9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         </div>
         <div style="position:relative;cursor:pointer;" onclick="showApp('access')">
           <div style="width:32px;height:32px;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg></div>
@@ -2727,6 +2742,27 @@ function selectChartMonths(n){
   loadDashboardInsights();
 }
 
+function applyDashTheme(dark){
+  document.body.classList.toggle('dash-dark', dark);
+  var moon = document.getElementById('dash-theme-icon-moon');
+  var sun = document.getElementById('dash-theme-icon-sun');
+  if(moon) moon.style.display = dark ? 'none' : 'block';
+  if(sun) sun.style.display = dark ? 'block' : 'none';
+}
+function toggleDashTheme(){
+  var dark = !document.body.classList.contains('dash-dark');
+  applyDashTheme(dark);
+  try{ localStorage.setItem('dashTheme', dark ? 'dark' : 'light'); }catch(e){}
+}
+// Applied immediately on script load (not waiting for the dashboard
+// screen itself to render) so a saved dark-mode preference takes
+// effect right away rather than flashing light mode first.
+(function(){
+  try{
+    if(document.body && localStorage.getItem('dashTheme')==='dark') applyDashTheme(true);
+  }catch(e){}
+})();
+
 async function loadDashboardInsights(filterProjId){
   filterProjId = filterProjId || '';
   var gridEl=document.getElementById('dash-kpi-grid');
@@ -3029,7 +3065,7 @@ async function loadDashboardInsights(filterProjId){
 
     // ══ WIDGET LIBRARY (reusable shapes matching the reference layout) ══
     function gradientStatCard(icon,value,label,grad){
-      return '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px 8px;">'+
+      return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:10px 8px;">'+
         '<div style="font-size:16px;color:var(--text3);margin-bottom:6px;">'+icon+'</div>'+
         '<div style="font-size:16px;font-weight:800;color:var(--text);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+value+'</div>'+
         '<div style="font-size:8.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.2px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+label+'</div>'+
@@ -3041,7 +3077,7 @@ async function loadDashboardInsights(filterProjId){
       var unbilledPctRaw = planVal>0 ? Math.max(0,(unbilledVal/planVal)*100) : 0;
       var billedPct = Math.min(100,billedPctRaw);
       var unbilledPct = Math.min(100-billedPct,unbilledPctRaw);
-      return '<div style="background:#fff;border-radius:14px;padding:16px 18px;border:1px solid var(--border);">'+
+      return '<div style="background:var(--card-bg);border-radius:14px;padding:16px 18px;border:1px solid var(--border);">'+
         '<div style="font-size:14px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
         '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;gap:8px;">'+
           '<span style="font-size:23px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</span>'+
@@ -3072,7 +3108,7 @@ async function loadDashboardInsights(filterProjId){
       var maxAbs=Math.max(Math.abs(actualVal),Math.abs(planVal),1);
       var actBarPct=Math.max(0,Math.min(100,(Math.abs(actualVal)/maxAbs)*100));
       var planBarPct=Math.max(0,Math.min(100,(Math.abs(planVal)/maxAbs)*100));
-      return '<div style="background:#fff;border-radius:14px;padding:16px 18px;border:1px solid var(--border);">'+
+      return '<div style="background:var(--card-bg);border-radius:14px;padding:16px 18px;border:1px solid var(--border);">'+
         '<div style="font-size:14px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+title+'</div>'+
         '<div style="font-size:23px;font-weight:800;color:'+actColor+';margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+inr(actualVal)+'</div>'+
         '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px;">Plan: '+inr(planVal)+'</div>'+
@@ -3119,7 +3155,7 @@ async function loadDashboardInsights(filterProjId){
         '</div>';
     }
     function panel(icon,title,inner,minH){
-      return '<div style="background:#fff;border-radius:16px;padding:16px;border:1px solid var(--border);'+(minH?'min-height:'+minH+'px;':'')+'">'+
+      return '<div style="background:var(--card-bg);border-radius:16px;padding:16px;border:1px solid var(--border);'+(minH?'min-height:'+minH+'px;':'')+'">'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'+
           '<span style="font-size:15px;color:var(--text3);">'+icon+'</span>'+
           '<span style="font-size:13.5px;font-weight:700;color:var(--text);letter-spacing:.2px;">'+title+'</span>'+
@@ -3378,7 +3414,7 @@ async function loadDashboardInsights(filterProjId){
     }
     function actionCard(icon,iconBg,value,label,anchor,customOnclick){
       var onclickExpr = customOnclick || (anchor?'showApp(\''+anchor+'\')':'');
-      return '<div onclick="'+onclickExpr+'" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:11px 12px;'+(onclickExpr?'cursor:pointer;':'')+'">'+
+      return '<div onclick="'+onclickExpr+'" style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:11px 12px;'+(onclickExpr?'cursor:pointer;':'')+'">'+
         '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px;">'+
           '<div style="width:30px;height:30px;border-radius:9px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">'+icon+'</div>'+
           '<div style="font-size:18px;font-weight:800;color:var(--text);">'+value+'</div>'+
@@ -3388,7 +3424,7 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
     }
     function overviewCard(icon,iconBg,value,label,trend){
-      return '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 12px;min-height:88px;display:flex;flex-direction:column;justify-content:center;">'+
+      return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 12px;min-height:88px;display:flex;flex-direction:column;justify-content:center;">'+
         '<div style="width:30px;height:30px;border-radius:9px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:15px;margin-bottom:8px;">'+icon+'</div>'+
         '<div style="font-size:20px;font-weight:800;color:var(--text);line-height:1.1;">'+value+'</div>'+
         '<div style="font-size:11.5px;color:var(--text3);font-weight:600;margin-top:3px;">'+label+
@@ -3463,7 +3499,7 @@ async function loadDashboardInsights(filterProjId){
 
     var projectHealthHtml =
       '<div style="height:100%;display:flex;flex-direction:column;"><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Project Health</div>'+
-      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;overflow-x:auto;flex:1;display:flex;flex-direction:column;">'+
+      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;overflow-x:auto;flex:1;display:flex;flex-direction:column;">'+
         '<table style="width:100%;min-width:480px;border-collapse:collapse;font-size:13px;">'+
           '<thead><tr style="text-align:left;color:var(--text3);font-size:11px;text-transform:uppercase;">'+
             '<th style="padding:4px 12px;">Project</th><th style="padding:4px 12px;">Progress</th>'+
@@ -3477,8 +3513,8 @@ async function loadDashboardInsights(filterProjId){
 
     var totalContractValue = plannedRevenueContract, totalBilled = revenueBilled, outstanding = revenueUnbilled;
     var billingChartHtml =
-      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:14px;font-weight:800;color:var(--text);">Billing vs Expenses</div><div style="position:relative;"><div id="dash-chart-months-label" onclick="toggleChartMonthsMenu(event)" style="display:flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--border);border-radius:8px;font-size:11.5px;font-weight:700;color:var(--text2);white-space:nowrap;cursor:pointer;">Last '+chartMonths+' Months <span style="font-size:10px;">&#9662;</span></div><div id="dash-chart-months-menu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:50;overflow:hidden;"></div></div></div>'+
+      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:14px;font-weight:800;color:var(--text);">Billing vs Expenses</div><div style="position:relative;"><div id="dash-chart-months-label" onclick="toggleChartMonthsMenu(event)" style="display:flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--border);border-radius:8px;font-size:11.5px;font-weight:700;color:var(--text2);white-space:nowrap;cursor:pointer;">Last '+chartMonths+' Months <span style="font-size:10px;">&#9662;</span></div><div id="dash-chart-months-menu" style="display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:50;overflow:hidden;"></div></div></div>'+
         barChartMonthly(monthLabels, billingSeries, expenseSeries, 'Billing (\u20b9)', 'Expenses (\u20b9)', '#2563EB', '#F87171')+
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
           '<div><div style="font-size:10.5px;color:var(--text3);font-weight:700;text-transform:uppercase;">Total Contract</div><div style="font-size:14px;font-weight:800;color:var(--text);">'+inr(totalContractValue)+'</div></div>'+
@@ -3495,7 +3531,7 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
     }
     var procurementHtml =
-      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
+      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
         '<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px;">Procurement Snapshot</div>'+
         procRow('Low Stock Items', lowStock.length, '#FFE4E6', '#E11D48')+
         procRow('Pending Purchase Orders', pendingRRs.length, '#FEF3C7', '#B45309')+
@@ -3505,7 +3541,7 @@ async function loadDashboardInsights(filterProjId){
       '</div>';
 
     var workforceHtml =
-      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
+      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
         '<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:6px;">Workforce Today</div>'+
         '<div style="display:flex;align-items:center;gap:14px;">'+
           '<div style="flex:1;display:flex;flex-direction:column;gap:6px;">'+
@@ -3528,7 +3564,7 @@ async function loadDashboardInsights(filterProjId){
     var progressCardsHtml = projHealthRows.length ? projHealthRows.map(function(p){
       var statusLabel = p.health==='Good'?'On Track':p.health==='Average'?'Behind Schedule':'Critical';
       var sc=statusMap2[statusLabel];
-      return '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:11px 12px;">'+
+      return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:11px 12px;">'+
         '<div style="font-size:13px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+p.name+'</div>'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin:7px 0 5px;">'+
           '<div style="height:6px;flex:1;background:var(--bg);border-radius:4px;overflow:hidden;margin-right:8px;"><div style="height:100%;width:'+p.pct+'%;background:'+sc[1]+';"></div></div>'+
@@ -3540,7 +3576,7 @@ async function loadDashboardInsights(filterProjId){
 
     var recentActivityHtmlWrap =
       '<div><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Recent Activity</div>'+
-      '<div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
+      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
         recentActivityHtml+
         '<div onclick="showApp(\'access\')" style="text-align:right;margin-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all activity &#8594;</div>'+
       '</div></div>';
@@ -3576,7 +3612,7 @@ async function loadDashboardInsights(filterProjId){
 
   }catch(e){
     console.error('Dashboard insights error:',e);
-    gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F857A6;font-size:13px;background:#fff;border-radius:12px;border:1px solid var(--border);">Could not load insights. Pull to refresh.</div>';
+    gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F857A6;font-size:13px;background:var(--card-bg);border-radius:12px;border:1px solid var(--border);">Could not load insights. Pull to refresh.</div>';
   }
 }
 
@@ -3819,7 +3855,7 @@ function showProjectPicker(title, items, group, subTab, innerSubTab){
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;';
   overlay.onclick = function(ev){ if(ev.target===overlay) closeProjectPicker(); };
   overlay.innerHTML =
-    '<div style="background:#fff;border-radius:14px;max-width:360px;width:100%;max-height:70vh;overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,0.2);">'+
+    '<div style="background:var(--card-bg);border-radius:14px;max-width:360px;width:100%;max-height:70vh;overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,0.2);">'+
       '<div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:13.5px;font-weight:800;color:var(--text);display:flex;justify-content:space-between;align-items:center;">'+
         title+'<span onclick="closeProjectPicker()" style="cursor:pointer;color:var(--text3);font-size:18px;line-height:1;">&times;</span>'+
       '</div>'+
