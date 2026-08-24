@@ -7124,7 +7124,7 @@ function execRenderBills(){
       return '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:'+col+'10;display:flex;align-items:center;gap:8px;">'+
           '<span style="background:'+col+'20;color:'+col+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;">'+(tLblS[p.type]||p.type)+'</span>'+
-          '<span style="font-size:12px;font-weight:800;">'+p.name+'</span>'+
+          '<span style="font-size:12px;font-weight:800;color:#1E293B;">'+p.name+'</span>'+
         '</div>'+
         '<div style="padding:10px 14px;background:#EFF6FF;text-align:right;border-left:1px solid var(--border);">'+
           '<div style="font-size:9px;color:var(--text3);font-weight:700;">GROSS BILLED</div>'+
@@ -7563,7 +7563,7 @@ function execRenderBills(){
         '>'+
         '<span class="abs-arrow" style="color:'+col+';font-size:11px;">&#9654;</span>'+
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;color:#1E293B;">'+p.name+'</div>'+
         '<button onclick="event.stopPropagation();execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
       '</div>';
       bodyHtml='<div id="'+absCollapseId+'" style="display:none;">'+tableHtml+'</div>';
@@ -7574,7 +7574,7 @@ function execRenderBills(){
         '>'+
         '<span class="gb-arrow" style="color:'+col+';font-size:11px;">&#9654;</span>'+
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;color:#1E293B;">'+p.name+'</div>'+
         '<button onclick="event.stopPropagation();execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
       '</div>';
       var gbInner=billsList
@@ -7585,7 +7585,7 @@ function execRenderBills(){
       // Fallback
       partyHeader='<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:13px;font-weight:800;">'+p.name+'</div>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;color:#1E293B;">'+p.name+'</div>'+
       '</div>';
       bodyHtml=billsList
         ? '<div style="padding:10px 12px;">'+billsList+'</div>'
