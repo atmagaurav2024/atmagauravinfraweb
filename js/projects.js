@@ -397,7 +397,7 @@ function renderProjList(list){
       '<div style="padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="projSelectAndGo(\''+p.id+'\')" title="Click to open project">'+
         '<div style="width:44px;height:44px;border-radius:12px;background:'+st.col+'20;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">&#127959;</div>'+
         '<div style="flex:1;min-width:0;">'+
-          '<div style="font-size:14px;font-weight:800;color:var(--navy);">'+esc(p.name||'Unnamed')+'</div>'+
+          '<div style="font-size:14px;font-weight:800;color:var(--text);">'+esc(p.name||'Unnamed')+'</div>'+
           '<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+(p.code||'—')+
             (p.client?' &bull; '+esc(p.client):'')+
             (p.project_length?' &bull; '+p.project_length+' km':'')+
@@ -914,7 +914,7 @@ function boqRender(){
   el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="boqDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="boqDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(total)+'</div></div></div>'+
     BOQ_ITEMS.map(function(item){var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0;var subs=BOQ_SUBITEMS.filter(function(s){return s.boq_item_id===item.id;});
-      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:var(--text3);">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR(bq*rate)+'</div><div style="font-size:10px;color:var(--text3);">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--navy);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:var(--text3);">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR(bq*rate)+'</div><div style="font-size:10px;color:var(--text3);">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
     }).join('');
 }
 function boqProjName(){var projId=(document.getElementById('boq-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -1111,7 +1111,7 @@ function jmRender(){
   }).length;
   el.innerHTML='<div style="background:#E8EAF6;border:1px solid #C5CAE9;border-radius:12px;padding:10px 14px;margin-bottom:10px;">'+
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+
-        '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">TOTAL BOQ VALUE</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(grandBoq)+'</div></div>'+
+        '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">TOTAL BOQ VALUE</div><div style="font-size:15px;font-weight:900;color:var(--text);">'+fmtINR(grandBoq)+'</div></div>'+
         '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">TOTAL JM VALUE</div><div style="font-size:15px;font-weight:900;color:#283593;">'+fmtINR(grandJM)+'</div></div>'+
         '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">BALANCE</div><div style="font-size:15px;font-weight:900;color:'+((grandBoq-grandJM)<0?'#C62828':'#2E7D32')+';">'+fmtINR(grandBoq-grandJM)+'</div></div>'+
       '</div>'+
@@ -4235,7 +4235,7 @@ async function execRenderPettyExpenses(containerId){
 
     el.innerHTML=
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px 4px;">'+
-        '<div style="font-size:13px;font-weight:800;color:var(--navy);">Petty Expenses — '+(proj.name||'')+'</div>'+
+        '<div style="font-size:13px;font-weight:800;color:var(--text);">Petty Expenses — '+(proj.name||'')+'</div>'+
         '<div style="font-size:15px;font-weight:900;color:#C62828;">Total: '+inr(total)+'</div>'+
       '</div>'+
       '<div style="font-size:10.5px;color:var(--text3);padding:0 4px 10px;">Cash expenditure recorded in Site Cash Manager against this project only.</div>'+
@@ -4409,7 +4409,7 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
 
     el.innerHTML=
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px 4px;">'+
-        '<div style="font-size:13px;font-weight:800;color:var(--navy);">'+icon+' '+label+' — '+(proj.name||'')+'</div>'+
+        '<div style="font-size:13px;font-weight:800;color:var(--text);">'+icon+' '+label+' — '+(proj.name||'')+'</div>'+
         '<button onclick="execOpenAddOtherExpense(\''+type+'\',\''+label.replace(/'/g,"\\'")+'\')" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Add</button>'+
       '</div>'+
       loanInterestHtml+
@@ -4521,7 +4521,7 @@ function execRenderSales(){
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+
         '<div><div style="font-size:9.5px;color:var(--text3);">OUTPUT GST BILLED</div><div style="font-size:14px;font-weight:900;color:#E65100;">'+inr(projOutGst)+'</div></div>'+
         '<div><div style="font-size:9.5px;color:var(--text3);">INPUT GST PAID</div><div style="font-size:14px;font-weight:900;color:#2E7D32;">'+inr(projInGst)+'</div></div>'+
-        '<div><div style="font-size:9.5px;color:var(--text3);">NET</div><div style="font-size:14px;font-weight:900;color:var(--navy);">'+inr(projOutGst-projInGst)+'</div></div>'+
+        '<div><div style="font-size:9.5px;color:var(--text3);">NET</div><div style="font-size:14px;font-weight:900;color:var(--text);">'+inr(projOutGst-projInGst)+'</div></div>'+
       '</div>'+
       '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;">GST is settled company-wide in Accounts &rarr; GST tab, not per project.</div>'+
     '</div>';
@@ -5098,7 +5098,7 @@ function execRenderOrders(){
             '<div style="font-size:13px;font-weight:800;">'+docNo+
               '<span style="font-size:10px;background:'+col+'15;color:'+col+';padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px;">'+g.items.length+' item'+(g.items.length>1?'s':'')+'</span>'+
             '</div>'+
-            '<div style="font-size:11px;font-weight:700;color:var(--navy);margin-top:2px;">'+g.party_name+'</div>'+
+            '<div style="font-size:11px;font-weight:700;color:var(--text);margin-top:2px;">'+g.party_name+'</div>'+
             '<div style="font-size:10px;color:var(--text3);">'+(tLbl[g.party_type]||g.party_type)+' &bull; '+fmtD(g.doc_date)+'</div>'+
           '</div>'+
           '<div style="text-align:right;flex-shrink:0;">'+
