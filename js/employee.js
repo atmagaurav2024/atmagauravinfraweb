@@ -527,7 +527,7 @@ function empTab(tab,btn){
   EMP_TAB=tab;
   var tb=document.getElementById('emp-tab-bar');
   if(tb)Array.from(tb.children).forEach(function(b){b.style.background='transparent';b.style.color='var(--text3)';});
-  if(btn){btn.style.background='var(--text)';btn.style.color='white';}
+  if(btn){btn.style.background='var(--navy)';btn.style.color='white';}
   var addBtn=document.getElementById('emp-add-btn');
   if(addBtn) addBtn.style.display=(tab==='active'||tab==='pending'||tab==='advances')?'':'none';
   empRender();
@@ -2554,7 +2554,7 @@ return '<div style="background:var(--card-bg);border-radius:14px;border:1px soli
           '<div style="font-size:14px;font-weight:800;color:var(--text);">'+name+'</div>'+
           '<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+(e.employee_code||e.emp_id||'—')+' &bull; '+(e.designation||e.role||'—')+'</div>'+
           '<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;">'+
-            (e.department?'<span style="background:var(--bg);color:var(--text2);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;">'+e.department+'</span>':'')+
+            (e.department?'<span style="background:var(--border);color:var(--text);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;">'+e.department+'</span>':'')+
             (e.project_name||e.project?'<span style="background:#E3F2FD;color:#1565C0;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;">&#127959; '+(e.project_name||e.project)+'</span>':'')+
             (hasPay?'<span style="background:#E8F5E9;color:#2E7D32;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;">&#128178; Pay Fixed</span>':'<span style="background:#FFF3E0;color:#E65100;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;">&#9888; No Pay</span>')+
           '</div>'+

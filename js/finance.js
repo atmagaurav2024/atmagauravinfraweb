@@ -299,7 +299,7 @@ function pcOpenExpense(){
     '</div>'+
     '<div id="pce-upi-wrap" style="display:none;margin-bottom:10px;">'+
       '<label class="flbl">Pay To</label>'+
-      '<button type="button" onclick="pcOpenQRScanner()" style="width:100%;background:var(--text);color:white;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128247; Scan UPI QR Code</button>'+
+      '<button type="button" onclick="pcOpenQRScanner()" style="width:100%;background:var(--navy);color:white;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128247; Scan UPI QR Code</button>'+
       '<div id="pce-upi-scanned" style="display:none;background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:11.5px;color:#2E7D32;font-weight:700;"></div>'+
       '<div style="font-size:10.5px;color:var(--text3);margin:2px 0 4px;">or type UPI ID / mobile number directly</div>'+
       '<input class="finp" id="pce-upi-id" placeholder="vendor@upi or 9876543210" oninput="pcClearScannedUPI()">'+

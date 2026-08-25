@@ -426,7 +426,7 @@ function companyRender() {
         '<button onclick="coPayoutEdit()" style="background:none;border:1px solid #BBF7D0;color:#166534;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">Edit</button>'+
       '</div>'
       :
-      '<button onclick="coPayoutEdit()" style="width:100%;background:var(--text);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect RazorpayX</button>'
+      '<button onclick="coPayoutEdit()" style="width:100%;background:var(--navy);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect RazorpayX</button>'
     )+
     '<div id="co-payout-form" style="display:none;margin-top:12px;"></div>'
   : '';

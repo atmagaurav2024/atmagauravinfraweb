@@ -1291,7 +1291,7 @@ input,select,textarea{font-size:16px !important;}
 #app-dashboard .dt-greeting{color:#0F172A;font-weight:600;}
 #app-dashboard .dt-name{color:var(--text);}
 #app-dashboard .dt-role{color:var(--text3);}
-#app-dashboard .dt-avatar{background:var(--text)!important;border:none;}
+#app-dashboard .dt-avatar{background:var(--navy)!important;border:none;}
 #app-dashboard .dk{background:var(--bg)!important;border:1px solid var(--border);}
 #app-dashboard .dk-val{color:var(--text);}
 #app-dashboard .dk-lbl{color:var(--text3)!important;}
@@ -1311,7 +1311,7 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
 .dt-greeting{font-size:14px;color:#0F172A;font-weight:600;}
 .dt-name{font-size:22px;font-weight:900;color:var(--text);font-family:'Nunito',sans-serif;}
 .dt-role{font-size:11px;color:var(--text3);margin-top:2px;font-family:'Nunito',sans-serif;}
-.dt-avatar{width:44px;height:44px;border-radius:14px;background:var(--text);display:flex;align-items:center;justify-content:center;font-size:18px;color:white;}
+.dt-avatar{width:44px;height:44px;border-radius:14px;background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:18px;color:white;}
 .dt-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px;}
 .dk{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:10px;text-align:center;}
 .dk-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:800;color:var(--text);}
@@ -6786,7 +6786,7 @@ function openPDF(docHtml){
   bar.innerHTML =
     '<div style="color:white;font-size:13px;font-weight:800;">&#128196; Document Preview</div>'+
     '<div style="display:flex;gap:8px;">'+
-      '<button id="pdf-print-btn" style="background:var(--text);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;">&#128424; Print</button>'+
+      '<button id="pdf-print-btn" style="background:var(--navy);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;">&#128424; Print</button>'+
       '<button id="pdf-close-btn" style="background:#C62828;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;">&#10005; Close</button>'+
     '</div>';
 
@@ -9180,7 +9180,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
   </div>
   <!-- Tab Bar -->
   <div id="emp-tab-bar" style="display:flex;overflow-x:auto;background:var(--card-bg);border-bottom:1px solid var(--border);padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;">
-    <button onclick="empTab('active',this)"   id="emp-t-active"   style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:var(--text);color:#fff;">&#9989; Active</button>
+    <button onclick="empTab('active',this)"   id="emp-t-active"   style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:var(--navy);color:#fff;">&#9989; Active</button>
     <button onclick="empTab('pending',this)"  id="emp-t-pending"  style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#9203; Pending</button>
     <button onclick="empTab('pay',this)"      id="emp-t-pay"      style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128178; Pay Fixation</button>
     <button onclick="empTab('advances',this)" id="emp-t-advances" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128176; Advances</button>
@@ -11215,7 +11215,7 @@ function empListHTML(status){
     var clickFn=status==='active'?'empOpenEditForm(\''+e.id+'\')'  :'empViewDetail(\''+e.id+'\')';
 return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" onclick="'+clickFn+'">'+
       '<div style="padding:12px 14px;display:flex;align-items:center;gap:12px;">'+
-        '<div style="width:44px;height:44px;border-radius:12px;background:var(--text);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:white;flex-shrink:0;overflow:hidden;">'+
+        '<div style="width:44px;height:44px;border-radius:12px;background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:white;flex-shrink:0;overflow:hidden;">'+
           (e.photo_url?'<img src="'+e.photo_url+'" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">':init)+
         '</div>'+
         '<div style="flex:1;min-width:0;">'+
@@ -11235,7 +11235,7 @@ return '<div style="background:white;border-radius:14px;border:1px solid var(--b
           '</div>':
           status==='active'?
           '<div style="display:flex;flex-direction:column;gap:6px;align-items:center;" onclick="event.stopPropagation()">'+
-            '<button onclick="downloadIDCard(\''+e.id+'\')" style="background:var(--text);color:white;border:none;border-radius:8px;padding:5px 10px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#127891; ID Card</button>'+
+            '<button onclick="downloadIDCard(\''+e.id+'\')" style="background:var(--navy);color:white;border:none;border-radius:8px;padding:5px 10px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#127891; ID Card</button>'+
             '<div style="font-size:18px;color:var(--text3);">&#8250;</div>'+
           '</div>':
           '<div style="font-size:20px;color:var(--text3);">&#8250;</div>'
@@ -12807,7 +12807,7 @@ async function empSavePay(){
   <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127970; Company Details</div>
-    <button onclick="companySave()" style="background:var(--text);border:none;color:#fff;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128190; Save</button>
+    <button onclick="companySave()" style="background:var(--navy);border:none;color:#fff;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128190; Save</button>
   </div>
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;" id="company-body">
     <div style="text-align:center;padding:40px;color:var(--text3);">Loading...</div>
@@ -12951,7 +12951,7 @@ function projModRenderNav(){
     if(hasProjId&&!onProjects){
       var pp=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
       var pname=pp?(pp.code||pp.name):'';
-      badge.innerHTML='<span style="font-size:10px;background:var(--text);color:#fff;padding:3px 10px;border-radius:6px;font-weight:700;">'+pname+'</span>';
+      badge.innerHTML='<span style="font-size:10px;background:var(--navy);color:#fff;padding:3px 10px;border-radius:6px;font-weight:700;">'+pname+'</span>';
     }else{
       badge.innerHTML='';
     }
@@ -19144,7 +19144,7 @@ function pcOpenExpense(){
     '</div>'+
     '<div id="pce-upi-wrap" style="display:none;margin-bottom:10px;">'+
       '<label class="flbl">Pay To</label>'+
-      '<button type="button" onclick="pcOpenQRScanner()" style="width:100%;background:var(--text);color:white;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128247; Scan UPI QR Code</button>'+
+      '<button type="button" onclick="pcOpenQRScanner()" style="width:100%;background:var(--navy);color:white;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128247; Scan UPI QR Code</button>'+
       '<div id="pce-upi-scanned" style="display:none;background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:11.5px;color:#2E7D32;font-weight:700;"></div>'+
       '<div style="font-size:10.5px;color:var(--text3);margin:2px 0 4px;">or type UPI ID / mobile number directly</div>'+
       '<input class="finp" id="pce-upi-id" placeholder="vendor@upi or 9876543210" oninput="pcClearScannedUPI()">'+
@@ -25441,7 +25441,7 @@ function companyRender(){
         '<button onclick="coPayoutEdit()" style="background:none;border:1px solid #BBF7D0;color:#166534;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">Edit</button>'+
       '</div>'
       :
-      '<button onclick="coPayoutEdit()" style="width:100%;background:var(--text);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect RazorpayX</button>'
+      '<button onclick="coPayoutEdit()" style="width:100%;background:var(--navy);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect RazorpayX</button>'
     )+
     '<div id="co-payout-form" style="display:none;margin-top:12px;"></div>'
   : '';
