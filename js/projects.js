@@ -416,10 +416,10 @@ function renderProjList(list){
       // ── Action buttons (Edit + Delete only, no Open Project) ──
       '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F3F4F6;">'+
         '<button onclick="event.stopPropagation();openProjForm(\''+p.id+'\')" '+
-          'style="background:#F3F4F6;color:#374151;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          'style="background:var(--bg);color:var(--text2);border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#9998; Edit</button>'+
         '<button onclick="event.stopPropagation();if(confirm(\'Delete this project?\')) deleteProjItem(\''+p.id+'\')" '+
-          'style="background:#FEE2E2;color:#C62828;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
+          'style="background:var(--bg);color:#E11D48;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#128465;</button>'+
       '</div>'+
     '</div>';
