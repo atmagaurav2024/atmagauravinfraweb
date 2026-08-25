@@ -9328,7 +9328,7 @@ function empTab(tab,btn){
   EMP_TAB=tab;
   var tb=document.getElementById('emp-tab-bar');
   if(tb)Array.from(tb.children).forEach(function(b){b.style.background='transparent';b.style.color='var(--text3)';});
-  if(btn){btn.style.background='var(--text)';btn.style.color='#fff';}
+  if(btn){btn.style.background='var(--navy)';btn.style.color='#fff';}
   var addBtn=document.getElementById('emp-add-btn');
   if(addBtn)addBtn.style.display=(tab==='active'||tab==='pending')?'':'none';
   empRender();
