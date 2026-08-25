@@ -9172,7 +9172,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
 
 <!-- ═══════════ EMPLOYEE MANAGEMENT MODULE ═══════════ -->
 <div class="app-screen" id="app-employees">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128101; Employee Management</div>
     <button class="tb-btn" id="emp-refresh-btn" title="Refresh" onclick="EMP_LIST=[];EMP_PAY=[];EMP_LEAVEFIX=[];EMP_ORDERS=[];SALARY_RECORDS=[];initEmpMgmt();" style="font-size:16px;">&#8635;</button>
@@ -12610,7 +12610,7 @@ async function empSavePay(){
 <!-- PROJECTS -->
 <!-- PROJECT MODULE (unified) -->
 <div class="app-screen" id="app-projects">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127959; Project Module</div>
     <div id="proj-mod-sel-badge" style="flex-shrink:0;"></div>
@@ -12664,7 +12664,7 @@ async function empSavePay(){
 
 <!-- ACCOUNTS -->
 <div class="app-screen" id="app-accounts">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128176; Accounts</div>
     <button class="tb-btn" id="acc-add-btn" onclick="accQuickAdd()" style="font-size:20px;">&#43;</button>
@@ -12676,7 +12676,7 @@ async function empSavePay(){
 <div class="sheet" id="sh-acc"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="acc-sheet-title">New Voucher</div><span class="sh-close" onclick="closeAccSheet()">&#10005;</span></div><div class="sh-body" id="acc-sheet-body"></div><div class="sh-foot" id="acc-sheet-foot"></div></div>
 
 <div class="app-screen" id="app-loans">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127974; Loans</div>
   </div>
@@ -12687,7 +12687,7 @@ async function empSavePay(){
 <div class="sheet" id="sh-ln"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="ln-sheet-title">Loans</div><span class="sh-close" onclick="closeSheet('ov-ln','sh-ln')">&#10005;</span></div><div class="sh-body" id="ln-sheet-body"></div><div class="sh-foot" id="ln-sheet-foot"></div></div>
 
 <div class="app-screen" id="app-overheads">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127970; Company Overheads</div>
     <button class="tb-btn" id="oh-add-btn" onclick="ohOpenEntry()" style="font-size:20px;">&#43;</button>
@@ -12700,7 +12700,7 @@ async function empSavePay(){
 <!-- TOOLS, PLANT & MACHINERY -->
 <!-- RYDAX PLATFORM ADMIN CONSOLE -->
 <div class="app-screen" id="app-platform-console">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128272; Rydax Platform Admin</div>
     <button class="tb-btn" onclick="paLogout()">Sign Out</button>
   </div>
@@ -12715,7 +12715,7 @@ async function empSavePay(){
 </div>
 
 <div class="app-screen" id="app-tpm">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128295; Tools, Plant &amp; Machinery</div>
     <button class="tb-btn" id="tpm-add-btn" onclick="tpmOpenForm()" style="font-size:20px;">&#43;</button>
@@ -12738,7 +12738,7 @@ async function empSavePay(){
 
 <!-- ACCESS CONTROL -->
 <div class="app-screen" id="app-access">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128274; Access Control</div>
   </div>
@@ -12804,7 +12804,7 @@ async function empSavePay(){
 </div>
 
 <div class="app-screen" id="app-company">
-  <div style="background:#fff;height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
+  <div style="background:var(--card-bg);height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;">
     <button class="tb-btn" onclick="showApp('dashboard')">&#8592;</button>
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127970; Company Details</div>
     <button onclick="companySave()" style="background:var(--text);border:none;color:#fff;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#128190; Save</button>
