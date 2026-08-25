@@ -618,7 +618,7 @@ async function openProjForm(id){
     // ── Status + Client ──
     '<div class="g2" style="margin-bottom:8px;">'+
       '<div><label class="flbl">Status <span style="font-size:9px;font-weight:400;color:var(--text3);">(auto — based on dates below)</span></label>'+
-        '<select id="pf-status" class="fsel" disabled style="background:#F1F1F1;color:var(--text2);cursor:not-allowed;">'+statusOpts+'</select></div>'+
+        '<select id="pf-status" class="fsel" disabled style="background:#F1F1F1;color:#4B5563;cursor:not-allowed;">'+statusOpts+'</select></div>'+
       '<div><label class="flbl">Client / Owner</label><input id="pf-client" class="finp" value="'+esc(p.client||'')+'"></div>'+
     '</div>'+
     // ── Client GST Details (for Sales Bill / Tax Invoice "Bill To") ──
@@ -643,7 +643,7 @@ async function openProjForm(id){
         '<div><label class="flbl">DLP Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(Defects Liability Period)</span></label>'+
           '<input id="pf-dlp-date" class="finp" type="date" value="'+(p.dlp_date||'')+'" oninput="pfCalcStatus()"></div>'+
         '<div><label class="flbl">Revised Completion Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(SCD + total EOT)</span></label>'+
-          '<input id="pf-revised-completion" class="finp" type="date" readonly style="background:#F1F1F1;color:var(--text2);"></div>'+
+          '<input id="pf-revised-completion" class="finp" type="date" readonly style="background:#F1F1F1;color:#4B5563;"></div>'+
       '</div>'+
       '<div style="margin-top:10px;">'+
         '<label class="flbl">Extension of Time (EOT) <span style="font-size:9px;font-weight:400;color:var(--text3);">— add multiple as they\'re granted</span></label>'+
@@ -914,7 +914,7 @@ function boqRender(){
   el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="boqDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="boqDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(total)+'</div></div></div>'+
     BOQ_ITEMS.map(function(item){var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0;var subs=BOQ_SUBITEMS.filter(function(s){return s.boq_item_id===item.id;});
-      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:var(--text3);">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR(bq*rate)+'</div><div style="font-size:10px;color:var(--text3);">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;color:#1E293B;">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:#5C4A6E;">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR(bq*rate)+'</div><div style="font-size:10px;color:#5C4A6E;">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
     }).join('');
 }
 function boqProjName(){var projId=(document.getElementById('boq-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -968,7 +968,7 @@ function boqDownloadPDF(){
   BOQ_ITEMS.forEach(function(item,i){
     var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0,amt=bq*rate;
     total+=amt;
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+item.item_code+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;">'+item.description+'</td>'+
@@ -1127,7 +1127,7 @@ function jmRender(){
     var balance=boqQty-totalJM;var pct=boqQty>0?Math.min(100,Math.round(totalJM/boqQty*100)):0;
     var rate=parseFloat(item.rate)||0;
     var jmAmt=totalJM*rate, boqAmt=boqQty*rate;
-    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;">'+(item.short_name||item.description)+'</div><div style=\"text-align:right;flex-shrink:0;margin-right:6px;\"><div style=\"font-size:13px;font-weight:900;color:#283593;\">'+fmtINR(jmAmt)+'</div><div style=\"font-size:9.5px;color:var(--text3);\">of '+fmtINR(boqAmt)+'</div></div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:var(--text3);background:#F3F4F6;display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' &#215; &#8377;'+rate+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+' <span style=\"color:#283593;\">= '+fmtINR((parseFloat(jm.jm_qty)||0)*rate)+'</span></div><div style="font-size:10px;color:var(--text3);">'+jmDate(jm.date)+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;color:#1E293B;">'+(item.short_name||item.description)+'</div><div style=\"text-align:right;flex-shrink:0;margin-right:6px;\"><div style=\"font-size:13px;font-weight:900;color:#283593;\">'+fmtINR(jmAmt)+'</div><div style=\"font-size:9.5px;color:#5C6BC0;\">of '+fmtINR(boqAmt)+'</div></div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:#6B7280;background:#F3F4F6;display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' &#215; &#8377;'+rate+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+' <span style=\"color:#283593;\">= '+fmtINR((parseFloat(jm.jm_qty)||0)*rate)+'</span></div><div style="font-size:10px;color:var(--text3);">'+jmDate(jm.date)+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
   }).join('');
 }
 function jmProjName(){var projId=(document.getElementById('jm-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -1190,7 +1190,7 @@ function jmDownloadPDF(){
     var totalJM=iJMs.reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
     var balance=boqQty-totalJM;
     var balColor=balance<0?'#C62828':'#283593';
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     var rows=iJMs.length?iJMs:[null];
     rows.forEach(function(jm,ri){
       tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
@@ -1390,11 +1390,11 @@ function planRender(){
     ' | <b>Total: '+jmTotal+'</b>'+(jmBal!==null?' | Bal: '+jmBal.toFixed(2).replace(/\.?0+$/, ''):'')+'</div>':'';
   return '<div style="padding:5px 10px;background:#F8F9FF;border-radius:8px;margin-top:3px;">'+
     '<div style="display:flex;align-items:center;gap:6px;">'+
-      '<div style="flex:1;font-size:11px;font-weight:600;">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+
+      '<div style="flex:1;font-size:11px;font-weight:600;color:#1E293B;">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+
         jmLine+
       '</div>'+
       '<div style="text-align:right;flex-shrink:0;">'+
-        '<div style="font-size:10px;color:var(--text3);">'+r.qty+' '+(r.unit||'')+' @ ₹'+r.rate+'</div>'+
+        '<div style="font-size:10px;color:#4A5A8A;">'+r.qty+' '+(r.unit||'')+' @ ₹'+r.rate+'</div>'+
         '<div style="font-size:11px;font-weight:800;color:#1565C0;">'+fmtINR((r.qty||0)*(r.rate||0))+'</div>'+
       '</div>'+
       '<button onclick="planEditRes(\''+r.id+'\',\''+r.boq_subitem_id+'\',\''+r.boq_item_id+'\')" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button>'+
@@ -1410,9 +1410,9 @@ function planRender(){
   var jmTBQ=links.reduce(function(s,l){return s+(parseFloat(l.jm_qty||l.plan_qty)||0);},0);
   var jmBal=jmTBQ>0?Math.max(0,jmTBQ-jmTotal):null;
   var jmLine=links.length?'<div style="font-size:9px;margin-top:2px;color:#1565C0;">'+links.map(function(l){return 'JM-'+(l.jm_number||'?')+': '+l.plan_qty;}).join(' | ')+' | <b>Total: '+jmTotal+'</b>'+(jmBal!==null?' | Bal: '+jmBal.toFixed(2).replace(/\.?0+$/,''):'')+'</div>':'';
-  return '<div style="padding:5px 10px;background:#F8F9FF;border-radius:8px;margin-top:3px;"><div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;font-size:11px;font-weight:600;">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+jmLine+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:10px;color:var(--text3);">'+r.qty+' '+(r.unit||'')+' @ \u20b9'+r.rate+'</div><div style="font-size:11px;font-weight:800;color:#1565C0;">'+fmtINR((r.qty||0)*(r.rate||0))+'</div></div><button onclick="planEditRes(\''+r.id+'\',\''+r.boq_subitem_id+'\',\''+r.boq_item_id+'\')" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button><button onclick="planDelRes(\''+r.id+'\')" style="background:none;border:none;color:#C62828;font-size:13px;cursor:pointer;">\u00d7</button></div></div>';
+  return '<div style="padding:5px 10px;background:#F8F9FF;border-radius:8px;margin-top:3px;"><div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;font-size:11px;font-weight:600;color:#1E293B;">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+jmLine+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:10px;color:#4A5A8A;">'+r.qty+' '+(r.unit||'')+' @ \u20b9'+r.rate+'</div><div style="font-size:11px;font-weight:800;color:#1565C0;">'+fmtINR((r.qty||0)*(r.rate||0))+'</div></div><button onclick="planEditRes(\''+r.id+'\',\''+r.boq_subitem_id+'\',\''+r.boq_item_id+'\')" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button><button onclick="planDelRes(\''+r.id+'\')" style="background:none;border:none;color:#C62828;font-size:13px;cursor:pointer;">\u00d7</button></div></div>';
 })();}).join(''):'';
-    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;justify-content:space-between;"><div><span style="font-size:10px;font-family:monospace;background:#BBDEFB;color:#1565C0;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span><div style="font-size:10px;color:var(--text3);margin-top:2px;">BOQ: '+item.boq_qty+' '+item.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+(totalPlan?'<span style="font-size:12px;font-weight:900;color:#1565C0;">'+fmtINR(totalPlan)+'</span>':'')+'<button onclick="planAddSub(\''+item.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Activity</button></div></div><div style="padding:10px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No resources yet</div>')+'</div></div>';
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;justify-content:space-between;"><div><span style="font-size:10px;font-family:monospace;background:#BBDEFB;color:#1565C0;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;color:#0D2137;">'+(item.short_name||item.description)+'</span><div style="font-size:10px;color:#1565C0;margin-top:2px;">BOQ: '+item.boq_qty+' '+item.unit+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+(totalPlan?'<span style="font-size:12px;font-weight:900;color:#1565C0;">'+fmtINR(totalPlan)+'</span>':'')+'<button onclick="planAddSub(\''+item.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Activity</button></div></div><div style="padding:10px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No resources yet</div>')+'</div></div>';
   }).join('');
 }
 function planProjName(){var projId=(document.getElementById('plan-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -1487,7 +1487,7 @@ function planDownloadPDF(){
   rows.forEach(function(row,i){
     var qty=parseFloat(row.r.qty)||0,rate=parseFloat(row.r.rate)||0,amt=qty*rate;
     total+=amt;
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+row.item.item_code+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;">'+(row.item.short_name||row.item.description)+'</td>'+
@@ -2195,7 +2195,7 @@ function rrRender(){
     return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:9px 14px;background:#E0F7FA;border-bottom:1px solid var(--border);">'+
         '<span style="font-size:10px;font-family:monospace;background:#B2EBF2;color:#00838F;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
-        '<span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span>'+
+        '<span style="font-size:13px;font-weight:800;margin-left:8px;color:#004D5C;">'+(item.short_name||item.description)+'</span>'+
       '</div>'+
       '<div style="padding:4px 0;border-bottom:1px solid var(--border);">'+
         '<div style="padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">PLANNED RESOURCES</div>'+
@@ -2278,7 +2278,7 @@ function rrDownloadAllPDF(){
   RR_ITEMS.forEach(function(r,i){
     var item=RR_PLAN_ITEMS.find(function(x){return x.id===r.boq_item_id;})||{};
     var sc=stCol[r.status]||'#555';
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+r.rr_number+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD(r.created_at?r.created_at.slice(0,10):'')+'</td>'+
@@ -2539,7 +2539,7 @@ function rrDownloadPDF(rrId, projName){
       (rr.remarks?'<div style="margin-top:10px;"><div class="lbl">Purpose / Remarks</div><div style="font-size:11px;color:#333;margin-top:3px;">'+rr.remarks+'</div></div>':'')+
     '</div>'+
 
-    (rr.rejection_reason?'<div style="background:#FFEBEE;border-radius:8px;padding:12px 14px;margin-bottom:16px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="font-size:11px;margin-top:3px;">'+rr.rejection_reason+'</div></div>':'')+
+    (rr.rejection_reason?'<div style="background:#FFEBEE;border-radius:8px;padding:12px 14px;margin-bottom:16px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="font-size:11px;margin-top:3px;color:#7A1F1F;">'+rr.rejection_reason+'</div></div>':'')+
 
     '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(rr.requested_by||'Requester')+'</div><div>Requested By</div></div>'+
@@ -2634,7 +2634,7 @@ function execRender(){
     });
     return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:#FFF3E0;display:flex;align-items:center;justify-content:space-between;">'+
-        '<div><span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span></div>'+
+        '<div><span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;color:#5D3A00;">'+(item.short_name||item.description)+'</span></div>'+
         (itemHasUnallotted?'<button class="wa-allot-btn" data-item-id="'+item.id+'" style="background:#E65100;color:white;border:none;border-radius:7px;padding:5px 14px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Work</button>':'')+
       '</div>'+
       '<div style="padding:8px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No planned resources</div>')+'</div></div>';
@@ -2775,7 +2775,7 @@ function execAllotDownloadPDF(){
   '</tr>';
   var tbody='';
   rows.forEach(function(row,i){
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+row.item.item_code+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;">'+(row.item.short_name||row.item.description||'')+'</td>'+
@@ -4162,7 +4162,7 @@ function execRenderOtherExpenses(){
       return '<button onclick="otherExpSubTab(\''+t.id+'\')" style="'+
         'padding:10px 16px;font-size:11px;font-weight:800;border:none;cursor:pointer;white-space:nowrap;'+
         'background:'+(active?'white':'#F8FAFC')+';'+
-        'color:'+(active?'#4A148C':'var(--text3)')+';'+
+        'color:'+(active?'#4A148C':'#94A3B8')+';'+
         'border-bottom:'+(active?'2px solid #4A148C':'2px solid transparent')+';'+
         'margin-bottom:-2px;">'+t.icon+' '+t.label+'</button>';
     }).join('')+
@@ -4486,7 +4486,7 @@ function execRenderSales(){
       return '<button onclick="salesSubTab(\''+t.id+'\')" style="'+
         'padding:10px 18px;font-size:11px;font-weight:800;border:none;cursor:pointer;'+
         'background:'+(active?'white':'#F8FAFC')+';'+
-        'color:'+(active?'#4A148C':'var(--text3)')+';'+
+        'color:'+(active?'#4A148C':'#94A3B8')+';'+
         'border-bottom:'+(active?'2px solid #4A148C':'2px solid transparent')+';'+
         'margin-bottom:-2px;">'+t.label+'</button>';
     }).join('')+
@@ -4693,7 +4693,7 @@ function execRenderSales(){
         '<div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:center;gap:10px;">'+
           '<div style="flex:1;">'+
             '<div style="font-size:13px;font-weight:900;color:#4A148C;">Generate Sales Bill</div>'+
-            '<div style="font-size:10px;color:var(--text3);">Items shown are from DPR progress. Qty = cumulative done \u2212 already billed.</div>'+
+            '<div style="font-size:10px;color:#7B1FA2;">Items shown are from DPR progress. Qty = cumulative done \u2212 already billed.</div>'+
           '</div>'+
           '<div style="display:flex;gap:8px;align-items:center;">'+
             '<div>'+
@@ -4847,7 +4847,7 @@ function salesRegDownloadPDF(){
   rows.forEach(function(row,i){
     var b=row.b;
     t.work+=row.workAmt;t.add+=row.addAmt;t.ded+=row.dedAmt;t.gst+=row.gstAmt;t.bill+=(parseFloat(b.bill_amount)||0);t.paid+=row.paidAmt;t.bal+=row.balDue;
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+b.bill_number+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;">'+(b.bill_ref||'')+'</td>'+
@@ -5192,7 +5192,7 @@ function execOrdersDownloadPDF(){
     var tot=0;
     list.forEach(function(g,i){
       tot+=g.totalAmt;
-      var bg=i%2===0?'white':'#FAFAFA';
+      var bg=i%2===0?'var(--card-bg)':'var(--bg)';
       tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
         '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+prefix+'-'+g.num+'</td>'+
         '<td style="padding:5px 8px;font-size:9px;">'+g.party_name+'</td>'+
@@ -5480,7 +5480,7 @@ function execAllottedDownloadPDF(){
     var advTotal=advs.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
     var amt=(parseFloat(a.qty)||0)*(parseFloat(a.rate)||0);
     total+=amt; totalAdv+=advTotal;
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+(boqItem.item_code||'')+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;">'+(boqItem.short_name||boqItem.description||'')+'</td>'+
@@ -6090,7 +6090,7 @@ function execDailyDownloadPDF(){
     var j=i+1;
     while(j<rows.length && rows[j].d===rows[i].d){ groupRows.push(rows[j]); j++; }
     var d=groupRows[0].d, item=groupRows[0].item;
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     groupRows.forEach(function(row,ri){
       var res=row.res;
       if(res) grandTotal+=res.amount;
@@ -6219,7 +6219,7 @@ function execRenderExecutedWork(){
       '<div style="padding:10px 14px;background:#FFF3E0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'+
         '<div>'+
           '<span style="font-size:11px;font-family:monospace;font-weight:800;color:#E65100;">'+(s.item.item_code||'')+'</span>'+
-          '<span style="font-size:12px;font-weight:800;margin-left:8px;">'+(s.item.short_name||s.item.description||'')+'</span>'+
+          '<span style="font-size:12px;font-weight:800;margin-left:8px;color:#5D3A00;">'+(s.item.short_name||s.item.description||'')+'</span>'+
         '</div>'+
         '<div style="font-size:11px;font-weight:800;color:#E65100;">Total Qty Executed: '+s.totalQtyDone+' '+s.unit+'</div>'+
       '</div>'+
@@ -6459,12 +6459,12 @@ function execRenderDailyContent(){
           '&#128197; Today ('+selDate.split('-').reverse().join('/')+') — '+fmt(doneToday2)+' '+(item.unit||'')+
         '</div>'+
         todayItemEntries.map(makeEntryRow).join('')
-      : '<div style="padding:6px 14px;font-size:11px;color:var(--text3);background:#FFF8F5;">No entry for selected date</div>';
+      : '<div style="padding:6px 14px;font-size:11px;color:#B08050;background:#FFF8F5;">No entry for selected date</div>';
 
     // Previous entries (cumul excluding today)
     var prevEntries = cumulItemEntries.filter(function(d){return d.date!==selDate;});
     var prevRowsHtml = prevEntries.length
-      ? '<div style="background:#F8FAFC;padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">'+
+      ? '<div style="background:#F8FAFC;padding:4px 12px;font-size:9px;font-weight:800;color:#64748B;">'+
           'Previous entries (cumulative: '+fmt(doneCumul2)+' '+(item.unit||'')+')'+
         '</div>'+
         prevEntries.map(makeEntryRow).join('')
@@ -6475,11 +6475,11 @@ function execRenderDailyContent(){
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
           '<div style="flex:1;min-width:0;">'+
             '<span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
-            '<span style="font-size:12px;font-weight:800;margin-left:8px;">'+(item.short_name||item.description)+'</span>'+
+            '<span style="font-size:12px;font-weight:800;margin-left:8px;color:#5D3A00;">'+(item.short_name||item.description)+'</span>'+
           '</div>'+
           '<button onclick="execOpenDailyEntry(\''+item.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:4px 11px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Entry</button>'+
         '</div>'+
-        '<div style="font-size:10px;color:var(--text3);">'+
+        '<div style="font-size:10px;color:#8A6D3B;">'+
           'Today: <b style="color:#E65100;">'+(doneToday2>0?fmt(doneToday2)+' '+(item.unit||''):'nil')+'</b>'+
           ' &nbsp;|&nbsp; Cumulative: <b style="color:'+pc+';">'+fmt(doneCumul2)+' '+(item.unit||'')+' ('+pct+'%)</b>'+
           (jmQty?' &nbsp;|&nbsp; JM: <b style="color:#283593;">'+fmt(jmQty)+'</b>':'')+
@@ -7077,7 +7077,7 @@ function execRenderBills(){
       return '<button onclick="billsSubTab(\''+t.id+'\')" style="'+
         'padding:10px 18px;font-size:11px;font-weight:800;border:none;cursor:pointer;'+
         'background:'+(active?'white':'#F8FAFC')+';'+
-        'color:'+(active?'#1565C0':'var(--text3)')+';'+
+        'color:'+(active?'#1565C0':'#94A3B8')+';'+
         'border-bottom:'+(active?'2px solid #1565C0':'2px solid transparent')+';'+
         'margin-bottom:-2px;">'+t.label+'</button>';
     }).join('')+
@@ -7127,17 +7127,17 @@ function execRenderBills(){
           '<span style="font-size:12px;font-weight:800;color:#1E293B;">'+p.name+'</span>'+
         '</div>'+
         '<div style="padding:10px 14px;background:#EFF6FF;text-align:right;border-left:1px solid var(--border);">'+
-          '<div style="font-size:9px;color:var(--text3);font-weight:700;">GROSS BILLED</div>'+
+          '<div style="font-size:9px;color:#5B7FA6;font-weight:700;">GROSS BILLED</div>'+
           '<div style="font-size:13px;font-weight:900;color:#1A237E;">'+inr(grossBilled)+'</div>'+
           (totalDedHeld>0?'<div style="font-size:9px;color:#E65100;margin-top:2px;">Net: '+inr(netPayable)+'</div>':'')+ 
         '</div>'+
         '<div style="padding:10px 14px;background:#E8F5E9;text-align:right;border-left:1px solid var(--border);">'+
-          '<div style="font-size:9px;color:var(--text3);font-weight:700;">PAID + ADV ADJ</div>'+
+          '<div style="font-size:9px;color:#4C8C5C;font-weight:700;">PAID + ADV ADJ</div>'+
           '<div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div>'+
           (advPending>0?'<div style="font-size:9px;color:#F57F17;margin-top:2px;">+'+inr(advPending)+' adv pending</div>':'')+ 
         '</div>'+
         '<div style="padding:10px 14px;background:'+(balDue>0?'#FFF3E0':'#F1F8E9')+';text-align:right;border-left:1px solid var(--border);">'+
-          '<div style="font-size:9px;color:var(--text3);font-weight:700;">BALANCE DUE</div>'+
+          '<div style="font-size:9px;color:'+(balDue>0?'#B08050':'#5B8C5C')+';font-weight:700;">BALANCE DUE</div>'+
           '<div style="font-size:13px;font-weight:900;color:'+balColor+';">'+inr(Math.abs(balDue))+(balDue<0?' Cr':'')+'</div>'+
         '</div>'+
       '</div>';
@@ -7680,7 +7680,7 @@ function purchaseBillsRegDownloadPDF(){
   rows.forEach(function(row,i){
     var b=row.b;
     t.gross+=row.gross;t.ded+=row.dedTotal;t.net+=row.net;t.paid+=row.paid;t.bal+=row.bal;
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+(b.bill_ref||('Bill #'+b.bill_number))+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD5(b.bill_date)+'</td>'+
@@ -10256,7 +10256,7 @@ function grnRender(){
       '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
         '<div style="padding:10px 14px;background:#F1FBF4;border-bottom:2px solid #C8E6C9;">'+
           '<div style="font-size:12px;font-weight:800;color:#558B2F;">&#128230; Pending Material Receipt</div>'+
-          '<div style="font-size:10px;color:var(--text3);">Materials ordered but GRN not yet created</div>'+
+          '<div style="font-size:10px;color:#5C8A5C;">Materials ordered but GRN not yet created</div>'+
         '</div>'+
         pendingRows+
       '</div>';
@@ -10386,7 +10386,7 @@ function grnDownloadAllPDF(){
     var resName=planRes.party_name||planRes.resource_category||'';
     var boqItem=WA_ITEMS.find(function(x){return x.id===allot.boq_item_id;})||{};
     var sc=stCol[g.status]||'#555';
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-family:monospace;">'+g.grn_number+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+fmtD2(g.grn_date)+'</td>'+
@@ -10745,7 +10745,7 @@ function grnDownloadPDF(grnId){
       '</div>'+
     '</div>'+
     (grn.remarks?'<div style="margin-bottom:12px;padding:10px 14px;background:#F8FAFC;border-radius:8px;"><div class="lbl">Quality Remarks</div><div style="margin-top:4px;">'+grn.remarks+'</div></div>':'')+
-    (grn.rejection_reason?'<div style="margin-bottom:12px;padding:10px 14px;background:#FFEBEE;border-radius:8px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="margin-top:4px;">'+grn.rejection_reason+'</div></div>':'')+
+    (grn.rejection_reason?'<div style="margin-bottom:12px;padding:10px 14px;background:#FFEBEE;border-radius:8px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="margin-top:4px;color:#7A1F1F;">'+grn.rejection_reason+'</div></div>':'')+
     '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(grn.created_by||'Store Keeper')+'</div><div>GRN Created By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Quality Inspector</div><div>Inspected By</div></div>'+
@@ -10986,7 +10986,7 @@ function storeDownloadPDF(){
   '</tr>';
   var tbody='';
   items.forEach(function(g,i){
-    var bg=i%2===0?'white':'#FAFAFA';
+    var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
       '<td style="padding:5px 8px;font-size:9px;font-weight:700;">'+g.item_name+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#6A1B9A;">'+g.qty_in_hand.toFixed(2)+'</td>'+
@@ -11008,7 +11008,7 @@ function storeDownloadPDF(){
       '<th style="padding:6px 8px;font-size:9px;font-weight:800;text-align:center;">Status</th>'+
     '</tr>';
     var logTbody=projLogs.map(function(log,i){
-      var bg=i%2===0?'white':'#FAFAFA';
+      var bg=i%2===0?'var(--card-bg)':'var(--bg)';
       return '<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
         '<td style="padding:5px 8px;font-size:9px;">'+(log.item_name||'')+'</td>'+
         '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+(parseFloat(log.qty_issued)||0).toFixed(2)+' '+(log.unit||'')+'</td>'+
