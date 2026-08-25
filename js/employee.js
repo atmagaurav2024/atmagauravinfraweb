@@ -526,8 +526,8 @@ function empTab(tab,btn){
   }
   EMP_TAB=tab;
   var tb=document.getElementById('emp-tab-bar');
-  if(tb)Array.from(tb.children).forEach(function(b){b.style.background='transparent';b.style.color='rgba(255,255,255,.6)';});
-  if(btn){btn.style.background='rgba(255,255,255,.2)';btn.style.color='white';}
+  if(tb)Array.from(tb.children).forEach(function(b){b.style.background='transparent';b.style.color='var(--text3)';});
+  if(btn){btn.style.background='var(--text)';btn.style.color='white';}
   var addBtn=document.getElementById('emp-add-btn');
   if(addBtn) addBtn.style.display=(tab==='active'||tab==='pending'||tab==='advances')?'':'none';
   empRender();
@@ -977,7 +977,7 @@ function empSalaryHTML(){
   var yearOpts=[now.getFullYear()-1,now.getFullYear(),now.getFullYear()+1,now.getFullYear()+2].map(function(y){return '<option value="'+y+'"'+(y===selY?' selected':'')+'>'+y+'</option>';}).join('');
 
   var header =
-    '<div style="background:white;border-radius:14px;padding:14px;margin-bottom:12px;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;padding:14px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#1B5E20;margin-bottom:4px;">&#128200; Monthly Salary Finalisation</div>'+
       '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Select employees, edit earnings/deductions, then click <b>Finalise Selected</b>. <b>LWP Days</b> are auto-filled from Attendance (Absent + ½×Half-day) and any leave <b>Approved without Pay</b> for the selected month — you can still edit them manually.</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'+
@@ -1001,7 +1001,7 @@ function empSalaryHTML(){
       var pays=EMP_PAY.filter(function(p){return p.employee_id===e.id;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
       var pay=pays[0];
       if(!pay) return (
-        '<div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #E65100;">'+
+        '<div style="background:var(--card-bg);border-radius:12px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #E65100;">'+
           '<div style="font-size:13px;font-weight:800;">'+name+'</div>'+
           '<div style="font-size:11px;color:#E65100;margin-top:4px;">&#9888; No pay structure. <span style="cursor:pointer;text-decoration:underline;" onclick="empTab(\'pay\',document.getElementById(\'emp-t-pay\'))">Fix now</span></div>'+
         '</div>'
@@ -1023,7 +1023,7 @@ function empSalaryHTML(){
       var net= (pay.net_salary||0) - (pt - basePt) - (td - baseTds);
 
       return (
-        '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" id="sal-row-'+e.id+'">'+
+        '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" id="sal-row-'+e.id+'">'+
 
           // ── Header row with checkbox + collapse toggle ────────────────
           '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="salToggleRow(\''+e.id+'\',event)">'+
@@ -1512,7 +1512,7 @@ function empShowPayslip(empId, monthLabel){
         '<div style="font-size:14px;font-weight:800;color:#1B5E20;">Net Take Home</div>'+
         '<div style="font-size:22px;font-weight:900;color:#1B5E20;">&#8377;'+Number(r.payable).toLocaleString('en-IN')+'</div>'+
       '</div>'+
-      '<div style="padding:8px 14px;font-size:10px;color:var(--text3);text-align:center;background:white;">'+
+      '<div style="padding:8px 14px;font-size:10px;color:var(--text3);text-align:center;background:var(--card-bg);">'+
         'This is a computer-generated payslip. It does not require a signature.'+
       '</div>'+
     '</div>';
@@ -1658,7 +1658,7 @@ function empFinaliseSalary(){
       '<div style="text-align:right;"><div style="font-size:11px;opacity:.7;">Employees</div><div style="font-size:24px;font-weight:900;">'+rows.length+'</div></div>'+
     '</div>'+
     '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
-    '<table style="width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden;">'+
+    '<table style="width:100%;border-collapse:collapse;background:var(--card-bg);border-radius:12px;overflow:hidden;">'+
       '<thead><tr style="background:#F8FFF8;border-bottom:2px solid #1B5E20;">'+
         '<th style="padding:8px 6px;font-size:10px;font-weight:800;color:var(--text3);text-align:left;text-transform:uppercase;white-space:nowrap;">Employee</th>'+
         '<th style="padding:8px 6px;font-size:10px;font-weight:800;color:var(--text3);text-align:center;white-space:nowrap;">Days / LWP</th>'+
@@ -1688,7 +1688,7 @@ function empIncrementHTML(){
   var active = empScoped(EMP_LIST).filter(function(e){ return e.status==='active'; });
   if(!active.length) return '<div style="text-align:center;padding:40px;color:var(--text3);">No active employees.</div>';
 
-  return '<div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:12px;">'+
+  return '<div style="background:var(--card-bg);border-radius:14px;padding:12px 14px;margin-bottom:12px;">'+
     '<div style="font-size:12px;font-weight:800;color:#1565C0;margin-bottom:4px;">&#128640; Increment / Revision</div>'+
     '<div style="font-size:11px;color:var(--text3);">Click + Increment to apply a revision. Full pay history is shown below each employee.</div>'+
   '</div>'+
@@ -1729,7 +1729,7 @@ function empIncrementHTML(){
       logRows = '<div style="font-size:11px;color:#E65100;padding:4px 0;">&#9888; No pay structure fixed yet.</div>';
     }
 
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;gap:10px;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:13px;font-weight:800;">'+name+'</div>'+
@@ -1988,7 +1988,7 @@ function empTransferHTML(){
   // Ensure orders loaded
   if(!EMP_ORDERS.length) hrLoadOrders();
 
-  return '<div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:12px;">'+
+  return '<div style="background:var(--card-bg);border-radius:14px;padding:12px 14px;margin-bottom:12px;">'+
     '<div style="font-size:12px;font-weight:800;color:#6A1B9A;margin-bottom:4px;">&#128260; Transfer / Promotion / Resignation</div>'+
     '<div style="font-size:11px;color:var(--text3);">All HR orders are recorded with date and can be downloaded anytime.</div>'+
   '</div>'+
@@ -2019,7 +2019,7 @@ function empTransferHTML(){
         }).join('')+
       '</div>';
     }
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:center;gap:8px;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:13px;font-weight:800;">'+name+'</div>'+
@@ -2391,7 +2391,7 @@ function empViewDetail(id){
         '</div>'+
       '</div>'+
     '</div>'+
-    '<div style="background:white;border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
       sec('&#128100;','Personal Details','#1565C0')+
       row('Mobile',e.phone||e.mobile||null)+
       row('Email',e.email||null)+
@@ -2403,7 +2403,7 @@ function empViewDetail(id){
       row('Emergency Contact',e.emergency_name||e.ecName||e.emergency_contact||null)+
       row('Emergency Mobile',e.emergency_phone||e.ecPhone||null)+
     '</div>'+
-    '<div style="background:white;border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
       sec('&#127959;','Employment Details','#2E7D32')+
       row('Date of Joining',e.date_of_joining||e.doj||null)+
       row('Designation',e.designation||e.access||null)+
@@ -2420,14 +2420,14 @@ function empViewDetail(id){
       })())+
       row('Reporting To',e.reporting_to||null)+
     '</div>'+
-    '<div style="background:white;border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
       sec('&#128203;','KYC / Documents','#6A1B9A')+
       row('Aadhaar No.',e.aadhar||e.aadhar_no||null)+
       row('PAN No.',e.pan||e.pan_no||null)+
       row('UAN (PF)',e.pf_no||e.pf||e.uan_no||null)+
       row('ESIC No.',e.esic_no||e.esic||null)+
     '</div>'+
-    '<div style="background:white;border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
       sec('&#127981;','Bank Details','#C62828')+
       row('Bank Name',e.bank_name||e.bank||null)+
       row('Account No.',e.account_no||e.accNo||null)+
@@ -2435,7 +2435,7 @@ function empViewDetail(id){
       row('Account Holder',e.account_holder||e.accName||null)+
     '</div>'+
     ((e.aadhar_doc_url||e.pan_doc_url)?
-      '<div style="background:white;border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
+      '<div style="background:var(--card-bg);border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
         sec('&#128206;','Uploaded Documents','#1565C0')+
         docLink(e.aadhar_doc_url,'Aadhaar Card')+
         docLink(e.pan_doc_url,'PAN Card')+
@@ -2524,9 +2524,9 @@ function empListHTML(status){
   var pending=scopedAll.filter(function(e){return e.status==='pending'||!e.status;}).length;
 
   var stats='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">'+
-    '<div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ACTIVE</div><div style="font-size:20px;font-weight:900;color:#2E7D32;">'+active+'</div></div>'+
-    '<div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #F57F17;cursor:pointer;" onclick="empTab(\'pending\',document.getElementById(\'emp-t-pending\'))"><div style="font-size:10px;color:var(--text3);font-weight:700;">PENDING</div><div style="font-size:20px;font-weight:900;color:#F57F17;">'+pending+'</div></div>'+
-    '<div style="background:white;border-radius:12px;padding:12px;border-left:3px solid #37474F;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:20px;font-weight:900;color:#37474F;">'+total+'</div></div>'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ACTIVE</div><div style="font-size:20px;font-weight:900;color:#2E7D32;">'+active+'</div></div>'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #F57F17;cursor:pointer;" onclick="empTab(\'pending\',document.getElementById(\'emp-t-pending\'))"><div style="font-size:10px;color:var(--text3);font-weight:700;">PENDING</div><div style="font-size:20px;font-weight:900;color:#F57F17;">'+pending+'</div></div>'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #37474F;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:20px;font-weight:900;color:#37474F;">'+total+'</div></div>'+
   '</div>';
 
   if(!list.length){
@@ -2545,7 +2545,7 @@ function empListHTML(status){
     var roleColors={'Admin':'#C62828','Project Manager':'#1565C0','Site Engineer':'#2E7D32','Finance / Accounts':'#6A1B9A'};
     var rc=roleColors[e.role||e.designation]||'#37474F';
     var clickFn=status==='active'?'empOpenEditForm(\''+e.id+'\')'  :'empViewDetail(\''+e.id+'\')';
-return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" onclick="'+clickFn+'">'+
+return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" onclick="'+clickFn+'">'+
       '<div style="padding:12px 14px;display:flex;align-items:center;gap:12px;">'+
         '<div style="width:44px;height:44px;border-radius:12px;background:'+col+';display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:white;flex-shrink:0;overflow:hidden;">'+
           (e.photo_url?'<img src="'+e.photo_url+'" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">':init)+
@@ -2658,7 +2658,7 @@ function empPayHTML(){
       detailHTML='<div style="padding:12px 14px;font-size:12px;color:var(--text3);">No pay structure fixed yet</div>';
     }
 
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
       '<div style="padding:12px 14px;background:#F8FAFC;display:flex;align-items:center;gap:8px;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:14px;font-weight:800;">'+name+'</div>'+
@@ -2707,7 +2707,7 @@ function empLeaveFixHTML(){
         '</div>'
       : '<div style="padding:0 14px 12px;font-size:11px;color:var(--text3);">No leave quotas fixed yet.</div>';
 
-    return '<div style="background:white;border-radius:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden;">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;">'+
         '<div>'+
           '<div style="font-weight:800;font-size:13px;">'+name+'</div>'+
@@ -2851,7 +2851,7 @@ function empOpenForm(emp){
       '<div><label class="flbl">Department</label><select id="f-udept" class="fsel"><option value="">Loading...</option></select></div>'+
     '</div>'+
     '<label class="flbl">Project Assignment</label>'+
-    '<div id="f-uproject-box" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 10px;max-height:180px;overflow-y:auto;margin-bottom:10px;background:white;">'+
+    '<div id="f-uproject-box" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 10px;max-height:180px;overflow-y:auto;margin-bottom:10px;background:var(--card-bg);">'+
       '<div style="font-size:11px;color:var(--text3);">&#9203; Loading projects...</div>'+
     '</div>'+
     '<div style="font-size:10px;color:var(--text3);margin:-6px 0 10px;">Tick every project this employee works on. Leave all unticked for company-wide access to all projects.</div>'+
@@ -3307,7 +3307,7 @@ function empOpenPay(empId, empName){
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">'+
 
       // LEFT: Earnings
-      '<div style="background:white;border-radius:12px;border:1px solid var(--border);overflow:hidden;">'+
+      '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);overflow:hidden;">'+
         '<div style="background:#2E7D32;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">'+
           '<div style="font-size:11px;font-weight:800;color:white;text-transform:uppercase;letter-spacing:.5px;">Earnings</div>'+
           '<button onclick="payAddEarning()" style="background:rgba(255,255,255,.25);color:white;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:800;cursor:pointer;">+ Add</button>'+
@@ -3329,7 +3329,7 @@ function empOpenPay(empId, empName){
       '</div>'+
 
       // RIGHT: Deductions
-      '<div style="background:white;border-radius:12px;border:1px solid var(--border);overflow:hidden;">'+
+      '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);overflow:hidden;">'+
         '<div style="background:#C62828;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">'+
           '<div style="font-size:11px;font-weight:800;color:white;text-transform:uppercase;letter-spacing:.5px;">Deductions</div>'+
           '<button onclick="payAddDeduction()" style="background:rgba(255,255,255,.25);color:white;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:800;cursor:pointer;">+ Add</button>'+

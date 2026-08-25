@@ -9179,7 +9179,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
     <button class="tb-btn" id="emp-add-btn" onclick="EMP_TAB==='advances'?advOpenNew():empOpenForm(null)" style="font-size:20px;">&#43;</button>
   </div>
   <!-- Tab Bar -->
-  <div id="emp-tab-bar" style="display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid var(--border);padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;">
+  <div id="emp-tab-bar" style="display:flex;overflow-x:auto;background:var(--card-bg);border-bottom:1px solid var(--border);padding:0 14px 10px;flex-shrink:0;scrollbar-width:none;gap:4px;">
     <button onclick="empTab('active',this)"   id="emp-t-active"   style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:var(--text);color:#fff;">&#9989; Active</button>
     <button onclick="empTab('pending',this)"  id="emp-t-pending"  style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#9203; Pending</button>
     <button onclick="empTab('pay',this)"      id="emp-t-pay"      style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128178; Pay Fixation</button>
@@ -9192,7 +9192,7 @@ function safeN(x){var s=String(x||'');var r='';for(var i=0;i<s.length;i++){r+=s[
     <button onclick="empTab('downloads',this)" id="emp-t-downloads" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128196; Downloads</button>
     <button onclick="empTab('resigned',this)" id="emp-t-resigned" style="padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;border:none;font-family:Nunito,sans-serif;border-radius:8px;background:transparent;color:var(--text3);">&#128683; Resigned</button>
   </div>
-  <div id="emp-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 90px;background:#F0F4F8;">
+  <div id="emp-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 90px;background:var(--bg);">
     <div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div>
   </div>
 </div>
