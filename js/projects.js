@@ -1671,13 +1671,19 @@ async function planTurnkeyPrompt(){
   var eligible=PLAN_ITEMS.map(function(item){
     var iJMs=jmRows.filter(function(j){return j.boq_item_id===item.id;});
     var jmTotal=iJMs.reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
-    return {item:item, jms:iJMs, jmTotal:jmTotal};
-  }).filter(function(x){return x.jmTotal>0.0001;});
+    // Already planned against this item by anyone, in any earlier run -
+    // the true remaining balance is what's measured minus what's
+    // already been assigned, not the full measured total every time.
+    var alreadyPlanned=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;})
+      .reduce(function(s,r){return s+(parseFloat(r.qty)||0);},0);
+    var balance=Math.max(0, jmTotal-alreadyPlanned);
+    return {item:item, jms:iJMs, jmTotal:jmTotal, alreadyPlanned:alreadyPlanned, balance:balance};
+  }).filter(function(x){return x.balance>0.0001;});
 
-  if(!eligible.length){ toast('No items have any JM measurements yet — raise JMs first','warning'); return; }
+  if(!eligible.length){ toast('No balance left to plan — every measured item is already fully planned','warning'); return; }
 
   var listHtml=eligible.slice(0,50).map(function(x,idx){
-    var maxQty=x.jmTotal;
+    var maxQty=x.balance;
     return '<tr><td style="padding:3px 6px;"><input type="checkbox" class="plan-tk-item-chk" data-idx="'+idx+'" checked style="width:14px;height:14px;accent-color:#1565C0;"></td>'+
       '<td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
       '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
@@ -1694,7 +1700,7 @@ async function planTurnkeyPrompt(){
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#1565C0;margin-bottom:6px;">&#128737; Combined Planning</div>'+
-    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will assign <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> to one subcontractor, at each item\'s own BOQ rate by default. Quantity defaults to what\'s been measured (JM) so far but can be adjusted per item below. Items with no JM yet are skipped — raise those separately.</div>'+
+    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will assign <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> to one subcontractor, at each item\'s own BOQ rate by default. Quantity defaults to the remaining unplanned balance (measured so far minus anything already planned) and can be adjusted per item below. Items with no balance left are skipped.</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
       '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
       '<span onclick="planTurnkeyToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#1565C0;cursor:pointer;">Deselect all</span>'+
@@ -1783,14 +1789,23 @@ async function planTurnkeyConfirm(){
     setMsg('Assigning… '+(i+1)+' of '+eligible.length,'#1565C0');
     var rate=useCustRate?custRate:(parseFloat(x.item.rate)||0);
     // Distribute the (possibly edited, possibly partial) planned qty
-    // across this item's JMs sequentially - fill each JM's own qty
-    // before moving to the next, until the planned qty is used up.
+    // across this item's JMs sequentially - but first account for
+    // whatever's already been consumed from each specific JM by any
+    // earlier planning run, so this doesn't re-claim a JM that's
+    // already fully spoken for while a later JM still has room.
+    var consumedByJm={};
+    PLAN_RES.filter(function(r){return r.boq_item_id===x.item.id;}).forEach(function(r){
+      if(!r.jm_links) return;
+      var links=[]; try{links=typeof r.jm_links==='string'?JSON.parse(r.jm_links):r.jm_links;}catch(ex){}
+      links.forEach(function(l){ consumedByJm[l.jm_id]=(consumedByJm[l.jm_id]||0)+(parseFloat(l.plan_qty)||0); });
+    });
     var remaining=x.planQty;
     var jmLinks=[];
     for(var k=0;k<x.jms.length && remaining>0.0001;k++){
       var j=x.jms[k];
       var jq=parseFloat(j.jm_qty)||0;
-      var take=Math.min(jq, remaining);
+      var jmAvail=Math.max(0, jq-(consumedByJm[j.id]||0));
+      var take=Math.min(jmAvail, remaining);
       if(take>0.0001){
         jmLinks.push({jm_id:j.id, plan_qty:take, jm_qty:jq, jm_number:j.jm_number});
         remaining-=take;
