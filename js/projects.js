@@ -1385,8 +1385,9 @@ function jmCompleteAllPrompt(){
   }).filter(function(x){return x.bal>0.0001;});
   if(!pending.length){ toast('All items are already measured in full','info'); return; }
 
-  var listHtml=pending.slice(0,50).map(function(x){
-    return '<tr><td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
+  var listHtml=pending.slice(0,50).map(function(x,idx){
+    return '<tr><td style="padding:3px 6px;"><input type="checkbox" class="jm-cmpl-item-chk" data-idx="'+idx+'" checked style="width:14px;height:14px;accent-color:#F57F17;"></td>'+
+      '<td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
       '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
       '<td style="padding:3px 6px;text-align:right;font-size:11px;font-weight:700;">'+String(x.bal.toFixed(3)).replace(/\.?0+$/,'')+' '+(x.item.unit||'')+'</td></tr>';
   }).join('');
@@ -1399,8 +1400,12 @@ function jmCompleteAllPrompt(){
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#E65100;margin-bottom:6px;">&#9888; Complete All JMs</div>'+
     '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will raise a joint measurement for the <b>full outstanding balance</b> on <b>'+pending.length+' item'+(pending.length!==1?'s':'')+'</b>, bringing every item to 100% of its BOQ quantity.<br><b style="color:#C62828;">This affects billing and cannot be undone in bulk</b> — each JM would have to be deleted individually.</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+      '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
+      '<span onclick="jmCompleteAllToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#F57F17;cursor:pointer;">Deselect all</span>'+
+    '</div>'+
     '<div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
-      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Balance to add</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Balance to add</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
       (pending.length>50?'<div style="padding:6px;font-size:10px;color:#888;text-align:center;">…and '+(pending.length-50)+' more</div>':'')+
     '</div>'+
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Date for these JMs</label>'+
@@ -1415,6 +1420,13 @@ function jmCompleteAllPrompt(){
       '<button id="jm-cmpl-go" onclick="jmCompleteAllConfirm()" style="background:#F57F17;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Complete</button>'+
     '</div></div>';
   document.body.appendChild(d);
+  window._jmCompleteAllPending=pending;
+}
+function jmCompleteAllToggleAll(el){
+  var toAll=el.getAttribute('data-state')!=='all';
+  document.querySelectorAll('.jm-cmpl-item-chk').forEach(function(chk){ chk.checked=toAll; });
+  el.setAttribute('data-state', toAll?'all':'none');
+  el.textContent=toAll?'Deselect all':'Select all';
 }
 
 async function jmCompleteAllConfirm(){
@@ -1426,6 +1438,12 @@ async function jmCompleteAllConfirm(){
 
   var projId=(document.getElementById('jm-proj-sel')||{}).value||'';
   if(!projId){ setMsg('No project selected'); return; }
+
+  var allPending=window._jmCompleteAllPending||[];
+  var checkedIdx={};
+  document.querySelectorAll('.jm-cmpl-item-chk').forEach(function(chk){ if(chk.checked) checkedIdx[chk.getAttribute('data-idx')]=true; });
+  var pending=allPending.filter(function(x,idx){ return checkedIdx[idx]; });
+  if(!pending.length){ setMsg('Select at least one item'); return; }
 
   // Verify the password by re-authenticating, same as the change-password flow
   setMsg('Verifying password…','#1565C0');
@@ -1439,12 +1457,6 @@ async function jmCompleteAllConfirm(){
 
   var date=(document.getElementById('jm-cmpl-date')||{}).value||new Date().toISOString().slice(0,10);
   var ref=(document.getElementById('jm-cmpl-ref')||{}).value||'Bulk completion';
-
-  var pending=JM_ITEMS.map(function(it){
-    var bq=parseFloat(it.boq_qty)||0;
-    var done=JM_JMS.filter(function(j){return j.boq_item_id===it.id;}).reduce(function(a,j){return a+(parseFloat(j.jm_qty)||0);},0);
-    return {item:it, bal:bq-done};
-  }).filter(function(x){return x.bal>0.0001;});
 
   var ok=0, failed=0;
   for(var i=0;i<pending.length;i++){
@@ -1664,8 +1676,9 @@ async function planTurnkeyPrompt(){
 
   if(!eligible.length){ toast('No items have any JM measurements yet — raise JMs first','warning'); return; }
 
-  var listHtml=eligible.slice(0,50).map(function(x){
-    return '<tr><td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
+  var listHtml=eligible.slice(0,50).map(function(x,idx){
+    return '<tr><td style="padding:3px 6px;"><input type="checkbox" class="plan-tk-item-chk" data-idx="'+idx+'" checked style="width:14px;height:14px;accent-color:#1565C0;"></td>'+
+      '<td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
       '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
       '<td style="padding:3px 6px;text-align:right;font-size:11px;font-weight:700;">'+String(x.jmTotal.toFixed(3)).replace(/\.?0+$/,'')+' '+(x.item.unit||'')+'</td></tr>';
   }).join('');
@@ -1678,8 +1691,12 @@ async function planTurnkeyPrompt(){
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#1565C0;margin-bottom:6px;">&#128737; Plan All as Turnkey</div>'+
     '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will assign the <b>full measured (JM) quantity</b> of <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> to one subcontractor, at each item\'s own BOQ rate by default. Items with no JM yet are skipped — raise those separately.</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+      '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
+      '<span onclick="planTurnkeyToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#1565C0;cursor:pointer;">Deselect all</span>'+
+    '</div>'+
     '<div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
-      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to assign</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to assign</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
       (eligible.length>50?'<div style="padding:6px;font-size:10px;color:#888;text-align:center;">…and '+(eligible.length-50)+' more</div>':'')+
     '</div>'+
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Subcontractor / Party Name *</label>'+
@@ -1703,6 +1720,12 @@ async function planTurnkeyPrompt(){
   document.body.appendChild(d);
   window._planTurnkeyEligible=eligible;
 }
+function planTurnkeyToggleAll(el){
+  var toAll=el.getAttribute('data-state')!=='all';
+  document.querySelectorAll('.plan-tk-item-chk').forEach(function(chk){ chk.checked=toAll; });
+  el.setAttribute('data-state', toAll?'all':'none');
+  el.textContent=toAll?'Deselect all':'Select all';
+}
 async function planTurnkeyConfirm(){
   var msg=document.getElementById('plan-tk-msg');
   var go=document.getElementById('plan-tk-go');
@@ -1719,6 +1742,12 @@ async function planTurnkeyConfirm(){
   var projId=(document.getElementById('plan-proj-sel')||{}).value||'';
   if(!projId){ setMsg('No project selected'); return; }
 
+  var allEligible=window._planTurnkeyEligible||[];
+  var checkedIdx={};
+  document.querySelectorAll('.plan-tk-item-chk').forEach(function(chk){ if(chk.checked) checkedIdx[chk.getAttribute('data-idx')]=true; });
+  var eligible=allEligible.filter(function(x,idx){ return checkedIdx[idx]; });
+  if(!eligible.length){ setMsg('Select at least one item'); return; }
+
   setMsg('Verifying password…','#1565C0');
   if(go){ go.disabled=true; go.style.opacity='.6'; }
   try{
@@ -1728,7 +1757,6 @@ async function planTurnkeyConfirm(){
     if(!vr||!vr.access_token){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
   }catch(e){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
 
-  var eligible=window._planTurnkeyEligible||[];
   var today=new Date().toISOString().slice(0,10);
   var ok=0, failed=0;
   for(var i=0;i<eligible.length;i++){
