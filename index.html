@@ -4171,6 +4171,7 @@ async function doLoginInner(ph,pw,co){
         updateDashboardUser();
         loadSubscriptionBadge();
         showApp('dashboard');
+        window._coLoaded=true; preloadCompanyData();
         loadPendingApprovals();
         loadUserPermissions();
         initRealtimeSync();
@@ -4184,6 +4185,7 @@ async function doLoginInner(ph,pw,co){
         updateDashboardUser();
         loadSubscriptionBadge();
         showApp('dashboard');
+        window._coLoaded=true; preloadCompanyData();
         loadPendingApprovals();
         loadUserPermissions();
         initRealtimeSync();

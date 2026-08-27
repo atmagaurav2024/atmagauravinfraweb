@@ -918,8 +918,9 @@ function boqRender(){
     }).join('');
 }
 function boqProjName(){var projId=(document.getElementById('boq-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
-function boqDownloadExcel(){
+async function boqDownloadExcel(){
   if(!BOQ_ITEMS.length){toast('No BOQ items to export','warning');return;}
+  if((!COMPANY_DATA||!COMPANY_DATA.name) && typeof preloadCompanyData==='function'){ try{await preloadCompanyData();}catch(e){} }
   var projName=boqProjName();
   var compName=typeof coName==='function'?coName():'RYDAX';
   var header=['Item Code','Description','Short Name','Unit','BOQ Qty','Rate','Amount','Remarks'];
@@ -945,8 +946,9 @@ function boqDownloadExcel(){
   a.click();
   toast('BOQ Excel downloaded','success');
 }
-function boqDownloadPDF(){
+async function boqDownloadPDF(){
   if(!BOQ_ITEMS.length){toast('No BOQ items to export','warning');return;}
+  if((!COMPANY_DATA||!COMPANY_DATA.name) && typeof preloadCompanyData==='function'){ try{await preloadCompanyData();}catch(e){} }
   var projName=boqProjName();
   var compName=typeof coName==='function'?coName():'RYDAX';
   var compAddr=typeof coAddr==='function'?coAddr():'';
