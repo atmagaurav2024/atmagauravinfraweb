@@ -3064,7 +3064,6 @@ async function rrGroupAllot(groupId, projId){
       var res=await sbInsert('boq_exec_resources',{
         project_id:projId,
         boq_item_id:ri.boq_item_id,
-        boq_exec_resource_id:ri.plan_item_id,
         date:today,
         exec_type:ri.party_type,
         party_name:ri.party_name,
