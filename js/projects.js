@@ -1481,7 +1481,7 @@ async function jmCompleteAllConfirm(){
 async function jmDelete(id){if(!confirm('Delete?'))return;JM_JMS=JM_JMS.filter(function(j){return j.id!==id;});jmRender();try{await sbDelete('boq_jm',id);}catch(e){console.error(e);}}
 
 // ════ PLANNING ════════════════════════════════════════════
-var PLAN_ITEMS=[],PLAN_SUBS=[],PLAN_RES=[];
+var PLAN_ITEMS=[],PLAN_SUBS=[],PLAN_RES=[],PLAN_COMBINED_GROUPS=[],PLAN_COMBINED_ITEMS=[];
 function initPlanning(){planLoadProjs();}
 async function planLoadProjs(){var sel=document.getElementById('plan-proj-sel');if(!sel)return;try{var d=await sbFetch('projects',{select:'id,name',order:'name.asc'});if(typeof scopeProjects==='function')d=scopeProjects(d);sel.innerHTML='<option value="">— Select Project —</option>'+(Array.isArray(d)?d:[]).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');}catch(e){}}
 async function planLoadItems(){
@@ -1489,12 +1489,46 @@ async function planLoadItems(){
   if(!projId){if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>';return;}
   if(el)el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
   try{var r=await Promise.all([sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'}),sbFetch('boq_subitems',{select:'*',filter:'project_id=eq.'+projId,order:'sort_order.asc'}),sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&exec_type=eq.planned',order:'created_at.asc'})]);PLAN_ITEMS=sortByItemCode(Array.isArray(r[0])?r[0]:[]);PLAN_SUBS=Array.isArray(r[1])?r[1]:[];PLAN_RES=Array.isArray(r[2])?r[2]:[];}catch(e){PLAN_ITEMS=[];console.error(e);}
+  try{
+    var groups=await sbFetch('combined_plan_groups',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'});
+    PLAN_COMBINED_GROUPS=Array.isArray(groups)?groups:[];
+    var gIds=PLAN_COMBINED_GROUPS.map(function(g){return g.id;});
+    PLAN_COMBINED_ITEMS=gIds.length?await sbFetch('combined_plan_items',{select:'*',filter:'group_id=in.('+gIds.join(',')+')'}):[];
+    if(!Array.isArray(PLAN_COMBINED_ITEMS)) PLAN_COMBINED_ITEMS=[];
+  }catch(e){ PLAN_COMBINED_GROUPS=[]; PLAN_COMBINED_ITEMS=[]; console.warn('combined_plan_groups/items not available yet — run the migration', e); }
   planRender();
 }
 function planRender(){
   var el=document.getElementById('plan-content');if(!el)return;
   if(!PLAN_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items found</div>';return;}
+
+  var itemById={}; PLAN_ITEMS.forEach(function(it){ itemById[it.id]=it; });
+  var combinedGroupsHtml=PLAN_COMBINED_GROUPS.length?(
+    '<div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Combined Planning Groups</div>'+
+    PLAN_COMBINED_GROUPS.map(function(g){
+      var gItems=PLAN_COMBINED_ITEMS.filter(function(it){return it.group_id===g.id;});
+      var total=gItems.reduce(function(s,it){return s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0);},0);
+      var rows=gItems.map(function(it){
+        var boqItem=itemById[it.boq_item_id];
+        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;">'+
+          '<span>'+(boqItem?(boqItem.short_name||boqItem.description):it.boq_item_id)+'</span>'+
+          '<span style="font-weight:700;">'+it.qty+' '+(it.unit||'')+' @ \u20b9'+it.rate+'</span>'+
+        '</div>';
+      }).join('');
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+        '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+g.party_name+'</div>'+
+          '<div style="font-size:10px;color:#1565C0;">'+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined \u00b7 '+(g.rate_mode==='custom'?'flat rate':'BOQ rates')+'</div></div>'+
+          '<div style="text-align:right;"><div style="font-size:13px;font-weight:900;color:#1565C0;">'+fmtINR(total)+'</div>'+
+          '<span onclick="planDeleteCombinedGroup(\''+g.id+'\')" style="font-size:10px;color:#C62828;cursor:pointer;text-decoration:underline;">Delete group</span></div>'+
+        '</div>'+
+        '<div style="padding:8px 14px;">'+rows+'</div>'+
+      '</div>';
+    }).join('')
+  ):'';
+
   el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="planTurnkeyPrompt()" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128737; Combined Planning</button><button onclick="planDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="planDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+    combinedGroupsHtml+
     PLAN_ITEMS.map(function(item){
     var iSubs=PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
     var iRes=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
@@ -1660,6 +1694,14 @@ function planDownloadPDF(){
   openPDF(html);
 }
 
+async function planDeleteCombinedGroup(groupId){
+  if(!confirm('Delete this combined planning group? This removes the assignment for every item in it.')) return;
+  try{
+    await sbDelete('combined_plan_groups', groupId);
+    toast('Group deleted','success');
+    await planLoadItems();
+  }catch(e){ toast('Error: '+e.message,'error'); console.error(e); }
+}
 async function planTurnkeyPrompt(){
   var projId=(document.getElementById('plan-proj-sel')||{}).value||'';
   if(!projId){toast('Select a project first','warning');return;}
@@ -1667,6 +1709,16 @@ async function planTurnkeyPrompt(){
   var jmRows=[];
   try{ jmRows=await sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'jm_number.asc'}); }catch(e){}
   if(!Array.isArray(jmRows)) jmRows=[];
+  var combinedItemRows=[];
+  try{
+    var combinedGroups=await sbFetch('combined_plan_groups',{select:'id',filter:'project_id=eq.'+projId});
+    var groupIds=(Array.isArray(combinedGroups)?combinedGroups:[]).map(function(g){return g.id;});
+    if(groupIds.length){
+      combinedItemRows=await sbFetch('combined_plan_items',{select:'*',filter:'group_id=in.('+groupIds.join(',')+')'});
+    }
+  }catch(e){ console.warn('combined_plan_items not available yet — run the migration', e); }
+  if(!Array.isArray(combinedItemRows)) combinedItemRows=[];
+  window._planCombinedItemRows=combinedItemRows; // reused in confirm for JM-consumption accounting
 
   var eligible=PLAN_ITEMS.map(function(item){
     var iJMs=jmRows.filter(function(j){return j.boq_item_id===item.id;});
@@ -1674,8 +1726,13 @@ async function planTurnkeyPrompt(){
     // Already planned against this item by anyone, in any earlier run -
     // the true remaining balance is what's measured minus what's
     // already been assigned, not the full measured total every time.
-    var alreadyPlanned=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;})
+    // Counts both the old single-item table and any earlier combined
+    // planning runs, since both consume the same underlying JM'd qty.
+    var alreadyPlannedOld=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;})
       .reduce(function(s,r){return s+(parseFloat(r.qty)||0);},0);
+    var alreadyPlannedCombined=combinedItemRows.filter(function(r){return r.boq_item_id===item.id;})
+      .reduce(function(s,r){return s+(parseFloat(r.qty)||0);},0);
+    var alreadyPlanned=alreadyPlannedOld+alreadyPlannedCombined;
     var balance=Math.max(0, jmTotal-alreadyPlanned);
     return {item:item, jms:iJMs, jmTotal:jmTotal, alreadyPlanned:alreadyPlanned, balance:balance};
   }).filter(function(x){return x.balance>0.0001;});
@@ -1783,18 +1840,42 @@ async function planTurnkeyConfirm(){
   }catch(e){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
 
   var today=new Date().toISOString().slice(0,10);
-  var ok=0, failed=0;
+  var combinedItemRows=window._planCombinedItemRows||[];
+
+  // Create the group header first
+  var groupId=null;
+  try{
+    var groupRes=await sbInsert('combined_plan_groups',{
+      project_id:projId, party_name:name, exec_type:'sc',
+      rate_mode:useCustRate?'custom':'boq', custom_rate:useCustRate?custRate:null,
+      resource_category:cat,
+      created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
+    });
+    if(groupRes&&groupRes[0]) groupId=groupRes[0].id;
+  }catch(e){
+    setMsg('Could not create the group — has the combined-planning migration been run? ('+e.message+')');
+    if(go){go.disabled=false;go.style.opacity='1';}
+    return;
+  }
+  if(!groupId){ setMsg('Could not create the group'); if(go){go.disabled=false;go.style.opacity='1';} return; }
+
+  var lineItems=[];
   for(var i=0;i<eligible.length;i++){
     var x=eligible[i];
-    setMsg('Assigning… '+(i+1)+' of '+eligible.length,'#1565C0');
     var rate=useCustRate?custRate:(parseFloat(x.item.rate)||0);
     // Distribute the (possibly edited, possibly partial) planned qty
     // across this item's JMs sequentially - but first account for
     // whatever's already been consumed from each specific JM by any
-    // earlier planning run, so this doesn't re-claim a JM that's
-    // already fully spoken for while a later JM still has room.
+    // earlier planning run (old single-item table AND earlier combined
+    // runs), so this doesn't re-claim a JM that's already fully spoken
+    // for while a later JM still has room.
     var consumedByJm={};
     PLAN_RES.filter(function(r){return r.boq_item_id===x.item.id;}).forEach(function(r){
+      if(!r.jm_links) return;
+      var links=[]; try{links=typeof r.jm_links==='string'?JSON.parse(r.jm_links):r.jm_links;}catch(ex){}
+      links.forEach(function(l){ consumedByJm[l.jm_id]=(consumedByJm[l.jm_id]||0)+(parseFloat(l.plan_qty)||0); });
+    });
+    combinedItemRows.filter(function(r){return r.boq_item_id===x.item.id;}).forEach(function(r){
       if(!r.jm_links) return;
       var links=[]; try{links=typeof r.jm_links==='string'?JSON.parse(r.jm_links):r.jm_links;}catch(ex){}
       links.forEach(function(l){ consumedByJm[l.jm_id]=(consumedByJm[l.jm_id]||0)+(parseFloat(l.plan_qty)||0); });
@@ -1811,23 +1892,25 @@ async function planTurnkeyConfirm(){
         remaining-=take;
       }
     }
-    try{
-      var res=await sbInsert('boq_exec_resources',{
-        project_id:projId, boq_item_id:x.item.id, boq_subitem_id:null,
-        jm_id:jmLinks.length?jmLinks[0].jm_id:null,
-        jm_links:jmLinks.length?JSON.stringify(jmLinks):null,
-        date:today, exec_type:'planned',
-        party_name:name, qty:x.planQty, unit:x.item.unit, rate:rate,
-        resource_category:cat
-      });
-      if(res&&res[0]){ PLAN_RES.push(res[0]); ok++; } else failed++;
-    }catch(e){ console.error('turnkey plan failed for '+x.item.item_code, e); failed++; }
+    lineItems.push({
+      group_id:groupId, boq_item_id:x.item.id,
+      qty:x.planQty, rate:rate, unit:x.item.unit,
+      jm_links:jmLinks.length?JSON.stringify(jmLinks):null
+    });
   }
 
+  var ok=0, failed=0;
+  try{
+    setMsg('Saving '+lineItems.length+' item'+(lineItems.length!==1?'s':'')+'…','#1565C0');
+    var itemsRes=await sbInsert('combined_plan_items', lineItems);
+    if(Array.isArray(itemsRes)){ ok=itemsRes.length; }
+    else failed=lineItems.length;
+  }catch(e){ console.error('combined plan items insert failed', e); failed=lineItems.length; }
+
   var ov=document.getElementById('plan-turnkey-ov'); if(ov) ov.remove();
-  planRender();
+  await planLoadItems();
   if(failed) toast(ok+' item'+(ok!==1?'s':'')+' assigned to '+name+', '+failed+' failed — see console','warning');
-  else toast('All '+ok+' item'+(ok!==1?'s':'')+' assigned to '+name,'success');
+  else toast('All '+ok+' item'+(ok!==1?'s':'')+' combined-assigned to '+name,'success');
 }
 function planAddSub(itemId){document.getElementById('plan-sheet-title').textContent='Add Work Activity';document.getElementById('plan-sheet-body').innerHTML='<label class="flbl">Activity Name *</label><input id="ps-name" class="finp" placeholder="e.g. Bar Bending, Shuttering...">';document.getElementById('plan-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-plan\',\'sh-plan\')">Cancel</button><button class="btn" style="background:#1565C0;color:white;" onclick="planSaveSub(\''+itemId+'\')">+ Add</button>';openSheet('ov-plan','sh-plan');}
 async function planSaveSub(itemId){var name=(document.getElementById('ps-name')||{value:''}).value.trim();if(!name){toast('Name required','warning');return;}var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var sortOrder=PLAN_SUBS.filter(function(s){return s.boq_item_id===itemId;}).length+1;try{var res=await sbInsert('boq_subitems',{project_id:projId,boq_item_id:itemId,name:name,sort_order:sortOrder});if(res&&res[0])PLAN_SUBS.push(res[0]);toast(name+' added','success');closeSheet('ov-plan','sh-plan');planRender();}catch(e){toast('Error: '+e.message,'error');}}
