@@ -2436,7 +2436,7 @@ function waSubTab(tab){ WA_SUBTAB=tab; execRenderSubTab(); }
 // ════════════════════════════════════════════════════════════════
 // RESOURCE REQUISITION (RR) MODULE
 // ════════════════════════════════════════════════════════════════
-var RR_ITEMS=[], RR_PLAN_ITEMS=[], RR_PLAN_SUBS=[], RR_PLAN_RES=[];
+var RR_ITEMS=[], RR_PLAN_ITEMS=[], RR_PLAN_SUBS=[], RR_PLAN_RES=[], RR_COMBINED_PLAN_GROUPS=[], RR_COMBINED_PLAN_ITEMS=[], RR_COMBINED_RR_GROUPS=[], RR_COMBINED_RR_ITEMS=[];
 
 function rrEnsureContainer(){
   if(!document.getElementById('rr-content')){
@@ -2476,6 +2476,22 @@ async function rrLoadItems(){
     el.innerHTML='<div style="text-align:center;padding:30px;color:#C62828;">Error: '+e.message+'</div>';
     return;
   }
+  try{
+    var pg=await sbFetch('combined_plan_groups',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'});
+    RR_COMBINED_PLAN_GROUPS=Array.isArray(pg)?pg:[];
+    var pgIds=RR_COMBINED_PLAN_GROUPS.map(function(g){return g.id;});
+    RR_COMBINED_PLAN_ITEMS=pgIds.length?await sbFetch('combined_plan_items',{select:'*',filter:'group_id=in.('+pgIds.join(',')+')'}):[];
+    if(!Array.isArray(RR_COMBINED_PLAN_ITEMS)) RR_COMBINED_PLAN_ITEMS=[];
+
+    var rg=await sbFetch('combined_rr_groups',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'});
+    RR_COMBINED_RR_GROUPS=Array.isArray(rg)?rg:[];
+    var rgIds=RR_COMBINED_RR_GROUPS.map(function(g){return g.id;});
+    RR_COMBINED_RR_ITEMS=rgIds.length?await sbFetch('combined_rr_items',{select:'*',filter:'group_id=in.('+rgIds.join(',')+')'}):[];
+    if(!Array.isArray(RR_COMBINED_RR_ITEMS)) RR_COMBINED_RR_ITEMS=[];
+  }catch(e){
+    RR_COMBINED_PLAN_GROUPS=[]; RR_COMBINED_PLAN_ITEMS=[]; RR_COMBINED_RR_GROUPS=[]; RR_COMBINED_RR_ITEMS=[];
+    console.warn('combined planning/RR tables not available yet — run the migration', e);
+  }
   rrRender();
 }
 
@@ -2501,6 +2517,56 @@ function rrRender(){
         '</div>';
       }).join('')+
     '</div>';
+
+  var itemById={}; RR_PLAN_ITEMS.forEach(function(it){ itemById[it.id]=it; });
+  var combinedSectionHtml='';
+  if(RR_COMBINED_PLAN_GROUPS.length){
+    var groupCards=RR_COMBINED_PLAN_GROUPS.map(function(g){
+      var gItems=RR_COMBINED_PLAN_ITEMS.filter(function(it){return it.group_id===g.id;});
+      var lineRows=gItems.map(function(it){
+        var raised=RR_COMBINED_RR_ITEMS.filter(function(ri){return ri.plan_item_id===it.id;})
+          .reduce(function(s,ri){return s+(parseFloat(ri.qty)||0);},0);
+        var remaining=Math.max(0,(parseFloat(it.qty)||0)-raised);
+        var boqItem=itemById[it.boq_item_id];
+        return {it:it, boqItem:boqItem, remaining:remaining};
+      });
+      var totalRemaining=lineRows.reduce(function(s,r){return s+r.remaining;},0);
+      var itemsHtml=lineRows.map(function(r){
+        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;">'+
+          '<span>'+(r.boqItem?(r.boqItem.short_name||r.boqItem.description):r.it.boq_item_id)+'</span>'+
+          '<span style="font-weight:700;">'+(r.remaining>0.0001?r.remaining.toFixed(2).replace(/\.?0+$/,'')+' '+(r.it.unit||'')+' left':'<span style="color:#2E7D32;">Fully raised</span>')+'</span>'+
+        '</div>';
+      }).join('');
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+        '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+g.party_name+'</div>'+
+          '<div style="font-size:10px;color:#1565C0;">'+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
+          (totalRemaining>0.0001
+            ? '<button onclick="rrOpenGroupPrompt(\''+g.id+'\')" style="background:#00838F;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Raise Combined RR</button>'
+            : '<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:4px 10px;border-radius:5px;font-weight:700;">Fully Raised</span>')+
+        '</div>'+
+        '<div style="padding:8px 14px;">'+itemsHtml+'</div>'+
+      '</div>';
+    }).join('');
+    var raisedGroupCards=RR_COMBINED_RR_GROUPS.map(function(g){
+      var giItems=RR_COMBINED_RR_ITEMS.filter(function(ri){return ri.group_id===g.id;});
+      var sc=statusColors[g.status]||'#555'; var sl=statusLabels[g.status]||g.status;
+      var partyNames=Array.from(new Set(giItems.map(function(it){return it.party_name;})));
+      return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:10px 14px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+sc+'20;color:'+sc+';">'+sl+'</span>'+
+          '<span style="font-size:11px;font-weight:800;margin-left:6px;">'+g.rr_number+'</span>'+
+          '<div style="font-size:10px;color:var(--text3);">'+partyNames.join(', ')+' \u00b7 '+giItems.length+' item'+(giItems.length!==1?'s':'')+' \u00b7 '+(g.remarks||'')+'</div></div>'+
+          (g.status==='pending'
+            ? '<div style="display:flex;gap:4px;"><button onclick="rrGroupApprove(\''+g.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10003; Approve</button><button onclick="rrGroupReject(\''+g.id+'\')" style="background:#C62828;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10005; Reject</button></div>'
+            : '')+
+        '</div></div>';
+    }).join('');
+    combinedSectionHtml=
+      '<div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Combined Planning Groups</div>'+
+      groupCards+
+      (raisedGroupCards?'<div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;">Combined RRs Raised</div>'+raisedGroupCards:'');
+  }
 
   // Group RR by BOQ item
   var rrByItem={};
@@ -2594,6 +2660,7 @@ function rrRender(){
       '</div>'+
     '</div>'+
     (Object.values(counts).some(function(v){return v>0;})?summaryBar:'')+
+    combinedSectionHtml+
     (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">No planned resources found. Add resources in Planning tab first.</div>');
 }
 
@@ -2845,6 +2912,121 @@ async function rrCombinedConfirm(){
   rrRender();
   if(failed) toast(ok+' RR'+(ok!==1?'s':'')+' raised, '+failed+' failed — see console','warning');
   else toast(ok+' RR'+(ok!==1?'s':'')+' raised','success');
+}
+
+// ── Raise a single merged combined RR for one specific combined-
+// planning group, covering whatever balance remains on its items. ──
+function rrOpenGroupPrompt(groupId){
+  var projId=PROJ_MOD_SEL_ID||'';
+  var group=RR_COMBINED_PLAN_GROUPS.find(function(g){return g.id===groupId;});
+  if(!group){ toast('Group not found','error'); return; }
+  var itemById={}; RR_PLAN_ITEMS.forEach(function(it){ itemById[it.id]=it; });
+  var gItems=RR_COMBINED_PLAN_ITEMS.filter(function(it){return it.group_id===groupId;});
+  var rows=gItems.map(function(it){
+    var raised=RR_COMBINED_RR_ITEMS.filter(function(ri){return ri.plan_item_id===it.id;})
+      .reduce(function(s,ri){return s+(parseFloat(ri.qty)||0);},0);
+    var remaining=Math.max(0,(parseFloat(it.qty)||0)-raised);
+    var boqItem=itemById[it.boq_item_id];
+    return {planItem:it, boqItem:boqItem, remaining:remaining};
+  }).filter(function(r){return r.remaining>0.0001;});
+
+  if(!rows.length){ toast('Nothing left to raise for this group','warning'); return; }
+
+  var listHtml=rows.map(function(r,idx){
+    var maxQty=r.remaining;
+    return '<tr><td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+(r.boqItem?r.boqItem.item_code:'')+'</td>'+
+      '<td style="padding:3px 6px;font-size:11px;">'+(r.boqItem?(r.boqItem.short_name||r.boqItem.description):'')+'</td>'+
+      '<td style="padding:3px 6px;text-align:right;">'+
+        '<input type="number" class="rr-grp-item-qty" data-idx="'+idx+'" data-plan-item-id="'+r.planItem.id+'" data-boq-item-id="'+r.planItem.boq_item_id+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid #ddd;border-radius:4px;">'+
+        ' <span style="font-size:9.5px;color:var(--text3);">'+(r.planItem.unit||'')+' <span style="color:#aaa;">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
+      '</td></tr>';
+  }).join('');
+
+  var ov=document.getElementById('rr-group-ov');
+  if(ov) ov.remove();
+  var d=document.createElement('div');
+  d.id='rr-group-ov';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
+    '<div style="font-size:15px;font-weight:900;color:#00838F;margin-bottom:6px;">&#128203; Raise Combined RR</div>'+
+    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">For <b>'+group.party_name+'</b> \u2014 covers <b>'+rows.length+' item'+(rows.length!==1?'s':'')+'</b> from this combined planning group in one requisition.</div>'+
+    '<div style="max-height:200px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to raise</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+    '</div>'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Required Date *</label>'+
+    '<input type="date" id="rr-grp-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Purpose / Remarks</label>'+
+    '<textarea id="rr-grp-remarks" rows="2" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;"></textarea>'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Requested By</label>'+
+    '<input type="text" id="rr-grp-by" value="'+(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||''):'')+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
+    '<div id="rr-grp-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;color:#C62828;"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button onclick="document.getElementById(\'rr-group-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button id="rr-grp-go" onclick="rrGroupConfirm(\''+groupId+'\')" style="background:#00838F;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Raise</button>'+
+    '</div></div>';
+  document.body.appendChild(d);
+}
+async function rrGroupConfirm(groupId){
+  var msg=document.getElementById('rr-grp-msg');
+  var go=document.getElementById('rr-grp-go');
+  var setMsg=function(t){ if(msg) msg.textContent=t; };
+  var group=RR_COMBINED_PLAN_GROUPS.find(function(g){return g.id===groupId;});
+  if(!group){ setMsg('Group not found'); return; }
+  var date=(document.getElementById('rr-grp-date')||{}).value||'';
+  if(!date){ setMsg('Required date is needed'); return; }
+  var remarks=(document.getElementById('rr-grp-remarks')||{}).value||'';
+  var reqBy=(document.getElementById('rr-grp-by')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||'';
+  if(!projId){ setMsg('No project selected'); return; }
+
+  var rows=[]; var qtyError=null;
+  document.querySelectorAll('.rr-grp-item-qty').forEach(function(inp){
+    var q=parseFloat(inp.value);
+    var max=parseFloat(inp.getAttribute('data-max'))||0;
+    if(!q||q<=0){ qtyError='Enter a valid quantity for every item'; return; }
+    if(q>max+0.0001){ qtyError='Quantity can\'t exceed the available balance'; return; }
+    rows.push({plan_item_id:inp.getAttribute('data-plan-item-id'), boq_item_id:inp.getAttribute('data-boq-item-id'), qty:q});
+  });
+  if(qtyError){ setMsg(qtyError); return; }
+  if(!rows.length){ setMsg('Nothing to raise'); return; }
+
+  if(go){ go.disabled=true; go.style.opacity='.6'; }
+  setMsg('Raising…');
+  var rrNo='RR/'+projId.slice(-4).toUpperCase()+'/'+new Date().getFullYear()+'/C'+
+    String((RR_COMBINED_RR_GROUPS.length+1)).padStart(4,'0');
+  try{
+    var groupRes=await sbInsert('combined_rr_groups',{
+      project_id:projId, rr_number:rrNo, required_date:date,
+      remarks:remarks||null, requested_by:reqBy||null, status:'pending'
+    });
+    var newGroupId=groupRes&&groupRes[0]?groupRes[0].id:null;
+    if(!newGroupId) throw new Error('Could not create the RR group');
+    var itemRows=rows.map(function(r){
+      return {group_id:newGroupId, boq_item_id:r.boq_item_id, plan_item_id:r.plan_item_id,
+        party_name:group.party_name, party_type:group.exec_type, qty:r.qty};
+    });
+    await sbInsert('combined_rr_items', itemRows);
+    toast(rrNo+' raised for '+group.party_name,'success');
+    var ov=document.getElementById('rr-group-ov'); if(ov) ov.remove();
+    await rrLoadItems();
+  }catch(e){
+    setMsg('Error: '+e.message+' — has the migration been run?');
+    if(go){go.disabled=false;go.style.opacity='1';}
+  }
+}
+async function rrGroupApprove(groupId){
+  try{
+    await sbUpdate('combined_rr_groups', groupId, {status:'approved'});
+    toast('Approved','success');
+    await rrLoadItems();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+async function rrGroupReject(groupId){
+  try{
+    await sbUpdate('combined_rr_groups', groupId, {status:'rejected'});
+    toast('Rejected','success');
+    await rrLoadItems();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 // Open RR form
