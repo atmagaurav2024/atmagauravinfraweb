@@ -1432,7 +1432,8 @@ async function jmCompleteAllConfirm(){
   if(go){ go.disabled=true; go.style.opacity='.6'; }
   try{
     var ph=(typeof currentUser!=='undefined'&&currentUser&&currentUser.phone)?currentUser.phone:'';
-    var vr=await authSignIn(ph, pass);
+    var slug=(typeof currentUser!=='undefined'&&currentUser&&currentUser.companySlug)?currentUser.companySlug:'';
+    var vr=await authSignIn(ph, pass, slug);
     if(!vr||!vr.access_token){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
   }catch(e){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
 

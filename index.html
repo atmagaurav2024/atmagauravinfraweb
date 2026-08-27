@@ -3965,7 +3965,8 @@ async function saveNewPassword(){
     toast('Verifying...','info');
     // First verify current password by signing in
     var ph = currentUser&&currentUser.phone ? currentUser.phone : '';
-    var verifyResult = await authSignIn(ph, cur);
+    var slug = currentUser&&currentUser.companySlug ? currentUser.companySlug : '';
+    var verifyResult = await authSignIn(ph, cur, slug);
     if(!verifyResult.access_token){
       toast('Current password is incorrect','error');
       return;
