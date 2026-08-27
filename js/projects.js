@@ -2564,6 +2564,7 @@ function rrRender(){
               : g.status==='approved'
                 ? '<button onclick="rrGroupAllot(\''+g.id+'\',\''+projId+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128203; Allot Group</button>'
                 : '')+
+            '<button onclick="rrGroupDelete(\''+g.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
           '</div>'+
         '</div></div>';
     }).join('');
@@ -3030,6 +3031,20 @@ async function rrGroupReject(groupId){
   try{
     await sbUpdate('combined_rr_groups', groupId, {status:'rejected'});
     toast('Rejected','success');
+    await rrLoadItems();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+async function rrGroupDelete(groupId){
+  var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
+  if(!group) return;
+  if(group.status==='allotted'){
+    if(!confirm('This combined RR has been allotted. Deleting will NOT remove the allotment from Work Allotment tab.\nDelete this RR record only?')) return;
+  } else {
+    if(!confirm('Delete this combined RR? This removes it for every item in the group.')) return;
+  }
+  try{
+    await sbDelete('combined_rr_groups', groupId);
+    toast('Deleted','success');
     await rrLoadItems();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
