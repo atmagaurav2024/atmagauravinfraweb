@@ -1494,7 +1494,7 @@ async function planLoadItems(){
 function planRender(){
   var el=document.getElementById('plan-content');if(!el)return;
   if(!PLAN_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items found</div>';return;}
-  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="planTurnkeyPrompt()" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128737; Plan All (Turnkey)</button><button onclick="planDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="planDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="planTurnkeyPrompt()" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128737; Combined Planning</button><button onclick="planDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="planDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
     PLAN_ITEMS.map(function(item){
     var iSubs=PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
     var iRes=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
@@ -1677,10 +1677,14 @@ async function planTurnkeyPrompt(){
   if(!eligible.length){ toast('No items have any JM measurements yet — raise JMs first','warning'); return; }
 
   var listHtml=eligible.slice(0,50).map(function(x,idx){
+    var maxQty=x.jmTotal;
     return '<tr><td style="padding:3px 6px;"><input type="checkbox" class="plan-tk-item-chk" data-idx="'+idx+'" checked style="width:14px;height:14px;accent-color:#1565C0;"></td>'+
       '<td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
       '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
-      '<td style="padding:3px 6px;text-align:right;font-size:11px;font-weight:700;">'+String(x.jmTotal.toFixed(3)).replace(/\.?0+$/,'')+' '+(x.item.unit||'')+'</td></tr>';
+      '<td style="padding:3px 6px;text-align:right;">'+
+        '<input type="number" class="plan-tk-item-qty" data-idx="'+idx+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid #ddd;border-radius:4px;">'+
+        ' <span style="font-size:9.5px;color:var(--text3);">'+(x.item.unit||'')+' <span style="color:#aaa;">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
+      '</td></tr>';
   }).join('');
 
   var ov=document.getElementById('plan-turnkey-ov');
@@ -1689,8 +1693,8 @@ async function planTurnkeyPrompt(){
   d.id='plan-turnkey-ov';
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
-    '<div style="font-size:15px;font-weight:900;color:#1565C0;margin-bottom:6px;">&#128737; Plan All as Turnkey</div>'+
-    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will assign the <b>full measured (JM) quantity</b> of <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> to one subcontractor, at each item\'s own BOQ rate by default. Items with no JM yet are skipped — raise those separately.</div>'+
+    '<div style="font-size:15px;font-weight:900;color:#1565C0;margin-bottom:6px;">&#128737; Combined Planning</div>'+
+    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will assign <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> to one subcontractor, at each item\'s own BOQ rate by default. Quantity defaults to what\'s been measured (JM) so far but can be adjusted per item below. Items with no JM yet are skipped — raise those separately.</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
       '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
       '<span onclick="planTurnkeyToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#1565C0;cursor:pointer;">Deselect all</span>'+
@@ -1745,7 +1749,22 @@ async function planTurnkeyConfirm(){
   var allEligible=window._planTurnkeyEligible||[];
   var checkedIdx={};
   document.querySelectorAll('.plan-tk-item-chk').forEach(function(chk){ if(chk.checked) checkedIdx[chk.getAttribute('data-idx')]=true; });
-  var eligible=allEligible.filter(function(x,idx){ return checkedIdx[idx]; });
+  var qtyByIdx={};
+  var qtyError=null;
+  document.querySelectorAll('.plan-tk-item-qty').forEach(function(inp){
+    var idx=inp.getAttribute('data-idx');
+    if(!checkedIdx[idx]) return; // unselected rows' qty doesn't matter
+    var q=parseFloat(inp.value);
+    var max=parseFloat(inp.getAttribute('data-max'))||0;
+    if(!q||q<=0){ qtyError='Enter a valid quantity for every selected item'; }
+    else if(q>max+0.0001){ qtyError='Quantity for '+(allEligible[idx]?allEligible[idx].item.item_code:'an item')+' can\'t exceed its measured '+max; }
+    qtyByIdx[idx]=q;
+  });
+  if(qtyError){ setMsg(qtyError); return; }
+  var eligible=allEligible.filter(function(x,idx){ return checkedIdx[idx]; }).map(function(x){
+    var idx=allEligible.indexOf(x);
+    return Object.assign({}, x, {planQty: qtyByIdx[idx]});
+  });
   if(!eligible.length){ setMsg('Select at least one item'); return; }
 
   setMsg('Verifying password…','#1565C0');
@@ -1763,16 +1782,27 @@ async function planTurnkeyConfirm(){
     var x=eligible[i];
     setMsg('Assigning… '+(i+1)+' of '+eligible.length,'#1565C0');
     var rate=useCustRate?custRate:(parseFloat(x.item.rate)||0);
-    var jmLinks=x.jms.map(function(j){
-      return {jm_id:j.id, plan_qty:parseFloat(j.jm_qty)||0, jm_qty:parseFloat(j.jm_qty)||0, jm_number:j.jm_number};
-    });
+    // Distribute the (possibly edited, possibly partial) planned qty
+    // across this item's JMs sequentially - fill each JM's own qty
+    // before moving to the next, until the planned qty is used up.
+    var remaining=x.planQty;
+    var jmLinks=[];
+    for(var k=0;k<x.jms.length && remaining>0.0001;k++){
+      var j=x.jms[k];
+      var jq=parseFloat(j.jm_qty)||0;
+      var take=Math.min(jq, remaining);
+      if(take>0.0001){
+        jmLinks.push({jm_id:j.id, plan_qty:take, jm_qty:jq, jm_number:j.jm_number});
+        remaining-=take;
+      }
+    }
     try{
       var res=await sbInsert('boq_exec_resources',{
         project_id:projId, boq_item_id:x.item.id, boq_subitem_id:null,
         jm_id:jmLinks.length?jmLinks[0].jm_id:null,
         jm_links:jmLinks.length?JSON.stringify(jmLinks):null,
         date:today, exec_type:'planned',
-        party_name:name, qty:x.jmTotal, unit:x.item.unit, rate:rate,
+        party_name:name, qty:x.planQty, unit:x.item.unit, rate:rate,
         resource_category:cat
       });
       if(res&&res[0]){ PLAN_RES.push(res[0]); ok++; } else failed++;
@@ -1782,7 +1812,7 @@ async function planTurnkeyConfirm(){
   var ov=document.getElementById('plan-turnkey-ov'); if(ov) ov.remove();
   planRender();
   if(failed) toast(ok+' item'+(ok!==1?'s':'')+' assigned to '+name+', '+failed+' failed — see console','warning');
-  else toast('All '+ok+' item'+(ok!==1?'s':'')+' assigned to '+name+' as turnkey','success');
+  else toast('All '+ok+' item'+(ok!==1?'s':'')+' assigned to '+name,'success');
 }
 function planAddSub(itemId){document.getElementById('plan-sheet-title').textContent='Add Work Activity';document.getElementById('plan-sheet-body').innerHTML='<label class="flbl">Activity Name *</label><input id="ps-name" class="finp" placeholder="e.g. Bar Bending, Shuttering...">';document.getElementById('plan-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-plan\',\'sh-plan\')">Cancel</button><button class="btn" style="background:#1565C0;color:white;" onclick="planSaveSub(\''+itemId+'\')">+ Add</button>';openSheet('ov-plan','sh-plan');}
 async function planSaveSub(itemId){var name=(document.getElementById('ps-name')||{value:''}).value.trim();if(!name){toast('Name required','warning');return;}var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var sortOrder=PLAN_SUBS.filter(function(s){return s.boq_item_id===itemId;}).length+1;try{var res=await sbInsert('boq_subitems',{project_id:projId,boq_item_id:itemId,name:name,sort_order:sortOrder});if(res&&res[0])PLAN_SUBS.push(res[0]);toast(name+' added','success');closeSheet('ov-plan','sh-plan');planRender();}catch(e){toast('Error: '+e.message,'error');}}
