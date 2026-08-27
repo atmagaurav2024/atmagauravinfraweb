@@ -2559,7 +2559,9 @@ function rrRender(){
           '<div style="font-size:10px;color:var(--text3);">'+partyNames.join(', ')+' \u00b7 '+giItems.length+' item'+(giItems.length!==1?'s':'')+' \u00b7 '+(g.remarks||'')+'</div></div>'+
           (g.status==='pending'
             ? '<div style="display:flex;gap:4px;"><button onclick="rrGroupApprove(\''+g.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10003; Approve</button><button onclick="rrGroupReject(\''+g.id+'\')" style="background:#C62828;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10005; Reject</button></div>'
-            : '')+
+            : g.status==='approved'
+              ? '<button onclick="rrGroupAllot(\''+g.id+'\',\''+projId+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128203; Allot Group</button>'
+              : '')+
         '</div></div>';
     }).join('');
     combinedSectionHtml=
@@ -3027,6 +3029,47 @@ async function rrGroupReject(groupId){
     toast('Rejected','success');
     await rrLoadItems();
   }catch(e){ toast('Error: '+e.message,'error'); }
+}
+async function rrGroupAllot(groupId, projId){
+  var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
+  if(!group){ toast('Group not found','error'); return; }
+  var giItems=RR_COMBINED_RR_ITEMS.filter(function(ri){return ri.group_id===groupId;});
+  if(!giItems.length){ toast('Nothing to allot in this group','warning'); return; }
+  if(!confirm('Allot all '+giItems.length+' item'+(giItems.length!==1?'s':'')+' in this combined RR? This will create allotment entries for each.')) return;
+
+  var batchId='rr-combined-batch-'+Date.now();
+  var today=new Date().toISOString().slice(0,10);
+  var ok=0, failed=0;
+  for(var i=0;i<giItems.length;i++){
+    var ri=giItems[i];
+    try{
+      var res=await sbInsert('boq_exec_resources',{
+        project_id:projId,
+        boq_item_id:ri.boq_item_id,
+        boq_exec_resource_id:ri.plan_item_id,
+        date:today,
+        exec_type:ri.party_type,
+        party_name:ri.party_name,
+        qty:ri.qty,
+        unit:ri.unit||null,
+        scope:group.remarks||null,
+        batch_id:batchId,
+        combined_rr_group_id:groupId,
+        combined_rr_item_id:ri.id
+      });
+      if(res&&res[0]){ WA_ALLOT.push(res[0]); ok++; } else failed++;
+    }catch(e){ console.error('combined RR allot failed for item '+ri.boq_item_id, e); failed++; }
+  }
+
+  if(failed){
+    toast(ok+' of '+giItems.length+' items allotted, '+failed+' failed — group left approved so you can retry','warning');
+    return;
+  }
+  try{
+    await sbUpdate('combined_rr_groups', groupId, {status:'allotted'});
+    toast('All '+ok+' items allotted','success');
+    await rrLoadItems();
+  }catch(e){ toast('Items allotted but could not mark the group as allotted: '+e.message,'warning'); }
 }
 
 // Open RR form
