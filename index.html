@@ -12827,6 +12827,10 @@ async function empSavePay(){
 // ════ HELPERS ════════════════════════════════════════════
 
 function fmtINR(n){if(!n&&n!==0)return '\u20b90';return '\u20b9'+parseFloat(n).toLocaleString('en-IN',{maximumFractionDigits:0});}
+// Exact 2-decimal variant for BOQ, where individual item amounts must
+// sum to precisely the displayed total (fmtINR's 0-decimal rounding
+// caused per-item amounts and the total to visibly not add up).
+function fmtINR2(n){if(!n&&n!==0)return '\u20b90.00';return '\u20b9'+parseFloat(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtA(n){return '\u20b9'+Math.abs(Number(n||0)).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
 
 // ════ PROJECTS ════════════════════════════════════════════
