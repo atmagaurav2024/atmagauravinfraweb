@@ -2557,11 +2557,14 @@ function rrRender(){
           '<div><span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+sc+'20;color:'+sc+';">'+sl+'</span>'+
           '<span style="font-size:11px;font-weight:800;margin-left:6px;">'+g.rr_number+'</span>'+
           '<div style="font-size:10px;color:var(--text3);">'+partyNames.join(', ')+' \u00b7 '+giItems.length+' item'+(giItems.length!==1?'s':'')+' \u00b7 '+(g.remarks||'')+'</div></div>'+
-          (g.status==='pending'
-            ? '<div style="display:flex;gap:4px;"><button onclick="rrGroupApprove(\''+g.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10003; Approve</button><button onclick="rrGroupReject(\''+g.id+'\')" style="background:#C62828;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10005; Reject</button></div>'
-            : g.status==='approved'
-              ? '<button onclick="rrGroupAllot(\''+g.id+'\',\''+projId+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128203; Allot Group</button>'
-              : '')+
+          '<div style="display:flex;gap:4px;align-items:center;">'+
+            '<button onclick="rrGroupDownloadPDF(\''+g.id+'\',\''+projName+'\')" title="Download PDF" style="background:#00838F;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;">&#11015; PDF</button>'+
+            (g.status==='pending'
+              ? '<button onclick="rrGroupApprove(\''+g.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10003; Approve</button><button onclick="rrGroupReject(\''+g.id+'\')" style="background:#C62828;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10005; Reject</button>'
+              : g.status==='approved'
+                ? '<button onclick="rrGroupAllot(\''+g.id+'\',\''+projId+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128203; Allot Group</button>'
+                : '')+
+          '</div>'+
         '</div></div>';
     }).join('');
     combinedSectionHtml=
@@ -3070,6 +3073,82 @@ async function rrGroupAllot(groupId, projId){
     toast('All '+ok+' items allotted','success');
     await rrLoadItems();
   }catch(e){ toast('Items allotted but could not mark the group as allotted: '+e.message,'warning'); }
+}
+
+function rrGroupDownloadPDF(groupId, projName){
+  var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
+  if(!group){ toast('Group not found','error'); return; }
+  var giItems=RR_COMBINED_RR_ITEMS.filter(function(ri){return ri.group_id===groupId;});
+  var itemById={}; RR_PLAN_ITEMS.forEach(function(it){ itemById[it.id]=it; });
+  var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+  function fmtD(d){if(!d)return '\u2014';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
+  var stLbl={pending:'PENDING',approved:'APPROVED',rejected:'REJECTED',allotted:'ALLOTTED'};
+  var sc=stCol[group.status]||'#555';
+  var partyNames=Array.from(new Set(giItems.map(function(it){return it.party_name;})));
+
+  var rows=giItems.map(function(ri,i){
+    var boqItem=itemById[ri.boq_item_id];
+    return '<tr>'+
+      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:10px;">'+(i+1)+'</td>'+
+      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:10px;font-family:monospace;">'+(boqItem?boqItem.item_code:'')+'</td>'+
+      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;">'+(boqItem?(boqItem.short_name||boqItem.description):'')+'</td>'+
+      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;">'+ri.party_name+'<div style="font-size:9px;color:#888;">'+(tLbl[ri.party_type]||ri.party_type||'')+'</div></td>'+
+      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;text-align:right;font-weight:700;">'+ri.qty+' '+(ri.unit||'')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Combined Resource Requisition \u2014 '+group.rr_number+'</title>'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:28px;}'+
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #00838F;padding-bottom:12px;margin-bottom:16px;}'+
+    '.co-name{font-size:16px;font-weight:900;color:#00838F;}.co-info{font-size:10px;color:#555;margin-top:3px;}'+
+    '.rr-title{font-size:20px;font-weight:900;color:#00838F;}.rr-no{font-size:12px;color:#555;margin-top:4px;}'+
+    '.status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:900;font-size:11px;color:white;background:'+sc+';}'+
+    '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:16px;}'+
+    '.info-cell{padding:10px 14px;}.info-cell+.info-cell{border-left:1px solid #DDD;}.info-cell.full{grid-column:span 2;border-top:1px solid #DDD;}'+
+    '.lbl{font-size:9px;font-weight:800;text-transform:uppercase;color:#888;letter-spacing:.5px;margin-bottom:3px;}'+
+    '.val{font-size:13px;font-weight:800;}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:16px;}'+
+    'th{background:#00838F;color:white;padding:8px;font-size:9px;text-align:left;text-transform:uppercase;}'+
+    '.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:40px;}'+
+    '.sig-box{border-top:1.5px solid #333;padding-top:6px;text-align:center;font-size:10px;color:#555;}'+
+    '@media print{button{display:none;}}</style></head><body>'+
+    '<button onclick="window.print()" style="background:#00838F;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:18px;font-family:Arial;font-weight:700;font-size:12px;">&#128438; Print / Save PDF</button>'+
+
+    '<div class="hdr">'+
+      '<div>'+
+        '<div class="co-name">'+(co.name||'Company Name')+'</div>'+
+        '<div class="co-info">'+(co.address||'')+(co.gstin?'<br>GSTIN: '+co.gstin:'')+'</div>'+
+      '</div>'+
+      '<div style="text-align:right;">'+
+        '<div class="rr-title">COMBINED RESOURCE REQUISITION</div>'+
+        '<div class="rr-no">'+group.rr_number+'</div>'+
+        '<div style="margin-top:6px;"><span class="status-badge">'+(stLbl[group.status]||group.status)+'</span></div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="info-grid">'+
+      '<div class="info-cell"><div class="lbl">Project</div><div class="val">'+projName+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Date of Requisition</div><div class="val">'+fmtD(group.created_at?group.created_at.slice(0,10):'')+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Required By Date</div><div class="val" style="color:#E65100;">'+fmtD(group.required_date)+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Requested By</div><div class="val">'+(group.requested_by||'\u2014')+'</div></div>'+
+      '<div class="info-cell full"><div class="lbl">Subcontractor'+(partyNames.length!==1?'s':'')+'</div><div class="val" style="font-size:12px;">'+partyNames.join(', ')+'</div></div>'+
+    '</div>'+
+
+    '<table><thead><tr><th>#</th><th>Code</th><th>Item</th><th>Party</th><th style="text-align:right;">Qty Required</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+
+    (group.remarks?'<div style="margin-bottom:16px;"><div class="lbl">Purpose / Remarks</div><div style="font-size:11px;color:#333;margin-top:3px;">'+group.remarks+'</div></div>':'')+
+
+    '<div class="sig-grid">'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(group.requested_by||'Requester')+'</div><div>Requested By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Site Engineer / PM</div><div>Verified By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Approved By</div></div>'+
+    '</div>'+
+
+    '</body></html>';
+
+  openPDF(html);
 }
 
 // Open RR form
