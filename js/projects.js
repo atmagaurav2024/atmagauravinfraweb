@@ -2337,7 +2337,7 @@ async function planDelRes(id){
 }
 
 // ════ WORK ALLOTMENT ════════════════════════════════════
-var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[];
+var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[],WA_COMBINED_PLAN_ITEMS=[],WA_COMBINED_RR_GROUPS=[],WA_COMBINED_RR_ITEMS=[];
 var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[],WA_SALES_PAYMENTS=[];
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_SUBTAB='orders'; // allot | allotted | daily | bills | orders
@@ -2425,6 +2425,21 @@ async function execLoadItems(silent){
     STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
+  try{
+    var pg=await sbFetch('combined_plan_groups',{select:'id',filter:'project_id=eq.'+projId});
+    var pgIds=(Array.isArray(pg)?pg:[]).map(function(g){return g.id;});
+    WA_COMBINED_PLAN_ITEMS=pgIds.length?await sbFetch('combined_plan_items',{select:'*',filter:'group_id=in.('+pgIds.join(',')+')'}):[];
+    if(!Array.isArray(WA_COMBINED_PLAN_ITEMS)) WA_COMBINED_PLAN_ITEMS=[];
+
+    var rg=await sbFetch('combined_rr_groups',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'});
+    WA_COMBINED_RR_GROUPS=Array.isArray(rg)?rg:[];
+    var rgIds=WA_COMBINED_RR_GROUPS.map(function(g){return g.id;});
+    WA_COMBINED_RR_ITEMS=rgIds.length?await sbFetch('combined_rr_items',{select:'*',filter:'group_id=in.('+rgIds.join(',')+')'}):[];
+    if(!Array.isArray(WA_COMBINED_RR_ITEMS)) WA_COMBINED_RR_ITEMS=[];
+  }catch(e){
+    WA_COMBINED_PLAN_ITEMS=[]; WA_COMBINED_RR_GROUPS=[]; WA_COMBINED_RR_ITEMS=[];
+    console.warn('combined planning/RR tables not available yet — run the migration', e);
+  }
   if(!silent) execRenderSubTab();
 }
 
@@ -2562,7 +2577,7 @@ function rrRender(){
             (g.status==='pending'
               ? '<button onclick="rrGroupApprove(\''+g.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10003; Approve</button><button onclick="rrGroupReject(\''+g.id+'\')" style="background:#C62828;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#10005; Reject</button>'
               : g.status==='approved'
-                ? '<button onclick="rrGroupAllot(\''+g.id+'\',\''+projId+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128203; Allot Group</button>'
+                ? '<button onclick="rrGroupOpenAllotForm(\''+g.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;">&#128203; Allot Group</button>'
                 : '')+
             '<button onclick="rrGroupDelete(\''+g.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
           '</div>'+
@@ -3048,18 +3063,94 @@ async function rrGroupDelete(groupId){
     await rrLoadItems();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
-async function rrGroupAllot(groupId, projId){
-  var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
+function rrGroupOpenAllotForm(groupId){
+  var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;})||WA_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
   if(!group){ toast('Group not found','error'); return; }
-  var giItems=RR_COMBINED_RR_ITEMS.filter(function(ri){return ri.group_id===groupId;});
+  var giItems=(typeof RR_COMBINED_RR_ITEMS!=='undefined'?RR_COMBINED_RR_ITEMS:[]).concat(typeof WA_COMBINED_RR_ITEMS!=='undefined'?WA_COMBINED_RR_ITEMS:[])
+    .filter(function(ri){return ri.group_id===groupId;});
+  // De-duplicate in case both RR-tab and WA-tab arrays happened to be loaded
+  var seen={}; giItems=giItems.filter(function(ri){ if(seen[ri.id]) return false; seen[ri.id]=true; return true; });
   if(!giItems.length){ toast('Nothing to allot in this group','warning'); return; }
-  if(!confirm('Allot all '+giItems.length+' item'+(giItems.length!==1?'s':'')+' in this combined RR? This will create allotment entries for each.')) return;
+
+  var itemById={};
+  (typeof RR_PLAN_ITEMS!=='undefined'?RR_PLAN_ITEMS:[]).concat(typeof WA_ITEMS!=='undefined'?WA_ITEMS:[]).forEach(function(it){ itemById[it.id]=it; });
+  var partyNames=Array.from(new Set(giItems.map(function(it){return it.party_name;})));
+
+  var rowsHtml=giItems.map(function(ri){
+    var boqItem=itemById[ri.boq_item_id];
+    return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;">'+
+      '<span>'+(boqItem?(boqItem.short_name||boqItem.description):ri.boq_item_id)+' <span style="color:#888;">('+ri.party_name+')</span></span>'+
+      '<span style="font-weight:700;">'+ri.qty+' '+(ri.unit||'')+'</span>'+
+    '</div>';
+  }).join('');
+
+  rrEnsureContainer();
+  document.getElementById('exec-sheet-title').textContent='Allot Combined RR — '+group.rr_number;
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#E0F7FA;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+      '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:8px;">Items in this Combined RR</div>'+
+      '<div style="font-size:12px;font-weight:800;margin-bottom:6px;">'+partyNames.join(', ')+'</div>'+
+      rowsHtml+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
+      '<div><label class="flbl">Start Date</label><input id="rr-grp-allot-start" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+      '<div><label class="flbl">End Date</label><input id="rr-grp-allot-end" class="finp" type="date"></div>'+
+    '</div>'+
+    '<div style="margin-bottom:8px;"><label class="flbl">Scope / Terms</label>'+
+      '<textarea id="rr-grp-allot-scope" class="ftxt" rows="2" placeholder="Common scope for this allotment...">'+(group.remarks||'')+'</textarea>'+
+    '</div>'+
+    '<div><label class="flbl">Document Type (optional)</label>'+
+      '<div style="display:flex;gap:6px;margin-top:4px;">'+
+        '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+          '<input type="radio" name="rr-grp-doc-type" value="wo" style="accent-color:#E65100;">'+
+          '<div style="font-size:10px;font-weight:800;">Work Order</div>'+
+        '</label>'+
+        '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+          '<input type="radio" name="rr-grp-doc-type" value="po" style="accent-color:#1565C0;">'+
+          '<div style="font-size:10px;font-weight:800;">Purchase Order</div>'+
+        '</label>'+
+        '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
+          '<input type="radio" name="rr-grp-doc-type" value="none" checked style="accent-color:#555;">'+
+          '<div style="font-size:10px;font-weight:800;">None</div>'+
+        '</label>'+
+      '</div>'+
+    '</div>';
+
+  var sf=document.getElementById('exec-sheet-foot');
+  sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#E65100;color:white;';
+  sb.innerHTML='&#10003; Save Allotment';
+  sb.onclick=function(){rrGroupAllotConfirm(groupId);};
+  sf.appendChild(cb); sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+async function rrGroupAllotConfirm(groupId){
+  var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;})||WA_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
+  if(!group){ toast('Group not found','error'); return; }
+  var projId=PROJ_MOD_SEL_ID||'';
+  if(!projId){ toast('No project selected','warning'); return; }
+  var giItems=(typeof RR_COMBINED_RR_ITEMS!=='undefined'?RR_COMBINED_RR_ITEMS:[]).concat(typeof WA_COMBINED_RR_ITEMS!=='undefined'?WA_COMBINED_RR_ITEMS:[])
+    .filter(function(ri){return ri.group_id===groupId;});
+  var seen={}; giItems=giItems.filter(function(ri){ if(seen[ri.id]) return false; seen[ri.id]=true; return true; });
+  if(!giItems.length){ toast('Nothing to allot in this group','warning'); return; }
+
+  var startDate=(document.getElementById('rr-grp-allot-start')||{}).value||null;
+  var endDate=(document.getElementById('rr-grp-allot-end')||{}).value||null;
+  var scope=(document.getElementById('rr-grp-allot-scope')||{}).value.trim()||null;
+  var docType=(document.querySelector('input[name="rr-grp-doc-type"]:checked')||{value:'none'}).value;
+
+  // Rate lives on the linked combined_plan_items line, not on the RR item itself
+  var planItemsPool=(typeof RR_COMBINED_PLAN_ITEMS!=='undefined'?RR_COMBINED_PLAN_ITEMS:[]).concat(typeof WA_COMBINED_PLAN_ITEMS!=='undefined'?WA_COMBINED_PLAN_ITEMS:[]);
+  var planItemById={}; planItemsPool.forEach(function(pi){ planItemById[pi.id]=pi; });
 
   var batchId='rr-combined-batch-'+Date.now();
   var today=new Date().toISOString().slice(0,10);
   var ok=0, failed=0;
   for(var i=0;i<giItems.length;i++){
     var ri=giItems[i];
+    var planItem=ri.plan_item_id?planItemById[ri.plan_item_id]:null;
     try{
       var res=await sbInsert('boq_exec_resources',{
         project_id:projId,
@@ -3069,7 +3160,11 @@ async function rrGroupAllot(groupId, projId){
         party_name:ri.party_name,
         qty:ri.qty,
         unit:ri.unit||null,
-        scope:group.remarks||null,
+        rate:planItem?(parseFloat(planItem.rate)||0):0,
+        scope:scope,
+        start_date:startDate,
+        end_date:endDate,
+        doc_type:docType==='none'?null:docType,
         batch_id:batchId,
         combined_rr_group_id:groupId,
         combined_rr_item_id:ri.id
@@ -3080,12 +3175,15 @@ async function rrGroupAllot(groupId, projId){
 
   if(failed){
     toast(ok+' of '+giItems.length+' items allotted, '+failed+' failed — group left approved so you can retry','warning');
+    closeSheet('ov-exec','sh-exec');
     return;
   }
   try{
     await sbUpdate('combined_rr_groups', groupId, {status:'allotted'});
     toast('All '+ok+' items allotted','success');
-    await rrLoadItems();
+    closeSheet('ov-exec','sh-exec');
+    if(typeof rrLoadItems==='function') await rrLoadItems();
+    if(typeof execLoadItems==='function') await execLoadItems();
   }catch(e){ toast('Items allotted but could not mark the group as allotted: '+e.message,'warning'); }
 }
 
@@ -3438,8 +3536,41 @@ function execRender(){
       if(pobtn) execRegenDoc(pobtn.getAttribute('data-po-id'),'po');
     });
   }
+
+  // Combined RR groups approved and awaiting allotment
+  var itemByIdWA={}; WA_ITEMS.forEach(function(it){ itemByIdWA[it.id]=it; });
+  var combinedAllotHtml='';
+  if(WA_COMBINED_RR_GROUPS.length){
+    var cards=WA_COMBINED_RR_GROUPS.map(function(g){
+      var giItems=WA_COMBINED_RR_ITEMS.filter(function(ri){return ri.group_id===g.id;});
+      var alreadyAllotted=WA_ALLOT.filter(function(a){return a.combined_rr_group_id===g.id;});
+      var allottedItemIds={}; alreadyAllotted.forEach(function(a){ if(a.combined_rr_item_id) allottedItemIds[a.combined_rr_item_id]=true; });
+      var remainingItems=giItems.filter(function(ri){return !allottedItemIds[ri.id];});
+      if(!remainingItems.length) return '';
+      var partyNames=Array.from(new Set(giItems.map(function(it){return it.party_name;})));
+      var rows=remainingItems.map(function(ri){
+        var boqItem=itemByIdWA[ri.boq_item_id];
+        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;">'+
+          '<span>'+(boqItem?(boqItem.short_name||boqItem.description):ri.boq_item_id)+'</span>'+
+          '<span style="font-weight:700;">'+ri.qty+' '+(ri.unit||'')+'</span>'+
+        '</div>';
+      }).join('');
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+        '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+partyNames.join(', ')+'</div>'+
+          '<div style="font-size:10px;color:#1565C0;">Combined RR '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
+          '<button onclick="rrGroupOpenAllotForm(\''+g.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Group</button>'+
+        '</div>'+
+        '<div style="padding:8px 14px;">'+rows+'</div>'+
+      '</div>';
+    }).filter(Boolean).join('');
+    if(cards){
+      combinedAllotHtml='<div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Combined RRs Awaiting Allotment</div>'+cards;
+    }
+  }
+
   if(!WA_PLANNED.length){
-    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128230;</div><div style="font-weight:700;margin-top:8px;">No planned resources</div><div style="font-size:12px;margin-top:4px;">Add resources in the Planning tab first</div></div>';
+    el.innerHTML=combinedAllotHtml||'<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128230;</div><div style="font-weight:700;margin-top:8px;">No planned resources</div><div style="font-size:12px;margin-top:4px;">Add resources in the Planning tab first</div></div>';
     return;
   }
 
@@ -3498,7 +3629,7 @@ function execRender(){
 
   var dlBtns='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="execAllotDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="execAllotDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>';
 
-  el.innerHTML=dlBtns+multiBtn+itemsHtml+orphanHtml;
+  el.innerHTML=dlBtns+combinedAllotHtml+multiBtn+itemsHtml+orphanHtml;
 
   function resRow(res,itemUnit,tCol,tLbl){
     var resUnit=res.unit||itemUnit;
