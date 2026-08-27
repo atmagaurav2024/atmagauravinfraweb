@@ -19190,6 +19190,21 @@ var QR_SCAN_STREAM=null, QR_SCAN_RAF=null;
 // cdnjs first, falls back to jsdelivr if that fails, and caches the
 // in-flight promise so repeated scanner opens don't re-fetch.
 var JSQR_LOAD_PROMISE=null;
+var XLSX_LOAD_PROMISE=null;
+function loadXLSXLib(){
+  if(typeof XLSX!=='undefined') return Promise.resolve();
+  if(XLSX_LOAD_PROMISE) return XLSX_LOAD_PROMISE;
+  function loadScript(src){
+    return new Promise(function(resolve,reject){
+      var s=document.createElement('script');
+      s.src=src; s.onload=resolve; s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
+  XLSX_LOAD_PROMISE = loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js')
+    .catch(function(){ return loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); });
+  return XLSX_LOAD_PROMISE;
+}
 function loadJsQR(){
   if(typeof jsQR!=='undefined') return Promise.resolve();
   if(JSQR_LOAD_PROMISE) return JSQR_LOAD_PROMISE;

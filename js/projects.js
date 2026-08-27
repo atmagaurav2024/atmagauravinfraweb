@@ -911,7 +911,7 @@ function boqRender(){
   var el=document.getElementById('boq-content');if(!el)return;
   if(!BOQ_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128203;</div><div style="font-weight:700;margin-top:10px;">No BOQ items yet</div><div style="font-size:12px;margin-top:6px;">Tap + to add</div></div>';return;}
   var total=BOQ_ITEMS.reduce(function(s,i){return s+(parseFloat(i.boq_qty)||0)*(parseFloat(i.rate)||0);},0);
-  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="boqDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="boqDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="boqOpenImport()" style="background:#7B1FA2;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128228; Import Excel</button><button onclick="boqDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="boqDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(total)+'</div></div></div>'+
     BOQ_ITEMS.map(function(item){var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0;var subs=BOQ_SUBITEMS.filter(function(s){return s.boq_item_id===item.id;});
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;color:#1E293B;">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:#5C4A6E;">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR(bq*rate)+'</div><div style="font-size:10px;color:#5C4A6E;">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
@@ -1019,6 +1019,112 @@ function boqDownloadPDF(){
 
   openPDF(html);
 }
+
+// ── BOQ bulk import from Excel/CSV ──────────────────────────
+var BOQ_IMPORT_PARSED = [];
+async function boqOpenImport(){
+  document.getElementById('boq-sheet-title').textContent='Import BOQ from Excel';
+  document.getElementById('boq-sheet-body').innerHTML=
+    '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Upload a .xlsx, .xls or .csv file. First row must be column headers. Recognised columns: <b>Item Code, Description, Short Name, Unit, BOQ Qty, Rate, Remarks</b> (matched by name, any order — case-insensitive). Item Code, Description and BOQ Qty are required for a row to import.</div>'+
+    '<input type="file" id="boq-import-file" accept=".xlsx,.xls,.csv" onchange="boqHandleImportFile(this)" style="display:block;width:100%;padding:10px;border:1.5px dashed var(--border);border-radius:10px;font-size:12px;">'+
+    '<div id="boq-import-preview" style="margin-top:12px;"></div>';
+  document.getElementById('boq-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeBOQSheet()">Cancel</button>';
+  BOQ_IMPORT_PARSED=[];
+  openBOQSheet();
+}
+async function boqHandleImportFile(input){
+  var file=input.files&&input.files[0];
+  if(!file) return;
+  var preview=document.getElementById('boq-import-preview');
+  preview.innerHTML='<div style="padding:10px;color:var(--text3);">Reading file&hellip;</div>';
+  try{
+    await loadXLSXLib();
+    var buf=await file.arrayBuffer();
+    var wb=XLSX.read(buf,{type:'array'});
+    var sheet=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+    boqParseImportRows(rows);
+  }catch(e){
+    preview.innerHTML='<div style="padding:10px;color:#C62828;">Could not read this file: '+e.message+'</div>';
+  }
+}
+function boqFindCol(row,names){
+  var keys=Object.keys(row);
+  for(var i=0;i<names.length;i++){
+    var k=keys.find(function(kk){return kk.trim().toLowerCase()===names[i];});
+    if(k) return k;
+  }
+  return null;
+}
+function boqParseImportRows(rows){
+  var preview=document.getElementById('boq-import-preview');
+  if(!rows.length){preview.innerHTML='<div style="padding:10px;color:#C62828;">No rows found in this file.</div>';return;}
+  var colCode=boqFindCol(rows[0],['item code','code']);
+  var colDesc=boqFindCol(rows[0],['description','item description','desc']);
+  var colShort=boqFindCol(rows[0],['short name','shortname']);
+  var colUnit=boqFindCol(rows[0],['unit','uom']);
+  var colQty=boqFindCol(rows[0],['boq qty','qty','quantity']);
+  var colRate=boqFindCol(rows[0],['rate','rate (\u20b9)']);
+  var colRemarks=boqFindCol(rows[0],['remarks','notes']);
+
+  var valid=[],invalid=0;
+  rows.forEach(function(r){
+    var code=colCode?String(r[colCode]||'').trim():'';
+    var desc=colDesc?String(r[colDesc]||'').trim():'';
+    var qty=colQty?parseFloat(r[colQty]):NaN;
+    if(!code||!desc||!qty){invalid++;return;}
+    valid.push({
+      item_code:code, description:desc,
+      short_name:colShort?(String(r[colShort]||'').trim()||null):null,
+      unit:colUnit?(String(r[colUnit]||'').trim()||'Nos'):'Nos',
+      boq_qty:qty,
+      rate:colRate?(parseFloat(r[colRate])||0):0,
+      remarks:colRemarks?(String(r[colRemarks]||'').trim()||null):null
+    });
+  });
+  BOQ_IMPORT_PARSED=valid;
+
+  if(!colCode||!colDesc||!colQty){
+    preview.innerHTML='<div style="padding:10px 12px;background:#FFEBEE;border-radius:8px;color:#7A1F1F;font-size:12px;">Could not find required columns (Item Code, Description, BOQ Qty) in the first row. Check the file has a header row with these column names.</div>';
+    return;
+  }
+
+  var rowsHtml=valid.slice(0,8).map(function(v){
+    return '<tr><td style="padding:5px 8px;font-size:11px;">'+v.item_code+'</td><td style="padding:5px 8px;font-size:11px;">'+v.description+'</td><td style="padding:5px 8px;font-size:11px;text-align:right;">'+v.boq_qty+' '+v.unit+'</td><td style="padding:5px 8px;font-size:11px;text-align:right;">\u20b9'+v.rate+'</td></tr>';
+  }).join('');
+  preview.innerHTML=
+    '<div style="padding:10px 12px;background:'+(invalid?'#FFF3E0':'#E8F5E9')+';border-radius:8px;margin-bottom:10px;font-size:12px;color:'+(invalid?'#8A5A00':'#1B5E20')+';">'+
+      '<b>'+valid.length+' item'+(valid.length===1?'':'s')+' ready to import</b>'+(invalid?' &mdash; '+invalid+' row'+(invalid===1?'':'s')+' skipped (missing code, description or qty)':'')+
+    '</div>'+
+    (valid.length?
+      '<div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">'+
+        '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;font-size:9px;text-align:left;color:var(--text3);">CODE</th><th style="padding:5px 8px;font-size:9px;text-align:left;color:var(--text3);">DESCRIPTION</th><th style="padding:5px 8px;font-size:9px;text-align:right;color:var(--text3);">QTY</th><th style="padding:5px 8px;font-size:9px;text-align:right;color:var(--text3);">RATE</th></tr></thead><tbody>'+
+        rowsHtml+
+        (valid.length>8?'<tr><td colspan="4" style="padding:6px 8px;font-size:10px;color:var(--text3);text-align:center;">+'+(valid.length-8)+' more&hellip;</td></tr>':'')+
+        '</tbody></table>'+
+      '</div>':'');
+
+  document.getElementById('boq-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeBOQSheet()">Cancel</button>'+
+    (valid.length?'<button class="btn" style="background:#7B1FA2;color:white;" onclick="boqConfirmImport()">&#10003; Import '+valid.length+' Item'+(valid.length===1?'':'s')+'</button>':'');
+}
+async function boqConfirmImport(){
+  if(!BOQ_IMPORT_PARSED.length) return;
+  var projId=(document.getElementById('boq-proj-sel')||{}).value||'';
+  if(!projId){toast('Select a project first','warning');return;}
+  var rows=BOQ_IMPORT_PARSED.map(function(v){return Object.assign({project_id:projId},v);});
+  try{
+    toast('Importing '+rows.length+' items...','info');
+    var res=await sbInsert('boq_items',rows);
+    if(Array.isArray(res)) BOQ_ITEMS=BOQ_ITEMS.concat(res);
+    toast(rows.length+' BOQ items imported!','success');
+    closeBOQSheet();
+    boqRender();
+  }catch(e){
+    toast('Import failed: '+e.message,'error');
+  }
+}
+
 async function boqOpenAddItem(editItem){
   var v=editItem||{};var uomOpts='';
   // Built from the registry so the list matches everywhere else and carries
