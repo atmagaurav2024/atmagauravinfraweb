@@ -2505,6 +2505,7 @@ function rrRender(){
       '<div style="font-size:13px;font-weight:800;color:#00838F;">&#128203; Resource Requisitions</div>'+
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
         '<div style="font-size:11px;color:var(--text3);font-weight:700;">'+projName+'</div>'+
+        '<button onclick="rrCombinedPrompt()" style="background:#00838F;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Combined RR</button>'+
         '<button onclick="rrDownloadAllExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
         '<button onclick="rrDownloadAllPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
       '</div>'+
@@ -2616,6 +2617,151 @@ function rrDownloadAllPDF(){
     '</body></html>';
 
   openPDF(html);
+}
+
+// ── Combined RR: raise requisitions for multiple planned resources
+// at once instead of one item at a time. ──────────────────────────
+function rrCombinedPrompt(){
+  var projId=PROJ_MOD_SEL_ID||'';
+  if(!projId){toast('Select a project first','warning');return;}
+
+  var eligible=[];
+  RR_PLAN_ITEMS.forEach(function(item){
+    var iRes=RR_PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
+    iRes.forEach(function(res){
+      var raised=RR_ITEMS.filter(function(r){return r.plan_res_id===res.id;})
+        .reduce(function(s,r){return s+(parseFloat(r.qty)||0);},0);
+      var planQty=parseFloat(res.qty)||0;
+      var remaining=Math.max(0,planQty-raised);
+      if(remaining>0.0001) eligible.push({item:item, res:res, remaining:remaining});
+    });
+  });
+
+  if(!eligible.length){ toast('No balance left to raise — every planned resource is already fully requisitioned','warning'); return; }
+
+  var byParty={}; var partyOrder=[];
+  eligible.forEach(function(x,idx){ x._idx=idx; var p=x.res.party_name||'—'; if(!byParty[p]){byParty[p]=[]; partyOrder.push(p);} byParty[p].push(x); });
+
+  var listHtml=partyOrder.map(function(party){
+    var rows=byParty[party].map(function(x){
+      var idx=x._idx, maxQty=x.remaining;
+      return '<tr><td style="padding:3px 6px;"><input type="checkbox" class="rr-cmb-item-chk" data-idx="'+idx+'" data-party="'+esc(party)+'" checked style="width:14px;height:14px;accent-color:#00838F;"></td>'+
+        '<td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
+        '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
+        '<td style="padding:3px 6px;text-align:right;">'+
+          '<input type="number" class="rr-cmb-item-qty" data-idx="'+idx+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid #ddd;border-radius:4px;">'+
+          ' <span style="font-size:9.5px;color:var(--text3);">'+(x.res.unit||'')+' <span style="color:#aaa;">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
+        '</td></tr>';
+    }).join('');
+    var groupHeader='<tr><td colspan="4" style="padding:5px 6px;background:#E0F7FA;font-size:10.5px;font-weight:800;color:#00838F;">'+
+      esc(party)+' <span style="font-weight:600;color:#4A9AA5;">('+byParty[party].length+' item'+(byParty[party].length!==1?'s':'')+')</span>'+
+      ' <span onclick="rrCombinedToggleParty(this,\''+esc(party)+'\')" style="float:right;font-weight:700;color:#00838F;cursor:pointer;text-decoration:underline;">select only these</span>'+
+      '</td></tr>';
+    return groupHeader+rows;
+  }).join('');
+
+  var ov=document.getElementById('rr-combined-ov');
+  if(ov) ov.remove();
+  var d=document.createElement('div');
+  d.id='rr-combined-ov';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
+    '<div style="font-size:15px;font-weight:900;color:#00838F;margin-bottom:6px;">&#128203; Combined RR</div>'+
+    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">Raise requisitions for <b>'+eligible.length+' planned resource'+(eligible.length!==1?'s':'')+'</b> at once. Quantity defaults to the remaining unraised balance and can be adjusted per item below.</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
+      '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
+      '<span onclick="rrCombinedToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#00838F;cursor:pointer;">Deselect all</span>'+
+    '</div>'+
+    '<div style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to raise</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+    '</div>'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Required Date *</label>'+
+    '<input type="date" id="rr-cmb-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Purpose / Remarks</label>'+
+    '<textarea id="rr-cmb-remarks" rows="2" placeholder="Applies to all requisitions raised" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;"></textarea>'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Requested By</label>'+
+    '<input type="text" id="rr-cmb-by" value="'+(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||''):'')+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
+    '<div id="rr-cmb-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;color:#C62828;"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button onclick="document.getElementById(\'rr-combined-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button id="rr-cmb-go" onclick="rrCombinedConfirm()" style="background:#00838F;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Raise</button>'+
+    '</div></div>';
+  document.body.appendChild(d);
+  window._rrCombinedEligible=eligible;
+}
+function rrCombinedToggleAll(el){
+  var toAll=el.getAttribute('data-state')!=='all';
+  document.querySelectorAll('.rr-cmb-item-chk').forEach(function(chk){ chk.checked=toAll; });
+  el.setAttribute('data-state', toAll?'all':'none');
+  el.textContent=toAll?'Deselect all':'Select all';
+}
+function rrCombinedToggleParty(el, party){
+  document.querySelectorAll('.rr-cmb-item-chk').forEach(function(chk){
+    chk.checked = (chk.getAttribute('data-party')===party);
+  });
+}
+async function rrCombinedConfirm(){
+  var msg=document.getElementById('rr-cmb-msg');
+  var go=document.getElementById('rr-cmb-go');
+  var setMsg=function(t){ if(msg) msg.textContent=t; };
+  var date=(document.getElementById('rr-cmb-date')||{}).value||'';
+  if(!date){ setMsg('Required date is needed'); return; }
+  var remarks=(document.getElementById('rr-cmb-remarks')||{}).value||'';
+  var reqBy=(document.getElementById('rr-cmb-by')||{}).value||'';
+  var projId=PROJ_MOD_SEL_ID||'';
+  if(!projId){ setMsg('No project selected'); return; }
+
+  var allEligible=window._rrCombinedEligible||[];
+  var checkedIdx={};
+  document.querySelectorAll('.rr-cmb-item-chk').forEach(function(chk){ if(chk.checked) checkedIdx[chk.getAttribute('data-idx')]=true; });
+  var qtyByIdx={};
+  var qtyError=null;
+  document.querySelectorAll('.rr-cmb-item-qty').forEach(function(inp){
+    var idx=inp.getAttribute('data-idx');
+    if(!checkedIdx[idx]) return;
+    var q=parseFloat(inp.value);
+    var max=parseFloat(inp.getAttribute('data-max'))||0;
+    if(!q||q<=0){ qtyError='Enter a valid quantity for every selected item'; }
+    else if(q>max+0.0001){ qtyError='Quantity for '+(allEligible[idx]?allEligible[idx].item.item_code:'an item')+' can\'t exceed its available '+max; }
+    qtyByIdx[idx]=q;
+  });
+  if(qtyError){ setMsg(qtyError); return; }
+  var selected=allEligible.filter(function(x,idx){ return checkedIdx[idx]; }).map(function(x){
+    var idx=allEligible.indexOf(x);
+    return Object.assign({}, x, {raiseQty: qtyByIdx[idx]});
+  });
+  if(!selected.length){ setMsg('Select at least one item'); return; }
+
+  if(go){ go.disabled=true; go.style.opacity='.6'; }
+  var ok=0, failed=0;
+  for(var i=0;i<selected.length;i++){
+    var x=selected[i];
+    setMsg('Raising… '+(i+1)+' of '+selected.length);
+    var rrNo='RR/'+projId.slice(-4).toUpperCase()+'/'+new Date().getFullYear()+'/'+
+      String((RR_ITEMS.length+1)).padStart(4,'0');
+    try{
+      var res=await sbInsert('resource_requisitions',{
+        project_id:projId,
+        boq_item_id:x.item.id,
+        plan_res_id:x.res.id,
+        party_name:x.res.party_name,
+        party_type:x.res.exec_type,
+        qty:x.raiseQty,
+        unit:x.res.unit||null,
+        required_date:date,
+        remarks:remarks||null,
+        requested_by:reqBy||null,
+        rr_number:rrNo,
+        status:'pending'
+      });
+      if(res&&res[0]){ RR_ITEMS.push(res[0]); ok++; } else failed++;
+    }catch(e){ console.error('combined RR failed for '+x.item.item_code, e); failed++; }
+  }
+
+  var ov=document.getElementById('rr-combined-ov'); if(ov) ov.remove();
+  rrRender();
+  if(failed) toast(ok+' RR'+(ok!==1?'s':'')+' raised, '+failed+' failed — see console','warning');
+  else toast(ok+' RR'+(ok!==1?'s':'')+' raised','success');
 }
 
 // Open RR form
