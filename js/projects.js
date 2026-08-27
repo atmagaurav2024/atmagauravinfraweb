@@ -1482,7 +1482,7 @@ async function planLoadItems(){
 function planRender(){
   var el=document.getElementById('plan-content');if(!el)return;
   if(!PLAN_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items found</div>';return;}
-  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="planDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="planDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
+  el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="planTurnkeyPrompt()" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128737; Plan All (Turnkey)</button><button onclick="planDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="planDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
     PLAN_ITEMS.map(function(item){
     var iSubs=PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
     var iRes=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
@@ -1646,6 +1646,115 @@ function planDownloadPDF(){
     '</body></html>';
 
   openPDF(html);
+}
+
+async function planTurnkeyPrompt(){
+  var projId=(document.getElementById('plan-proj-sel')||{}).value||'';
+  if(!projId){toast('Select a project first','warning');return;}
+  toast('Checking items…','info');
+  var jmRows=[];
+  try{ jmRows=await sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'jm_number.asc'}); }catch(e){}
+  if(!Array.isArray(jmRows)) jmRows=[];
+
+  var eligible=PLAN_ITEMS.map(function(item){
+    var iJMs=jmRows.filter(function(j){return j.boq_item_id===item.id;});
+    var jmTotal=iJMs.reduce(function(s,j){return s+(parseFloat(j.jm_qty)||0);},0);
+    return {item:item, jms:iJMs, jmTotal:jmTotal};
+  }).filter(function(x){return x.jmTotal>0.0001;});
+
+  if(!eligible.length){ toast('No items have any JM measurements yet — raise JMs first','warning'); return; }
+
+  var listHtml=eligible.slice(0,50).map(function(x){
+    return '<tr><td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
+      '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
+      '<td style="padding:3px 6px;text-align:right;font-size:11px;font-weight:700;">'+String(x.jmTotal.toFixed(3)).replace(/\.?0+$/,'')+' '+(x.item.unit||'')+'</td></tr>';
+  }).join('');
+
+  var ov=document.getElementById('plan-turnkey-ov');
+  if(ov) ov.remove();
+  var d=document.createElement('div');
+  d.id='plan-turnkey-ov';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
+    '<div style="font-size:15px;font-weight:900;color:#1565C0;margin-bottom:6px;">&#128737; Plan All as Turnkey</div>'+
+    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will assign the <b>full measured (JM) quantity</b> of <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> to one subcontractor, at each item\'s own BOQ rate by default. Items with no JM yet are skipped — raise those separately.</div>'+
+    '<div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to assign</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+      (eligible.length>50?'<div style="padding:6px;font-size:10px;color:#888;text-align:center;">…and '+(eligible.length-50)+' more</div>':'')+
+    '</div>'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Subcontractor / Party Name *</label>'+
+    '<input type="text" id="plan-tk-name" placeholder="e.g. ABC Construction Co." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Resource Category (optional)</label>'+
+    '<select id="plan-tk-cat" class="fsel" style="margin-bottom:8px;">'+buildResourceCatOpts('')+'</select>'+
+    '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#333;margin-bottom:10px;cursor:pointer;">'+
+      '<input type="checkbox" id="plan-tk-custrate" onchange="document.getElementById(\'plan-tk-rate-row\').style.display=this.checked?\'block\':\'none\';"> Use one rate for all items instead of each item\'s own BOQ rate'+
+    '</label>'+
+    '<div id="plan-tk-rate-row" style="display:none;margin-bottom:8px;">'+
+      '<label class="flbl">Rate (\u20b9) for all items</label>'+
+      '<input type="number" step="0.01" id="plan-tk-rate" class="finp" placeholder="0">'+
+    '</div>'+
+    '<label style="font-size:11px;font-weight:800;color:#C62828;display:block;margin-bottom:4px;">Re-enter your login password to confirm *</label>'+
+    '<input type="password" id="plan-tk-pass" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
+    '<div id="plan-tk-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+      '<button onclick="document.getElementById(\'plan-turnkey-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button id="plan-tk-go" onclick="planTurnkeyConfirm()" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Assign</button>'+
+    '</div></div>';
+  document.body.appendChild(d);
+  window._planTurnkeyEligible=eligible;
+}
+async function planTurnkeyConfirm(){
+  var msg=document.getElementById('plan-tk-msg');
+  var go=document.getElementById('plan-tk-go');
+  var setMsg=function(t,c){ if(msg){msg.textContent=t; msg.style.color=c||'#C62828';} };
+  var name=(document.getElementById('plan-tk-name')||{}).value.trim()||'';
+  if(!name){ setMsg('Subcontractor name is required'); return; }
+  var pass=(document.getElementById('plan-tk-pass')||{}).value||'';
+  if(!pass){ setMsg('Enter your password to confirm'); return; }
+  var useCustRate=(document.getElementById('plan-tk-custrate')||{}).checked;
+  var custRate=useCustRate?(parseFloat((document.getElementById('plan-tk-rate')||{}).value)||0):null;
+  if(useCustRate&&!custRate){ setMsg('Enter a rate for all items, or uncheck the custom rate option'); return; }
+  var cat=(document.getElementById('plan-tk-cat')||{value:''}).value||null;
+
+  var projId=(document.getElementById('plan-proj-sel')||{}).value||'';
+  if(!projId){ setMsg('No project selected'); return; }
+
+  setMsg('Verifying password…','#1565C0');
+  if(go){ go.disabled=true; go.style.opacity='.6'; }
+  try{
+    var ph=(typeof currentUser!=='undefined'&&currentUser&&currentUser.phone)?currentUser.phone:'';
+    var slug=(typeof currentUser!=='undefined'&&currentUser&&currentUser.companySlug)?currentUser.companySlug:'';
+    var vr=await authSignIn(ph, pass, slug);
+    if(!vr||!vr.access_token){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
+  }catch(e){ setMsg('Password is incorrect'); if(go){go.disabled=false;go.style.opacity='1';} return; }
+
+  var eligible=window._planTurnkeyEligible||[];
+  var today=new Date().toISOString().slice(0,10);
+  var ok=0, failed=0;
+  for(var i=0;i<eligible.length;i++){
+    var x=eligible[i];
+    setMsg('Assigning… '+(i+1)+' of '+eligible.length,'#1565C0');
+    var rate=useCustRate?custRate:(parseFloat(x.item.rate)||0);
+    var jmLinks=x.jms.map(function(j){
+      return {jm_id:j.id, plan_qty:parseFloat(j.jm_qty)||0, jm_qty:parseFloat(j.jm_qty)||0, jm_number:j.jm_number};
+    });
+    try{
+      var res=await sbInsert('boq_exec_resources',{
+        project_id:projId, boq_item_id:x.item.id, boq_subitem_id:null,
+        jm_id:jmLinks.length?jmLinks[0].jm_id:null,
+        jm_links:jmLinks.length?JSON.stringify(jmLinks):null,
+        date:today, exec_type:'planned',
+        party_name:name, qty:x.jmTotal, unit:x.item.unit, rate:rate,
+        resource_category:cat
+      });
+      if(res&&res[0]){ PLAN_RES.push(res[0]); ok++; } else failed++;
+    }catch(e){ console.error('turnkey plan failed for '+x.item.item_code, e); failed++; }
+  }
+
+  var ov=document.getElementById('plan-turnkey-ov'); if(ov) ov.remove();
+  planRender();
+  if(failed) toast(ok+' item'+(ok!==1?'s':'')+' assigned to '+name+', '+failed+' failed — see console','warning');
+  else toast('All '+ok+' item'+(ok!==1?'s':'')+' assigned to '+name+' as turnkey','success');
 }
 function planAddSub(itemId){document.getElementById('plan-sheet-title').textContent='Add Work Activity';document.getElementById('plan-sheet-body').innerHTML='<label class="flbl">Activity Name *</label><input id="ps-name" class="finp" placeholder="e.g. Bar Bending, Shuttering...">';document.getElementById('plan-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-plan\',\'sh-plan\')">Cancel</button><button class="btn" style="background:#1565C0;color:white;" onclick="planSaveSub(\''+itemId+'\')">+ Add</button>';openSheet('ov-plan','sh-plan');}
 async function planSaveSub(itemId){var name=(document.getElementById('ps-name')||{value:''}).value.trim();if(!name){toast('Name required','warning');return;}var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var sortOrder=PLAN_SUBS.filter(function(s){return s.boq_item_id===itemId;}).length+1;try{var res=await sbInsert('boq_subitems',{project_id:projId,boq_item_id:itemId,name:name,sort_order:sortOrder});if(res&&res[0])PLAN_SUBS.push(res[0]);toast(name+' added','success');closeSheet('ov-plan','sh-plan');planRender();}catch(e){toast('Error: '+e.message,'error');}}
