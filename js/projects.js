@@ -12289,6 +12289,13 @@ function scRender(){
       var remainingQty=Math.max(0,(parseFloat(scope.scope_qty)||0)-completedQty);
       var pctDone=scope.scope_qty>0?Math.min(100,(completedQty/scope.scope_qty*100)):0;
 
+      var historyRows=progress.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).map(function(p){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border);font-size:10.5px;">'+
+          '<div><b>'+fmtD(p.date)+'</b> \u2014 '+p.completed_qty+' '+(scope.scope_unit||'')+' \u00b7 '+fmtINR(p.amount)+(p.remarks?' \u2014 '+p.remarks:'')+'</div>'+
+          '<button onclick="scDeleteProgress(\''+p.id+'\',\''+scope.id+'\')" style="background:none;border:none;color:#C62828;font-size:12px;cursor:pointer;">&#215;</button>'+
+        '</div>';
+      }).join('');
+
       return '<div style="background:var(--bg);border-radius:12px;padding:12px;margin-top:8px;border:1px solid var(--border);">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'+
           '<div style="flex:1;">'+
@@ -12303,9 +12310,12 @@ function scRender(){
           '<div style="background:'+(pctDone>=100?'#2E7D32':'#1565C0')+';height:100%;width:'+pctDone.toFixed(1)+'%;"></div>'+
         '</div>'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'+
-          '<div style="font-size:10.5px;color:var(--text3);">'+completedQty.toFixed(3).replace(/\.?0+$/,'')+' / '+scope.scope_qty+' '+(scope.scope_unit||'')+' done \u00b7 '+fmtINR(completedAmt)+' billed</div>'+
+          '<div style="font-size:10.5px;color:var(--text3);">'+completedQty.toFixed(3).replace(/\.?0+$/,'')+' / '+scope.scope_qty+' '+(scope.scope_unit||'')+' done \u00b7 '+fmtINR(completedAmt)+' billed'+
+            (progress.length?' \u00b7 <span onclick="scToggleHistory(\''+scope.id+'\')" style="color:#1565C0;font-weight:700;cursor:pointer;text-decoration:underline;">History ('+progress.length+')</span>':'')+
+          '</div>'+
           (remainingQty>0.0001?'<button onclick="scOpenProgress(\''+scope.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">+ Log Progress</button>':'<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:5px;font-weight:700;">Complete</span>')+
         '</div>'+
+        (historyRows?'<div id="sc-history-'+scope.id+'" style="display:none;margin-top:6px;">'+historyRows+'</div>':'')+
       '</div>';
     }).join('');
 
@@ -12313,7 +12323,10 @@ function scRender(){
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
         '<div><div style="font-size:15px;font-weight:900;">'+sub.party_name+'</div>'+
         '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Subcontract Value: '+fmtINR(sub.subcontract_value)+'</div></div>'+
-        '<button onclick="scOpenAddScope(\''+sub.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Scope</button>'+
+        '<div style="display:flex;gap:6px;align-items:center;">'+
+          '<button onclick="scOpenAddScope(\''+sub.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Scope</button>'+
+          '<button onclick="scDeleteSubcontract(\''+sub.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;padding:4px;">&#215;</button>'+
+        '</div>'+
       '</div>'+
       (scopes.length?'<div style="font-size:10px;font-weight:700;margin-top:8px;color:'+(pctOk?'var(--text3)':'#C62828')+';">'+pctTotal.toFixed(1)+'% of value allocated across scopes'+(pctOk?'':' — exceeds 100%!')+'</div>':'')+
       scopeCards+
@@ -12449,6 +12462,23 @@ async function scDeleteScope(id){
   if(!confirm('Delete this scope? This also removes its progress/billing history.'))return;
   try{
     await sbDelete('subcontract_scopes', id);
+    await scLoadItems();
+    toast('Deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+function scToggleHistory(scopeId){
+  var el=document.getElementById('sc-history-'+scopeId);
+  if(el) el.style.display=(el.style.display==='none'?'block':'none');
+}
+async function scDeleteProgress(progressId, scopeId){
+  var p=SC_PROGRESS.find(function(x){return x.id===progressId;});
+  if(p&&p.work_bill_id){
+    if(!confirm('This progress entry created a bill in Bills & Payments. Deleting it here will NOT remove that bill — delete it there too if needed.\nDelete this progress entry?')) return;
+  } else {
+    if(!confirm('Delete this progress entry?')) return;
+  }
+  try{
+    await sbDelete('subcontract_scope_progress', progressId);
     await scLoadItems();
     toast('Deleted','success');
   }catch(e){toast('Error: '+e.message,'error');}
