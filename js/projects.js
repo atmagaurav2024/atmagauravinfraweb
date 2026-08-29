@@ -54,7 +54,7 @@ var PROJ_MOD_SEL_ID = '';           // selected project id
 
 var PMT_GROUPS = {
   preconstruction: ['boq','schh','schb','jm','planning'],
-  construction:    ['rr','execution','allotted','daily','executedwork','grn','store']
+  construction:    ['rr','execution','allotted','daily','executedwork','grn','store','subcontract']
 };
 
 // ── Project selector (hidden, kept for compat) ────────────
@@ -171,7 +171,7 @@ function projModRenderNav(){
   var hasProjId=!!PROJ_MOD_SEL_ID;
   var onProjects=PROJ_MOD_TAB==='projects';
 
-  var subLabels={boq:'BOQ',schh:'Schedule H',schb:'Schedule B',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',executedwork:'Executed Work',grn:'GRN',store:'Store'};
+  var subLabels={boq:'BOQ',schh:'Schedule H',schb:'Schedule B',jm:'JM',planning:'Planning',rr:'RR',execution:'Work Allotment',allotted:'Allotted',daily:'Daily Progress',executedwork:'Executed Work',grn:'GRN',store:'Store',subcontract:'Subcontract Scope'};
   var activeGroup='';
   if(PMT_GROUPS.preconstruction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='preconstruction';
   else if(PMT_GROUPS.construction.indexOf(PROJ_MOD_TAB)>-1) activeGroup='construction';
@@ -311,6 +311,7 @@ function projModLoadTab(){
     executedwork: {cont:'exec-content', sel:'exec-proj-sel', fn: function(){ WA_SUBTAB='executedwork'; execSwitchTab(); }},
     grn:       {cont:'grn-content',   sel:'grn-proj-sel',   fn: function(){ grnLoadItems(); }},
     store:     {cont:'store-content', sel:'store-proj-sel', fn: function(){ storeLoadItems(); }},
+    subcontract: {cont:'sc-content',  sel:'sc-proj-sel',    fn: function(){ scLoadItems(); }},
     bills:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills';    execSwitchTab(); }},
     sales:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='sales';    execSwitchTab(); }},
     otherexp:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='otherexp'; execSwitchTab(); }},
@@ -12222,4 +12223,322 @@ function execPrintOrderCombined(docType, docNum){
   });
   if(docType==='wo') generateCombinedDoc(allots,'WORK ORDER','#E65100','#FFF3E0');
   else generateCombinedDoc(allots,'PURCHASE ORDER','#1565C0','#E3F2FD');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SUBCONTRACT SCOPE — mirrors the Schedule B (scope+qty/unit) +
+// Schedule H (% allocation) pattern used for the main contract, but
+// scoped to an individual subcontract's own value. A scope combines
+// multiple BOQ items under one named scope of work; logging progress
+// against it (e.g. "1 km completed") derives a rate from the scope's
+// %/qty and creates a work_bills entry directly, feeding into the
+// existing Bills & Payments screen.
+// ═══════════════════════════════════════════════════════════════════
+var SC_SUBCONTRACTS=[], SC_SCOPES=[], SC_SCOPE_ITEMS=[], SC_PROGRESS=[], SC_BOQ_ITEMS=[];
+
+async function scLoadItems(){
+  var projId=PROJ_MOD_SEL_ID||'';
+  var el=document.getElementById('sc-content');
+  if(!projId){ if(el)el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">Select a project</div>'; return; }
+  if(el) el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">&#9203; Loading...</div>';
+  try{
+    var subs=await sbFetch('subcontracts',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'});
+    SC_SUBCONTRACTS=Array.isArray(subs)?subs:[];
+    var subIds=SC_SUBCONTRACTS.map(function(s){return s.id;});
+    SC_SCOPES=subIds.length?await sbFetch('subcontract_scopes',{select:'*',filter:'subcontract_id=in.('+subIds.join(',')+')',order:'created_at.asc'}):[];
+    if(!Array.isArray(SC_SCOPES)) SC_SCOPES=[];
+    var scopeIds=SC_SCOPES.map(function(s){return s.id;});
+    SC_SCOPE_ITEMS=scopeIds.length?await sbFetch('subcontract_scope_items',{select:'*',filter:'scope_id=in.('+scopeIds.join(',')+')'}):[];
+    if(!Array.isArray(SC_SCOPE_ITEMS)) SC_SCOPE_ITEMS=[];
+    SC_PROGRESS=scopeIds.length?await sbFetch('subcontract_scope_progress',{select:'*',filter:'scope_id=in.('+scopeIds.join(',')+')',order:'date.desc'}):[];
+    if(!Array.isArray(SC_PROGRESS)) SC_PROGRESS=[];
+    SC_BOQ_ITEMS=sortByItemCode(await sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'})||[]);
+  }catch(e){
+    SC_SUBCONTRACTS=[]; SC_SCOPES=[]; SC_SCOPE_ITEMS=[]; SC_PROGRESS=[]; SC_BOQ_ITEMS=[];
+    console.warn('subcontract scope tables not available yet — run the migration', e);
+  }
+  scRender();
+}
+
+function scRender(){
+  var el=document.getElementById('sc-content'); if(!el) return;
+  var itemById={}; SC_BOQ_ITEMS.forEach(function(it){ itemById[it.id]=it; });
+
+  var toolbar='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;">'+
+    '<button onclick="scOpenAddSubcontract()" style="background:#5D4037;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:11.5px;font-weight:800;cursor:pointer;">&#128736; New Subcontract</button>'+
+  '</div>';
+
+  if(!SC_SUBCONTRACTS.length){
+    el.innerHTML=toolbar+'<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128736;</div><div style="font-weight:700;margin-top:10px;">No subcontracts yet</div><div style="font-size:12px;margin-top:6px;">Create one, then define scopes of work with their own qty/unit and % of the subcontract value</div></div>';
+    return;
+  }
+
+  var cards=SC_SUBCONTRACTS.map(function(sub){
+    var scopes=SC_SCOPES.filter(function(s){return s.subcontract_id===sub.id;});
+    var pctTotal=scopes.reduce(function(s,sc){return s+(parseFloat(sc.percentage)||0);},0);
+    var pctOk=pctTotal<=100.0001;
+
+    var scopeCards=scopes.map(function(scope){
+      var sItems=SC_SCOPE_ITEMS.filter(function(si){return si.scope_id===scope.id;});
+      var itemNames=sItems.map(function(si){var bi=itemById[si.boq_item_id]; return bi?(bi.short_name||bi.description):si.boq_item_id;});
+      var scopeValue=(parseFloat(scope.percentage)||0)/100*(parseFloat(sub.subcontract_value)||0);
+      var ratePerUnit=(parseFloat(scope.scope_qty)||0)>0?scopeValue/parseFloat(scope.scope_qty):0;
+      var progress=SC_PROGRESS.filter(function(p){return p.scope_id===scope.id;});
+      var completedQty=progress.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+      var completedAmt=progress.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+      var remainingQty=Math.max(0,(parseFloat(scope.scope_qty)||0)-completedQty);
+      var pctDone=scope.scope_qty>0?Math.min(100,(completedQty/scope.scope_qty*100)):0;
+
+      return '<div style="background:var(--bg);border-radius:12px;padding:12px;margin-top:8px;border:1px solid var(--border);">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'+
+          '<div style="flex:1;">'+
+            '<div style="font-size:13px;font-weight:800;">'+scope.scope_name+'</div>'+
+            '<div style="font-size:10.5px;color:var(--text3);margin-top:2px;">'+scope.scope_qty+' '+(scope.scope_unit||'')+' \u00b7 '+scope.percentage+'% of subcontract value \u00b7 '+fmtINR(scopeValue)+'</div>'+
+            '<div style="font-size:10.5px;color:#1565C0;font-weight:700;margin-top:2px;">Rate: '+fmtINR(ratePerUnit)+' / '+(scope.scope_unit||'unit')+'</div>'+
+            (itemNames.length?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">Items: '+itemNames.join(', ')+'</div>':'')+
+          '</div>'+
+          '<button onclick="scDeleteScope(\''+scope.id+'\')" style="background:none;border:none;color:#C62828;font-size:14px;cursor:pointer;">&#215;</button>'+
+        '</div>'+
+        '<div style="background:var(--card-bg);border-radius:8px;height:8px;margin-top:10px;overflow:hidden;">'+
+          '<div style="background:'+(pctDone>=100?'#2E7D32':'#1565C0')+';height:100%;width:'+pctDone.toFixed(1)+'%;"></div>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'+
+          '<div style="font-size:10.5px;color:var(--text3);">'+completedQty.toFixed(3).replace(/\.?0+$/,'')+' / '+scope.scope_qty+' '+(scope.scope_unit||'')+' done \u00b7 '+fmtINR(completedAmt)+' billed</div>'+
+          (remainingQty>0.0001?'<button onclick="scOpenProgress(\''+scope.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">+ Log Progress</button>':'<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:5px;font-weight:700;">Complete</span>')+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    return '<div style="background:var(--card-bg);border-radius:16px;border:1px solid var(--border);margin-bottom:14px;padding:14px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
+        '<div><div style="font-size:15px;font-weight:900;">'+sub.party_name+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Subcontract Value: '+fmtINR(sub.subcontract_value)+'</div></div>'+
+        '<button onclick="scOpenAddScope(\''+sub.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Scope</button>'+
+      '</div>'+
+      (scopes.length?'<div style="font-size:10px;font-weight:700;margin-top:8px;color:'+(pctOk?'var(--text3)':'#C62828')+';">'+pctTotal.toFixed(1)+'% of value allocated across scopes'+(pctOk?'':' — exceeds 100%!')+'</div>':'')+
+      scopeCards+
+      (!scopes.length?'<div style="text-align:center;padding:16px;color:var(--text3);font-size:11.5px;">No scopes yet — tap + Scope to combine BOQ items into a scope of work</div>':'')+
+    '</div>';
+  }).join('');
+
+  el.innerHTML=toolbar+cards;
+}
+
+function openScSheet(){openSheet('ov-sc','sh-sc');}
+function closeScSheet(){closeSheet('ov-sc','sh-sc');}
+
+function scOpenAddSubcontract(){
+  document.getElementById('sc-sheet-title').textContent='New Subcontract';
+  document.getElementById('sc-sheet-body').innerHTML=
+    '<label class="flbl">Party Name *</label><input id="sc-party-name" class="finp" placeholder="e.g. ABC Construction Co.">'+
+    '<label class="flbl">Subcontract Value (\u20b9) *</label><input id="sc-value" class="finp" type="number" step="0.01" placeholder="0">'+
+    '<label class="flbl">Notes</label><textarea id="sc-notes" class="ftxt" rows="2" placeholder="Optional"></textarea>';
+  document.getElementById('sc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeScSheet()">Cancel</button>'+
+    '<button class="btn" style="background:#5D4037;color:white;" onclick="scSaveSubcontract()">&#10003; Create</button>';
+  openScSheet();
+}
+async function scSaveSubcontract(){
+  var name=gv('sc-party-name'), value=parseFloat(gv('sc-value'));
+  if(!name){toast('Enter a party name','warning');return;}
+  if(isNaN(value)||value<=0){toast('Enter a valid subcontract value','warning');return;}
+  var projId=PROJ_MOD_SEL_ID||'';
+  if(!projId){toast('No project selected','warning');return;}
+  try{
+    toast('Saving...','info');
+    await sbInsert('subcontracts',{
+      project_id:projId, party_name:name, subcontract_value:value,
+      notes:gv('sc-notes')||null,
+      created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
+    });
+    closeScSheet();
+    await scLoadItems();
+    toast('Subcontract created','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function scDeleteSubcontract(id){
+  if(!confirm('Delete this subcontract? This removes all its scopes and progress entries too.'))return;
+  try{
+    await sbDelete('subcontracts', id);
+    await scLoadItems();
+    toast('Deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+function scOpenAddScope(subcontractId){
+  var sub=SC_SUBCONTRACTS.find(function(s){return s.id===subcontractId;});
+  if(!sub){ toast('Subcontract not found','error'); return; }
+
+  var itemsHtml=SC_BOQ_ITEMS.map(function(it){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0F0F0;cursor:pointer;">'+
+      '<input type="checkbox" class="sc-scope-item-chk" value="'+it.id+'" style="width:15px;height:15px;accent-color:#1565C0;">'+
+      '<span style="font-family:monospace;font-size:10px;color:#888;">'+it.item_code+'</span>'+
+      '<span style="font-size:11.5px;flex:1;">'+(it.short_name||it.description)+'</span>'+
+    '</label>';
+  }).join('');
+
+  document.getElementById('sc-sheet-title').textContent='New Scope — '+sub.party_name;
+  document.getElementById('sc-sheet-body').innerHTML=
+    '<div style="background:#EFEBE9;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:#5D4037;">Subcontract Value: <b>'+fmtINR(sub.subcontract_value)+'</b></div>'+
+    '<label class="flbl">Scope Name *</label><input id="sc-scope-name" class="finp" placeholder="e.g. Bituminous Concrete">'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">'+
+      '<div><label class="flbl">Qty of Scope *</label><input id="sc-scope-qty" class="finp" type="number" step="0.001" placeholder="e.g. 5"></div>'+
+      '<div><label class="flbl">Unit *</label><select id="sc-scope-unit" class="fsel">'+buildUomOpts('')+'</select></div>'+
+    '</div>'+
+    '<label class="flbl" style="margin-top:8px;">% of Subcontract Value *</label><input id="sc-scope-pct" class="finp" type="number" step="0.01" placeholder="e.g. 40">'+
+    '<div id="sc-scope-rate-preview" style="font-size:10.5px;color:#1565C0;font-weight:700;margin-top:4px;"></div>'+
+    '<label class="flbl" style="margin-top:8px;">Combine BOQ Items *</label>'+
+    '<div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:0 10px;">'+itemsHtml+'</div>';
+  document.getElementById('sc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeScSheet()">Cancel</button>'+
+    '<button class="btn" style="background:#1565C0;color:white;" onclick="scSaveScope(\''+subcontractId+'\')">&#10003; Create Scope</button>';
+  openScSheet();
+
+  setTimeout(function(){
+    var qtyInp=document.getElementById('sc-scope-qty'), pctInp=document.getElementById('sc-scope-pct');
+    var unitSel=document.getElementById('sc-scope-unit');
+    var updatePreview=function(){
+      var q=parseFloat(qtyInp.value)||0, p=parseFloat(pctInp.value)||0;
+      var prev=document.getElementById('sc-scope-rate-preview');
+      if(q>0 && p>0){
+        var val=p/100*(parseFloat(sub.subcontract_value)||0);
+        prev.textContent='Scope Value: '+fmtINR(val)+' \u2014 Rate: '+fmtINR(val/q)+' / '+(unitSel.value||'unit');
+      } else prev.textContent='';
+    };
+    if(qtyInp){qtyInp.addEventListener('input',updatePreview);}
+    if(pctInp){pctInp.addEventListener('input',updatePreview);}
+    if(unitSel){unitSel.addEventListener('change',updatePreview);}
+  },200);
+}
+async function scSaveScope(subcontractId){
+  var name=gv('sc-scope-name');
+  var qty=parseFloat(gv('sc-scope-qty'));
+  var unit=(document.getElementById('sc-scope-unit')||{}).value||'';
+  var pct=parseFloat(gv('sc-scope-pct'));
+  if(!name){toast('Enter a scope name','warning');return;}
+  if(isNaN(qty)||qty<=0){toast('Enter a valid qty of scope','warning');return;}
+  if(!unit){toast('Select a unit','warning');return;}
+  if(isNaN(pct)||pct<=0){toast('Enter a valid percentage','warning');return;}
+
+  var sub=SC_SUBCONTRACTS.find(function(s){return s.id===subcontractId;});
+  var existingScopes=SC_SCOPES.filter(function(s){return s.subcontract_id===subcontractId;});
+  var existingPct=existingScopes.reduce(function(s,sc){return s+(parseFloat(sc.percentage)||0);},0);
+  if(existingPct+pct>100.0001){
+    if(!confirm('This scope would bring the total allocated to '+(existingPct+pct).toFixed(1)+'% of the subcontract value, over 100%. Continue anyway?')) return;
+  }
+
+  var selectedItemIds=[];
+  document.querySelectorAll('.sc-scope-item-chk:checked').forEach(function(chk){ selectedItemIds.push(chk.value); });
+  if(!selectedItemIds.length){toast('Select at least one BOQ item to combine into this scope','warning');return;}
+
+  try{
+    toast('Saving...','info');
+    var res=await sbInsert('subcontract_scopes',{
+      subcontract_id:subcontractId, scope_name:name, scope_qty:qty, scope_unit:unit, percentage:pct
+    });
+    var scopeId=res&&res[0]?res[0].id:null;
+    if(!scopeId) throw new Error('Could not create the scope');
+    var itemRows=selectedItemIds.map(function(itemId){ return {scope_id:scopeId, boq_item_id:itemId}; });
+    await sbInsert('subcontract_scope_items', itemRows);
+    closeScSheet();
+    await scLoadItems();
+    toast('Scope created','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function scDeleteScope(id){
+  if(!confirm('Delete this scope? This also removes its progress/billing history.'))return;
+  try{
+    await sbDelete('subcontract_scopes', id);
+    await scLoadItems();
+    toast('Deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+function scOpenProgress(scopeId){
+  var scope=SC_SCOPES.find(function(s){return s.id===scopeId;});
+  if(!scope){ toast('Scope not found','error'); return; }
+  var sub=SC_SUBCONTRACTS.find(function(s){return s.id===scope.subcontract_id;});
+  if(!sub){ toast('Subcontract not found','error'); return; }
+
+  var scopeValue=(parseFloat(scope.percentage)||0)/100*(parseFloat(sub.subcontract_value)||0);
+  var ratePerUnit=(parseFloat(scope.scope_qty)||0)>0?scopeValue/parseFloat(scope.scope_qty):0;
+  var progress=SC_PROGRESS.filter(function(p){return p.scope_id===scopeId;});
+  var completedQty=progress.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+  var remainingQty=Math.max(0,(parseFloat(scope.scope_qty)||0)-completedQty);
+
+  document.getElementById('sc-sheet-title').textContent='Log Progress — '+scope.scope_name;
+  document.getElementById('sc-sheet-body').innerHTML=
+    '<div style="background:#E3F2FD;border-radius:8px;padding:10px;margin-bottom:12px;font-size:11px;color:#0D2137;">'+
+      'Rate: <b>'+fmtINR(ratePerUnit)+' / '+(scope.scope_unit||'unit')+'</b><br>'+
+      'Remaining: <b>'+remainingQty.toFixed(3).replace(/\.?0+$/,'')+' '+(scope.scope_unit||'')+'</b> of '+scope.scope_qty+' '+(scope.scope_unit||'')+
+    '</div>'+
+    '<label class="flbl">Qty Completed *</label><input id="sc-prog-qty" class="finp" type="number" step="0.001" max="'+remainingQty+'" placeholder="e.g. 1">'+
+    '<div id="sc-prog-amt-preview" style="font-size:11px;font-weight:800;color:#2E7D32;margin-top:4px;"></div>'+
+    '<label class="flbl" style="margin-top:8px;">Date *</label><input id="sc-prog-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Remarks</label><textarea id="sc-prog-remarks" class="ftxt" rows="2" placeholder="Optional"></textarea>'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">This will create a bill in Bills &amp; Payments for '+sub.party_name+'.</div>';
+  document.getElementById('sc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeScSheet()">Cancel</button>'+
+    '<button class="btn" style="background:#2E7D32;color:white;" onclick="scSaveProgress(\''+scopeId+'\')">&#10003; Log &amp; Bill</button>';
+  openScSheet();
+
+  setTimeout(function(){
+    var qtyInp=document.getElementById('sc-prog-qty');
+    if(qtyInp) qtyInp.addEventListener('input',function(){
+      var q=parseFloat(qtyInp.value)||0;
+      var prev=document.getElementById('sc-prog-amt-preview');
+      prev.textContent=q>0?('Bill Amount: '+fmtINR(q*ratePerUnit)):'';
+    });
+  },200);
+}
+async function scSaveProgress(scopeId){
+  var scope=SC_SCOPES.find(function(s){return s.id===scopeId;});
+  if(!scope){ toast('Scope not found','error'); return; }
+  var sub=SC_SUBCONTRACTS.find(function(s){return s.id===scope.subcontract_id;});
+  if(!sub){ toast('Subcontract not found','error'); return; }
+
+  var qty=parseFloat(gv('sc-prog-qty'));
+  var date=gv('sc-prog-date');
+  var remarks=gv('sc-prog-remarks');
+  if(isNaN(qty)||qty<=0){toast('Enter a valid completed qty','warning');return;}
+  if(!date){toast('Date is required','warning');return;}
+
+  var scopeValue=(parseFloat(scope.percentage)||0)/100*(parseFloat(sub.subcontract_value)||0);
+  var ratePerUnit=(parseFloat(scope.scope_qty)||0)>0?scopeValue/parseFloat(scope.scope_qty):0;
+  var progress=SC_PROGRESS.filter(function(p){return p.scope_id===scopeId;});
+  var completedQty=progress.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+  var remainingQty=Math.max(0,(parseFloat(scope.scope_qty)||0)-completedQty);
+  if(qty>remainingQty+0.0001){toast('Qty exceeds the remaining '+remainingQty.toFixed(3).replace(/\.?0+$/,'')+' '+(scope.scope_unit||''),'warning');return;}
+
+  var amount=qty*ratePerUnit;
+  var projId=PROJ_MOD_SEL_ID||'';
+
+  try{
+    toast('Saving and generating bill...','info');
+    // Fetch a fresh count for the bill number/ref, rather than relying
+    // on WA_BILLS which may not be freshly loaded from this tab.
+    var existingBills=await sbFetch('work_bills',{select:'id'});
+    var billYear=new Date().getFullYear();
+    var billSeq=String((Array.isArray(existingBills)?existingBills.length:0)+1).padStart(4,'0');
+    var billRef='BILL/'+billYear+'/'+billSeq;
+
+    var billRes=await sbInsert('work_bills',{
+      project_id:projId, party_type:'sc', party_name:sub.party_name,
+      bill_number:billSeq, bill_ref:billRef,
+      bill_date:date, bill_amount:Math.round(amount),
+      selected_items:JSON.stringify([{allot_id:null, res_name:scope.scope_name, done_qty:qty, rate:ratePerUnit, amount:amount}]),
+      description:'Subcontract Scope — '+scope.scope_name+(remarks?' — '+remarks:'')
+    });
+    var billId=billRes&&billRes[0]?billRes[0].id:null;
+
+    await sbInsert('subcontract_scope_progress',{
+      scope_id:scopeId, completed_qty:qty, date:date, remarks:remarks||null,
+      rate_used:ratePerUnit, amount:amount, work_bill_id:billId,
+      created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
+    });
+
+    closeScSheet();
+    await scLoadItems();
+    toast('Progress logged, bill '+billRef+' created for '+fmtINR(amount),'success');
+  }catch(e){toast('Error: '+e.message,'error');}
 }
