@@ -3089,8 +3089,26 @@ function rrGroupOpenAllotForm(groupId){
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="background:#E0F7FA;border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:8px;">Items in this Combined RR</div>'+
-      '<div style="font-size:12px;font-weight:800;margin-bottom:6px;">'+partyNames.join(', ')+'</div>'+
+      '<div style="font-size:12px;font-weight:800;margin-bottom:6px;">Planned as: '+partyNames.join(', ')+'</div>'+
       rowsHtml+
+    '</div>'+
+    '<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-bottom:14px;">'+
+      '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Allot To</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+        '<div><label class="flbl">Party Type *</label>'+
+          '<select id="wa-party-type" class="fsel">'+
+            '<option value="">— Select Type —</option>'+
+            '<option value="sc">Subcontractor</option>'+
+            '<option value="vendor">Vendor</option>'+
+            '<option value="labour_contractor">Labour Contractor</option>'+
+            '<option value="labour">Labour</option>'+
+            '<option value="machinery">Machinery</option>'+
+          '</select>'+
+        '</div>'+
+        '<div><label class="flbl">Party Name *</label>'+
+          '<select id="wa-party-name" class="fsel"><option value="">— Select type first —</option></select>'+
+        '</div>'+
+      '</div>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
       '<div><label class="flbl">Start Date</label><input id="rr-grp-allot-start" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
@@ -3125,6 +3143,11 @@ function rrGroupOpenAllotForm(groupId){
   sb.onclick=function(){rrGroupAllotConfirm(groupId);};
   sf.appendChild(cb); sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
+
+  setTimeout(function(){
+    var ptSel=document.getElementById('wa-party-type');
+    if(ptSel) ptSel.addEventListener('change',function(){ waLoadPartyNames(ptSel.value); });
+  },200);
 }
 async function rrGroupAllotConfirm(groupId){
   var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;})||WA_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
@@ -3135,6 +3158,10 @@ async function rrGroupAllotConfirm(groupId){
     .filter(function(ri){return ri.group_id===groupId;});
   var seen={}; giItems=giItems.filter(function(ri){ if(seen[ri.id]) return false; seen[ri.id]=true; return true; });
   if(!giItems.length){ toast('Nothing to allot in this group','warning'); return; }
+
+  var partyType=(document.getElementById('wa-party-type')||{value:''}).value;
+  var partyName=(document.getElementById('wa-party-name')||{value:''}).value;
+  if(!partyType||!partyName){ toast('Select who this is being allotted to','warning'); return; }
 
   var startDate=(document.getElementById('rr-grp-allot-start')||{}).value||null;
   var endDate=(document.getElementById('rr-grp-allot-end')||{}).value||null;
@@ -3156,8 +3183,8 @@ async function rrGroupAllotConfirm(groupId){
         project_id:projId,
         boq_item_id:ri.boq_item_id,
         date:today,
-        exec_type:ri.party_type,
-        party_name:ri.party_name,
+        exec_type:partyType,
+        party_name:partyName,
         qty:ri.qty,
         unit:ri.unit||null,
         rate:planItem?(parseFloat(planItem.rate)||0):0,
