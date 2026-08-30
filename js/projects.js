@@ -6815,12 +6815,21 @@ function execDefaultTerms(docType){
       'This order is valid only when countersigned by authorized representative of the company.';
 }
 
-function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, docNumber, fullDocNo, projId){
+async function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, docNumber, fullDocNo, projId){
   document.getElementById('exec-sheet-title').textContent='Terms & Conditions — '+fullDocNo;
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#E65100;">Review or edit the terms before generating '+fullDocNo+'. One line per term.</div>'+
+    '<label class="flbl">Load a saved template</label>'+
+    '<div style="display:flex;gap:6px;margin-bottom:10px;">'+
+      '<select id="wo-terms-template-sel" class="fsel" style="flex:1;"><option value="">&#9203; Loading...</option></select>'+
+      '<button id="wo-terms-template-del" type="button" onclick="execDeleteTermsTemplate(\''+docType+'\')" style="display:none;background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:8px;padding:0 10px;cursor:pointer;font-size:16px;">&#215;</button>'+
+    '</div>'+
     '<label class="flbl">Terms &amp; Conditions</label>'+
-    '<textarea id="wo-terms-edit" class="ftxt" rows="10">'+esc(execDefaultTerms(docType))+'</textarea>';
+    '<textarea id="wo-terms-edit" class="ftxt" rows="9">'+esc(execDefaultTerms(docType))+'</textarea>'+
+    '<div style="display:flex;gap:6px;align-items:flex-end;margin-top:8px;">'+
+      '<div style="flex:1;"><label class="flbl">Save current text as a new template</label><input id="wo-terms-save-name" class="finp" placeholder="Template name, e.g. Standard Subcontractor Terms"></div>'+
+      '<button type="button" onclick="execSaveTermsTemplate(\''+docType+'\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:9px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128190; Save</button>'+
+    '</div>';
   var sf=document.getElementById('exec-sheet-foot');
   sf.innerHTML='';
   var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
@@ -6830,6 +6839,62 @@ function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, docNumber
   sb.onclick=function(){execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId);};
   sf.appendChild(cb);sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
+
+  await execLoadTermsTemplateOptions(docType);
+}
+
+async function execLoadTermsTemplateOptions(docType){
+  var sel=document.getElementById('wo-terms-template-sel');
+  if(!sel) return;
+  try{
+    var rows=await sbFetch('wo_po_terms_templates',{select:'*',filter:'doc_type=in.('+docType+',both)',order:'template_name.asc'});
+    var list=Array.isArray(rows)?rows:[];
+    window._woTermsTemplates=list;
+    sel.innerHTML='<option value="">— Default —</option>'+list.map(function(t){return '<option value="'+t.id+'">'+esc(t.template_name)+'</option>';}).join('');
+    sel.onchange=function(){ execApplyTermsTemplate(sel.value); };
+  }catch(e){
+    sel.innerHTML='<option value="">— Default —</option>';
+    console.warn('wo_po_terms_templates not available yet — run the migration', e);
+  }
+}
+function execApplyTermsTemplate(templateId){
+  var delBtn=document.getElementById('wo-terms-template-del');
+  var ta=document.getElementById('wo-terms-edit');
+  if(!templateId){
+    if(delBtn) delBtn.style.display='none';
+    return;
+  }
+  var list=window._woTermsTemplates||[];
+  var t=list.find(function(x){return x.id===templateId;});
+  if(t && ta) ta.value=t.terms_text;
+  if(delBtn) delBtn.style.display='inline-block';
+}
+async function execSaveTermsTemplate(docType){
+  var name=(document.getElementById('wo-terms-save-name')||{}).value.trim();
+  var text=(document.getElementById('wo-terms-edit')||{}).value.trim();
+  if(!name){toast('Enter a name for this template','warning');return;}
+  if(!text){toast('Nothing to save — the terms box is empty','warning');return;}
+  try{
+    await sbInsert('wo_po_terms_templates',{doc_type:docType, template_name:name, terms_text:text,
+      created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)});
+    toast('Template saved','success');
+    document.getElementById('wo-terms-save-name').value='';
+    await execLoadTermsTemplateOptions(docType);
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+async function execDeleteTermsTemplate(docType){
+  var sel=document.getElementById('wo-terms-template-sel');
+  var templateId=sel?sel.value:'';
+  if(!templateId) return;
+  var list=window._woTermsTemplates||[];
+  var t=list.find(function(x){return x.id===templateId;});
+  if(!confirm('Delete the template "'+(t?t.template_name:'')+'"? This only removes the saved template, not any document already generated with it.')) return;
+  try{
+    await sbDelete('wo_po_terms_templates', templateId);
+    toast('Template deleted','success');
+    await execLoadTermsTemplateOptions(docType);
+    document.getElementById('wo-terms-template-del').style.display='none';
+  }catch(e){toast('Error: '+e.message,'error');}
 }
 
 async function execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId){
