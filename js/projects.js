@@ -4526,6 +4526,66 @@ async function execSaveAllot(itemId, projId){
   execRender();
 }
 
+async function execEditBatch(batchKey){
+  var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
+  if(!items.length){toast('Batch not found','warning');return;}
+  await loadUomIfNeeded();
+  var first=items[0];
+  var uomOpts=buildUomOpts(first.unit||'');
+  var partyNames=Array.from(new Set(items.map(function(a){return a.party_name;})));
+
+  document.getElementById('exec-sheet-title').textContent='Edit Batch \u2014 '+items.length+' item'+(items.length!==1?'s':'');
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#FFF3E0;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:11px;">'+
+      '<div style="font-weight:800;color:#E65100;">'+partyNames.join(', ')+'</div>'+
+      '<div style="color:var(--text3);">'+items.length+' item'+(items.length!==1?'s':'')+' in this batch \u2014 the values below apply to all of them</div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Qty (applies to all items) *</label><input id="ea-qty" class="finp" type="number" step="0.001" value="'+(first.qty||0)+'"></div>'+
+      '<div><label class="flbl">Unit</label><select id="ea-unit-sel" class="fsel" onchange="if(!catSelectChanged(this,\'uom\'))catRememberValue(this);">'+uomOpts+'</select></div>'+
+    '</div>'+
+    '<label class="flbl">Allotment Rate (\u20b9) (applies to all items) *</label>'+
+    '<input id="ea-rate" class="finp" type="number" step="0.01" value="'+(first.rate||0)+'">'+
+    '<label class="flbl">Scope / Terms</label>'+
+    '<textarea id="ea-scope" class="ftxt" rows="2" style="margin-bottom:8px;">'+esc(first.scope||'')+'</textarea>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Start Date</label><input id="ea-start" class="finp" type="date" value="'+(first.start_date||'')+'"></div>'+
+      '<div><label class="flbl">End Date</label><input id="ea-end" class="finp" type="date" value="'+(first.end_date||'')+'"></div>'+
+    '</div>';
+
+  var sf=document.getElementById('exec-sheet-foot');
+  sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#E65100;color:white;';
+  sb.innerHTML='&#10003; Update Batch';
+  sb.onclick=function(){execUpdateBatch(batchKey);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+async function execUpdateBatch(batchKey){
+  var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
+  if(!items.length){toast('Batch not found','warning');return;}
+  var qty=parseFloat(gv('ea-qty'))||0;
+  var rate=parseFloat(gv('ea-rate'))||0;
+  var unitSel=document.getElementById('ea-unit-sel');
+  var unit=(unitSel&&unitSel.value)?unitSel.value:null;
+  if(!qty||!rate){toast('Qty and rate required','warning');return;}
+  var updates={qty:qty,rate:rate,unit:unit,scope:gv('ea-scope')||null,start_date:gv('ea-start')||null,end_date:gv('ea-end')||null};
+  var ok=0, failed=0;
+  for(var i=0;i<items.length;i++){
+    try{
+      await sbUpdate('boq_exec_resources',items[i].id,updates);
+      var idx=WA_ALLOT.findIndex(function(a){return a.id===items[i].id;});
+      if(idx>-1) Object.assign(WA_ALLOT[idx],updates);
+      ok++;
+    }catch(e){ console.error('batch update failed for '+items[i].id, e); failed++; }
+  }
+  closeSheet('ov-exec','sh-exec');
+  execRenderAllotted();
+  if(failed) toast(ok+' updated, '+failed+' failed \u2014 see console','warning');
+  else toast('Batch updated ('+ok+' item'+(ok!==1?'s':'')+')','success');
+}
 async function execEditAllotted(id){
   var a=WA_ALLOT.find(function(x){return x.id===id;});
   if(!a){toast('Allotment not found','warning');return;}
@@ -4606,6 +4666,53 @@ async function execDelAllotted(id){
   else execRenderSubTab();
   try{await sbDelete('boq_exec_resources',id);}catch(e){console.error(e);}
   toast('Allotment deleted','success');
+}
+async function execDelBatch(batchKey){
+  var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
+  if(!items.length){toast('Batch not found','warning');return;}
+  var itemIds=items.map(function(a){return a.id;});
+  var hasOrder=WA_ORDERS.some(function(o){return itemIds.indexOf(o.allot_id)!==-1;});
+  var msg=hasOrder
+    ? 'This batch has WO/PO(s) generated across '+items.length+' item'+(items.length!==1?'s':'')+'.\nDeleting will also delete those order records.\n\nDelete this whole batch?'
+    : 'Delete this whole batch of '+items.length+' item'+(items.length!==1?'s':'')+'?';
+  if(!confirm(msg)) return;
+
+  var relOrds=WA_ORDERS.filter(function(o){return itemIds.indexOf(o.allot_id)!==-1;});
+  for(var i=0;i<relOrds.length;i++){ try{await sbDelete('work_orders',relOrds[i].id);}catch(e){} }
+  WA_ORDERS=WA_ORDERS.filter(function(o){return itemIds.indexOf(o.allot_id)===-1;});
+
+  // Reset any linked individual RRs back to approved so they can be re-allotted
+  var combinedGroupIds={};
+  items.forEach(function(allot){
+    if(allot.combined_rr_group_id) combinedGroupIds[allot.combined_rr_group_id]=true;
+  });
+  for(var j=0;j<items.length;j++){
+    var allot=items[j];
+    if(allot.rr_id){
+      try{await sbUpdate('resource_requisitions',allot.rr_id,{status:'approved',allotment_id:null});}catch(e){}
+      var rrIdx=RR_ITEMS.findIndex(function(r){return r.id===allot.rr_id;});
+      if(rrIdx>-1){RR_ITEMS[rrIdx].status='approved';RR_ITEMS[rrIdx].allotment_id=null;}
+      var rr=RR_ITEMS[rrIdx];
+      if(rr&&!WA_APPROVED_RRS.some(function(r){return r.id===rr.id;})) WA_APPROVED_RRS.push(rr);
+    }
+  }
+  // Reset any linked combined RR groups back to approved too
+  var groupIdList=Object.keys(combinedGroupIds);
+  for(var k=0;k<groupIdList.length;k++){
+    try{await sbUpdate('combined_rr_groups',groupIdList[k],{status:'approved'});}catch(e){}
+  }
+
+  WA_ALLOT=WA_ALLOT.filter(function(a){return itemIds.indexOf(a.id)===-1;});
+  if(WA_SUBTAB==='allotted') execRenderAllotted();
+  else if(WA_SUBTAB==='allot') execRender();
+  else execRenderSubTab();
+
+  var ok=0, failed=0;
+  for(var m=0;m<itemIds.length;m++){
+    try{await sbDelete('boq_exec_resources',itemIds[m]); ok++;}catch(e){ console.error(e); failed++; }
+  }
+  if(failed) toast(ok+' deleted, '+failed+' failed \u2014 see console','warning');
+  else toast('Batch deleted ('+ok+' item'+(ok!==1?'s':'')+')','success');
 }
 
 async function execDelAllot(id){
@@ -6377,8 +6484,6 @@ function execRenderAllotted(){
           (function(){var advs=WA_ADVANCES.filter(function(x){return x.allot_id===a.id;});if(!advs.length)return '';var tot=advs.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);return '<div style="font-size:9px;color:#F57F17;font-weight:700;">&#128181; Advance: ₹'+tot.toLocaleString('en-IN')+'</div>';})()+
         '</div>'+
         '<button onclick="execOpenAdvanceAllot(\''+a.id+'\')" title="Advance Payment" style="background:#F57F17;color:white;border:none;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;">&#128181; Advance</button>'+
-        '<button onclick="execEditAllotted(\''+a.id+'\')" title="Edit" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;flex-shrink:0;">&#9998;</button>'+
-        '<button onclick="execDelAllotted(\''+a.id+'\')" title="Delete" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;flex-shrink:0;">&#215;</button>'+
       '</div>';
     }).join('');
 
@@ -6432,6 +6537,8 @@ function execRenderAllotted(){
           '<div style="font-size:10px;color:var(--text3);">Vendor: <b>'+headerVendor+'</b> | '+items.length+' resource'+(items.length>1?'s':'')+' | Allotted: '+(batchDate?batchDate.slice(0,10):'')+'</div>'+
         '</div>'+
         '<div style="font-size:13px;font-weight:800;color:'+col+';">'+inr(totalAmt)+'</div>'+
+        '<button onclick="execEditBatch(\''+batchKey+'\')" title="Edit batch" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:4px 9px;cursor:pointer;font-weight:800;flex-shrink:0;">&#9998;</button>'+
+        '<button onclick="execDelBatch(\''+batchKey+'\')" title="Delete batch" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;flex-shrink:0;">&#215;</button>'+
       '</div>'+
       itemRows+
       orderRow+
