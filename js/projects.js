@@ -12340,16 +12340,27 @@ function scRender(){
 function openScSheet(){openSheet('ov-sc','sh-sc');}
 function closeScSheet(){closeSheet('ov-sc','sh-sc');}
 
-function scOpenAddSubcontract(){
+async function scOpenAddSubcontract(){
   document.getElementById('sc-sheet-title').textContent='New Subcontract';
   document.getElementById('sc-sheet-body').innerHTML=
-    '<label class="flbl">Party Name *</label><input id="sc-party-name" class="finp" placeholder="e.g. ABC Construction Co.">'+
+    '<label class="flbl">Party Name *</label><select id="sc-party-name" class="fsel"><option value="">&#9203; Loading...</option></select>'+
     '<label class="flbl">Subcontract Value (\u20b9) *</label><input id="sc-value" class="finp" type="number" step="0.01" placeholder="0">'+
     '<label class="flbl">Notes</label><textarea id="sc-notes" class="ftxt" rows="2" placeholder="Optional"></textarea>';
   document.getElementById('sc-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeScSheet()">Cancel</button>'+
     '<button class="btn" style="background:#5D4037;color:white;" onclick="scSaveSubcontract()">&#10003; Create</button>';
   openScSheet();
+
+  try{
+    var rows=await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+    var list=Array.isArray(rows)?rows:[];
+    var sel=document.getElementById('sc-party-name');
+    if(sel) sel.innerHTML='<option value="">— Select Subcontractor —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('');
+  }catch(e){
+    var sel2=document.getElementById('sc-party-name');
+    if(sel2) sel2.innerHTML='<option value="">— Error loading —</option>';
+    console.error(e);
+  }
 }
 async function scSaveSubcontract(){
   var name=gv('sc-party-name'), value=parseFloat(gv('sc-value'));
