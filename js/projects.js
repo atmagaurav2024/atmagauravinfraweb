@@ -6768,12 +6768,6 @@ async function execGenPartyDoc(partyKey, docType){
 
 async function execGenBatchDoc(batchKey, docType){
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
-  var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
-  var co=COMPANY_DATA||{};
-  var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
-  var fmtD=function(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
-  var today=new Date().toISOString().slice(0,10);
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
 
   // Get all allotments in this batch
   var batchItems = WA_ALLOT.filter(function(a){
@@ -6787,40 +6781,93 @@ async function execGenBatchDoc(batchKey, docType){
     return o.doc_type===docType && batchItems.some(function(a){return a.id===o.allot_id;});
   });
 
-  var docNumber, fullDocNo;
   if(existingBatchOrders.length){
-    // Already generated — re-download using existing doc number
-    docNumber = existingBatchOrders[0].doc_number;
-    fullDocNo = prefix+'-'+new Date().getFullYear()+'-'+docNumber;
+    // Already generated — re-download using existing doc number and saved terms
+    var docNumber = existingBatchOrders[0].doc_number;
+    var fullDocNo = prefix+'-'+new Date().getFullYear()+'-'+docNumber;
     toast('Re-downloading '+fullDocNo,'info');
-  } else {
-    // First time — generate new doc number and save to DB
-    var existingNos = WA_ORDERS.filter(function(o){return o.doc_type===docType;}).map(function(o){return parseInt(o.doc_number)||0;});
-    var nextNo = (existingNos.length?Math.max.apply(null,existingNos):0)+1;
-    docNumber = String(nextNo).padStart(4,'0');
-    fullDocNo = prefix+'-'+new Date().getFullYear()+'-'+docNumber;
-    try{
-      toast('Generating '+fullDocNo+'...','info');
-      for(var i=0;i<batchItems.length;i++){
-        var a=batchItems[i];
-        var res=await sbInsert('work_orders',{
-          project_id:projId,
-          party_type:a.exec_type,
-          party_name:a.party_name,
-          allot_id:a.id,
-          batch_id:batchKey,
-          doc_type:docType,
-          doc_number:docNumber,
-          doc_date:today,
-          qty:a.qty, rate:a.rate, unit:a.unit||null,
-          amount:Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)),
-          boq_item_id:a.boq_item_id||null
-        });
-        if(res&&res[0]) WA_ORDERS.push(res[0]);
-      }
-      toast(fullDocNo+' saved!','success');
-    }catch(e){toast('Error: '+e.message,'error');console.error(e);return;}
+    execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, existingBatchOrders[0].terms||'');
+    return;
   }
+
+  // First time — let the user review/edit the terms before generating
+  var newDocNumber, newFullDocNo;
+  var existingNos = WA_ORDERS.filter(function(o){return o.doc_type===docType;}).map(function(o){return parseInt(o.doc_number)||0;});
+  var nextNo = (existingNos.length?Math.max.apply(null,existingNos):0)+1;
+  newDocNumber = String(nextNo).padStart(4,'0');
+  newFullDocNo = prefix+'-'+new Date().getFullYear()+'-'+newDocNumber;
+  execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, newDocNumber, newFullDocNo, projId);
+}
+
+function execDefaultTerms(docType){
+  return docType==='po'
+    ? 'Payment will be made within 30 days of receipt of material and invoice.\n'+
+      'Materials must conform to the specifications mentioned above and applicable IS standards.\n'+
+      'Vendor shall provide delivery challan / invoice with each consignment.\n'+
+      'Any defective or non-conforming material will be returned at vendor\'s cost.\n'+
+      'This PO is valid for 90 days from the date of issue unless extended in writing.\n'+
+      'GST as applicable shall be charged separately and mentioned clearly on invoice.'
+    : 'Work shall be executed as per approved drawings, specifications and instructions of site engineer.\n'+
+      'Contractor shall deploy adequate skilled manpower and maintain quality standards.\n'+
+      'Payment will be processed after measurement and certification of completed work.\n'+
+      'Contractor shall comply with all safety norms and labour laws applicable at site.\n'+
+      'Any damage to existing structures or utilities will be rectified at contractor\'s cost.\n'+
+      'This order is valid only when countersigned by authorized representative of the company.';
+}
+
+function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, docNumber, fullDocNo, projId){
+  document.getElementById('exec-sheet-title').textContent='Terms & Conditions — '+fullDocNo;
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#E65100;">Review or edit the terms before generating '+fullDocNo+'. One line per term.</div>'+
+    '<label class="flbl">Terms &amp; Conditions</label>'+
+    '<textarea id="wo-terms-edit" class="ftxt" rows="10">'+esc(execDefaultTerms(docType))+'</textarea>';
+  var sf=document.getElementById('exec-sheet-foot');
+  sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:'+(docType==='po'?'#1565C0':'#E65100')+';color:white;';
+  sb.innerHTML='&#10003; Generate '+fullDocNo;
+  sb.onclick=function(){execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId){
+  var terms=(document.getElementById('wo-terms-edit')||{}).value||execDefaultTerms(docType);
+  var today=new Date().toISOString().slice(0,10);
+  try{
+    toast('Generating '+fullDocNo+'...','info');
+    for(var i=0;i<batchItems.length;i++){
+      var a=batchItems[i];
+      var res=await sbInsert('work_orders',{
+        project_id:projId,
+        party_type:a.exec_type,
+        party_name:a.party_name,
+        allot_id:a.id,
+        batch_id:batchKey,
+        doc_type:docType,
+        doc_number:docNumber,
+        doc_date:today,
+        qty:a.qty, rate:a.rate, unit:a.unit||null,
+        amount:Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)),
+        boq_item_id:a.boq_item_id||null,
+        terms:terms
+      });
+      if(res&&res[0]) WA_ORDERS.push(res[0]);
+    }
+    toast(fullDocNo+' saved!','success');
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);return;}
+  closeSheet('ov-exec','sh-exec');
+  execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, terms);
+}
+
+function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, savedTerms){
+  var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+  var co=COMPANY_DATA||{};
+  var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
+  var fmtD=function(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
+  var today=new Date().toISOString().slice(0,10);
+  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
 
   // Build combined document
   var total = batchItems.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
@@ -6988,21 +7035,10 @@ async function execGenBatchDoc(batchKey, docType){
     '<div class="tnc">'+
       '<div class="tnc-title">Terms &amp; Conditions</div>'+
       '<ol>'+
-        (isPO?
-          '<li>Payment will be made within 30 days of receipt of material and invoice.</li>'+
-          '<li>Materials must conform to the specifications mentioned above and applicable IS standards.</li>'+
-          '<li>Vendor shall provide delivery challan / invoice with each consignment.</li>'+
-          '<li>Any defective or non-conforming material will be returned at vendor&apos;s cost.</li>'+
-          '<li>This PO is valid for 90 days from the date of issue unless extended in writing.</li>'+
-          '<li>GST as applicable shall be charged separately and mentioned clearly on invoice.</li>'
-          :
-          '<li>Work shall be executed as per approved drawings, specifications and instructions of site engineer.</li>'+
-          '<li>Contractor shall deploy adequate skilled manpower and maintain quality standards.</li>'+
-          '<li>Payment will be processed after measurement and certification of completed work.</li>'+
-          '<li>Contractor shall comply with all safety norms and labour laws applicable at site.</li>'+
-          '<li>Any damage to existing structures or utilities will be rectified at contractor&apos;s cost.</li>'+
-          '<li>This order is valid only when countersigned by authorized representative of '+( co.name||'the company')+' .</li>'
-        )+
+        (savedTerms||execDefaultTerms(docType)).split('\n').map(function(line){
+          line=line.trim();
+          return line?'<li>'+esc(line)+'</li>':'';
+        }).join('')+
       '</ol>'+
     '</div>'+
 
