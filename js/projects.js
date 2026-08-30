@@ -3231,16 +3231,19 @@ async function rrGroupAllotConfirm(groupId){
   try{
     await sbUpdate('combined_rr_groups', groupId, {status:'allotted'});
     toast('All '+ok+' items allotted','success');
+  }catch(e){
+    toast('Items allotted but could not mark the group as allotted: '+e.message,'warning');
+  }finally{
+    // Always close the sheet and refresh, even if the "mark group as
+    // allotted" step above failed - the item inserts already succeeded
+    // by this point, and leaving the sheet's .on class stuck here means
+    // closeSheet() never runs, which means the elevated z-index boost it
+    // removes from the parent .app-screen never gets removed either -
+    // this is what a "frozen screen" after allotment actually was.
     closeSheet('ov-exec','sh-exec');
-    // Only refresh whichever tab is actually on screen right now -
-    // projModLoadTab() fully replaces #proj-mod-content on every tab
-    // switch (not show/hide), so rr-content and exec-content are
-    // mutually exclusive; calling the "wrong" one's load function
-    // would create an orphaned element outside the managed container
-    // via rrEnsureContainer(), left stuck on screen indefinitely.
     if(document.getElementById('rr-content') && typeof rrLoadItems==='function') await rrLoadItems();
     if(document.getElementById('exec-content') && typeof execLoadItems==='function') await execLoadItems();
-  }catch(e){ toast('Items allotted but could not mark the group as allotted: '+e.message,'warning'); }
+  }
 }
 
 function rrGroupDownloadPDF(groupId, projName){
