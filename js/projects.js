@@ -2368,15 +2368,25 @@ function execSwitchTab(){
     return;
   }
   if(projId === WA_LOADED_PROJ){
-    // Data cached — re-render instantly
-    // But always ensure approved RRs are loaded (they may have been approved since last load)
-    if(!WA_APPROVED_RRS.length){
-      sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'})
-        .then(function(r){WA_APPROVED_RRS=Array.isArray(r)?r:[];execRenderSubTab();})
-        .catch(function(){execRenderSubTab();});
-    } else {
+    // Data cached — re-render instantly for the bulk of the data (WA_ITEMS,
+    // WA_ALLOT, WA_PLANNED etc.), but always re-fetch the smaller,
+    // frequently-changing, status-dependent pieces (approved RRs, combined
+    // RR groups/items) fresh - these get updated by approve/reject/allot
+    // actions that can happen from other tabs, so relying on "still in
+    // memory" here means a hard refresh was needed to ever see the change.
+    Promise.all([
+      sbFetch('resource_requisitions',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'}),
+      sbFetch('combined_rr_groups',{select:'*',filter:'project_id=eq.'+projId+'&status=eq.approved',order:'created_at.desc'})
+    ]).then(function(r){
+      WA_APPROVED_RRS=Array.isArray(r[0])?r[0]:[];
+      WA_COMBINED_RR_GROUPS=Array.isArray(r[1])?r[1]:[];
+      var rgIds=WA_COMBINED_RR_GROUPS.map(function(g){return g.id;});
+      var itemsPromise=rgIds.length?sbFetch('combined_rr_items',{select:'*',filter:'group_id=in.('+rgIds.join(',')+')'}):Promise.resolve([]);
+      return itemsPromise;
+    }).then(function(items){
+      WA_COMBINED_RR_ITEMS=Array.isArray(items)?items:[];
       execRenderSubTab();
-    }
+    }).catch(function(){ execRenderSubTab(); });
   } else {
     // Different project — full fetch
     execLoadItems();
