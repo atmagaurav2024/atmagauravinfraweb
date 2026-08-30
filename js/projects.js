@@ -12246,7 +12246,7 @@ function execPrintOrderCombined(docType, docNum){
 // %/qty and creates a work_bills entry directly, feeding into the
 // existing Bills & Payments screen.
 // ═══════════════════════════════════════════════════════════════════
-var SC_SUBCONTRACTS=[], SC_SCOPES=[], SC_SCOPE_ITEMS=[], SC_PROGRESS=[], SC_BOQ_ITEMS=[];
+var SC_SUBCONTRACTS=[], SC_SCOPES=[], SC_SCOPE_ITEMS=[], SC_PROGRESS=[], SC_BOQ_ITEMS=[], SC_ALLOT=[];
 
 async function scLoadItems(){
   var projId=PROJ_MOD_SEL_ID||'';
@@ -12265,8 +12265,10 @@ async function scLoadItems(){
     SC_PROGRESS=scopeIds.length?await sbFetch('subcontract_scope_progress',{select:'*',filter:'scope_id=in.('+scopeIds.join(',')+')',order:'date.desc'}):[];
     if(!Array.isArray(SC_PROGRESS)) SC_PROGRESS=[];
     SC_BOQ_ITEMS=sortByItemCode(await sbFetch('boq_items',{select:'*',filter:'project_id=eq.'+projId,order:'item_code.asc'})||[]);
+    SC_ALLOT=await sbFetch('boq_exec_resources',{select:'*',filter:'project_id=eq.'+projId+'&batch_id=not.is.null',order:'date.desc'})||[];
+    if(!Array.isArray(SC_ALLOT)) SC_ALLOT=[];
   }catch(e){
-    SC_SUBCONTRACTS=[]; SC_SCOPES=[]; SC_SCOPE_ITEMS=[]; SC_PROGRESS=[]; SC_BOQ_ITEMS=[];
+    SC_SUBCONTRACTS=[]; SC_SCOPES=[]; SC_SCOPE_ITEMS=[]; SC_PROGRESS=[]; SC_BOQ_ITEMS=[]; SC_ALLOT=[];
     console.warn('subcontract scope tables not available yet — run the migration', e);
   }
   scRender();
@@ -12276,12 +12278,37 @@ function scRender(){
   var el=document.getElementById('sc-content'); if(!el) return;
   var itemById={}; SC_BOQ_ITEMS.forEach(function(it){ itemById[it.id]=it; });
 
-  var toolbar='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;">'+
-    '<button onclick="scOpenAddSubcontract()" style="background:#5D4037;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:11.5px;font-weight:800;cursor:pointer;">&#128736; New Subcontract</button>'+
-  '</div>';
+  // Group allotments by batch_id — only multi-item batches (combined
+  // allotments) qualify. Exclude ones already set up as a subcontract.
+  var linkedBatchIds={}; SC_SUBCONTRACTS.forEach(function(s){ if(s.source_batch_id) linkedBatchIds[s.source_batch_id]=true; });
+  var batches={}; var batchOrder=[];
+  SC_ALLOT.forEach(function(a){
+    if(!a.batch_id || linkedBatchIds[a.batch_id]) return;
+    if(!batches[a.batch_id]){ batches[a.batch_id]={batchId:a.batch_id, partyName:a.party_name, items:[]}; batchOrder.push(a.batch_id); }
+    batches[a.batch_id].items.push(a);
+  });
+  batchOrder=batchOrder.filter(function(id){return batches[id].items.length>1;});
+
+  var pendingHtml='';
+  if(batchOrder.length){
+    var pendingCards=batchOrder.map(function(bid){
+      var b=batches[bid];
+      var total=b.items.reduce(function(s,a){return s+(parseFloat(a.qty)||0)*(parseFloat(a.rate)||0);},0);
+      var itemNames=b.items.map(function(a){var bi=itemById[a.boq_item_id]; return bi?(bi.short_name||bi.description):a.boq_item_id;});
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid #FFCC80;margin-bottom:10px;padding:12px 14px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><div style="font-size:13px;font-weight:800;">'+b.partyName+'</div>'+
+          '<div style="font-size:10.5px;color:var(--text3);margin-top:2px;">'+b.items.length+' items allotted \u00b7 '+fmtINR(total)+' at allotment rates</div></div>'+
+          '<button onclick="scOpenAddSubcontract(\''+bid+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">Set Up Subcontract</button>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:6px;">'+itemNames.join(', ')+'</div>'+
+      '</div>';
+    }).join('');
+    pendingHtml='<div style="font-size:11.5px;font-weight:800;color:#E65100;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Allotted \u2014 Awaiting Subcontract Setup</div>'+pendingCards+'<div style="height:16px;"></div>';
+  }
 
   if(!SC_SUBCONTRACTS.length){
-    el.innerHTML=toolbar+'<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128736;</div><div style="font-weight:700;margin-top:10px;">No subcontracts yet</div><div style="font-size:12px;margin-top:6px;">Create one, then define scopes of work with their own qty/unit and % of the subcontract value</div></div>';
+    el.innerHTML=pendingHtml||'<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128736;</div><div style="font-weight:700;margin-top:10px;">Nothing to set up yet</div><div style="font-size:12px;margin-top:6px;">Combine and allot BOQ items to a subcontractor in Work Allotment first \u2014 it\'ll show up here to define its scope, qty/unit and % breakdown.</div></div>';
     return;
   }
 
@@ -12346,50 +12373,48 @@ function scRender(){
     '</div>';
   }).join('');
 
-  el.innerHTML=toolbar+cards;
+  el.innerHTML=pendingHtml+cards;
 }
 
 function openScSheet(){openSheet('ov-sc','sh-sc');}
 function closeScSheet(){closeSheet('ov-sc','sh-sc');}
 
-async function scOpenAddSubcontract(){
-  document.getElementById('sc-sheet-title').textContent='New Subcontract';
+function scOpenAddSubcontract(batchId){
+  var batchItems=SC_ALLOT.filter(function(a){return a.batch_id===batchId;});
+  if(!batchItems.length){ toast('Allotment batch not found','error'); return; }
+  var partyName=batchItems[0].party_name;
+  var suggestedValue=batchItems.reduce(function(s,a){return s+(parseFloat(a.qty)||0)*(parseFloat(a.rate)||0);},0);
+
+  document.getElementById('sc-sheet-title').textContent='Set Up Subcontract';
   document.getElementById('sc-sheet-body').innerHTML=
-    '<label class="flbl">Party Name *</label><select id="sc-party-name" class="fsel"><option value="">&#9203; Loading...</option></select>'+
-    '<label class="flbl">Subcontract Value (\u20b9) *</label><input id="sc-value" class="finp" type="number" step="0.01" placeholder="0">'+
-    '<label class="flbl">Notes</label><textarea id="sc-notes" class="ftxt" rows="2" placeholder="Optional"></textarea>';
+    '<div style="background:#EFEBE9;border-radius:8px;padding:10px;margin-bottom:10px;">'+
+      '<div style="font-size:9.5px;color:#5D4037;text-transform:uppercase;font-weight:800;">Subcontractor (from allotment)</div>'+
+      '<div style="font-size:14px;font-weight:800;">'+partyName+'</div>'+
+    '</div>'+
+    '<label class="flbl">Subcontract Value (\u20b9) *</label><input id="sc-value" class="finp" type="number" step="0.01" value="'+suggestedValue.toFixed(2)+'">'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Defaulted to the allotted total at allotment rates \u2014 adjust to the actual agreed subcontract value if different.</div>'+
+    '<label class="flbl" style="margin-top:8px;">Notes</label><textarea id="sc-notes" class="ftxt" rows="2" placeholder="Optional"></textarea>';
   document.getElementById('sc-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeScSheet()">Cancel</button>'+
-    '<button class="btn" style="background:#5D4037;color:white;" onclick="scSaveSubcontract()">&#10003; Create</button>';
+    '<button class="btn" style="background:#5D4037;color:white;" onclick="scSaveSubcontract(\''+batchId+'\',\''+partyName+'\')">&#10003; Create</button>';
   openScSheet();
-
-  try{
-    var rows=await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    var list=Array.isArray(rows)?rows:[];
-    var sel=document.getElementById('sc-party-name');
-    if(sel) sel.innerHTML='<option value="">— Select Subcontractor —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('');
-  }catch(e){
-    var sel2=document.getElementById('sc-party-name');
-    if(sel2) sel2.innerHTML='<option value="">— Error loading —</option>';
-    console.error(e);
-  }
 }
-async function scSaveSubcontract(){
-  var name=gv('sc-party-name'), value=parseFloat(gv('sc-value'));
-  if(!name){toast('Enter a party name','warning');return;}
+async function scSaveSubcontract(batchId, partyName){
+  var value=parseFloat(gv('sc-value'));
   if(isNaN(value)||value<=0){toast('Enter a valid subcontract value','warning');return;}
   var projId=PROJ_MOD_SEL_ID||'';
   if(!projId){toast('No project selected','warning');return;}
   try{
     toast('Saving...','info');
     await sbInsert('subcontracts',{
-      project_id:projId, party_name:name, subcontract_value:value,
+      project_id:projId, party_name:partyName, subcontract_value:value,
+      source_batch_id:batchId,
       notes:gv('sc-notes')||null,
       created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
     });
     closeScSheet();
     await scLoadItems();
-    toast('Subcontract created','success');
+    toast('Subcontract created \u2014 now add its scope(s) below','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
 async function scDeleteSubcontract(id){
@@ -12405,9 +12430,23 @@ function scOpenAddScope(subcontractId){
   var sub=SC_SUBCONTRACTS.find(function(s){return s.id===subcontractId;});
   if(!sub){ toast('Subcontract not found','error'); return; }
 
-  var itemsHtml=SC_BOQ_ITEMS.map(function(it){
+  var batchItemIds=sub.source_batch_id
+    ? Array.from(new Set(SC_ALLOT.filter(function(a){return a.batch_id===sub.source_batch_id;}).map(function(a){return a.boq_item_id;})))
+    : SC_BOQ_ITEMS.map(function(it){return it.id;}); // fallback for subcontracts created before this linkage existed
+  var siblingScopes=SC_SCOPES.filter(function(s){return s.subcontract_id===subcontractId;});
+  var alreadyUsedItemIds={};
+  siblingScopes.forEach(function(s){ SC_SCOPE_ITEMS.filter(function(si){return si.scope_id===s.id;}).forEach(function(si){ alreadyUsedItemIds[si.boq_item_id]=true; }); });
+  var availableItemIds=batchItemIds.filter(function(id){return !alreadyUsedItemIds[id];});
+  var availableItems=SC_BOQ_ITEMS.filter(function(it){return availableItemIds.indexOf(it.id)!==-1;});
+
+  if(!availableItems.length){
+    toast('Every item from this subcontract\'s allotment is already covered by another scope','warning');
+    return;
+  }
+
+  var itemsHtml=availableItems.map(function(it){
     return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0F0F0;cursor:pointer;">'+
-      '<input type="checkbox" class="sc-scope-item-chk" value="'+it.id+'" style="width:15px;height:15px;accent-color:#1565C0;">'+
+      '<input type="checkbox" class="sc-scope-item-chk" value="'+it.id+'" checked style="width:15px;height:15px;accent-color:#1565C0;">'+
       '<span style="font-family:monospace;font-size:10px;color:#888;">'+it.item_code+'</span>'+
       '<span style="font-size:11.5px;flex:1;">'+(it.short_name||it.description)+'</span>'+
     '</label>';
