@@ -12657,7 +12657,10 @@ function scRender(){
             '<div style="font-size:10.5px;color:#1565C0;font-weight:700;margin-top:2px;">Rate: '+fmtINR(ratePerUnit)+' / '+(scope.scope_unit||'unit')+'</div>'+
             (itemNames.length?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">Items: '+itemNames.join(', ')+'</div>':'')+
           '</div>'+
-          '<button onclick="scDeleteScope(\''+scope.id+'\')" style="background:none;border:none;color:#C62828;font-size:14px;cursor:pointer;">&#215;</button>'+
+          '<div style="display:flex;gap:4px;align-items:center;">'+
+            '<button onclick="scOpenAddScope(\''+scope.subcontract_id+'\',\''+scope.id+'\')" title="Edit scope" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:4px 8px;cursor:pointer;font-weight:800;">&#9998;</button>'+
+            '<button onclick="scDeleteScope(\''+scope.id+'\')" style="background:none;border:none;color:#C62828;font-size:14px;cursor:pointer;">&#215;</button>'+
+          '</div>'+
         '</div>'+
         '<div style="background:var(--card-bg);border-radius:8px;height:8px;margin-top:10px;overflow:hidden;">'+
           '<div style="background:'+(pctDone>=100?'#2E7D32':'#1565C0')+';height:100%;width:'+pctDone.toFixed(1)+'%;"></div>'+
@@ -12740,17 +12743,20 @@ async function scDeleteSubcontract(id){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
-function scOpenAddScope(subcontractId){
+function scOpenAddScope(subcontractId, editId){
   var sub=SC_SUBCONTRACTS.find(function(s){return s.id===subcontractId;});
   if(!sub){ toast('Subcontract not found','error'); return; }
+  var editScope=editId?SC_SCOPES.find(function(s){return s.id===editId;}):null;
 
   var batchItemIds=sub.source_batch_id
     ? Array.from(new Set(SC_ALLOT.filter(function(a){return a.batch_id===sub.source_batch_id;}).map(function(a){return a.boq_item_id;})))
     : SC_BOQ_ITEMS.map(function(it){return it.id;}); // fallback for subcontracts created before this linkage existed
-  var siblingScopes=SC_SCOPES.filter(function(s){return s.subcontract_id===subcontractId;});
+  var siblingScopes=SC_SCOPES.filter(function(s){return s.subcontract_id===subcontractId && s.id!==editId;});
   var alreadyUsedItemIds={};
   siblingScopes.forEach(function(s){ SC_SCOPE_ITEMS.filter(function(si){return si.scope_id===s.id;}).forEach(function(si){ alreadyUsedItemIds[si.boq_item_id]=true; }); });
-  var availableItemIds=batchItemIds.filter(function(id){return !alreadyUsedItemIds[id];});
+  var thisScopeItemIds={};
+  if(editId) SC_SCOPE_ITEMS.filter(function(si){return si.scope_id===editId;}).forEach(function(si){ thisScopeItemIds[si.boq_item_id]=true; });
+  var availableItemIds=batchItemIds.filter(function(id){return !alreadyUsedItemIds[id] || thisScopeItemIds[id];});
   var availableItems=SC_BOQ_ITEMS.filter(function(it){return availableItemIds.indexOf(it.id)!==-1;});
 
   if(!availableItems.length){
@@ -12759,28 +12765,29 @@ function scOpenAddScope(subcontractId){
   }
 
   var itemsHtml=availableItems.map(function(it){
+    var checked=editId?!!thisScopeItemIds[it.id]:true;
     return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0F0F0;cursor:pointer;">'+
-      '<input type="checkbox" class="sc-scope-item-chk" value="'+it.id+'" checked style="width:15px;height:15px;accent-color:#1565C0;">'+
+      '<input type="checkbox" class="sc-scope-item-chk" value="'+it.id+'" '+(checked?'checked':'')+' style="width:15px;height:15px;accent-color:#1565C0;">'+
       '<span style="font-family:monospace;font-size:10px;color:#888;">'+it.item_code+'</span>'+
       '<span style="font-size:11.5px;flex:1;">'+(it.short_name||it.description)+'</span>'+
     '</label>';
   }).join('');
 
-  document.getElementById('sc-sheet-title').textContent='New Scope — '+sub.party_name;
+  document.getElementById('sc-sheet-title').textContent=(editId?'Edit Scope — ':'New Scope — ')+sub.party_name;
   document.getElementById('sc-sheet-body').innerHTML=
     '<div style="background:#EFEBE9;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:#5D4037;">Subcontract Value: <b>'+fmtINR(sub.subcontract_value)+'</b></div>'+
-    '<label class="flbl">Scope Name *</label><input id="sc-scope-name" class="finp" placeholder="e.g. Bituminous Concrete">'+
+    '<label class="flbl">Scope Name *</label><input id="sc-scope-name" class="finp" value="'+(editScope?esc(editScope.scope_name):'')+'" placeholder="e.g. Bituminous Concrete">'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">'+
-      '<div><label class="flbl">Qty of Scope *</label><input id="sc-scope-qty" class="finp" type="number" step="0.001" placeholder="e.g. 5"></div>'+
-      '<div><label class="flbl">Unit *</label><select id="sc-scope-unit" class="fsel">'+buildUomOpts('')+'</select></div>'+
+      '<div><label class="flbl">Qty of Scope *</label><input id="sc-scope-qty" class="finp" type="number" step="0.001" value="'+(editScope?editScope.scope_qty:'')+'" placeholder="e.g. 5"></div>'+
+      '<div><label class="flbl">Unit *</label><select id="sc-scope-unit" class="fsel">'+buildUomOpts(editScope?editScope.scope_unit:'')+'</select></div>'+
     '</div>'+
-    '<label class="flbl" style="margin-top:8px;">% of Subcontract Value *</label><input id="sc-scope-pct" class="finp" type="number" step="0.01" placeholder="e.g. 40">'+
+    '<label class="flbl" style="margin-top:8px;">% of Subcontract Value *</label><input id="sc-scope-pct" class="finp" type="number" step="0.01" value="'+(editScope?editScope.percentage:'')+'" placeholder="e.g. 40">'+
     '<div id="sc-scope-rate-preview" style="font-size:10.5px;color:#1565C0;font-weight:700;margin-top:4px;"></div>'+
     '<label class="flbl" style="margin-top:8px;">Combine BOQ Items *</label>'+
     '<div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:0 10px;">'+itemsHtml+'</div>';
   document.getElementById('sc-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeScSheet()">Cancel</button>'+
-    '<button class="btn" style="background:#1565C0;color:white;" onclick="scSaveScope(\''+subcontractId+'\')">&#10003; Create Scope</button>';
+    '<button class="btn" style="background:#1565C0;color:white;" onclick="scSaveScope(\''+subcontractId+'\''+(editId?",'"+editId+"'":'')+')">&#10003; '+(editId?'Save Changes':'Create Scope')+'</button>';
   openScSheet();
 
   setTimeout(function(){
@@ -12797,9 +12804,10 @@ function scOpenAddScope(subcontractId){
     if(qtyInp){qtyInp.addEventListener('input',updatePreview);}
     if(pctInp){pctInp.addEventListener('input',updatePreview);}
     if(unitSel){unitSel.addEventListener('change',updatePreview);}
+    updatePreview();
   },200);
 }
-async function scSaveScope(subcontractId){
+async function scSaveScope(subcontractId, editId){
   var name=gv('sc-scope-name');
   var qty=parseFloat(gv('sc-scope-qty'));
   var unit=(document.getElementById('sc-scope-unit')||{}).value||'';
@@ -12810,10 +12818,19 @@ async function scSaveScope(subcontractId){
   if(isNaN(pct)||pct<=0){toast('Enter a valid percentage','warning');return;}
 
   var sub=SC_SUBCONTRACTS.find(function(s){return s.id===subcontractId;});
-  var existingScopes=SC_SCOPES.filter(function(s){return s.subcontract_id===subcontractId;});
+  var existingScopes=SC_SCOPES.filter(function(s){return s.subcontract_id===subcontractId && s.id!==editId;});
   var existingPct=existingScopes.reduce(function(s,sc){return s+(parseFloat(sc.percentage)||0);},0);
   if(existingPct+pct>100.0001){
     if(!confirm('This scope would bring the total allocated to '+(existingPct+pct).toFixed(1)+'% of the subcontract value, over 100%. Continue anyway?')) return;
+  }
+
+  if(editId){
+    var completedQty=SC_PROGRESS.filter(function(p){return p.scope_id===editId;})
+      .reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+    if(qty<completedQty-0.0001){
+      toast('Qty of scope can\'t be less than '+completedQty.toFixed(3).replace(/\.?0+$/,'')+' already completed against it','warning');
+      return;
+    }
   }
 
   var selectedItemIds=[];
@@ -12822,16 +12839,26 @@ async function scSaveScope(subcontractId){
 
   try{
     toast('Saving...','info');
-    var res=await sbInsert('subcontract_scopes',{
-      subcontract_id:subcontractId, scope_name:name, scope_qty:qty, scope_unit:unit, percentage:pct
-    });
-    var scopeId=res&&res[0]?res[0].id:null;
-    if(!scopeId) throw new Error('Could not create the scope');
+    var scopeId;
+    if(editId){
+      await sbUpdate('subcontract_scopes', editId, {scope_name:name, scope_qty:qty, scope_unit:unit, percentage:pct});
+      scopeId=editId;
+      // Replace the item list wholesale rather than diffing - simpler and
+      // this table has no other data hanging off individual rows.
+      var existingItems=SC_SCOPE_ITEMS.filter(function(si){return si.scope_id===editId;});
+      for(var i=0;i<existingItems.length;i++){ await sbDelete('subcontract_scope_items', existingItems[i].id); }
+    } else {
+      var res=await sbInsert('subcontract_scopes',{
+        subcontract_id:subcontractId, scope_name:name, scope_qty:qty, scope_unit:unit, percentage:pct
+      });
+      scopeId=res&&res[0]?res[0].id:null;
+      if(!scopeId) throw new Error('Could not create the scope');
+    }
     var itemRows=selectedItemIds.map(function(itemId){ return {scope_id:scopeId, boq_item_id:itemId}; });
     await sbInsert('subcontract_scope_items', itemRows);
     closeScSheet();
     await scLoadItems();
-    toast('Scope created','success');
+    toast(editId?'Scope updated':'Scope created','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
 async function scDeleteScope(id){
