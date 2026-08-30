@@ -6950,9 +6950,13 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   var rows = batchItems.map(function(a,idx){
     var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var boqItem = WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
-    var itemCode = boqItem.item_code?'<div style="font-size:9px;color:#888;margin-bottom:2px;">BOQ: '+boqItem.item_code+' — '+(boqItem.short_name||boqItem.description||'')+'</div>':'';
+    var itemCode = boqItem.item_code?'<div style="font-size:9px;color:#888;margin-bottom:2px;">BOQ: '+boqItem.item_code+'</div>':'';
     var specText = a.specification?'<div style="font-size:9px;color:#555;margin-top:3px;font-style:italic;">Spec: '+a.specification+'</div>':'';
-    var descText = planRes.party_name||a.party_name||'Item '+(idx+1);
+    // The item/work description is what genuinely differs row-to-row in
+    // a combined document - the party is identical on every row (all
+    // allotted to the same party) and already shown once at the top, so
+    // it shouldn't be the primary, bold text repeated on every line.
+    var descText = boqItem.short_name||boqItem.description||planRes.party_name||a.party_name||'Item '+(idx+1);
     var amt = Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
     var inrFull = function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2});};
     return '<tr>'+
