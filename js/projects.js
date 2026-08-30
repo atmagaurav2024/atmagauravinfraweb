@@ -6483,9 +6483,7 @@ function execRenderAllotted(){
         '<div style="text-align:right;flex-shrink:0;">'+
           '<div style="font-size:12px;font-weight:800;">'+inr((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0))+'</div>'+
           (itemOrders.length?'<div style="font-size:9px;color:#2E7D32;font-weight:700;">&#10003; Doc issued</div>':'<div style="font-size:9px;color:var(--text3);">Pending</div>')+
-          (function(){var advs=WA_ADVANCES.filter(function(x){return x.allot_id===a.id;});if(!advs.length)return '';var tot=advs.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);return '<div style="font-size:9px;color:#F57F17;font-weight:700;">&#128181; Advance: ₹'+tot.toLocaleString('en-IN')+'</div>';})()+
         '</div>'+
-        '<button onclick="execOpenAdvanceAllot(\''+a.id+'\')" title="Advance Payment" style="background:#F57F17;color:white;border:none;border-radius:5px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;">&#128181; Advance</button>'+
       '</div>';
     }).join('');
 
@@ -6511,7 +6509,7 @@ function execRenderAllotted(){
 
     // Advances for this batch
     var batchAdvances=WA_ADVANCES.filter(function(adv){
-      return items.some(function(a){return a.id===adv.allot_id;});
+      return adv.batch_id===batchKey || items.some(function(a){return a.id===adv.allot_id;});
     });
     var totalBatchAdv=batchAdvances.reduce(function(s,adv){return s+(parseFloat(adv.amount)||0);},0);
     var inrFmt=function(n){return '\u20b9'+Math.round(Number(n||0)).toLocaleString('en-IN');};
@@ -6539,6 +6537,7 @@ function execRenderAllotted(){
           '<div style="font-size:10px;color:var(--text3);">Vendor: <b>'+headerVendor+'</b> | '+items.length+' resource'+(items.length>1?'s':'')+' | Allotted: '+(batchDate?batchDate.slice(0,10):'')+'</div>'+
         '</div>'+
         '<div style="font-size:13px;font-weight:800;color:'+col+';">'+inr(totalAmt)+'</div>'+
+        '<button onclick="execOpenAdvanceBatch(\''+batchKey+'\')" title="Advance Payment" style="background:#F57F17;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;">&#128181; Advance</button>'+
         '<button onclick="execEditBatch(\''+batchKey+'\')" title="Edit batch" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:4px 9px;cursor:pointer;font-weight:800;flex-shrink:0;">&#9998;</button>'+
         '<button onclick="execDelBatch(\''+batchKey+'\')" title="Delete batch" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;flex-shrink:0;">&#215;</button>'+
       '</div>'+
@@ -9161,6 +9160,83 @@ function execRenderPaymentsCore(el, projId){
   '</div>';
 }
 
+async function execOpenAdvanceBatch(batchKey){
+  var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
+  if(!items.length){toast('Batch not found','error');return;}
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var partyNames=Array.from(new Set(items.map(function(a){return a.party_name;})));
+  var batchAmt=items.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
+  var itemIds=items.map(function(a){return a.id;});
+  // Sum both new batch-linked advances and any old-style per-item
+  // advances against items in this batch, so a partial history from
+  // before this change still counts toward the balance correctly.
+  var alreadyAdv=WA_ADVANCES.filter(function(x){return x.batch_id===batchKey || itemIds.indexOf(x.allot_id)!==-1;})
+    .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var balance=Math.max(0,batchAmt-alreadyAdv);
+  var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
+
+  document.getElementById('exec-sheet-title').textContent='Advance Payment — '+items.length+' item'+(items.length!==1?'s':'');
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+      '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:6px;">'+partyNames.join(', ')+'</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;">'+
+        '<div><div style="font-size:9px;color:var(--text3);">Items</div><b>'+items.length+'</b></div>'+
+        '<div><div style="font-size:9px;color:var(--text3);">Total Batch Value</div><b>'+inr(batchAmt)+'</b></div>'+
+        '<div><div style="font-size:9px;color:var(--text3);">Balance</div><b style="color:#F57F17;">'+inr(balance)+'</b></div>'+
+      '</div>'+
+      (alreadyAdv?'<div style="font-size:10px;color:#E65100;margin-top:6px;">Already advanced: '+inr(alreadyAdv)+'</div>':'')+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Date *</label><input id="adva-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+      '<div><label class="flbl">Amount (\u20b9) *</label><input id="adva-amount" class="finp" type="number" placeholder="0" value="'+Math.max(0,balance)+'"></div>'+
+    '</div>'+
+    '<div class="g2">'+
+      '<div><label class="flbl">Payment Mode</label>'+
+        '<select id="adva-mode" class="fsel"><option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option></select>'+
+      '</div>'+
+      '<div><label class="flbl">Reference / UTR</label><input id="adva-ref" class="finp" placeholder="UTR / Cheque no."></div>'+
+    '</div>'+
+    '<label class="flbl">Purpose / Remarks *</label>'+
+    '<input id="adva-purpose" class="finp" placeholder="e.g. Mobilization advance, Advance against PO...">';
+
+  var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#F57F17;color:white;';
+  sb.innerHTML='&#128181; Record Advance';
+  sb.onclick=function(){execSaveAdvanceBatch(batchKey,items[0].party_type||items[0].exec_type,partyNames.join(', '),projId,batchAmt);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execSaveAdvanceBatch(batchKey,partyType,partyName,projId,batchAmt){
+  var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
+  if(!items.length){toast('Batch not found','error');return;}
+  var date=gv('adva-date'),amount=parseFloat(gv('adva-amount'))||0;
+  var purpose=(gv('adva-purpose')||'').trim();
+  if(!date||!amount){toast('Date and amount required','warning');return;}
+  if(!purpose){toast('Purpose/remarks required','warning');return;}
+  if(amount>batchAmt){
+    if(!confirm('Amount exceeds total batch value ('+'\u20b9'+batchAmt.toLocaleString('en-IN')+').\nContinue?'))return;
+  }
+  try{
+    var res=await sbInsert('work_advances',{
+      project_id:projId,party_type:partyType,party_name:partyName,
+      allot_id:items[0].id,batch_id:batchKey,date:date,amount:amount,
+      payment_mode:gv('adva-mode')||null,
+      reference:gv('adva-ref')||null,
+      purpose:purpose
+    });
+    if(res&&res[0]){
+      WA_ADVANCES.push(res[0]);
+      toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
+      closeSheet('ov-exec','sh-exec');
+      execAdvanceReceipt(res[0].id,items.length+' item'+(items.length!==1?'s':''),batchAmt);
+      if(WA_SUBTAB==='orders')execRenderOrders();else execRenderAllotted();
+    }
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
 async function execOpenAdvanceAllot(allotId){
   var a=WA_ALLOT.find(function(x){return x.id===allotId;});
   if(!a){toast('Allotment not found','error');return;}
@@ -9246,8 +9322,20 @@ function execAdvanceReceipt(advId,resName,allotAmt){
 
   // Receipt number
   var rcptNo='ADV/'+new Date().getFullYear()+'/'+String(WA_ADVANCES.length).padStart(4,'0');
-  var allotAmt2=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
-  var totalAdv=WA_ADVANCES.filter(function(x){return x.allot_id===adv.allot_id;})
+  // Self-sufficient regardless of what's passed in: if this advance
+  // belongs to a batch, always compute the true batch total from every
+  // item sharing that batch_id - the re-print button (from the
+  // Advances Paid list) has no batch context to pass and just sends 0,
+  // so trusting a possibly-placeholder allotAmt parameter here would
+  // show an incorrect total for a batch advance's receipt.
+  var allotAmt2;
+  if(adv.batch_id){
+    allotAmt2=WA_ALLOT.filter(function(x){return (x.batch_id||('solo-'+x.id))===adv.batch_id;})
+      .reduce(function(s,x){return s+Math.round((parseFloat(x.qty)||0)*(parseFloat(x.rate)||0));},0);
+  } else {
+    allotAmt2=allotAmt||Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
+  }
+  var totalAdv=WA_ADVANCES.filter(function(x){return (adv.batch_id && x.batch_id===adv.batch_id) || x.allot_id===adv.allot_id;})
     .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
 
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Advance Receipt — '+rcptNo+'</title>'+
