@@ -3103,7 +3103,6 @@ function rrGroupOpenAllotForm(groupId){
     '</div>';
   }).join('');
 
-  rrEnsureContainer();
   document.getElementById('exec-sheet-title').textContent='Allot Combined RR — '+group.rr_number;
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="background:#E0F7FA;border-radius:10px;padding:12px;margin-bottom:12px;">'+
