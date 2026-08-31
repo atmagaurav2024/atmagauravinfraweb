@@ -3093,12 +3093,12 @@ function rrGroupOpenAllotForm(groupId){
   var rowsHtml=giItems.map(function(ri){
     var boqItem=itemById[ri.boq_item_id];
     var planItem=ri.plan_item_id?planItemById[ri.plan_item_id]:null;
-    var defaultRate=planItem?(parseFloat(planItem.rate)||0):0;
+    var plannedRate=planItem?(parseFloat(planItem.rate)||0):0;
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;gap:6px;">'+
       '<span style="flex:1;">'+(boqItem?(boqItem.short_name||boqItem.description):ri.boq_item_id)+' <span style="color:#888;">('+ri.party_name+')</span><br><span style="color:#666;">'+ri.qty+' '+(ri.unit||'')+'</span></span>'+
       '<div style="text-align:center;">'+
-        '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Rate (\u20b9)</div>'+
-        '<input class="rr-grp-item-rate finp" data-ri-id="'+ri.id+'" type="number" step="0.01" value="'+defaultRate+'" style="width:80px;padding:4px 6px;font-size:11px;text-align:center;">'+
+        '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Rate (\u20b9) <span style="color:#aaa;">(planned: '+plannedRate+')</span></div>'+
+        '<input class="rr-grp-item-rate finp" data-ri-id="'+ri.id+'" type="number" step="0.01" placeholder="Enter rate" style="width:100px;padding:4px 6px;font-size:11px;text-align:center;">'+
       '</div>'+
     '</div>';
   }).join('');
