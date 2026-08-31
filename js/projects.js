@@ -1758,7 +1758,7 @@ async function planTurnkeyPrompt(){
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#1565C0;margin-bottom:6px;">&#128737; Combined Planning</div>'+
-    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will assign <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> to one subcontractor, at each item\'s own BOQ rate by default. Quantity defaults to the remaining unplanned balance (measured so far minus anything already planned) and can be adjusted per item below. Items with no balance left are skipped.</div>'+
+    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will combine <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> into one named group, at each item\'s own BOQ rate by default. Quantity defaults to the remaining unplanned balance (measured so far minus anything already planned) and can be adjusted per item below. Items with no balance left are skipped. The subcontractor gets assigned later, at Allotment.</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
       '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
       '<span onclick="planTurnkeyToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#1565C0;cursor:pointer;">Deselect all</span>'+
@@ -1770,8 +1770,6 @@ async function planTurnkeyPrompt(){
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Group Name *</label>'+
     '<input type="text" id="plan-tk-groupname" placeholder="e.g. Bituminous Concrete Work, Earthwork Package 1..." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;">This name identifies the combined package of work \u2014 shown throughout RR, Allotment, and WO/PO documents.</div>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Subcontractor / Party Name (optional)</label>'+
-    '<input type="text" id="plan-tk-name" placeholder="Optional — can be finalized later at allotment" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Resource Category (optional)</label>'+
     '<select id="plan-tk-cat" class="fsel" style="margin-bottom:8px;">'+buildResourceCatOpts('')+'</select>'+
     '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#333;margin-bottom:10px;cursor:pointer;">'+
@@ -1803,7 +1801,6 @@ async function planTurnkeyConfirm(){
   var setMsg=function(t,c){ if(msg){msg.textContent=t; msg.style.color=c||'#C62828';} };
   var groupName=(document.getElementById('plan-tk-groupname')||{}).value.trim()||'';
   if(!groupName){ setMsg('Group name is required'); return; }
-  var name=(document.getElementById('plan-tk-name')||{}).value.trim()||'';
   var pass=(document.getElementById('plan-tk-pass')||{}).value||'';
   if(!pass){ setMsg('Enter your password to confirm'); return; }
   var useCustRate=(document.getElementById('plan-tk-custrate')||{}).checked;
@@ -1851,7 +1848,7 @@ async function planTurnkeyConfirm(){
   var groupId=null;
   try{
     var groupRes=await sbInsert('combined_plan_groups',{
-      project_id:projId, group_name:groupName, party_name:name||null, exec_type:'sc',
+      project_id:projId, group_name:groupName, party_name:null, exec_type:'sc',
       rate_mode:useCustRate?'custom':'boq', custom_rate:useCustRate?custRate:null,
       resource_category:cat,
       created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
@@ -1914,8 +1911,8 @@ async function planTurnkeyConfirm(){
 
   var ov=document.getElementById('plan-turnkey-ov'); if(ov) ov.remove();
   await planLoadItems();
-  if(failed) toast(ok+' item'+(ok!==1?'s':'')+' assigned to '+name+', '+failed+' failed — see console','warning');
-  else toast('All '+ok+' item'+(ok!==1?'s':'')+' combined-assigned to '+name,'success');
+  if(failed) toast(ok+' item'+(ok!==1?'s':'')+' added to "'+groupName+'", '+failed+' failed — see console','warning');
+  else toast('All '+ok+' item'+(ok!==1?'s':'')+' combined into "'+groupName+'"','success');
 }
 function planAddSub(itemId){document.getElementById('plan-sheet-title').textContent='Add Work Activity';document.getElementById('plan-sheet-body').innerHTML='<label class="flbl">Activity Name *</label><input id="ps-name" class="finp" placeholder="e.g. Bar Bending, Shuttering...">';document.getElementById('plan-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-plan\',\'sh-plan\')">Cancel</button><button class="btn" style="background:#1565C0;color:white;" onclick="planSaveSub(\''+itemId+'\')">+ Add</button>';openSheet('ov-plan','sh-plan');}
 async function planSaveSub(itemId){var name=(document.getElementById('ps-name')||{value:''}).value.trim();if(!name){toast('Name required','warning');return;}var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var sortOrder=PLAN_SUBS.filter(function(s){return s.boq_item_id===itemId;}).length+1;try{var res=await sbInsert('boq_subitems',{project_id:projId,boq_item_id:itemId,name:name,sort_order:sortOrder});if(res&&res[0])PLAN_SUBS.push(res[0]);toast(name+' added','success');closeSheet('ov-plan','sh-plan');planRender();}catch(e){toast('Error: '+e.message,'error');}}
