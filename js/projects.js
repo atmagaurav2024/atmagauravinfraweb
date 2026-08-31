@@ -3078,6 +3078,12 @@ async function rrGroupDelete(groupId){
     await rrLoadItems();
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
+function rrGroupToggleRateMode(mode){
+  var itemwiseEl=document.getElementById('rr-grp-itemwise-rows');
+  var lumpsumEl=document.getElementById('rr-grp-lumpsum-row');
+  if(itemwiseEl) itemwiseEl.style.display=(mode==='lumpsum'?'none':'block');
+  if(lumpsumEl) lumpsumEl.style.display=(mode==='lumpsum'?'block':'none');
+}
 function rrGroupOpenAllotForm(groupId){
   var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;})||WA_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
   if(!group){ toast('Group not found','error'); return; }
@@ -3112,7 +3118,20 @@ function rrGroupOpenAllotForm(groupId){
     '<div style="background:#E0F7FA;border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:8px;">Items in this Combined RR</div>'+
       '<div style="font-size:12px;font-weight:800;margin-bottom:6px;">Planned as: '+(partyNames.join(', ')||'Not yet assigned')+'</div>'+
-      rowsHtml+
+      '<div style="display:flex;gap:14px;margin-bottom:10px;">'+
+        '<label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;cursor:pointer;">'+
+          '<input type="radio" name="rr-grp-rate-mode" value="itemwise" checked onchange="rrGroupToggleRateMode(\'itemwise\')" style="accent-color:#00838F;"> Item-wise rates'+
+        '</label>'+
+        '<label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;cursor:pointer;">'+
+          '<input type="radio" name="rr-grp-rate-mode" value="lumpsum" onchange="rrGroupToggleRateMode(\'lumpsum\')" style="accent-color:#00838F;"> Lumpsum for whole group'+
+        '</label>'+
+      '</div>'+
+      '<div id="rr-grp-lumpsum-row" style="display:none;margin-bottom:10px;">'+
+        '<label class="flbl">Lumpsum Amount (\u20b9) *</label>'+
+        '<input id="rr-grp-lumpsum-amt" class="finp" type="number" step="0.01" placeholder="Total for all '+giItems.length+' items">'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Split across items in proportion to their planned value \u2014 each item still gets its own rate stored for billing/execution tracking.</div>'+
+      '</div>'+
+      '<div id="rr-grp-itemwise-rows">'+rowsHtml+'</div>'+
     '</div>'+
     '<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-bottom:14px;">'+
       '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Allot To</div>'+
@@ -3190,14 +3209,35 @@ async function rrGroupAllotConfirm(groupId){
   var scope=(document.getElementById('rr-grp-allot-scope')||{}).value.trim()||null;
   var docType=(document.querySelector('input[name="rr-grp-doc-type"]:checked')||{value:'none'}).value;
 
+  var rateMode=(document.querySelector('input[name="rr-grp-rate-mode"]:checked')||{value:'itemwise'}).value;
   var rateByRiId={}; var rateError=null;
-  document.querySelectorAll('.rr-grp-item-rate').forEach(function(inp){
-    var riId=inp.getAttribute('data-ri-id');
-    var r=parseFloat(inp.value);
-    if(isNaN(r)||r<=0){ rateError='Enter a valid allotment rate for every item'; }
-    rateByRiId[riId]=r;
-  });
-  if(rateError){ toast(rateError,'warning'); return; }
+
+  if(rateMode==='lumpsum'){
+    var lumpsum=parseFloat((document.getElementById('rr-grp-lumpsum-amt')||{}).value);
+    if(isNaN(lumpsum)||lumpsum<=0){ toast('Enter a valid lumpsum amount','warning'); return; }
+    var planItemsPool2=(typeof RR_COMBINED_PLAN_ITEMS!=='undefined'?RR_COMBINED_PLAN_ITEMS:[]).concat(typeof WA_COMBINED_PLAN_ITEMS!=='undefined'?WA_COMBINED_PLAN_ITEMS:[]);
+    var planItemById2={}; planItemsPool2.forEach(function(pi){ planItemById2[pi.id]=pi; });
+    var plannedValues={}; var totalPlannedValue=0;
+    giItems.forEach(function(ri){
+      var pi=ri.plan_item_id?planItemById2[ri.plan_item_id]:null;
+      var pv=(parseFloat(ri.qty)||0)*(pi?(parseFloat(pi.rate)||0):0);
+      plannedValues[ri.id]=pv;
+      totalPlannedValue+=pv;
+    });
+    giItems.forEach(function(ri){
+      var share=totalPlannedValue>0?(plannedValues[ri.id]/totalPlannedValue):(1/giItems.length);
+      var itemAmt=lumpsum*share;
+      rateByRiId[ri.id]=(parseFloat(ri.qty)||0)>0?itemAmt/parseFloat(ri.qty):0;
+    });
+  } else {
+    document.querySelectorAll('.rr-grp-item-rate').forEach(function(inp){
+      var riId=inp.getAttribute('data-ri-id');
+      var r=parseFloat(inp.value);
+      if(isNaN(r)||r<=0){ rateError='Enter a valid allotment rate for every item'; }
+      rateByRiId[riId]=r;
+    });
+    if(rateError){ toast(rateError,'warning'); return; }
+  }
 
   var batchId='rr-combined-batch-'+Date.now();
   var today=new Date().toISOString().slice(0,10);
