@@ -3209,9 +3209,10 @@ async function rrGroupAllotConfirm(groupId){
 
   var rateMode=(document.querySelector('input[name="rr-grp-rate-mode"]:checked')||{value:'itemwise'}).value;
   var rateByRiId={}; var rateError=null;
+  var lumpsum=null;
 
   if(rateMode==='lumpsum'){
-    var lumpsum=parseFloat((document.getElementById('rr-grp-lumpsum-amt')||{}).value);
+    lumpsum=parseFloat((document.getElementById('rr-grp-lumpsum-amt')||{}).value);
     if(isNaN(lumpsum)||lumpsum<=0){ toast('Enter a valid lumpsum amount','warning'); return; }
     var planItemsPool2=(typeof RR_COMBINED_PLAN_ITEMS!=='undefined'?RR_COMBINED_PLAN_ITEMS:[]).concat(typeof WA_COMBINED_PLAN_ITEMS!=='undefined'?WA_COMBINED_PLAN_ITEMS:[]);
     var planItemById2={}; planItemsPool2.forEach(function(pi){ planItemById2[pi.id]=pi; });
@@ -3253,6 +3254,7 @@ async function rrGroupAllotConfirm(groupId){
         qty:ri.qty,
         unit:ri.unit||null,
         rate:rateByRiId[ri.id]||0,
+        lumpsum_amount:lumpsum,
         scope:scope,
         start_date:startDate,
         end_date:endDate,
@@ -6978,7 +6980,9 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
 
   // Build combined document
-  var total = batchItems.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
+  var isLumpsum = batchItems.length && !!batchItems[0].lumpsum_amount;
+  var lumpsumTotal = isLumpsum ? Math.round(parseFloat(batchItems[0].lumpsum_amount)||0) : 0;
+  var total = isLumpsum ? lumpsumTotal : batchItems.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);
   var isPO  = docType==='po';
   var titleStr = isPO ? 'PURCHASE ORDER' : 'WORK ORDER';
   var accentCol = isPO ? '#1565C0' : '#E65100';
@@ -6991,8 +6995,19 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   var commonStart = batchItems[0].start_date||'';
   var commonEnd   = batchItems[0].end_date||'';
 
-  // Table rows
-  var rows = batchItems.map(function(a,idx){
+  // Table rows — lumpsum-priced batches collapse to one line (group
+  // name + total) instead of listing every BOQ item with its
+  // internally-derived proportional rate.
+  var rows = isLumpsum ? (
+    '<tr>'+
+      '<td style="text-align:center;color:#888;">1</td>'+
+      '<td><span style="font-weight:700;">'+(groupNameLabel||'Combined Work')+'</span>'+
+        '<div style="font-size:9px;color:#555;margin-top:3px;font-style:italic;">Lumpsum for entire scope of work</div></td>'+
+      '<td style="text-align:center;">Lot</td>'+
+      '<td style="text-align:right;">—</td>'+
+      '<td style="text-align:right;font-weight:700;">'+('₹'+lumpsumTotal.toLocaleString('en-IN',{minimumFractionDigits:2}))+'</td>'+
+    '</tr>'
+  ) : batchItems.map(function(a,idx){
     var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var boqItem = WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
     var itemCode = boqItem.item_code?'<div style="font-size:9px;color:#888;margin-bottom:2px;">BOQ: '+boqItem.item_code+'</div>':'';
