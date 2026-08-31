@@ -1518,8 +1518,8 @@ function planRender(){
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+g.party_name+'</div>'+
-          '<div style="font-size:10px;color:#1565C0;">'+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined \u00b7 '+(g.rate_mode==='custom'?'flat rate':'BOQ rates')+'</div></div>'+
+          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||g.party_name)+'</div>'+
+          '<div style="font-size:10px;color:#1565C0;">'+g.party_name+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined \u00b7 '+(g.rate_mode==='custom'?'flat rate':'BOQ rates')+'</div></div>'+
           '<div style="text-align:right;"><div style="font-size:13px;font-weight:900;color:#1565C0;">'+fmtINR(total)+'</div>'+
           '<span onclick="planDeleteCombinedGroup(\''+g.id+'\')" style="font-size:10px;color:#C62828;cursor:pointer;text-decoration:underline;">Delete group</span></div>'+
         '</div>'+
@@ -1767,6 +1767,9 @@ async function planTurnkeyPrompt(){
       '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to assign</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
       (eligible.length>50?'<div style="padding:6px;font-size:10px;color:#888;text-align:center;">…and '+(eligible.length-50)+' more</div>':'')+
     '</div>'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Group Name *</label>'+
+    '<input type="text" id="plan-tk-groupname" placeholder="e.g. Bituminous Concrete Work, Earthwork Package 1..." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;">This name identifies the combined package of work \u2014 shown throughout RR, Allotment, and WO/PO documents.</div>'+
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Subcontractor / Party Name *</label>'+
     '<input type="text" id="plan-tk-name" placeholder="e.g. ABC Construction Co." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Resource Category (optional)</label>'+
@@ -1798,6 +1801,8 @@ async function planTurnkeyConfirm(){
   var msg=document.getElementById('plan-tk-msg');
   var go=document.getElementById('plan-tk-go');
   var setMsg=function(t,c){ if(msg){msg.textContent=t; msg.style.color=c||'#C62828';} };
+  var groupName=(document.getElementById('plan-tk-groupname')||{}).value.trim()||'';
+  if(!groupName){ setMsg('Group name is required'); return; }
   var name=(document.getElementById('plan-tk-name')||{}).value.trim()||'';
   if(!name){ setMsg('Subcontractor name is required'); return; }
   var pass=(document.getElementById('plan-tk-pass')||{}).value||'';
@@ -1847,7 +1852,7 @@ async function planTurnkeyConfirm(){
   var groupId=null;
   try{
     var groupRes=await sbInsert('combined_plan_groups',{
-      project_id:projId, party_name:name, exec_type:'sc',
+      project_id:projId, group_name:groupName, party_name:name, exec_type:'sc',
       rate_mode:useCustRate?'custom':'boq', custom_rate:useCustRate?custRate:null,
       resource_category:cat,
       created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
@@ -2565,8 +2570,8 @@ function rrRender(){
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+g.party_name+'</div>'+
-          '<div style="font-size:10px;color:#1565C0;">'+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
+          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||g.party_name)+'</div>'+
+          '<div style="font-size:10px;color:#1565C0;">'+g.party_name+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
           (totalRemaining>0.0001
             ? '<button onclick="rrOpenGroupPrompt(\''+g.id+'\')" style="background:#00838F;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Raise Combined RR</button>'
             : '<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:4px 10px;border-radius:5px;font-weight:700;">Fully Raised</span>')+
@@ -2581,8 +2586,8 @@ function rrRender(){
       return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:10px 14px;">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;">'+
           '<div><span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+sc+'20;color:'+sc+';">'+sl+'</span>'+
-          '<span style="font-size:11px;font-weight:800;margin-left:6px;">'+g.rr_number+'</span>'+
-          '<div style="font-size:10px;color:var(--text3);">'+partyNames.join(', ')+' \u00b7 '+giItems.length+' item'+(giItems.length!==1?'s':'')+' \u00b7 '+(g.remarks||'')+'</div></div>'+
+          '<span style="font-size:12px;font-weight:800;margin-left:6px;">'+(g.group_name||g.rr_number)+'</span>'+
+          '<div style="font-size:10px;color:var(--text3);">'+g.rr_number+' \u00b7 '+partyNames.join(', ')+' \u00b7 '+giItems.length+' item'+(giItems.length!==1?'s':'')+' \u00b7 '+(g.remarks||'')+'</div></div>'+
           '<div style="display:flex;gap:4px;align-items:center;">'+
             '<button onclick="rrGroupDownloadPDF(\''+g.id+'\',\''+projName+'\')" title="Download PDF" style="background:#00838F;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;">&#11015; PDF</button>'+
             (g.status==='pending'
@@ -3028,7 +3033,7 @@ async function rrGroupConfirm(groupId){
     String((RR_COMBINED_RR_GROUPS.length+1)).padStart(4,'0');
   try{
     var groupRes=await sbInsert('combined_rr_groups',{
-      project_id:projId, rr_number:rrNo, required_date:date,
+      project_id:projId, group_name:group.group_name||null, rr_number:rrNo, required_date:date,
       remarks:remarks||null, requested_by:reqBy||null, status:'pending'
     });
     var newGroupId=groupRes&&groupRes[0]?groupRes[0].id:null;
@@ -3207,6 +3212,7 @@ async function rrGroupAllotConfirm(groupId){
         date:today,
         exec_type:partyType,
         party_name:partyName,
+        group_name:group.group_name||null,
         qty:ri.qty,
         unit:ri.unit||null,
         rate:rateByRiId[ri.id]||0,
@@ -3615,8 +3621,8 @@ function execRender(){
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+partyNames.join(', ')+'</div>'+
-          '<div style="font-size:10px;color:#1565C0;">Combined RR '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
+          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||partyNames.join(', '))+'</div>'+
+          '<div style="font-size:10px;color:#1565C0;">'+partyNames.join(', ')+' \u00b7 '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
           '<button onclick="rrGroupOpenAllotForm(\''+g.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Group</button>'+
         '</div>'+
         '<div style="padding:8px 14px;">'+rows+'</div>'+
@@ -6461,7 +6467,8 @@ function execRenderAllotted(){
       return pl.party_name||pl.resource_category||'';
     }).filter(function(v,i,arr){return v&&arr.indexOf(v)===i;});
     var partyNames = items.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;});
-    var headerLabel = resNames.length ? resNames.join(', ') : (partyNames[0]||'');
+    var groupName = items.map(function(a){return a.group_name;}).filter(Boolean)[0];
+    var headerLabel = groupName || (resNames.length ? resNames.join(', ') : (partyNames[0]||''));
     var headerVendor = partyNames.join(', ');
 
     // Resource rows
@@ -6940,6 +6947,7 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   var accentCol = isPO ? '#1565C0' : '#E65100';
   var lightBg   = isPO ? '#E3F2FD' : '#FFF3E0';
   var partyLabel = batchItems.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;}).join(', ');
+  var groupNameLabel = batchItems.map(function(a){return a.group_name;}).filter(Boolean)[0]||'';
 
   // Common scope/terms from first item
   var commonScope = batchItems[0].scope||'';
@@ -7059,6 +7067,10 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
 
     // Party + Project info
     '<div class="info-grid">'+
+      (groupNameLabel?'<div class="info-card" style="grid-column:span 2;background:'+lightBg+';">'+
+        '<div class="lbl">Scope / Package</div>'+
+        '<div class="val" style="font-size:15px;">'+groupNameLabel+'</div>'+
+      '</div>':'')+
       '<div class="info-card">'+
         '<div class="lbl">'+(isPO?'Vendor / Supplier':'Contractor / Party')+'</div>'+
         '<div class="val">'+partyLabel+'</div>'+
