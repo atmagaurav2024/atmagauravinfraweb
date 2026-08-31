@@ -1414,7 +1414,7 @@ function jmCompleteAllPrompt(){
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Reference (optional)</label>'+
     '<input type="text" id="jm-cmpl-ref" placeholder="e.g. Final measurement" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<label style="font-size:11px;font-weight:800;color:#C62828;display:block;margin-bottom:4px;">Re-enter your login password to confirm *</label>'+
-    '<input type="password" id="jm-cmpl-pass" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
+    '<input type="password" id="jm-cmpl-pass" autocomplete="new-password" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
     '<div id="jm-cmpl-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;"></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
       '<button onclick="document.getElementById(\'jm-cmpl-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
@@ -1707,6 +1707,7 @@ async function planTurnkeyPrompt(){
   var projId=(document.getElementById('plan-proj-sel')||{}).value||'';
   if(!projId){toast('Select a project first','warning');return;}
   toast('Checking items…','info');
+  await loadUomIfNeeded();
   var jmRows=[];
   try{ jmRows=await sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId,order:'jm_number.asc'}); }catch(e){}
   if(!Array.isArray(jmRows)) jmRows=[];
@@ -1768,10 +1769,10 @@ async function planTurnkeyPrompt(){
       (eligible.length>50?'<div style="padding:6px;font-size:10px;color:#888;text-align:center;">…and '+(eligible.length-50)+' more</div>':'')+
     '</div>'+
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Group Name *</label>'+
-    '<input type="text" id="plan-tk-groupname" placeholder="e.g. Bituminous Concrete Work, Earthwork Package 1..." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<input type="text" id="plan-tk-groupname" autocomplete="off" placeholder="e.g. Bituminous Concrete Work, Earthwork Package 1..." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;">This name identifies the combined package of work \u2014 shown throughout RR, Allotment, and WO/PO documents.</div>'+
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Resource Category (optional)</label>'+
-    '<select id="plan-tk-cat" class="fsel" style="margin-bottom:8px;">'+buildResourceCatOpts('')+'</select>'+
+    '<select id="plan-tk-cat" class="fsel" style="margin-bottom:8px;" onchange="if(!catSelectChanged(this,\'resource\'))catRememberValue(this);">'+buildResourceCatOpts('')+'</select>'+
     '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#333;margin-bottom:10px;cursor:pointer;">'+
       '<input type="checkbox" id="plan-tk-custrate" onchange="document.getElementById(\'plan-tk-rate-row\').style.display=this.checked?\'block\':\'none\';"> Use one rate for all items instead of each item\'s own BOQ rate'+
     '</label>'+
@@ -1780,7 +1781,7 @@ async function planTurnkeyPrompt(){
       '<input type="number" step="0.01" id="plan-tk-rate" class="finp" placeholder="0">'+
     '</div>'+
     '<label style="font-size:11px;font-weight:800;color:#C62828;display:block;margin-bottom:4px;">Re-enter your login password to confirm *</label>'+
-    '<input type="password" id="plan-tk-pass" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
+    '<input type="password" id="plan-tk-pass" autocomplete="new-password" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
     '<div id="plan-tk-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;"></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
       '<button onclick="document.getElementById(\'plan-turnkey-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
