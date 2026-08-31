@@ -1519,7 +1519,7 @@ function planRender(){
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
           '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||g.party_name)+'</div>'+
-          '<div style="font-size:10px;color:#1565C0;">'+g.party_name+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined \u00b7 '+(g.rate_mode==='custom'?'flat rate':'BOQ rates')+'</div></div>'+
+          '<div style="font-size:10px;color:#1565C0;">'+(g.party_name||'Party not yet assigned')+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined \u00b7 '+(g.rate_mode==='custom'?'flat rate':'BOQ rates')+'</div></div>'+
           '<div style="text-align:right;"><div style="font-size:13px;font-weight:900;color:#1565C0;">'+fmtINR(total)+'</div>'+
           '<span onclick="planDeleteCombinedGroup(\''+g.id+'\')" style="font-size:10px;color:#C62828;cursor:pointer;text-decoration:underline;">Delete group</span></div>'+
         '</div>'+
@@ -1770,8 +1770,8 @@ async function planTurnkeyPrompt(){
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Group Name *</label>'+
     '<input type="text" id="plan-tk-groupname" placeholder="e.g. Bituminous Concrete Work, Earthwork Package 1..." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;">This name identifies the combined package of work \u2014 shown throughout RR, Allotment, and WO/PO documents.</div>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Subcontractor / Party Name *</label>'+
-    '<input type="text" id="plan-tk-name" placeholder="e.g. ABC Construction Co." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Subcontractor / Party Name (optional)</label>'+
+    '<input type="text" id="plan-tk-name" placeholder="Optional — can be finalized later at allotment" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Resource Category (optional)</label>'+
     '<select id="plan-tk-cat" class="fsel" style="margin-bottom:8px;">'+buildResourceCatOpts('')+'</select>'+
     '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#333;margin-bottom:10px;cursor:pointer;">'+
@@ -1804,7 +1804,6 @@ async function planTurnkeyConfirm(){
   var groupName=(document.getElementById('plan-tk-groupname')||{}).value.trim()||'';
   if(!groupName){ setMsg('Group name is required'); return; }
   var name=(document.getElementById('plan-tk-name')||{}).value.trim()||'';
-  if(!name){ setMsg('Subcontractor name is required'); return; }
   var pass=(document.getElementById('plan-tk-pass')||{}).value||'';
   if(!pass){ setMsg('Enter your password to confirm'); return; }
   var useCustRate=(document.getElementById('plan-tk-custrate')||{}).checked;
@@ -1852,7 +1851,7 @@ async function planTurnkeyConfirm(){
   var groupId=null;
   try{
     var groupRes=await sbInsert('combined_plan_groups',{
-      project_id:projId, group_name:groupName, party_name:name, exec_type:'sc',
+      project_id:projId, group_name:groupName, party_name:name||null, exec_type:'sc',
       rate_mode:useCustRate?'custom':'boq', custom_rate:useCustRate?custRate:null,
       resource_category:cat,
       created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
@@ -2571,7 +2570,7 @@ function rrRender(){
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
           '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||g.party_name)+'</div>'+
-          '<div style="font-size:10px;color:#1565C0;">'+g.party_name+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
+          '<div style="font-size:10px;color:#1565C0;">'+(g.party_name||'Party not yet assigned')+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
           (totalRemaining>0.0001
             ? '<button onclick="rrOpenGroupPrompt(\''+g.id+'\')" style="background:#00838F;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Raise Combined RR</button>'
             : '<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:4px 10px;border-radius:5px;font-weight:700;">Fully Raised</span>')+
@@ -2587,7 +2586,7 @@ function rrRender(){
         '<div style="display:flex;justify-content:space-between;align-items:center;">'+
           '<div><span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+sc+'20;color:'+sc+';">'+sl+'</span>'+
           '<span style="font-size:12px;font-weight:800;margin-left:6px;">'+(g.group_name||g.rr_number)+'</span>'+
-          '<div style="font-size:10px;color:var(--text3);">'+g.rr_number+' \u00b7 '+partyNames.join(', ')+' \u00b7 '+giItems.length+' item'+(giItems.length!==1?'s':'')+' \u00b7 '+(g.remarks||'')+'</div></div>'+
+          '<div style="font-size:10px;color:var(--text3);">'+g.rr_number+' \u00b7 '+(partyNames.join(', ')||'Party not yet assigned')+' \u00b7 '+giItems.length+' item'+(giItems.length!==1?'s':'')+' \u00b7 '+(g.remarks||'')+'</div></div>'+
           '<div style="display:flex;gap:4px;align-items:center;">'+
             '<button onclick="rrGroupDownloadPDF(\''+g.id+'\',\''+projName+'\')" title="Download PDF" style="background:#00838F;color:white;border:none;border-radius:5px;padding:4px 8px;font-size:10px;cursor:pointer;">&#11015; PDF</button>'+
             (g.status==='pending'
@@ -3112,7 +3111,7 @@ function rrGroupOpenAllotForm(groupId){
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="background:#E0F7FA;border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:8px;">Items in this Combined RR</div>'+
-      '<div style="font-size:12px;font-weight:800;margin-bottom:6px;">Planned as: '+partyNames.join(', ')+'</div>'+
+      '<div style="font-size:12px;font-weight:800;margin-bottom:6px;">Planned as: '+(partyNames.join(', ')||'Not yet assigned')+'</div>'+
       rowsHtml+
     '</div>'+
     '<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-bottom:14px;">'+
@@ -3622,7 +3621,7 @@ function execRender(){
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
           '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||partyNames.join(', '))+'</div>'+
-          '<div style="font-size:10px;color:#1565C0;">'+partyNames.join(', ')+' \u00b7 '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
+          '<div style="font-size:10px;color:#1565C0;">'+(partyNames.join(', ')||'Party not yet assigned')+' \u00b7 '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
           '<button onclick="rrGroupOpenAllotForm(\''+g.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Group</button>'+
         '</div>'+
         '<div style="padding:8px 14px;">'+rows+'</div>'+
