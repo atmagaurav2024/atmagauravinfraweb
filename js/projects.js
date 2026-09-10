@@ -7595,7 +7595,7 @@ function execRenderDailyContent(){
       '<td style="padding:7px 10px;font-size:11px;font-weight:700;vertical-align:middle;">'+( item.short_name||item.description)+'</td>'+
       '<td style="'+td+'">'+fmt(boqQty)+' <span style="font-size:9px;color:var(--text3);">'+unit+'</span></td>'+
       '<td style="'+td+';color:#283593;font-weight:800;">'+fmt(jmQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span> <span style="font-size:9px;color:#283593;">('+jmPct+'%)</span></td>'+
-      '<td style="'+td+';color:#E65100;font-weight:800;background:#FFF8F5;">'+
+      '<td style="'+td+';color:#E65100;font-weight:800;">'+
         (doneToday>0?fmt(doneToday)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span>':'<span style="color:#CCC;font-size:11px;">—</span>')+
       '</td>'+
       '<td style="'+td+';color:'+pColor(cumulPct)+';font-weight:800;">'+fmt(doneCumul)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span> <span style="font-size:9px;color:'+pColor(cumulPct)+';">('+cumulPct+'%)</span></td>'+
@@ -7604,8 +7604,8 @@ function execRenderDailyContent(){
   }).join('');
 
   var summaryTable=
-    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
-      '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #E8EAF6;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;border:1px solid var(--border);">'+
+      '<div style="padding:10px 14px;background:var(--card-bg);border-bottom:2px solid var(--border);">'+
         '<div style="font-size:12px;font-weight:800;color:#1565C0;">&#128202; BOQ Item Progress — Completed vs JM vs BOQ</div>'+
         '<div style="display:flex;gap:12px;margin-top:5px;font-size:9px;font-weight:700;">'+
           '<span style="color:#283593;">&#9632; JM Qty (issued)</span>'+
@@ -7615,12 +7615,12 @@ function execRenderDailyContent(){
       '</div>'+
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
         '<table style="width:100%;border-collapse:collapse;min-width:600px;">'+
-          '<thead><tr style="background:#F0F4FF;">'+
+          '<thead><tr style="background:var(--bg);">'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);white-space:nowrap;">CODE</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">ITEM</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);white-space:nowrap;">BOQ QTY</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#283593;white-space:nowrap;">JM QTY</th>'+
-            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#E65100;white-space:nowrap;background:#FFF8F5;">TODAY</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#E65100;white-space:nowrap;">TODAY</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1565C0;white-space:nowrap;">CUMULATIVE</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#E65100;white-space:nowrap;">JM BALANCE</th>'+
           '</tr></thead>'+
@@ -7680,14 +7680,14 @@ function execRenderDailyContent(){
   }).join('');
 
   var resTable=resRows?
-    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
-      '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #E8F5E9;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;border:1px solid var(--border);">'+
+      '<div style="padding:10px 14px;background:var(--card-bg);border-bottom:2px solid var(--border);">'+
         '<div style="font-size:12px;font-weight:800;color:#2E7D32;">&#128101; Resource Utilisation vs Allotted</div>'+
         '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Based on qty recorded in daily entries</div>'+
       '</div>'+
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
         '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
-          '<thead><tr style="background:#F1FBF4;">'+
+          '<thead><tr style="background:var(--bg);">'+
             '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);white-space:nowrap;">TYPE</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">PARTY / ITEM</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);white-space:nowrap;">ALLOTTED</th>'+
@@ -7761,12 +7761,12 @@ function execRenderDailyContent(){
           '&#128197; Today ('+selDate.split('-').reverse().join('/')+') — '+fmt(doneToday2)+' '+(item.unit||'')+
         '</div>'+
         todayItemEntries.map(makeEntryRow).join('')
-      : '<div style="padding:6px 14px;font-size:11px;color:#B08050;background:#FFF8F5;">No entry for selected date</div>';
+      : '<div style="padding:6px 14px;font-size:11px;color:var(--text3);background:var(--bg);">No entry for selected date</div>';
 
     // Previous entries (cumul excluding today)
     var prevEntries = cumulItemEntries.filter(function(d){return d.date!==selDate;});
     var prevRowsHtml = prevEntries.length
-      ? '<div style="background:#F8FAFC;padding:4px 12px;font-size:9px;font-weight:800;color:#64748B;">'+
+      ? '<div style="background:var(--bg);padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">'+
           'Previous entries (cumulative: '+fmt(doneCumul2)+' '+(item.unit||'')+')'+
         '</div>'+
         prevEntries.map(makeEntryRow).join('')
