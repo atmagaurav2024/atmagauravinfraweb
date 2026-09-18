@@ -415,7 +415,7 @@ function renderProjList(list){
         (files.length?'<span>&#128206; '+files.length+' file'+(files.length>1?'s':'')+'</span>':'')+
       '</div>'+
       // ── Action buttons (Edit + Delete only, no Open Project) ──
-      '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid #F3F4F6;">'+
+      '<div style="padding:6px 14px 10px;display:flex;gap:6px;border-top:1px solid var(--border);">'+
         '<button onclick="event.stopPropagation();openProjForm(\''+p.id+'\')" '+
           'style="background:var(--bg);color:var(--text2);border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
           '&#9998; Edit</button>'+
@@ -585,7 +585,7 @@ async function openProjForm(id){
       '</div>'+
     '</div>'+
     // ── Cost section ──
-    '<div style="background:#F8FAFC;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
       '<div style="font-size:10px;font-weight:800;color:#1565C0;margin-bottom:8px;">CONTRACT FINANCIALS</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
         '<div><label class="flbl">Cost Put to Tender (₹)</label>'+
@@ -623,7 +623,7 @@ async function openProjForm(id){
       '<div><label class="flbl">Client / Owner</label><input id="pf-client" class="finp" value="'+esc(p.client||'')+'"></div>'+
     '</div>'+
     // ── Client GST Details (for Sales Bill / Tax Invoice "Bill To") ──
-    '<div style="background:#F3E5F5;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
       '<div style="font-size:10px;font-weight:800;color:#4A148C;margin-bottom:8px;">CLIENT GST DETAILS <span style="font-size:9px;font-weight:400;color:var(--text3);">— used as "Bill To" on Sales Bills</span></div>'+
       '<label class="flbl">Client Billing Address</label>'+
       '<textarea id="pf-client-address" class="ftxt" rows="2" placeholder="Full billing address of client">'+esc(p.client_address||'')+'</textarea>'+
@@ -633,7 +633,7 @@ async function openProjForm(id){
       '</div>'+
     '</div>'+
     // ── Dates ──
-    '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
       '<div style="font-size:10px;font-weight:800;color:#E65100;margin-bottom:8px;">KEY DATES</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">'+
         '<div><label class="flbl">LOA Date</label><input id="pf-loa" class="finp" type="date" value="'+(p.loa_date||'')+'"></div>'+
@@ -660,7 +660,7 @@ async function openProjForm(id){
     '<div style="margin-bottom:10px;"><label class="flbl">Description / Scope</label>'+
       '<textarea id="pf-desc" class="ftxt" rows="2">'+esc(p.description||'')+'</textarea></div>'+
     // ── File attachments ──
-    '<div style="background:#F8FAFC;border-radius:10px;padding:10px 12px;margin-bottom:4px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:4px;">'+
       '<div style="font-size:10px;font-weight:800;color:#2E7D32;margin-bottom:8px;">&#128196; FILE ATTACHMENTS</div>'+
       '<div id="pf-file-list" style="margin-bottom:8px;"></div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;">'+
