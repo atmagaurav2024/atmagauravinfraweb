@@ -7136,10 +7136,32 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   var commonStart = batchItems[0].start_date||'';
   var commonEnd   = batchItems[0].end_date||'';
 
-  // Table rows — lumpsum-priced batches collapse to one line (group
-  // name + total) instead of listing every BOQ item with its
-  // internally-derived proportional rate.
+  // Table rows — lumpsum-priced batches show their Scope & Payment
+  // Schedule breakdown (one row per scope, with qty/%/amount) instead
+  // of listing every BOQ item with its internally-derived proportional
+  // rate, since that's not what was actually agreed for a lumpsum.
+  var lumpsumScopeRows = [];
+  if(isLumpsum){
+    var linkedSubDoc = (typeof WA_SUBCONTRACTS!=='undefined'?WA_SUBCONTRACTS:[]).find(function(s){return s.source_batch_id===batchItems[0].batch_id;});
+    if(linkedSubDoc){
+      lumpsumScopeRows = (typeof WA_SUBCONTRACT_SCOPES!=='undefined'?WA_SUBCONTRACT_SCOPES:[]).filter(function(sc){return sc.subcontract_id===linkedSubDoc.id;});
+    }
+  }
   var rows = isLumpsum ? (
+    lumpsumScopeRows.length ? lumpsumScopeRows.map(function(sc,idx){
+      var pct=parseFloat(sc.percentage)||0;
+      var qty=parseFloat(sc.scope_qty)||0;
+      var amt=Math.round(pct/100*lumpsumTotal);
+      var rate=qty>0?amt/qty:0;
+      return '<tr>'+
+        '<td style="text-align:center;color:#888;">'+(idx+1)+'</td>'+
+        '<td><span style="font-weight:700;">'+sc.scope_name+'</span>'+
+          '<div style="font-size:9px;color:#555;margin-top:3px;font-style:italic;">'+pct.toFixed(2)+'% of lumpsum</div></td>'+
+        '<td style="text-align:center;">'+qty+' '+(sc.scope_unit||'')+'</td>'+
+        '<td style="text-align:right;">'+('₹'+rate.toLocaleString('en-IN',{minimumFractionDigits:2}))+'</td>'+
+        '<td style="text-align:right;font-weight:700;">'+('₹'+amt.toLocaleString('en-IN',{minimumFractionDigits:2}))+'</td>'+
+      '</tr>';
+    }).join('') : (
     '<tr>'+
       '<td style="text-align:center;color:#888;">1</td>'+
       '<td><span style="font-weight:700;">'+(groupNameLabel||'Combined Work')+'</span>'+
@@ -7148,6 +7170,7 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
       '<td style="text-align:right;">—</td>'+
       '<td style="text-align:right;font-weight:700;">'+('₹'+lumpsumTotal.toLocaleString('en-IN',{minimumFractionDigits:2}))+'</td>'+
     '</tr>'
+    )
   ) : batchItems.map(function(a,idx){
     var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var boqItem = WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
