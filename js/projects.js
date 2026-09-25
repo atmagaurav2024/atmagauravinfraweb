@@ -3097,8 +3097,45 @@ function rrGroupToggleRateMode(mode){
   var lumpsumEl=document.getElementById('rr-grp-lumpsum-row');
   if(itemwiseEl) itemwiseEl.style.display=(mode==='lumpsum'?'none':'block');
   if(lumpsumEl) lumpsumEl.style.display=(mode==='lumpsum'?'block':'none');
+  if(mode==='lumpsum'){
+    var rowsEl=document.getElementById('rr-grp-scope-rows');
+    if(rowsEl && !rowsEl.children.length) rrGroupAddScopeLine();
+  }
 }
-function rrGroupOpenAllotForm(groupId){
+var RR_GRP_SCOPE_LINE_SEQ=0;
+function rrGroupAddScopeLine(){
+  var rowsEl=document.getElementById('rr-grp-scope-rows');
+  if(!rowsEl) return;
+  var lineId='rgsl'+(RR_GRP_SCOPE_LINE_SEQ++);
+  var row=document.createElement('div');
+  row.id=lineId;
+  row.style.cssText='display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px;';
+  row.innerHTML=
+    '<input class="rr-grp-scope-name finp" placeholder="Scope, e.g. Footing" style="padding:6px 8px;font-size:11px;">'+
+    '<input class="rr-grp-scope-qty finp" type="number" step="0.001" placeholder="Qty" style="padding:6px 8px;font-size:11px;">'+
+    '<select class="rr-grp-scope-unit fsel" style="padding:6px 4px;font-size:11px;">'+buildUomOpts('')+'</select>'+
+    '<input class="rr-grp-scope-pct finp" type="number" step="0.01" placeholder="% of lumpsum" style="padding:6px 8px;font-size:11px;">'+
+    '<button type="button" onclick="rrGroupRemoveScopeLine(\''+lineId+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">&#215;</button>';
+  rowsEl.appendChild(row);
+  row.querySelector('.rr-grp-scope-pct').addEventListener('input', rrGroupUpdateScopeTotal);
+  rrGroupUpdateScopeTotal();
+}
+function rrGroupRemoveScopeLine(lineId){
+  var row=document.getElementById(lineId);
+  if(row) row.remove();
+  rrGroupUpdateScopeTotal();
+}
+function rrGroupUpdateScopeTotal(){
+  var el=document.getElementById('rr-grp-scope-total');
+  if(!el) return;
+  var total=0;
+  document.querySelectorAll('.rr-grp-scope-pct').forEach(function(inp){ total+=parseFloat(inp.value)||0; });
+  var ok=Math.abs(total-100)<0.01;
+  el.textContent='Total: '+total.toFixed(2)+'% of lumpsum'+(ok?' \u2713':' (must equal 100%)');
+  el.style.color=ok?'#2E7D32':'#C62828';
+}
+async function rrGroupOpenAllotForm(groupId){
+  await loadUomIfNeeded();
   var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;})||WA_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
   if(!group){ toast('Group not found','error'); return; }
   var giItems=(typeof RR_COMBINED_RR_ITEMS!=='undefined'?RR_COMBINED_RR_ITEMS:[]).concat(typeof WA_COMBINED_RR_ITEMS!=='undefined'?WA_COMBINED_RR_ITEMS:[])
@@ -3143,7 +3180,14 @@ function rrGroupOpenAllotForm(groupId){
       '<div id="rr-grp-lumpsum-row" style="display:none;margin-bottom:10px;">'+
         '<label class="flbl">Lumpsum Amount (\u20b9) *</label>'+
         '<input id="rr-grp-lumpsum-amt" class="finp" type="number" step="0.01" placeholder="Total for all '+giItems.length+' items">'+
-        '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Split across items in proportion to their planned value \u2014 each item still gets its own rate stored for billing/execution tracking.</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:4px;margin-bottom:12px;">Split across items in proportion to their planned value \u2014 each item still gets its own rate stored for billing/execution tracking.</div>'+
+        '<div style="background:#FFF;border-radius:10px;padding:10px;border:1px solid #B2EBF2;">'+
+          '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:2px;">Scope Breakdown *</div>'+
+          '<div style="font-size:9.5px;color:#666;margin-bottom:8px;">Break the lumpsum into billable milestones \u2014 e.g. "Footing", qty 8 Nos, 20% of lumpsum. Progress against each is logged later in Subcontract Scope for billing.</div>'+
+          '<div id="rr-grp-scope-rows"></div>'+
+          '<button type="button" onclick="rrGroupAddScopeLine()" style="background:#E0F7FA;border:none;color:#00838F;font-size:11px;font-weight:800;border-radius:6px;padding:6px 10px;cursor:pointer;margin-top:4px;">+ Add Scope Line</button>'+
+          '<div id="rr-grp-scope-total" style="font-size:11px;font-weight:800;margin-top:8px;text-align:right;"></div>'+
+        '</div>'+
       '</div>'+
       '<div id="rr-grp-itemwise-rows">'+rowsHtml+'</div>'+
     '</div>'+
@@ -3230,6 +3274,21 @@ async function rrGroupAllotConfirm(groupId){
   if(rateMode==='lumpsum'){
     lumpsum=parseFloat((document.getElementById('rr-grp-lumpsum-amt')||{}).value);
     if(isNaN(lumpsum)||lumpsum<=0){ toast('Enter a valid lumpsum amount','warning'); return; }
+
+    var scopeLines=[]; var scopeTotalPct=0; var scopeError=null;
+    document.querySelectorAll('#rr-grp-scope-rows > div').forEach(function(row){
+      var name=(row.querySelector('.rr-grp-scope-name')||{}).value.trim()||'';
+      var qty=parseFloat((row.querySelector('.rr-grp-scope-qty')||{}).value);
+      var unit=(row.querySelector('.rr-grp-scope-unit')||{}).value||'';
+      var pct=parseFloat((row.querySelector('.rr-grp-scope-pct')||{}).value);
+      if(!name||isNaN(qty)||qty<=0||!unit||isNaN(pct)||pct<=0){ scopeError='Fill in every field on every scope line'; return; }
+      scopeLines.push({name:name,qty:qty,unit:unit,pct:pct});
+      scopeTotalPct+=pct;
+    });
+    if(!scopeLines.length){ toast('Add at least one scope breakdown line for the lumpsum','warning'); return; }
+    if(scopeError){ toast(scopeError,'warning'); return; }
+    if(Math.abs(scopeTotalPct-100)>0.01){ toast('Scope breakdown must total 100% of the lumpsum (currently '+scopeTotalPct.toFixed(2)+'%)','warning'); return; }
+
     var planItemsPool2=(typeof RR_COMBINED_PLAN_ITEMS!=='undefined'?RR_COMBINED_PLAN_ITEMS:[]).concat(typeof WA_COMBINED_PLAN_ITEMS!=='undefined'?WA_COMBINED_PLAN_ITEMS:[]);
     var planItemById2={}; planItemsPool2.forEach(function(pi){ planItemById2[pi.id]=pi; });
     var plannedValues={}; var totalPlannedValue=0;
@@ -3288,6 +3347,35 @@ async function rrGroupAllotConfirm(groupId){
     closeSheet('ov-exec','sh-exec');
     return;
   }
+
+  if(rateMode==='lumpsum' && scopeLines && scopeLines.length){
+    try{
+      var subRes=await sbInsert('subcontracts',{
+        project_id:projId, party_name:partyName, subcontract_value:lumpsum,
+        source_batch_id:batchId,
+        notes:'Auto-created from lumpsum Combined RR allotment ('+group.rr_number+')',
+        created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
+      });
+      var subcontractId=subRes&&subRes[0]?subRes[0].id:null;
+      if(subcontractId){
+        var batchBoqItemIds=Array.from(new Set(giItems.map(function(ri){return ri.boq_item_id;})));
+        for(var si=0;si<scopeLines.length;si++){
+          var sl=scopeLines[si];
+          var scopeRes=await sbInsert('subcontract_scopes',{
+            subcontract_id:subcontractId, scope_name:sl.name, scope_qty:sl.qty, scope_unit:sl.unit, percentage:sl.pct
+          });
+          var scopeId=scopeRes&&scopeRes[0]?scopeRes[0].id:null;
+          if(scopeId){
+            var itemRows=batchBoqItemIds.map(function(itemId){ return {scope_id:scopeId, boq_item_id:itemId}; });
+            await sbInsert('subcontract_scope_items', itemRows);
+          }
+        }
+      }
+    }catch(e){
+      toast('Items allotted, but the scope breakdown couldn\'t be saved automatically — set it up in Subcontract Scope instead ('+e.message+')','warning');
+    }
+  }
+
   try{
     await sbUpdate('combined_rr_groups', groupId, {status:'allotted'});
     toast('All '+ok+' items allotted','success');
