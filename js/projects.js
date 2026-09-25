@@ -29,7 +29,7 @@ function sortByItemCode(arr){
 
 var PROJ_DATA=[], PROJ_EDIT_ID=null;
 var PROJ_CACHE_PREFIX='aipl_project_list_v2:';
-var PROJ_SUMMARY_SELECT='id,name,code,status,location,contract_value,client,client_gstin,client_state,client_address,description,project_length,tender_cost,tender_pct,loa_date,wo_date,completion_date,dlp_date,revised_completion_date,contract_provisions,eot_entries,coordinates,attachments';
+var PROJ_SUMMARY_SELECT='id,name,code,status,location,contract_value,client,client_gstin,client_state,client_address,description,project_length,tender_cost,tender_pct,loa_date,wo_date,completion_date,dlp_date,revised_completion_date,contract_provisions,eot_entries,coordinates,attachments,execution_mode';
 var PROJ_LOADING=null;
 
 // Cache key is scoped to the signed-in user so switching accounts on a
