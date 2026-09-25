@@ -2433,7 +2433,8 @@ async function execLoadItems(silent){
       safe(sbFetch('store_issue_log',{select:'*',filter:'project_id=eq.'+projId,order:'issue_date.desc'})),
       safe(sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'})),
       safe(sbFetch('sales_bills',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
-      safe(sbFetch('sales_payments',{select:'*',filter:'project_id=eq.'+projId,order:'payment_date.desc'}))
+      safe(sbFetch('sales_payments',{select:'*',filter:'project_id=eq.'+projId,order:'payment_date.desc'})),
+      safe(sbFetch('subcontracts',{select:'*',filter:'project_id=eq.'+projId}))
     ]);
     WA_ITEMS=sortByItemCode(Array.isArray(r[0])?r[0]:[]);
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -2451,9 +2452,18 @@ async function execLoadItems(silent){
     WA_ADVANCES=Array.isArray(r[11])?r[11]:[];
     WA_SALES_BILLS=Array.isArray(r[12])?r[12]:[];
     WA_SALES_PAYMENTS=Array.isArray(r[13])?r[13]:[];
+    WA_SUBCONTRACTS=Array.isArray(r[14])?r[14]:[];
     STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
+  try{
+    var subIds=WA_SUBCONTRACTS.map(function(s){return s.id;});
+    WA_SUBCONTRACT_SCOPES=subIds.length?await sbFetch('subcontract_scopes',{select:'*',filter:'subcontract_id=in.('+subIds.join(',')+')'}):[];
+    if(!Array.isArray(WA_SUBCONTRACT_SCOPES)) WA_SUBCONTRACT_SCOPES=[];
+  }catch(e){
+    WA_SUBCONTRACT_SCOPES=[];
+    console.warn('subcontract_scopes not available yet', e);
+  }
   try{
     var pg=await sbFetch('combined_plan_groups',{select:'id',filter:'project_id=eq.'+projId});
     var pgIds=(Array.isArray(pg)?pg:[]).map(function(g){return g.id;});
@@ -6614,8 +6624,34 @@ function execRenderAllotted(){
     var headerLabel = groupName || (resNames.length ? resNames.join(', ') : (partyNames[0]||''));
     var headerVendor = partyNames.join(', ');
 
-    // Resource rows
-    var itemRows = items.map(function(a){
+    // Resource rows — or, for a lumpsum-priced batch, its Scope & Payment
+    // Schedule breakdown instead, since per-item proportional rates aren't
+    // what was actually agreed for a lumpsum allotment.
+    var isLumpsumBatch = items.length && !!items[0].lumpsum_amount;
+    var itemRows;
+    if(isLumpsumBatch){
+      var lumpsumTotal = Math.round(parseFloat(items[0].lumpsum_amount)||0);
+      var linkedSub = WA_SUBCONTRACTS.find(function(s){return s.source_batch_id===batchKey;});
+      var linkedScopes = linkedSub ? WA_SUBCONTRACT_SCOPES.filter(function(sc){return sc.subcontract_id===linkedSub.id;}) : [];
+      itemRows = linkedScopes.length ? (
+        '<div style="padding:8px 14px 4px;font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">Scope &amp; Payment Schedule \u2014 Lumpsum '+inr(lumpsumTotal)+'</div>'+
+        linkedScopes.map(function(sc){
+          var pct=parseFloat(sc.percentage)||0;
+          var amt=Math.round(pct/100*lumpsumTotal);
+          return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
+            '<div style="flex:1;min-width:0;">'+
+              '<div style="font-size:12px;font-weight:800;">'+sc.scope_name+'</div>'+
+              '<div style="font-size:10px;color:var(--text3);">'+sc.scope_qty+' '+(sc.scope_unit||'')+'</div>'+
+            '</div>'+
+            '<div style="text-align:right;flex-shrink:0;">'+
+              '<div style="font-size:12px;font-weight:800;">'+inr(amt)+'</div>'+
+              '<div style="font-size:9px;color:var(--text3);">'+pct.toFixed(2)+'% of lumpsum</div>'+
+            '</div>'+
+          '</div>';
+        }).join('')
+      ) : '<div style="padding:14px;font-size:11px;color:var(--text3);text-align:center;">Scope breakdown not found for this lumpsum batch \u2014 set it up in Subcontract Scope.</div>';
+    } else {
+    itemRows = items.map(function(a){
       var aCol = tCol[a.exec_type]||'#37474F';
       var itemOrders = WA_ORDERS.filter(function(o){return o.allot_id===a.id;});
       var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
@@ -6636,6 +6672,7 @@ function execRenderAllotted(){
         '</div>'+
       '</div>';
     }).join('');
+    }
 
     // Batch order download row
     var orderRow = hasOrder
