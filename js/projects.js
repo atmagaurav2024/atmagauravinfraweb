@@ -4863,6 +4863,21 @@ async function execDelBatch(batchKey){
     try{await sbUpdate('combined_rr_groups',groupIdList[k],{status:'approved'});}catch(e){}
   }
 
+  // If this batch had a subcontract auto-created for it (lumpsum
+  // allotment), delete it too — its scopes, scope items, and progress
+  // entries cascade-delete with it, so this batch stops showing up in
+  // Daily Progress' Scope Completed section and the Subcontract Scope
+  // tab once the allotment itself is gone.
+  var linkedSub=(typeof WA_SUBCONTRACTS!=='undefined'?WA_SUBCONTRACTS:[]).find(function(s){return s.source_batch_id===batchKey;});
+  if(linkedSub){
+    try{
+      await sbDelete('subcontracts', linkedSub.id);
+      WA_SUBCONTRACTS=WA_SUBCONTRACTS.filter(function(s){return s.id!==linkedSub.id;});
+      if(typeof WA_SUBCONTRACT_SCOPES!=='undefined') WA_SUBCONTRACT_SCOPES=WA_SUBCONTRACT_SCOPES.filter(function(sc){return sc.subcontract_id!==linkedSub.id;});
+      if(typeof execRenderLumpsumScopeProgress==='function') execRenderLumpsumScopeProgress();
+    }catch(e){ console.error('Could not delete linked subcontract for this batch',e); }
+  }
+
   WA_ALLOT=WA_ALLOT.filter(function(a){return itemIds.indexOf(a.id)===-1;});
   if(WA_SUBTAB==='allotted') execRenderAllotted();
   else if(WA_SUBTAB==='allot') execRender();
