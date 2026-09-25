@@ -206,9 +206,17 @@ function projModRenderNav(){
   // ── Sub-tab row ──
   var subRow='';
   if(hasProjId&&activeGroup&&!onProjects){
+    var subTabIds=PMT_GROUPS[activeGroup];
+    if(activeGroup==='preconstruction'){
+      var curProj=PROJ_DATA.find(function(p){return p.id===PROJ_MOD_SEL_ID;});
+      if(curProj&&curProj.execution_mode==='item_rate'){
+        subTabIds=subTabIds.filter(function(s){return s!=='schh'&&s!=='schb';});
+        if(PROJ_MOD_TAB==='schh'||PROJ_MOD_TAB==='schb'){ PROJ_MOD_TAB='boq'; }
+      }
+    }
     subRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;'+
       'padding:0 10px 8px;gap:4px;background:var(--card-bg);border-top:1px solid #F3F4F6;">'+
-      PMT_GROUPS[activeGroup].map(function(s){
+      subTabIds.map(function(s){
         var sa=PROJ_MOD_TAB===s;
         return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
           'style="flex-shrink:0;padding:5px 12px;font-size:11px;font-weight:800;border:none;border-radius:7px;'+
