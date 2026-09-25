@@ -25717,11 +25717,16 @@ async function companySave(){
       }
     }
 
-    // Save to Supabase
-    if(COMPANY_DATA && COMPANY_DATA.id){
+    // Save to Supabase — always re-check for an existing row fresh,
+    // rather than trusting COMPANY_DATA.id (which could be stale or
+    // unset if this ran before the initial load finished), since that
+    // mismatch is how a duplicate row gets created in the first place.
+    var existingRows = await sbFetch('company_details',{select:'id',order:'id.asc'});
+    var existingId = (Array.isArray(existingRows)&&existingRows.length) ? existingRows[0].id : null;
+    if(existingId){
       // Update existing
-      var res = await sbUpdate('company_details', COMPANY_DATA.id, data);
-      COMPANY_DATA = Object.assign(COMPANY_DATA, data);
+      var res = await sbUpdate('company_details', existingId, data);
+      COMPANY_DATA = Object.assign({id:existingId}, data);
     } else {
       // Insert new
       var res = await sbInsert('company_details', data);
