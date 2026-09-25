@@ -6969,6 +6969,7 @@ async function execGenPartyDoc(partyKey, docType){
 
 async function execGenBatchDoc(batchKey, docType){
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  if((!COMPANY_DATA||!COMPANY_DATA.name) && typeof preloadCompanyData==='function'){ try{await preloadCompanyData();}catch(e){} }
 
   // Get all allotments in this batch
   var batchItems = WA_ALLOT.filter(function(a){
