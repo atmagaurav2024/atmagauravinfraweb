@@ -7363,8 +7363,9 @@ function execDailyDateChange(){
   execRenderDailyContent();
 }
 
-function execRenderDaily(){
+async function execRenderDaily(){
   var el=document.getElementById('exec-content');if(!el)return;
+  await scLoadItems();
 
   if(!WA_ITEMS.length){
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:32px;">&#128197;</div><div style="font-weight:700;margin-top:8px;">No BOQ items found</div><div style="font-size:11px;margin-top:6px;">Add BOQ items first, then come back to record daily progress</div></div>';
@@ -7385,9 +7386,47 @@ function execRenderDaily(){
       '<button onclick="execDailyDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
       '<button onclick="execOpenDailyEntryPicker()" style="background:#E65100;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;">+ New Entry</button>'+
     '</div>'+
+    '<div id="dp-lumpsum-scope-content"></div>'+
     '<div id="dp-daily-content"></div>';
 
+  execRenderLumpsumScopeProgress();
   execRenderDailyContent();
+}
+
+// Lumpsum-priced subcontracts' scope breakdown, surfaced here too so
+// progress against scope milestones (e.g. "3 of 8 footings") can be
+// logged right alongside regular BOQ-based daily progress, rather than
+// only from the Subcontract Scope tab. Reuses scOpenProgress()/
+// scSaveProgress() directly - same data, same billing flow.
+function execRenderLumpsumScopeProgress(){
+  var el=document.getElementById('dp-lumpsum-scope-content');
+  if(!el) return;
+  if(!SC_SCOPES.length){ el.innerHTML=''; return; }
+  var rows=SC_SCOPES.map(function(scope){
+    var sub=SC_SUBCONTRACTS.find(function(s){return s.id===scope.subcontract_id;});
+    var progress=SC_PROGRESS.filter(function(p){return p.scope_id===scope.id;});
+    var completedQty=progress.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+    var scopeQty=parseFloat(scope.scope_qty)||0;
+    var remainingQty=Math.max(0,scopeQty-completedQty);
+    var pctDone=scopeQty>0?Math.min(100,(completedQty/scopeQty)*100):0;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div style="font-size:12px;font-weight:800;">'+scope.scope_name+(sub?' <span style="font-weight:600;color:var(--text3);">&#8594; '+sub.party_name+'</span>':'')+'</div>'+
+        '<div style="font-size:10px;color:var(--text3);">'+completedQty.toFixed(3).replace(/\.?0+$/,'')+' of '+scopeQty+' '+(scope.scope_unit||'')+' done ('+pctDone.toFixed(0)+'%)</div>'+
+      '</div>'+
+      (remainingQty>0.0001
+        ? '<button onclick="scOpenProgress(\''+scope.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Log Progress</button>'
+        : '<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:5px;font-weight:700;flex-shrink:0;">Complete</span>')+
+    '</div>';
+  }).join('');
+  el.innerHTML=
+    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;border:1px solid var(--border);">'+
+      '<div style="padding:10px 14px;background:var(--card-bg);border-bottom:2px solid var(--border);">'+
+        '<div style="font-size:12px;font-weight:800;color:#2E7D32;">&#128203; Scope Completed (Lumpsum)</div>'+
+        '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Logging progress here bills the corresponding subcontractor directly.</div>'+
+      '</div>'+
+      rows+
+    '</div>';
 }
 
 // Show BOQ item picker then open entry form
@@ -13204,6 +13243,7 @@ async function scSaveProgress(scopeId){
 
     closeScSheet();
     await scLoadItems();
+    execRenderLumpsumScopeProgress();
     toast('Progress logged, bill '+billRef+' created for '+fmtINR(amount),'success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
