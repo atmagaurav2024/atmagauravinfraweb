@@ -622,6 +622,13 @@ async function openProjForm(id){
         '<select id="pf-status" class="fsel" disabled style="background:#F1F1F1;color:#4B5563;cursor:not-allowed;">'+statusOpts+'</select></div>'+
       '<div><label class="flbl">Client / Owner</label><input id="pf-client" class="finp" value="'+esc(p.client||'')+'"></div>'+
     '</div>'+
+    '<div style="margin-bottom:8px;"><label class="flbl">Execution Mode</label>'+
+      '<select id="pf-exec-mode" class="fsel">'+
+        '<option value="">— Select —</option>'+
+        '<option value="item_rate"'+(p.execution_mode==='item_rate'?' selected':'')+'>Item Rate Contract</option>'+
+        '<option value="epc"'+(p.execution_mode==='epc'?' selected':'')+'>EPC Contract</option>'+
+      '</select>'+
+    '</div>'+
     // ── Client GST Details (for Sales Bill / Tax Invoice "Bill To") ──
     '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
       '<div style="font-size:10px;font-weight:800;color:#4A148C;margin-bottom:8px;">CLIENT GST DETAILS <span style="font-size:9px;font-weight:400;color:var(--text3);">— used as "Bill To" on Sales Bills</span></div>'+
@@ -787,6 +794,7 @@ async function saveProjForm(editId){
   addCol('client_address', (document.getElementById('pf-client-address')||{value:''}).value.trim()||null);
   addCol('client_gstin',   (document.getElementById('pf-client-gstin')||{value:''}).value.trim().toUpperCase()||null);
   addCol('client_state',   (document.getElementById('pf-client-state')||{value:''}).value.trim()||null);
+  addCol('execution_mode', (document.getElementById('pf-exec-mode')||{value:''}).value||null);
 
   try{
     toast('Saving...','info');
