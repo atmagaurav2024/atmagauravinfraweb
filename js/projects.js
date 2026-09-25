@@ -2359,6 +2359,7 @@ async function planDelRes(id){
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[],WA_COMBINED_PLAN_ITEMS=[],WA_COMBINED_RR_GROUPS=[],WA_COMBINED_RR_ITEMS=[];
 var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[],WA_SALES_PAYMENTS=[];
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
+var WA_DAILY_SUBTAB='boq'; // 'boq' | 'scope' — which Daily Progress sub-view is active
 var WA_SUBTAB='orders'; // allot | allotted | daily | bills | orders
 
 var WA_LOADED_PROJ = ''; // track which project data is currently loaded
@@ -7388,6 +7389,9 @@ async function execRenderDaily(){
     return;
   }
 
+  var hasScopes = SC_SCOPES.length>0;
+  if(!hasScopes) WA_DAILY_SUBTAB='boq'; // no scopes to show — force back to BOQ view
+
   // Render date picker + New Entry button at top
   el.innerHTML=
     '<div style="background:var(--card-bg);border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'+
@@ -7402,11 +7406,26 @@ async function execRenderDaily(){
       '<button onclick="execDailyDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
       '<button onclick="execOpenDailyEntryPicker()" style="background:#E65100;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;">+ New Entry</button>'+
     '</div>'+
-    '<div id="dp-lumpsum-scope-content"></div>'+
-    '<div id="dp-daily-content"></div>';
+    (hasScopes ?
+    '<div style="display:flex;gap:6px;margin-bottom:12px;">'+
+      '<button id="dp-tab-boq" onclick="execDailySwitchSubTab(\'boq\')" style="flex:1;padding:9px;font-size:12px;font-weight:800;border:none;border-radius:8px;cursor:pointer;background:'+(WA_DAILY_SUBTAB==='boq'?'#111827':'var(--card-bg)')+';color:'+(WA_DAILY_SUBTAB==='boq'?'white':'var(--text)')+';border:1px solid var(--border);">BOQ Item Progress</button>'+
+      '<button id="dp-tab-scope" onclick="execDailySwitchSubTab(\'scope\')" style="flex:1;padding:9px;font-size:12px;font-weight:800;border:none;border-radius:8px;cursor:pointer;background:'+(WA_DAILY_SUBTAB==='scope'?'#111827':'var(--card-bg)')+';color:'+(WA_DAILY_SUBTAB==='scope'?'white':'var(--text)')+';border:1px solid var(--border);">Scope Completed</button>'+
+    '</div>' : '')+
+    '<div id="dp-lumpsum-scope-content" style="display:'+(WA_DAILY_SUBTAB==='scope'?'block':'none')+';"></div>'+
+    '<div id="dp-daily-content" style="display:'+(WA_DAILY_SUBTAB==='boq'?'block':'none')+';"></div>';
 
   execRenderLumpsumScopeProgress();
   execRenderDailyContent();
+}
+
+function execDailySwitchSubTab(tab){
+  WA_DAILY_SUBTAB=tab;
+  var boqEl=document.getElementById('dp-daily-content'), scopeEl=document.getElementById('dp-lumpsum-scope-content');
+  var boqBtn=document.getElementById('dp-tab-boq'), scopeBtn=document.getElementById('dp-tab-scope');
+  if(boqEl) boqEl.style.display=(tab==='boq'?'block':'none');
+  if(scopeEl) scopeEl.style.display=(tab==='scope'?'block':'none');
+  if(boqBtn){ boqBtn.style.background=(tab==='boq'?'#111827':'var(--card-bg)'); boqBtn.style.color=(tab==='boq'?'white':'var(--text)'); }
+  if(scopeBtn){ scopeBtn.style.background=(tab==='scope'?'#111827':'var(--card-bg)'); scopeBtn.style.color=(tab==='scope'?'white':'var(--text)'); }
 }
 
 // Lumpsum-priced subcontracts' scope breakdown, surfaced here too so
