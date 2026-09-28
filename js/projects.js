@@ -7210,7 +7210,6 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   var isPO  = docType==='po';
   var titleStr = isPO ? 'PURCHASE ORDER' : 'WORK ORDER';
   var accentCol = isPO ? '#1565C0' : '#E65100';
-  var lightBg   = isPO ? '#E3F2FD' : '#FFF3E0';
   var partyLabel = batchItems.map(function(a){return a.party_name;}).filter(function(v,i,arr){return arr.indexOf(v)===i;}).join(', ');
   var groupNameLabel = batchItems.map(function(a){return a.group_name;}).filter(Boolean)[0]||'';
 
@@ -7292,123 +7291,128 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
     return s.trim()+' Only';
   })(Math.round(total));
 
+  // Formal, letter-style A4 print layout — meant to be printed/PDF'd on
+  // company letterhead paper, not viewed as an in-app card. @page pins the
+  // physical size to A4 so "Print / Save as PDF" yields a true A4 sheet
+  // regardless of the printer's own default paper size.
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
     '<title>'+titleStr+' — '+fullDocNo+'</title>'+
     '<style>'+
       '*{box-sizing:border-box;margin:0;padding:0;}'+
-      'body{font-family:"Arial",sans-serif;font-size:12px;color:#1a1a1a;background:var(--card-bg);}'+
-      '.page{max-width:800px;margin:0 auto;padding:32px 36px;}'+
-      // Header strip
-      '.top-strip{background:'+accentCol+';color:white;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:8px 8px 0 0;}'+
-      '.top-strip .doc-type{font-size:22px;font-weight:900;letter-spacing:1px;}'+
-      '.top-strip .doc-no{font-size:13px;font-weight:700;opacity:.9;}'+
-      // Company header
-      '.co-bar{background:'+lightBg+';padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid '+accentCol+';}'+
-      '.co-name{font-size:17px;font-weight:900;color:'+accentCol+';}'+
-      '.co-info{font-size:10px;color:#555;margin-top:3px;line-height:1.5;}'+
-      '.doc-meta{text-align:right;font-size:11px;color:#444;line-height:1.8;}'+
-      // Party + Project cards
-      '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #DDD;border-radius:6px;overflow:hidden;margin:14px 0;}'+
-      '.info-card{padding:10px 14px;}.info-card+.info-card{border-left:1px solid #DDD;}'+
-      '.info-card .lbl{font-size:9px;font-weight:800;text-transform:uppercase;color:'+accentCol+';letter-spacing:.5px;margin-bottom:4px;}'+
-      '.info-card .val{font-size:13px;font-weight:800;color:#111;}'+
-      '.info-card .sub{font-size:10px;color:#666;margin-top:2px;}'+
-      // Terms row
-      '.terms-bar{background:#F8FAFC;border:1px solid #DDD;border-radius:6px;padding:8px 14px;margin-bottom:14px;display:flex;gap:24px;flex-wrap:wrap;}'+
-      '.terms-bar .t-item{font-size:10px;color:#555;}<br>'+
-      '.terms-bar .t-item b{color:#111;}'+
-      // Table
-      'table{width:100%;border-collapse:collapse;margin-bottom:0;font-size:11.5px;}'+
-      'thead tr{background:'+accentCol+';color:white;}'+
-      'thead th{padding:8px 10px;text-align:left;font-size:11px;font-weight:700;}'+
-      'tbody tr{border-bottom:1px solid #EEE;}'+
-      'tbody tr:nth-child(even){background:#FAFAFA;}'+
-      'tbody td{padding:7px 10px;vertical-align:top;}'+
-      '.total-row td{background:'+lightBg+';font-weight:900;font-size:13px;border-top:2px solid '+accentCol+';}'+
-      '.amt-words{background:#F0F4FF;border:1px dashed '+accentCol+';border-radius:6px;padding:8px 14px;margin:12px 0;font-size:11px;color:#333;}'+
-      '.amt-words b{color:'+accentCol+';}'+
+      '@page{size:A4;margin:14mm 16mm;}'+
+      'body{font-family:"Arial",Helvetica,sans-serif;font-size:11.5px;line-height:1.55;color:#1a1a1a;background:#E8E8E8;}'+
+      '.sheet{width:210mm;min-height:297mm;margin:18px auto;background:#FFF;padding:14mm 16mm;box-shadow:0 0 14px rgba(0,0,0,.18);}'+
+      // Letterhead
+      '.letterhead{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px double '+accentCol+';padding-bottom:8px;}'+
+      '.co-name{font-size:19px;font-weight:900;letter-spacing:.3px;color:#111;text-transform:uppercase;}'+
+      '.co-info{font-size:9.5px;color:#555;margin-top:3px;line-height:1.6;}'+
+      '.letterhead-right{text-align:right;font-size:9.5px;color:#555;line-height:1.6;}'+
+      // Title + ref row
+      '.doc-title{text-align:center;margin:18px 0 10px;}'+
+      '.doc-title .t{display:inline-block;font-size:18px;font-weight:900;letter-spacing:3px;color:#111;padding-bottom:4px;border-bottom:2.5px solid '+accentCol+';}'+
+      '.ref-row{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#333;margin-bottom:16px;padding-bottom:6px;border-bottom:1px solid #CCC;}'+
+      // To / subject / body
+      '.to-block{margin-bottom:10px;}'+
+      '.to-block .lbl{font-weight:800;color:#333;font-size:11px;}'+
+      '.to-name{font-weight:800;font-size:12.5px;color:#111;margin-top:2px;}'+
+      '.to-sub{font-size:10px;color:#666;}'+
+      '.subject{margin:14px 0;font-size:11.5px;}'+
+      '.body-para{margin:8px 0 12px;text-align:justify;font-size:11.5px;}'+
+      // Project/scope detail strip
+      'table.det{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:10.5px;}'+
+      'table.det td{border:1px solid #CCC;padding:5px 8px;}'+
+      'table.det td.k{background:#F5F5F5;font-weight:700;color:#444;width:20%;white-space:nowrap;}'+
+      // Items table
+      'table.items{width:100%;border-collapse:collapse;font-size:11px;}'+
+      'table.items th{border:1px solid #999;background:#EEEEEE;color:#111;padding:6px 8px;font-size:10.5px;font-weight:800;text-align:left;}'+
+      'table.items td{border:1px solid #CCC;padding:6px 8px;vertical-align:top;}'+
+      '.total-row td{font-weight:900;background:#F5F5F5;border-top:2px solid #333;font-size:12px;}'+
+      '.amt-words{margin:10px 0 16px;font-size:10.5px;font-style:italic;color:#333;border-top:1px dashed #999;border-bottom:1px dashed #999;padding:7px 0;}'+
       // Terms & conditions
-      '.tnc{margin-top:14px;padding:12px 14px;border:1px solid #DDD;border-radius:6px;font-size:10px;color:#555;}'+
-      '.tnc .tnc-title{font-size:11px;font-weight:800;color:#333;margin-bottom:6px;}'+
-      '.tnc ol{padding-left:16px;line-height:2;}'+
-      // Signatures
-      '.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:32px;}'+
-      '.sig-box{border-top:1.5px solid #333;padding-top:8px;text-align:center;}'+
-      '.sig-box .sig-name{font-size:11px;font-weight:800;color:#333;margin-top:4px;}'+
-      '.sig-box .sig-role{font-size:9px;color:#888;margin-top:2px;}'+
-      '.sig-space{height:48px;}'+
-      '@media print{button{display:none!important;}.page{padding:20px 24px;}}'+
+      '.tnc{margin-top:12px;}'+
+      '.tnc .tnc-title{font-size:11.5px;font-weight:800;color:#111;border-bottom:1px solid #999;padding-bottom:3px;margin-bottom:7px;}'+
+      '.tnc ol{padding-left:18px;}'+
+      '.tnc li{margin-bottom:5px;font-size:10.5px;color:#333;}'+
+      // Closing + signatures
+      '.closing{margin-top:16px;font-size:11px;}'+
+      '.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:44px;}'+
+      '.sig-box{font-size:10.5px;}'+
+      '.sig-space{height:50px;}'+
+      '.sig-line{border-top:1px solid #333;padding-top:6px;}'+
+      '.sig-name{font-weight:800;color:#111;}'+
+      '.sig-role{color:#777;font-size:9.5px;}'+
+      '.footer-note{margin-top:26px;padding-top:8px;border-top:1px solid #DDD;font-size:8.5px;color:#999;text-align:center;}'+
+      '@media print{'+
+        'body{background:#FFF;}'+
+        '.sheet{box-shadow:none;margin:0;width:auto;min-height:auto;padding:0;}'+
+        'button{display:none!important;}'+
+        'table.items tr, .tnc li, .sig-grid{page-break-inside:avoid;}'+
+      '}'+
     '</style></head><body>'+
-    '<div class="page">'+
 
-    // Print button
-    '<button onclick="window.print()" style="background:'+accentCol+';color:white;border:none;padding:9px 22px;border-radius:6px;cursor:pointer;margin-bottom:16px;font-size:13px;font-weight:700;font-family:Arial,sans-serif;">&#128438; Print / Save as PDF</button>'+
+    // Print button (hidden on the printed/PDF output)
+    '<button onclick="window.print()" style="display:block;background:'+accentCol+';color:white;border:none;padding:9px 22px;border-radius:6px;cursor:pointer;margin:16px auto 0;font-size:13px;font-weight:700;font-family:Arial,sans-serif;">&#128438; Print / Save as PDF</button>'+
 
-    // Top strip
-    '<div class="top-strip">'+
-      '<div class="doc-type">'+titleStr+'</div>'+
-      '<div class="doc-no">'+fullDocNo+'</div>'+
-    '</div>'+
+    '<div class="sheet">'+
 
-    // Company bar
-    '<div class="co-bar">'+
+    // Letterhead
+    '<div class="letterhead">'+
       '<div>'+
         '<div class="co-name">'+(co.name||'Company Name')+'</div>'+
-        '<div class="co-info">'+(co.address?co.address+'<br>':'')+(co.gstin?'GSTIN: '+co.gstin:'')+
-          (co.cin?'&nbsp;&nbsp;|&nbsp;&nbsp;CIN: '+co.cin:'')+'</div>'+
+        '<div class="co-info">'+(co.address||'')+'</div>'+
+        '<div class="co-info">'+[co.phone?('Ph: '+co.phone):'',co.email?('Email: '+co.email):''].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;')+'</div>'+
       '</div>'+
-      '<div class="doc-meta">'+
-        '<div><b>Date:</b> '+fmtD(today)+'</div>'+
-        '<div><b>Project:</b> '+(proj.name||'—')+'</div>'+
-        (proj.location?'<div><b>Site:</b> '+proj.location+'</div>':'')+
-      '</div>'+
-    '</div>'+
-
-    // Party + Project info
-    '<div class="info-grid">'+
-      (groupNameLabel?'<div class="info-card" style="grid-column:span 2;background:'+lightBg+';">'+
-        '<div class="lbl">Scope / Package</div>'+
-        '<div class="val" style="font-size:15px;">'+groupNameLabel+'</div>'+
-      '</div>':'')+
-      '<div class="info-card">'+
-        '<div class="lbl">'+(isPO?'Vendor / Supplier':'Contractor / Party')+'</div>'+
-        '<div class="val">'+partyLabel+'</div>'+
-        '<div class="sub">'+(tLbl[batchItems[0].exec_type]||batchItems[0].exec_type)+'</div>'+
-      '</div>'+
-      '<div class="info-card">'+
-        '<div class="lbl">Delivery / Work Location</div>'+
-        '<div class="val">'+(proj.name||'—')+'</div>'+
-        '<div class="sub">'+(proj.location||proj.code||'As per project site')+'</div>'+
+      '<div class="letterhead-right">'+
+        (co.gstin?'<div>GSTIN: '+co.gstin+'</div>':'')+
+        (co.cin?'<div>CIN: '+co.cin+'</div>':'')+
+        (co.pan?'<div>PAN: '+co.pan+'</div>':'')+
       '</div>'+
     '</div>'+
 
-    // Terms bar (dates + scope)
-    ((commonStart||commonEnd||commonScope)?
-      '<div class="terms-bar">'+
-        (commonStart?'<div class="t-item"><b>Start Date:</b> '+fmtD(commonStart)+'</div>':'')+
-        (commonEnd?'<div class="t-item"><b>Completion Date:</b> '+fmtD(commonEnd)+'</div>':'')+
-        (commonScope?'<div class="t-item" style="flex:1;"><b>Scope:</b> '+commonScope+'</div>':'')+
-      '</div>':'<br>')+
+    // Title + ref/date
+    '<div class="doc-title"><span class="t">'+titleStr+'</span></div>'+
+    '<div class="ref-row"><span>Ref No: '+fullDocNo+'</span><span>Date: '+fmtD(today)+'</span></div>'+
+
+    // To
+    '<div class="to-block">'+
+      '<div class="lbl">To,</div>'+
+      '<div class="to-name">'+partyLabel+'</div>'+
+      '<div class="to-sub">'+(tLbl[batchItems[0].exec_type]||batchItems[0].exec_type)+'</div>'+
+    '</div>'+
+
+    // Subject
+    '<div class="subject"><b>Sub: '+(isPO?'Purchase Order for supply of material / items':'Work Order for execution of work')+(groupNameLabel?' — '+groupNameLabel:'')+' at '+(proj.name||'the project site')+'</b></div>'+
+
+    // Salutation + opening paragraph
+    '<div class="body-para">Dear Sir / Madam,</div>'+
+    '<div class="body-para">With reference to the terms mutually discussed and agreed upon, we are pleased to place this '+(isPO?'purchase order':'work order')+' with you for the '+(isPO?'supply of the material / items':'execution of the work')+' detailed below, at <b>'+(proj.name||'—')+'</b>'+(proj.location?', '+proj.location:'')+'. Kindly proceed strictly as per the specifications, schedule and terms &amp; conditions mentioned herein.</div>'+
+
+    // Project / scope detail strip
+    '<table class="det"><tbody>'+
+      '<tr><td class="k">Project</td><td>'+(proj.name||'—')+'</td><td class="k">Site / Location</td><td>'+(proj.location||proj.code||'—')+'</td></tr>'+
+      ((commonStart||commonEnd)?'<tr><td class="k">Start Date</td><td>'+(fmtD(commonStart)||'—')+'</td><td class="k">Completion Date</td><td>'+(fmtD(commonEnd)||'—')+'</td></tr>':'')+
+      (commonScope?'<tr><td class="k">Scope of Work</td><td colspan="3">'+commonScope+'</td></tr>':'')+
+    '</tbody></table>'+
 
     // Items table
-    '<table>'+
+    '<table class="items">'+
       '<thead><tr>'+
-        '<th style="width:36px;text-align:center;">#</th>'+
-        '<th>'+(isPO?'Item / Material Description':'Work Description')+'</th>'+
-        '<th style="width:90px;text-align:center;">Qty</th>'+
-        '<th style="width:100px;text-align:right;">Rate</th>'+
-        '<th style="width:110px;text-align:right;">Amount</th>'+
+        '<th style="width:32px;text-align:center;">Sr.</th>'+
+        '<th>'+(isPO?'Item / Material Description':'Description of Work')+'</th>'+
+        '<th style="width:85px;text-align:center;">Qty / Unit</th>'+
+        '<th style="width:95px;text-align:right;">Rate (&#8377;)</th>'+
+        '<th style="width:105px;text-align:right;">Amount (&#8377;)</th>'+
       '</tr></thead>'+
       '<tbody>'+rows+
         '<tr class="total-row">'+
-          '<td colspan="4" style="text-align:right;padding:10px;">TOTAL ORDER VALUE</td>'+
-          '<td style="text-align:right;padding:10px;">'+inrFull(total)+'</td>'+
+          '<td colspan="4" style="text-align:right;">TOTAL ORDER VALUE</td>'+
+          '<td style="text-align:right;">'+inrFull(total)+'</td>'+
         '</tr>'+
       '</tbody>'+
     '</table>'+
 
     // Amount in words
-    '<div class="amt-words"><b>Amount in Words:</b> '+amtWords+'</div>'+
+    '<div class="amt-words"><b>Amount in Words:</b> Rupees '+amtWords+'</div>'+
 
     // Terms & conditions
     '<div class="tnc">'+
@@ -7421,12 +7425,17 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
       '</ol>'+
     '</div>'+
 
-    // Signature block
+    // Closing
+    '<div class="closing">Kindly acknowledge receipt of this '+(isPO?'purchase order':'work order')+' and confirm your acceptance by signing and returning a copy of the same at the earliest.</div>'+
+    '<div class="closing" style="margin-top:8px;">Thanking you,</div>'+
+
+    // Signature block — issuer (left) / party acceptance (right)
     '<div class="sig-grid">'+
-      '<div class="sig-box"><div class="sig-space"></div><div class="sig-name">'+(co.name||'Company')+'</div><div class="sig-role">Prepared By</div></div>'+
-      '<div class="sig-box"><div class="sig-space"></div><div class="sig-name">'+(co.name||'Company')+'</div><div class="sig-role">Authorized Signatory</div></div>'+
-      '<div class="sig-box"><div class="sig-space"></div><div class="sig-name">'+partyLabel+'</div><div class="sig-role">'+(isPO?'Vendor Acceptance':'Contractor Acceptance')+'</div></div>'+
+      '<div class="sig-box"><div>For <b>'+(co.name||'Company')+'</b></div><div class="sig-space"></div><div class="sig-line"><div class="sig-name">Authorized Signatory</div></div></div>'+
+      '<div class="sig-box" style="text-align:right;"><div>Accepted By</div><div class="sig-space"></div><div class="sig-line" style="text-align:right;"><div class="sig-name">'+partyLabel+'</div><div class="sig-role">Signature &amp; Date</div></div></div>'+
     '</div>'+
+
+    '<div class="footer-note">This is a system-generated document issued by '+(co.name||'the company')+' &middot; '+fullDocNo+' &middot; Generated on '+fmtD(today)+'</div>'+
 
     '</div></body></html>';
 
