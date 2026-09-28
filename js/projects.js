@@ -7424,7 +7424,6 @@ async function execRenderDaily(){
       '<div style="flex:1;"></div>'+
       '<button onclick="execDailyDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
       '<button onclick="execDailyDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
-      '<button onclick="execOpenDailyEntryPicker()" style="background:#E65100;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;">+ New Entry</button>'+
     '</div>'+
     (hasScopes ?
     '<div style="display:flex;gap:6px;margin-bottom:12px;">'+
