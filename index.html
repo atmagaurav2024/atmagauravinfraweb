@@ -24667,19 +24667,26 @@ async function accTdsTab(){
     });
     allRows.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
 
+    // Party PAN is the party's identity info, not something scoped to
+    // whichever date range happens to be selected on this tab — look it up
+    // from ALL bills (not just periodRows) so a PAN recorded on any bill,
+    // old or new, in-period or not, always shows for that party. allRows is
+    // already sorted newest-first, so the first hit per party is their most
+    // recently recorded PAN.
+    var partyPanMap={};
+    allRows.forEach(function(r){ if(r.pan && !partyPanMap[r.party]) partyPanMap[r.party]=r.pan; });
+
     var totalAll=allRows.reduce(function(s,r){return s+r.amount;},0);
     var periodRows=allRows.filter(function(r){return r.date && r.date>=ACC_TDS_FROM && r.date<=ACC_TDS_TO;});
     var periodTotal=periodRows.reduce(function(s,r){return s+r.amount;},0);
 
-    // Party-wise summary (within selected period). PAN is the party's PAN
-    // as captured on their most recent TDS entry — periodRows is already
-    // sorted newest-first, so the first hit per party wins and only a
-    // missing PAN gets overwritten by a later (older) row that has one.
+    // Party-wise summary (amount/count within selected period; PAN from
+    // partyPanMap so it isn't lost when the PAN-bearing bill falls outside
+    // the current period).
     var byParty={};
     periodRows.forEach(function(r){
-      if(!byParty[r.party]) byParty[r.party]={amount:0,count:0,pan:''};
+      if(!byParty[r.party]) byParty[r.party]={amount:0,count:0,pan:partyPanMap[r.party]||''};
       byParty[r.party].amount+=r.amount; byParty[r.party].count++;
-      if(!byParty[r.party].pan && r.pan) byParty[r.party].pan=r.pan;
     });
     var partyKeys=Object.keys(byParty).sort(function(a,b){return byParty[b].amount-byParty[a].amount;});
 
