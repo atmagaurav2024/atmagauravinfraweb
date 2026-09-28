@@ -117,7 +117,7 @@ async function initRegistry(){
 
 function mapVendor(v){
   return {id:v.id,vendorId:v.vendor_id,name:v.name||'Unknown',cat:v.category||'',status:v.status||'active',rating:v.rating||0,
-    gst:v.gst||'',contact:v.contact_person||'',phone:v.phone||'',email:v.email||'',address:v.address||'',
+    gst:v.gst||'',pan:v.pan||'',contact:v.contact_person||'',phone:v.phone||'',email:v.email||'',address:v.address||'',
     brands:v.brands||'',payTerms:v.pay_terms||'',leadTime:v.lead_time||'',orders:v.total_orders||0,
     totalValue:v.total_value||0,materialRates:[],col:catColor(v.category)};
 }
@@ -126,13 +126,13 @@ function mapMaterial(m){
 }
 function mapSC(s){
   return {id:s.id,scId:s.sc_id,name:s.name||'Unknown',trade:s.trade||'',rating:s.rating||0,
-    gst:s.gst||'',contact:s.contact_person||'',phone:s.phone||'',email:s.email||'',address:s.address||'',
+    gst:s.gst||'',pan:s.pan||'',contact:s.contact_person||'',phone:s.phone||'',email:s.email||'',address:s.address||'',
     exp:s.experience||'',turnover:s.turnover||'',workers:s.workers||0,speciality:s.speciality||'',
     pbgAvail:s.pbg_available,emdAvail:s.emd_available,status:s.status||'active',projects:[],col:'#1565C0'};
 }
 function mapLabour(l){
   return {id:l.id,labId:l.lab_id||l.id.slice(0,8).toUpperCase(),name:l.name||'Unknown',skill:l.skill||'',type:l.type||'unskilled',
-    phone:l.phone||'',address:l.address||'',aadhar:l.aadhar||'',dailyRate:l.daily_rate||0,
+    phone:l.phone||'',address:l.address||'',aadhar:l.aadhar||'',pan:l.pan||'',dailyRate:l.daily_rate||0,
     source:l.source||'direct',contractor:l.contractor||'',project:l.project||'',
     status:l.status||'active',joined:l.joined||'',bloodGroup:l.blood_group||'',remarks:l.remarks||''};
 }
@@ -338,10 +338,10 @@ function openDetail(type,id){
   var item=(items[type]||[]).find(function(x){return x.id===id;});
   if(!item) return;
   var labels={
-    vendor:  [{k:'vendorId',l:'Vendor ID'},{k:'name',l:'Name'},{k:'cat',l:'Category'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'contact',l:'Contact Person'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'brands',l:'Brands'},{k:'payTerms',l:'Pay Terms'},{k:'leadTime',l:'Lead Time'},{k:'rating',l:'Rating'}],
+    vendor:  [{k:'vendorId',l:'Vendor ID'},{k:'name',l:'Name'},{k:'cat',l:'Category'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'pan',l:'PAN No'},{k:'contact',l:'Contact Person'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'brands',l:'Brands'},{k:'payTerms',l:'Pay Terms'},{k:'leadTime',l:'Lead Time'},{k:'rating',l:'Rating'}],
     material:[{k:'matId',l:'Material ID'},{k:'name',l:'Name'},{k:'cat',l:'Category'},{k:'code',l:'Code'},{k:'uom',l:'Unit'},{k:'spec',l:'Specification'}],
-    sc:      [{k:'scId',l:'SC ID'},{k:'name',l:'Name'},{k:'trade',l:'Trade'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'contact',l:'Contact'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'exp',l:'Experience'},{k:'speciality',l:'Speciality'},{k:'workers',l:'Workers'},{k:'turnover',l:'Turnover'}],
-    labour:  [{k:'labId',l:'Labour ID'},{k:'name',l:'Name'},{k:'skill',l:'Skill'},{k:'type',l:'Type'},{k:'phone',l:'Phone'},{k:'address',l:'Address'},{k:'dailyRate',l:'Daily Rate'},{k:'source',l:'Source'},{k:'bloodGroup',l:'Blood Group'},{k:'joined',l:'Joined'}],
+    sc:      [{k:'scId',l:'SC ID'},{k:'name',l:'Name'},{k:'trade',l:'Trade'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'pan',l:'PAN No'},{k:'contact',l:'Contact'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'exp',l:'Experience'},{k:'speciality',l:'Speciality'},{k:'workers',l:'Workers'},{k:'turnover',l:'Turnover'}],
+    labour:  [{k:'labId',l:'Labour ID'},{k:'name',l:'Name'},{k:'skill',l:'Skill'},{k:'type',l:'Type'},{k:'phone',l:'Phone'},{k:'address',l:'Address'},{k:'aadhar',l:'Aadhar No'},{k:'pan',l:'PAN No'},{k:'dailyRate',l:'Daily Rate'},{k:'source',l:'Source'},{k:'bloodGroup',l:'Blood Group'},{k:'joined',l:'Joined'}],
     user:    [{k:'empId',l:'Emp ID'},{k:'name',l:'Name'},{k:'role',l:'Role'},{k:'dept',l:'Department'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'status',l:'Status'}]
   };
   var fields=labels[type]||[];
@@ -528,6 +528,7 @@ function openEditForm(type,id){
           ['active','approved','under-review','blacklisted'].map(function(s){return '<option value="'+s+'"'+(item&&item.status===s?' selected':'')+'>'+s+'</option>';}).join('')+
         '</select></div>'+
       '</div>'+
+      '<label class="flbl">PAN Number</label><input id="ef-pan" class="finp" value="'+(item?item.pan||'':'')+'" placeholder="ABCDE1234F — used for TDS deduction" style="text-transform:uppercase;" maxlength="10" oninput="this.value=this.value.toUpperCase()">'+
       '<div class="g2">'+
         '<div><label class="flbl">Contact Person</label><input id="ef-contact" class="finp" value="'+(item?item.contact||'':'')+'" placeholder="Contact name"></div>'+
         '<div><label class="flbl">Phone *</label><input id="ef-phone" class="finp" value="'+(item?item.phone||'':'')+'" placeholder="+91 98765 43210"></div>'+
@@ -563,6 +564,7 @@ function openEditForm(type,id){
         '<div><label class="flbl">GST Number</label><input id="ef-gst" class="finp" value="'+(item?item.gst||'':'')+'" placeholder="GST No"></div>'+
         '<div><label class="flbl">Phone *</label><input id="ef-phone" class="finp" value="'+(item?item.phone||'':'')+'" placeholder="+91..."></div>'+
       '</div>'+
+      '<label class="flbl">PAN Number</label><input id="ef-pan" class="finp" value="'+(item?item.pan||'':'')+'" placeholder="ABCDE1234F — used for TDS deduction" style="text-transform:uppercase;" maxlength="10" oninput="this.value=this.value.toUpperCase()">'+
       '<div class="g2">'+
         '<div><label class="flbl">Contact Person</label><input id="ef-contact" class="finp" value="'+(item?item.contact||'':'')+'" placeholder="Name"></div>'+
         '<div><label class="flbl">Email</label><input id="ef-email" class="finp" value="'+(item?item.email||'':'')+'" placeholder="email@..."></div>'+
@@ -595,6 +597,7 @@ function openEditForm(type,id){
         '<div><label class="flbl">Aadhar No</label><input id="ef-aadhar" class="finp" value="'+(item?item.aadhar||'':'')+'" placeholder="xxxx-xxxx-xxxx"></div>'+
         '<div><label class="flbl">Joined Date</label><input id="ef-joined" class="finp" type="date" value="'+(item?item.joined||'':'')+'"></div>'+
       '</div>'+
+      '<label class="flbl">PAN Number</label><input id="ef-pan" class="finp" value="'+(item?item.pan||'':'')+'" placeholder="ABCDE1234F — for TDS, if applicable" style="text-transform:uppercase;" maxlength="10" oninput="this.value=this.value.toUpperCase()">'+
       '<label class="flbl">Address</label><textarea id="ef-address" class="finp" rows="2">'+(item?item.address||'':'')+'</textarea>';
   }
   setTimeout(function(){
@@ -618,20 +621,24 @@ async function saveRegistryRecord(type,id){
   var name=gv2('ef-name');
   if(!name){toast('Name is required','warning');return;}
   var data={};
+  // PAN is used to attribute TDS withheld from this party's bills to the
+  // right deductee (Accounts → TDS, and the TDS challan/26Q return), so it's
+  // captured on vendors, subcontractors and labour alike.
+  var pan=gv2('ef-pan'); if(pan) pan=pan.toUpperCase();
   if(type==='vendor'){
-    data={name:name,category:gv2('ef-cat')||null,gst:gv2('ef-gst')||null,status:gv2('ef-status')||'active',
+    data={name:name,category:gv2('ef-cat')||null,gst:gv2('ef-gst')||null,pan:pan||null,status:gv2('ef-status')||'active',
       contact_person:gv2('ef-contact')||null,phone:gv2('ef-phone')||null,email:gv2('ef-email')||null,
       address:gv2('ef-address')||null,brands:gv2('ef-brands')||null,pay_terms:gv2('ef-payterms')||null,
       lead_time:gv2('ef-leadtime')||null,rating:parseFloat(gv2('ef-rating'))||0};
   } else if(type==='material'){
     data={name:name,category:gv2('ef-cat')||null,code:gv2('ef-code')||null,uom:gv2('ef-uom')||null,spec:gv2('ef-spec')||null};
   } else if(type==='sc'){
-    data={name:name,trade:gv2('ef-trade')||null,gst:gv2('ef-gst')||null,phone:gv2('ef-phone')||null,
+    data={name:name,trade:gv2('ef-trade')||null,gst:gv2('ef-gst')||null,pan:pan||null,phone:gv2('ef-phone')||null,
       contact_person:gv2('ef-contact')||null,email:gv2('ef-email')||null,address:gv2('ef-address')||null,
       experience:gv2('ef-exp')||null,workers:parseInt(gv2('ef-workers'))||0,speciality:gv2('ef-spec')||null,
       pbg_available:gv2('ef-pbg')==='true',status:gv2('ef-status')||'active'};
   } else if(type==='labour'){
-    data={name:name,skill:gv2('ef-skill')||null,type:gv2('ef-type')||'unskilled',phone:gv2('ef-phone')||null,
+    data={name:name,skill:gv2('ef-skill')||null,type:gv2('ef-type')||'unskilled',phone:gv2('ef-phone')||null,pan:pan||null,
       daily_rate:parseFloat(gv2('ef-rate'))||0,blood_group:gv2('ef-blood')||null,
       aadhar:gv2('ef-aadhar')||null,joined:gv2('ef-joined')||null,address:gv2('ef-address')||null};
   }
