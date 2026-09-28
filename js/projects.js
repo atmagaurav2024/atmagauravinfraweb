@@ -54,7 +54,13 @@ var PROJ_MOD_SEL_ID = '';           // selected project id
 
 var PMT_GROUPS = {
   preconstruction: ['boq','schh','schb','jm','planning'],
-  construction:    ['rr','execution','allotted','daily','executedwork','grn','store','subcontract']
+  construction:    ['rr','execution','allotted','daily','executedwork','grn','store']
+  // 'subcontract' (Subcontract Scope) is intentionally not listed as its
+  // own tab anymore — Daily Progress → Scope Completed now shows the
+  // same cards AND carries the setup/edit/delete actions that used to
+  // live here (see execRenderLumpsumScopeProgress()). The underlying
+  // sc-content render path (scRender()) and its functions are left in
+  // place, unused by nav, in case this needs to come back.
 };
 
 // ── Project selector (hidden, kept for compat) ────────────
@@ -7444,19 +7450,52 @@ function execDailySwitchSubTab(tab){
 
 // Lumpsum-priced subcontracts' scope breakdown, surfaced here too so
 // progress against scope milestones (e.g. "3 of 8 footings") can be
-// logged right alongside regular BOQ-based daily progress, rather than
-// only from the Subcontract Scope tab. Reuses scOpenProgress()/
+// logged right alongside regular BOQ-based daily progress. The Subcontract
+// Scope tab itself is no longer in the tab bar (see PMT_GROUPS) — this is
+// now the only place for lumpsum scope work, so it carries EVERYTHING
+// that tab used to: setting up a subcontract for a freshly-allotted
+// combined batch, adding/editing/deleting scope breakdown lines, and
+// deleting a subcontract, on top of logging/viewing progress. Reuses
+// scOpenAddSubcontract()/scSaveSubcontract()/scDeleteSubcontract()/
+// scOpenAddScope()/scSaveScope()/scDeleteScope()/scOpenProgress()/
 // scSaveProgress()/scToggleHistory()/scDeleteProgress() directly - same
-// data, same card layout as the Subcontract Scope tab's own scRender(),
-// just without the scope-definition actions (+ Scope / edit / delete
-// scope / delete subcontract) that belong there, not here. Logging
-// progress here does NOT create a bill; unbilled progress is picked up
-// from Bills & Payments → Generate Bills, same as item-rate work.
+// data, same card layout as scRender() used to render in that tab.
+// Logging progress here does NOT create a bill; unbilled progress is
+// picked up from Bills & Payments → Generate Bills, same as item-rate work.
 function execRenderLumpsumScopeProgress(){
   var el=document.getElementById('dp-lumpsum-scope-content');
   if(!el) return;
-  if(!SC_SCOPES.length){ el.innerHTML=''; return; }
   var itemById={}; (typeof SC_BOQ_ITEMS!=='undefined'?SC_BOQ_ITEMS:[]).forEach(function(it){ itemById[it.id]=it; });
+
+  // ── Combined batches allotted but not yet set up as a subcontract ──
+  var linkedBatchIds={}; SC_SUBCONTRACTS.forEach(function(s){ if(s.source_batch_id) linkedBatchIds[s.source_batch_id]=true; });
+  var pendingBatches={}; var pendingBatchOrder=[];
+  (typeof SC_ALLOT!=='undefined'?SC_ALLOT:[]).forEach(function(a){
+    if(!a.batch_id || linkedBatchIds[a.batch_id]) return;
+    if(!pendingBatches[a.batch_id]){ pendingBatches[a.batch_id]={batchId:a.batch_id, partyName:a.party_name, items:[]}; pendingBatchOrder.push(a.batch_id); }
+    pendingBatches[a.batch_id].items.push(a);
+  });
+  pendingBatchOrder=pendingBatchOrder.filter(function(id){return pendingBatches[id].items.length>1;});
+
+  if(!SC_SCOPES.length && !pendingBatchOrder.length){ el.innerHTML=''; return; }
+
+  var pendingHtml='';
+  if(pendingBatchOrder.length){
+    var pendingCards=pendingBatchOrder.map(function(bid){
+      var b=pendingBatches[bid];
+      var total=b.items.reduce(function(s,a){return s+(parseFloat(a.qty)||0)*(parseFloat(a.rate)||0);},0);
+      var itemNames=b.items.map(function(a){var bi=itemById[a.boq_item_id]; return bi?(bi.short_name||bi.description):a.boq_item_id;});
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid #FFCC80;margin-bottom:10px;padding:12px 14px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><div style="font-size:13px;font-weight:800;">'+b.partyName+'</div>'+
+          '<div style="font-size:10.5px;color:var(--text3);margin-top:2px;">'+b.items.length+' items allotted · '+fmtINR(total)+' at allotment rates</div></div>'+
+          '<button onclick="scOpenAddSubcontract(\''+bid+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">Set Up Subcontract</button>'+
+        '</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:6px;">'+itemNames.join(', ')+'</div>'+
+      '</div>';
+    }).join('');
+    pendingHtml='<div style="font-size:11.5px;font-weight:800;color:#E65100;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Allotted — Awaiting Subcontract Setup</div>'+pendingCards+'<div style="height:16px;"></div>';
+  }
 
   var subsWithScopes=SC_SUBCONTRACTS.filter(function(sub){
     return SC_SCOPES.some(function(sc){return sc.subcontract_id===sub.id;});
@@ -7499,6 +7538,10 @@ function execRenderLumpsumScopeProgress(){
             '<div style="font-size:10.5px;color:#1565C0;font-weight:700;margin-top:2px;">Rate: '+fmtINR(ratePerUnit)+' / '+(scope.scope_unit||'unit')+'</div>'+
             (itemNames.length?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">Items: '+itemNames.join(', ')+'</div>':'')+
           '</div>'+
+          '<div style="display:flex;gap:4px;align-items:center;">'+
+            '<button onclick="scOpenAddScope(\''+scope.subcontract_id+'\',\''+scope.id+'\')" title="Edit scope" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:4px 8px;cursor:pointer;font-weight:800;">&#9998;</button>'+
+            '<button onclick="scDeleteScope(\''+scope.id+'\')" style="background:none;border:none;color:#C62828;font-size:14px;cursor:pointer;">&#215;</button>'+
+          '</div>'+
         '</div>'+
         '<div style="background:var(--card-bg);border-radius:8px;height:8px;margin-top:10px;overflow:hidden;">'+
           '<div style="background:'+(pctDone>=100?'#2E7D32':'#1565C0')+';height:100%;width:'+pctDone.toFixed(1)+'%;"></div>'+
@@ -7514,9 +7557,18 @@ function execRenderLumpsumScopeProgress(){
       '</div>';
     }).join('');
 
+    var pctTotal=scopes.reduce(function(s,sc){return s+(parseFloat(sc.percentage)||0);},0);
+    var pctOk=pctTotal<=100.0001;
     return '<div style="background:var(--card-bg);border-radius:16px;border:1px solid var(--border);margin-bottom:14px;padding:14px;">'+
-      '<div><div style="font-size:15px;font-weight:900;">'+sub.party_name+'</div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Subcontract Value: '+fmtINR(sub.subcontract_value)+'</div></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
+        '<div><div style="font-size:15px;font-weight:900;">'+sub.party_name+'</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Subcontract Value: '+fmtINR(sub.subcontract_value)+'</div></div>'+
+        '<div style="display:flex;gap:6px;align-items:center;">'+
+          '<button onclick="scOpenAddScope(\''+sub.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Scope</button>'+
+          '<button onclick="scDeleteSubcontract(\''+sub.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;padding:4px;">&#215;</button>'+
+        '</div>'+
+      '</div>'+
+      '<div style="font-size:10px;font-weight:700;margin-top:8px;color:'+(pctOk?'var(--text3)':'#C62828')+';">'+pctTotal.toFixed(1)+'% of value allocated across scopes'+(pctOk?'':' — exceeds 100%!')+'</div>'+
       scopeCards+
     '</div>';
   }).join('');
@@ -7526,7 +7578,8 @@ function execRenderLumpsumScopeProgress(){
       '<div style="font-size:12px;font-weight:800;color:#2E7D32;">&#128203; Scope Completed (Lumpsum)</div>'+
       '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Logging progress here does not bill automatically — generate the bill from Bills &amp; Payments &rarr; Generate Bills.</div>'+
     '</div>'+
-    cards;
+    pendingHtml+cards+
+    (!pendingHtml&&!cards?'<div style="text-align:center;padding:24px;color:var(--text3);font-size:11.5px;">No lumpsum scope work yet.</div>':'');
 }
 
 // Show BOQ item picker then open entry form
@@ -13207,6 +13260,12 @@ async function scSaveSubcontract(batchId, partyName){
     });
     closeScSheet();
     await scLoadItems();
+    // This is now the only entry point for lumpsum scope work (see
+    // execRenderLumpsumScopeProgress) \u2014 resync the Execution module's own
+    // WA_SUBCONTRACTS/etc. copy of this data too, so Bills & Payments
+    // reflects it without needing a full tab switch, and redraw.
+    if(typeof execLoadItems==='function') await execLoadItems(true);
+    if(typeof execRenderLumpsumScopeProgress==='function') execRenderLumpsumScopeProgress();
     toast('Subcontract created \u2014 now add its scope(s) below','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
@@ -13215,6 +13274,8 @@ async function scDeleteSubcontract(id){
   try{
     await sbDelete('subcontracts', id);
     await scLoadItems();
+    if(typeof execLoadItems==='function') await execLoadItems(true);
+    if(typeof execRenderLumpsumScopeProgress==='function') execRenderLumpsumScopeProgress();
     toast('Deleted','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
@@ -13334,6 +13395,8 @@ async function scSaveScope(subcontractId, editId){
     await sbInsert('subcontract_scope_items', itemRows);
     closeScSheet();
     await scLoadItems();
+    if(typeof execLoadItems==='function') await execLoadItems(true);
+    if(typeof execRenderLumpsumScopeProgress==='function') execRenderLumpsumScopeProgress();
     toast(editId?'Scope updated':'Scope created','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
@@ -13342,6 +13405,8 @@ async function scDeleteScope(id){
   try{
     await sbDelete('subcontract_scopes', id);
     await scLoadItems();
+    if(typeof execLoadItems==='function') await execLoadItems(true);
+    if(typeof execRenderLumpsumScopeProgress==='function') execRenderLumpsumScopeProgress();
     toast('Deleted','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
