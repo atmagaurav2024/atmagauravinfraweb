@@ -7446,48 +7446,87 @@ function execDailySwitchSubTab(tab){
 // progress against scope milestones (e.g. "3 of 8 footings") can be
 // logged right alongside regular BOQ-based daily progress, rather than
 // only from the Subcontract Scope tab. Reuses scOpenProgress()/
-// scSaveProgress() directly - same data. Logging progress here does NOT
-// create a bill; unbilled progress is picked up from Bills & Payments →
-// Generate Bills, same as item-rate work.
+// scSaveProgress()/scToggleHistory()/scDeleteProgress() directly - same
+// data, same card layout as the Subcontract Scope tab's own scRender(),
+// just without the scope-definition actions (+ Scope / edit / delete
+// scope / delete subcontract) that belong there, not here. Logging
+// progress here does NOT create a bill; unbilled progress is picked up
+// from Bills & Payments → Generate Bills, same as item-rate work.
 function execRenderLumpsumScopeProgress(){
   var el=document.getElementById('dp-lumpsum-scope-content');
   if(!el) return;
   if(!SC_SCOPES.length){ el.innerHTML=''; return; }
-  var rows=SC_SCOPES.map(function(scope){
-    var sub=SC_SUBCONTRACTS.find(function(s){return s.id===scope.subcontract_id;});
-    var progress=SC_PROGRESS.filter(function(p){return p.scope_id===scope.id;});
-    var completedQty=progress.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
-    var doneAmtTotal=progress.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
-    // Billed-so-far is derived from bills' selected_items (scope_id), the
-    // same accounting execOpenBill() uses — kept in sync automatically.
-    var billedAmtTotal=(typeof WA_BILLS!=='undefined'?WA_BILLS:[]).reduce(function(s,b){
-      var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
-      return s+si.filter(function(x){return x.scope_id===scope.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
-    },0);
-    var unbilledAmt=Math.max(0,doneAmtTotal-billedAmtTotal);
-    var scopeQty=parseFloat(scope.scope_qty)||0;
-    var remainingQty=Math.max(0,scopeQty-completedQty);
-    var pctDone=scopeQty>0?Math.min(100,(completedQty/scopeQty)*100):0;
-    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
-      '<div style="flex:1;min-width:0;">'+
-        '<div style="font-size:12px;font-weight:800;">'+scope.scope_name+(sub?' <span style="font-weight:600;color:var(--text3);">&#8594; '+sub.party_name+'</span>':'')+'</div>'+
-        '<div style="font-size:10px;color:var(--text3);">'+completedQty.toFixed(3).replace(/\.?0+$/,'')+' of '+scopeQty+' '+(scope.scope_unit||'')+' done ('+pctDone.toFixed(0)+'%)'+
-        (unbilledAmt>0?' <span style="color:#E65100;font-weight:700;">&middot; '+fmtINR(unbilledAmt)+' unbilled</span>':'')+
+  var itemById={}; (typeof SC_BOQ_ITEMS!=='undefined'?SC_BOQ_ITEMS:[]).forEach(function(it){ itemById[it.id]=it; });
+
+  var subsWithScopes=SC_SUBCONTRACTS.filter(function(sub){
+    return SC_SCOPES.some(function(sc){return sc.subcontract_id===sub.id;});
+  });
+
+  var cards=subsWithScopes.map(function(sub){
+    var scopes=SC_SCOPES.filter(function(s){return s.subcontract_id===sub.id;});
+
+    var scopeCards=scopes.map(function(scope){
+      var sItems=SC_SCOPE_ITEMS.filter(function(si){return si.scope_id===scope.id;});
+      var itemNames=sItems.map(function(si){var bi=itemById[si.boq_item_id]; return bi?(bi.short_name||bi.description):si.boq_item_id;});
+      var scopeValue=(parseFloat(scope.percentage)||0)/100*(parseFloat(sub.subcontract_value)||0);
+      var ratePerUnit=(parseFloat(scope.scope_qty)||0)>0?scopeValue/parseFloat(scope.scope_qty):0;
+      var progress=SC_PROGRESS.filter(function(p){return p.scope_id===scope.id;});
+      var completedQty=progress.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+      var doneAmt=progress.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+      // Billed-so-far is derived from bills' selected_items (scope_id), the
+      // same accounting execOpenBill() uses — kept in sync automatically,
+      // since progress no longer auto-bills.
+      var billedAmt=(typeof WA_BILLS!=='undefined'?WA_BILLS:[]).reduce(function(s,b){
+        var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+        return s+si.filter(function(x){return x.scope_id===scope.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+      },0);
+      var unbilledAmt=Math.max(0,doneAmt-billedAmt);
+      var remainingQty=Math.max(0,(parseFloat(scope.scope_qty)||0)-completedQty);
+      var pctDone=scope.scope_qty>0?Math.min(100,(completedQty/scope.scope_qty*100)):0;
+
+      var historyRows=progress.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).map(function(p){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border);font-size:10.5px;">'+
+          '<div><b>'+fmtD(p.date)+'</b> — '+p.completed_qty+' '+(scope.scope_unit||'')+' · '+fmtINR(p.amount)+(p.remarks?' — '+p.remarks:'')+'</div>'+
+          '<button onclick="scDeleteProgress(\''+p.id+'\',\''+scope.id+'\')" style="background:none;border:none;color:#C62828;font-size:12px;cursor:pointer;">&#215;</button>'+
+        '</div>';
+      }).join('');
+
+      return '<div style="background:var(--bg);border-radius:12px;padding:12px;margin-top:8px;border:1px solid var(--border);">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'+
+          '<div style="flex:1;">'+
+            '<div style="font-size:13px;font-weight:800;">'+scope.scope_name+'</div>'+
+            '<div style="font-size:10.5px;color:var(--text3);margin-top:2px;">'+scope.scope_qty+' '+(scope.scope_unit||'')+' · '+scope.percentage+'% of subcontract value · '+fmtINR(scopeValue)+'</div>'+
+            '<div style="font-size:10.5px;color:#1565C0;font-weight:700;margin-top:2px;">Rate: '+fmtINR(ratePerUnit)+' / '+(scope.scope_unit||'unit')+'</div>'+
+            (itemNames.length?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">Items: '+itemNames.join(', ')+'</div>':'')+
+          '</div>'+
         '</div>'+
-      '</div>'+
-      (remainingQty>0.0001
-        ? '<button onclick="scOpenProgress(\''+scope.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Log Progress</button>'
-        : '<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:5px;font-weight:700;flex-shrink:0;">Complete</span>')+
+        '<div style="background:var(--card-bg);border-radius:8px;height:8px;margin-top:10px;overflow:hidden;">'+
+          '<div style="background:'+(pctDone>=100?'#2E7D32':'#1565C0')+';height:100%;width:'+pctDone.toFixed(1)+'%;"></div>'+
+        '</div>'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">'+
+          '<div style="font-size:10.5px;color:var(--text3);">'+completedQty.toFixed(3).replace(/\.?0+$/,'')+' / '+scope.scope_qty+' '+(scope.scope_unit||'')+' done'+
+            (unbilledAmt>0?' · <span style="color:#E65100;font-weight:700;">'+fmtINR(unbilledAmt)+' unbilled</span>':(doneAmt>0?' · <span style="color:#2E7D32;font-weight:700;">fully billed</span>':''))+
+            (progress.length?' · <span onclick="scToggleHistory(\''+scope.id+'\')" style="color:#1565C0;font-weight:700;cursor:pointer;text-decoration:underline;">History ('+progress.length+')</span>':'')+
+          '</div>'+
+          (remainingQty>0.0001?'<button onclick="scOpenProgress(\''+scope.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:800;cursor:pointer;">+ Log Progress</button>':'<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:3px 8px;border-radius:5px;font-weight:700;">Complete</span>')+
+        '</div>'+
+        (historyRows?'<div id="sc-history-'+scope.id+'" style="display:none;margin-top:6px;">'+historyRows+'</div>':'')+
+      '</div>';
+    }).join('');
+
+    return '<div style="background:var(--card-bg);border-radius:16px;border:1px solid var(--border);margin-bottom:14px;padding:14px;">'+
+      '<div><div style="font-size:15px;font-weight:900;">'+sub.party_name+'</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Subcontract Value: '+fmtINR(sub.subcontract_value)+'</div></div>'+
+      scopeCards+
     '</div>';
   }).join('');
+
   el.innerHTML=
-    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;border:1px solid var(--border);">'+
-      '<div style="padding:10px 14px;background:var(--card-bg);border-bottom:2px solid var(--border);">'+
-        '<div style="font-size:12px;font-weight:800;color:#2E7D32;">&#128203; Scope Completed (Lumpsum)</div>'+
-        '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Logging progress here does not bill automatically — generate the bill from Bills &amp; Payments &rarr; Generate Bills.</div>'+
-      '</div>'+
-      rows+
-    '</div>';
+    '<div style="padding:2px 2px 8px;">'+
+      '<div style="font-size:12px;font-weight:800;color:#2E7D32;">&#128203; Scope Completed (Lumpsum)</div>'+
+      '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Logging progress here does not bill automatically — generate the bill from Bills &amp; Payments &rarr; Generate Bills.</div>'+
+    '</div>'+
+    cards;
 }
 
 // Show BOQ item picker then open entry form
