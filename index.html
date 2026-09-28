@@ -23143,6 +23143,7 @@ var ACC_DEFAULT_COA=[
   {code:'1403', name:'Salary Advances to Staff', type:'Asset',      group:'Loans & Advances'},
   {code:'2001', name:'Sundry Creditors (Vendors)',type:'Liability',group:'Current Liabilities'},
   {code:'2101', name:'GST Payable',              type:'Liability', group:'Duties & Taxes'},
+  {code:'2102', name:'TDS Payable',              type:'Liability', group:'Duties & Taxes'},
   {code:'2201', name:'Loans Payable (Borrowings)',type:'Liability', group:'Loans (Liability)'},
   {code:'2202', name:'Interest Payable (Accrued)',type:'Liability', group:'Loans (Liability)'},
   {code:'3001', name:'Sales Revenue (Contract Work)', type:'Income', group:'Direct Income'},
@@ -23212,6 +23213,7 @@ var ACC_TAB_DEFS=[
   {id:'coa',       label:'📚 Chart of Accounts'},
   {id:'reports',   label:'📈 Reports'},
   {id:'gst',       label:'🏛 GST'},
+  {id:'tds',       label:'💼 TDS'},
   {id:'personal',  label:'🔒 Personal'}
 ];
 
@@ -23281,6 +23283,7 @@ function accSwitchTab(tab){
   if(tab==='ledger')accLedger();
   if(tab==='reports')accReports();
   if(tab==='gst')accGstTab();
+  if(tab==='tds')accTdsTab();
   if(tab==='personal')accPersonalTab();
   if(tab==='coa')accCoa();
 }
@@ -24582,6 +24585,198 @@ async function accGstTab(){
     console.error('accGstTab failed',e);
     cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading GST summary: '+e.message+'</div>';
   }
+}
+
+// ── TDS tab ─────────────────────────────────────────────────────────────
+// TDS withheld from subcontractor/vendor (Purchase/work_bills) payments —
+// money the company deducts from what's owed to a party and deposits with
+// the Income Tax Department on the party's behalf, so unlike a normal
+// deduction (Retention, Security Deposit) it is never released back.
+//
+// Its own period-filter state, deliberately NOT the Reports tab's
+// ACC_RPT_FROM/TO/LABEL — accSetPeriod() ends by calling accReports() /
+// accShowReport(), so reusing it here would re-render the wrong tab and
+// corrupt the Reports tab's own selection. Same This Month/Last Month/
+// This FY/Last FY/All Time + custom-range UX, kept independent.
+var ACC_TDS_FROM=null, ACC_TDS_TO=null, ACC_TDS_LABEL='';
+function accTdsInitPeriod(){
+  if(ACC_TDS_FROM&&ACC_TDS_TO) return;
+  var fy=accFyBounds(0);
+  ACC_TDS_FROM=fy.from; ACC_TDS_TO=fy.to; ACC_TDS_LABEL=fy.label;
+}
+function accTdsSetPeriod(kind){
+  var d=new Date(), y=d.getFullYear(), m=d.getMonth();
+  var p=function(n){return String(n).padStart(2,'0');};
+  if(kind==='thismonth'){
+    ACC_TDS_FROM=y+'-'+p(m+1)+'-01';
+    ACC_TDS_TO=y+'-'+p(m+1)+'-'+p(new Date(y,m+1,0).getDate());
+    ACC_TDS_LABEL=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]+' '+y;
+  } else if(kind==='lastmonth'){
+    var lm=new Date(y,m-1,1), ly=lm.getFullYear(), lmo=lm.getMonth();
+    ACC_TDS_FROM=ly+'-'+p(lmo+1)+'-01';
+    ACC_TDS_TO=ly+'-'+p(lmo+1)+'-'+p(new Date(ly,lmo+1,0).getDate());
+    ACC_TDS_LABEL=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][lmo]+' '+ly;
+  } else if(kind==='thisfy'){
+    var fy=accFyBounds(0); ACC_TDS_FROM=fy.from; ACC_TDS_TO=fy.to; ACC_TDS_LABEL=fy.label;
+  } else if(kind==='lastfy'){
+    var lfy=accFyBounds(-1); ACC_TDS_FROM=lfy.from; ACC_TDS_TO=lfy.to; ACC_TDS_LABEL=lfy.label;
+  } else if(kind==='all'){
+    ACC_TDS_FROM='1900-01-01'; ACC_TDS_TO='2999-12-31'; ACC_TDS_LABEL='All Time';
+  } else if(kind==='custom'){
+    var f=document.getElementById('acc-tds-from'), t=document.getElementById('acc-tds-to');
+    if(f&&f.value) ACC_TDS_FROM=f.value;
+    if(t&&t.value) ACC_TDS_TO=t.value;
+    ACC_TDS_LABEL=fmtDate(ACC_TDS_FROM)+' to '+fmtDate(ACC_TDS_TO);
+  }
+  accTdsTab();
+}
+function accTdsPeriodSelectorHtml(){
+  accTdsInitPeriod();
+  var btn=function(k,l){ return '<button onclick="accTdsSetPeriod(\''+k+'\')" style="background:transparent;border:1.5px solid var(--border);border-radius:8px;padding:5px 9px;font-size:10.5px;font-weight:800;cursor:pointer;margin-right:6px;white-space:nowrap;font-family:Nunito,sans-serif;">'+l+'</button>'; };
+  return '<div style="background:white;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;">'+
+    '<div style="font-size:10px;color:var(--text3);font-weight:800;margin-bottom:6px;">TDS PERIOD — <span style="color:#1A237E;">'+ACC_TDS_LABEL+'</span></div>'+
+    '<div style="display:flex;overflow-x:auto;scrollbar-width:none;margin-bottom:8px;">'+
+      btn('thismonth','This Month')+btn('lastmonth','Last Month')+btn('thisfy','This FY')+btn('lastfy','Last FY')+btn('all','All Time')+
+    '</div>'+
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+
+      '<input type="date" id="acc-tds-from" value="'+ACC_TDS_FROM+'" style="flex:1;min-width:120px;padding:5px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;">'+
+      '<span style="font-size:10px;color:var(--text3);">to</span>'+
+      '<input type="date" id="acc-tds-to" value="'+ACC_TDS_TO+'" style="flex:1;min-width:120px;padding:5px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;">'+
+      '<button onclick="accTdsSetPeriod(\'custom\')" style="background:var(--accent);color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Apply</button>'+
+    '</div></div>';
+}
+
+async function accTdsTab(){
+  var cont=document.getElementById('acc-content');if(!cont)return;
+  cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading TDS summary…</div>';
+  try{
+    accTdsInitPeriod();
+    var workBills=await sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];});
+    workBills=Array.isArray(workBills)?workBills:[];
+
+    // Flatten every TDS-tagged deduction out of every bill into its own row.
+    var allRows=[];
+    workBills.forEach(function(b){
+      var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      deds.filter(function(d){return d.is_tds;}).forEach(function(d){
+        allRows.push({date:b.bill_date, party:b.party_name||'—', billRef:b.bill_ref||('#'+b.bill_number), billId:b.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0});
+      });
+    });
+    allRows.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+
+    var totalAll=allRows.reduce(function(s,r){return s+r.amount;},0);
+    var periodRows=allRows.filter(function(r){return r.date && r.date>=ACC_TDS_FROM && r.date<=ACC_TDS_TO;});
+    var periodTotal=periodRows.reduce(function(s,r){return s+r.amount;},0);
+
+    // Party-wise summary (within selected period)
+    var byParty={};
+    periodRows.forEach(function(r){
+      if(!byParty[r.party]) byParty[r.party]={amount:0,count:0};
+      byParty[r.party].amount+=r.amount; byParty[r.party].count++;
+    });
+    var partyKeys=Object.keys(byParty).sort(function(a,b){return byParty[b].amount-byParty[a].amount;});
+
+    // ── Deposits: actual TDS payments made to the Income Tax Department ──
+    // Read from the GL so it reflects whatever was actually posted, same
+    // pattern as the GST tab's settlement history.
+    var tdsAcct=ACC_ACCOUNTS.find(function(a){return String(a.code)==='2102';});
+    var deposits=[];
+    if(tdsAcct){
+      ACC_VOUCHERS.forEach(function(v){
+        if(accIsPersonal(v)) return;
+        if(v.debit_account!==tdsAcct.id) return;   // Dr TDS Payable = depositing it
+        if(v.source_type) return;                   // skip auto-posted bill legs
+        var amt=parseFloat(v.amount)||0; if(amt<=0) return;
+        deposits.push(v);
+      });
+    }
+    var tdsCanDel = typeof canAccess==='function' ? canAccess('accounts','delete') : (currentUser&&currentUser.role==='admin');
+    var depositTotal=deposits.reduce(function(s,v){return s+(parseFloat(v.amount)||0);},0);
+    var payableBal=tdsAcct?accNetBalance(tdsAcct,true):0;
+    var depositRows=deposits.slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));})
+      .map(function(v){
+        return '<tr><td style="white-space:nowrap;">'+fmtDate(v.date)+'</td><td>'+(v.vou_no||v.voucher_no||'—')+'</td>'+
+          '<td>'+(v.narration||v.party_name||'—')+'</td>'+
+          '<td style="text-align:right;font-weight:700;">'+fmtINR(parseFloat(v.amount)||0)+'</td>'+
+          '<td style="text-align:center;">'+(tdsCanDel?'<button class="btn btn-sm btn-red" onclick="accDelTdsSettlement(\''+v.id+'\')" title="Delete this deposit entry">&#128465;</button>':'')+'</td></tr>';
+      }).join('');
+
+    var tdsSettlementHtml=
+      '<div style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:10px;padding:10px 12px;margin-bottom:14px;">'+
+        '<div style="font-size:12px;font-weight:900;color:#4A148C;margin-bottom:8px;">&#127970; TDS Deposited to Income Tax</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px;">'+
+          '<div><div style="font-size:9.5px;color:var(--text3);">DEPOSITED TO DATE</div><div style="font-size:13px;font-weight:900;color:#2E7D32;">'+fmtINR(depositTotal)+'</div></div>'+
+          '<div><div style="font-size:9.5px;color:var(--text3);">TDS PAYABLE OUTSTANDING</div><div style="font-size:13px;font-weight:900;color:'+(payableBal>0?'#C62828':'var(--text3)')+';">'+fmtINR(payableBal)+'</div></div>'+
+        '</div>'+
+        (depositRows?
+          '<div class="table-card" style="margin:0;"><table class="att-table"><thead><tr><th>Date</th><th>Voucher</th><th>Narration</th><th style="text-align:right;">Amount</th><th></th></tr></thead><tbody>'+depositRows+'</tbody></table></div>'
+          :'<div style="font-size:10.5px;color:var(--text3);">No TDS deposits recorded yet — use the button below after depositing with the Income Tax Department.</div>')+
+        '<div style="font-size:9.5px;color:var(--text3);margin-top:6px;">Balance is live from the ledger (TDS Payable 2102). Full entry detail: Accounts &rarr; Ledger.</div>'+
+      '</div>';
+
+    cont.innerHTML=
+      '<div style="font-size:16px;font-weight:800;margin-bottom:4px;">TDS Summary</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">TDS withheld from subcontractor/vendor bills, deposited with the Income Tax Department on their behalf — never payable back to the party. For information only — verify before filing TDS returns.</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;">'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL TDS (ALL TIME)</div><div style="font-size:16px;font-weight:900;color:#4A148C;">'+fmtINR(totalAll)+'</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TDS IN '+ACC_TDS_LABEL.toUpperCase()+'</div><div style="font-size:16px;font-weight:900;color:#4A148C;">'+fmtINR(periodTotal)+'</div></div>'+
+      '</div>'+
+      tdsSettlementHtml+
+      '<div style="display:flex;gap:0;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;">'+
+        '<button onclick="accOpenTdsVoucher('+Math.max(0,payableBal)+')" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;" title="Payment: Dr TDS Payable / Cr Bank — deposit TDS with the Income Tax Department">&#127970; Record TDS Deposit</button>'+
+      '</div>'+
+      accTdsPeriodSelectorHtml()+
+      '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Party-wise ('+ACC_TDS_LABEL+')</div>'+
+      (partyKeys.length?
+        '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Party</th><th style="text-align:right;">Entries</th><th style="text-align:right;">Total TDS</th></tr></thead><tbody>'+
+        partyKeys.map(function(pk){var x=byParty[pk];return '<tr><td>'+pk+'</td><td style="text-align:right;">'+x.count+'</td><td style="text-align:right;font-weight:800;color:#4A148C;">'+fmtINR(x.amount)+'</td></tr>';}).join('')+
+        '</tbody></table></div>'
+        :'<div style="text-align:center;padding:20px;color:var(--text3);margin-bottom:14px;">No TDS deducted in this period</div>')+
+      '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Date-wise Entries ('+ACC_TDS_LABEL+')</div>'+
+      (periodRows.length?
+        '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Bill</th><th>Party</th><th>Head</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+
+        periodRows.map(function(r){
+          return '<tr><td style="white-space:nowrap;">'+fmtDate(r.date)+'</td><td><strong>'+r.billRef+'</strong></td>'+
+            '<td>'+r.party+'</td><td>'+r.head+'</td>'+
+            '<td style="text-align:right;font-weight:700;color:#4A148C;">'+fmtINR(r.amount)+'</td></tr>';
+        }).join('')+'</tbody></table></div>'
+        :'<div style="text-align:center;padding:20px;color:var(--text3);">No TDS entries in this period</div>');
+  }catch(e){
+    console.error('accTdsTab failed',e);
+    cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading TDS summary: '+e.message+'</div>';
+  }
+}
+
+// Opens the voucher sheet pre-filled to record an actual TDS deposit with
+// the Income Tax Department: Payment, Dr 2102 TDS Payable / Cr 1002 Bank.
+function accOpenTdsVoucher(amount){
+  accOpenVoucher();
+  setTimeout(function(){
+    var byCode=function(code){ var a=ACC_ACCOUNTS.find(function(x){return String(x.code)===code;}); return a?a.id:''; };
+    var sv=function(id,val){ var el=document.getElementById(id); if(el) el.value=val; };
+    sv('vou-type','Payment');
+    sv('vou-debit',byCode('2102'));
+    sv('vou-credit',byCode('1002'));
+    sv('vou-party','TDS Deposit — Income Tax Dept');
+    sv('vou-narration','TDS deposited with the Income Tax Department');
+    if(amount&&amount>0) sv('vou-amount',Math.round(amount));
+  },80);
+}
+
+// Delete a TDS deposit voucher and stay on the TDS tab. Kept separate from
+// accDelVoucher(), which returns to the Accounts dashboard after deleting.
+async function accDelTdsSettlement(id){
+  var canDel = typeof canAccess==='function' ? canAccess('accounts','delete') : (currentUser&&currentUser.role==='admin');
+  if(!canDel){ toast('You do not have permission to delete accounting entries','warning'); return; }
+  var v=ACC_VOUCHERS.find(function(x){return x.id===id;});
+  var label=v?((v.vou_no||v.voucher_no||'')+' — '+fmtINR(parseFloat(v.amount)||0)):'this entry';
+  if(!confirm('Delete '+label+'?\n\nThis reverses the deposit: the TDS Payable balance will go back up accordingly.')) return;
+  try{
+    await sbDelete('vouchers',id);
+    ACC_VOUCHERS=ACC_VOUCHERS.filter(function(x){return x.id!==id;});
+    toast('TDS deposit entry deleted','success');
+    accTdsTab();
+  }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 function accCoa(){
