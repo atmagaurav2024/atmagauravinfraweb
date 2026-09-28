@@ -6259,9 +6259,17 @@ function slUpdateTotal(){
     if(type==='pct'){var calcAmt=Math.round(workTotal*pct/100);if(amtInp){amtInp.value=calcAmt;amtInp.setAttribute('readonly','true');}addTotal+=calcAmt;}
     else{addTotal+=parseFloat(amtInp&&amtInp.value)||0;}
   });
-  // Deductions
+  // Deductions — recompute any %-based row live off the current work total
+  // (same as %-based additions/GST above), so it doesn't freeze at whatever
+  // it was when the % was first typed.
   var dedTotal=0;
-  document.querySelectorAll('.bl-ded-amt').forEach(function(inp){dedTotal+=parseFloat(inp.value)||0;});
+  document.querySelectorAll('.bl-ded-row').forEach(function(row){
+    var pctInp=row.querySelector('.bl-ded-pct');
+    var amtInp=row.querySelector('.bl-ded-amt');
+    var pct=parseFloat(pctInp&&pctInp.value)||0;
+    if(pct&&amtInp) amtInp.value=Math.round(workTotal*pct/100);
+    dedTotal+=parseFloat(amtInp&&amtInp.value)||0;
+  });
   // Net before GST
   var netBeforeGst=workTotal+addTotal-dedTotal;
   var nbgEl=document.getElementById('bl-net-before-gst-amt');
@@ -10404,9 +10412,21 @@ function blUpdateTotal(){
       addTotal+=parseFloat(amtInp&&amtInp.value)||0;
     }
   });
-  // Sum deductions entered in form
+  // Sum deductions entered in form. A %-based deduction (e.g. 1% TDS u/s
+  // 194C) is recomputed here off the current work sub-total every time this
+  // runs — same as %-based additions and GST above — so it stays live if
+  // the work amount changes after the deduction was added, instead of
+  // freezing at whatever it was when the % was first typed. A manually
+  // typed amount (which clears the % field, see blDedAmtManual) is left
+  // exactly as entered.
   var dedTotal=0;
-  document.querySelectorAll('.bl-ded-amt').forEach(function(inp){dedTotal+=parseFloat(inp.value)||0;});
+  document.querySelectorAll('.bl-ded-row').forEach(function(row){
+    var pctInp=row.querySelector('.bl-ded-pct');
+    var amtInp=row.querySelector('.bl-ded-amt');
+    var pct=parseFloat(pctInp&&pctInp.value)||0;
+    if(pct&&amtInp) amtInp.value=Math.round(total*pct/100);
+    dedTotal+=parseFloat(amtInp&&amtInp.value)||0;
+  });
   // Sum released deductions (they are payable to party — add to net)
   var relDedTotal=0;
   document.querySelectorAll('.bl-rel-ded-amt').forEach(function(inp){
