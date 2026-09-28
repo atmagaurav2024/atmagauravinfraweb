@@ -2358,6 +2358,7 @@ async function planDelRes(id){
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[],WA_COMBINED_PLAN_ITEMS=[],WA_COMBINED_RR_GROUPS=[],WA_COMBINED_RR_ITEMS=[];
 var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[],WA_SALES_PAYMENTS=[];
+var WA_SUBCONTRACTS=[],WA_SUBCONTRACT_SCOPES=[],WA_SUBCONTRACT_PROGRESS=[]; // lumpsum subcontract scope + unbilled progress (for Generate Bill)
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_DAILY_SUBTAB='boq'; // 'boq' | 'scope' — which Daily Progress sub-view is active
 var WA_SUBTAB='orders'; // allot | allotted | daily | bills | orders
@@ -2464,6 +2465,14 @@ async function execLoadItems(silent){
   }catch(e){
     WA_SUBCONTRACT_SCOPES=[];
     console.warn('subcontract_scopes not available yet', e);
+  }
+  try{
+    var scopeIds2=WA_SUBCONTRACT_SCOPES.map(function(s){return s.id;});
+    WA_SUBCONTRACT_PROGRESS=scopeIds2.length?await sbFetch('subcontract_scope_progress',{select:'*',filter:'scope_id=in.('+scopeIds2.join(',')+')'}):[];
+    if(!Array.isArray(WA_SUBCONTRACT_PROGRESS)) WA_SUBCONTRACT_PROGRESS=[];
+  }catch(e){
+    WA_SUBCONTRACT_PROGRESS=[];
+    console.warn('subcontract_scope_progress not available yet', e);
   }
   try{
     var pg=await sbFetch('combined_plan_groups',{select:'id',filter:'project_id=eq.'+projId});
@@ -4874,7 +4883,12 @@ async function execDelBatch(batchKey){
     try{
       await sbDelete('subcontracts', linkedSub.id);
       WA_SUBCONTRACTS=WA_SUBCONTRACTS.filter(function(s){return s.id!==linkedSub.id;});
-      if(typeof WA_SUBCONTRACT_SCOPES!=='undefined') WA_SUBCONTRACT_SCOPES=WA_SUBCONTRACT_SCOPES.filter(function(sc){return sc.subcontract_id!==linkedSub.id;});
+      var delScopeIds=[];
+      if(typeof WA_SUBCONTRACT_SCOPES!=='undefined'){
+        delScopeIds=WA_SUBCONTRACT_SCOPES.filter(function(sc){return sc.subcontract_id===linkedSub.id;}).map(function(sc){return sc.id;});
+        WA_SUBCONTRACT_SCOPES=WA_SUBCONTRACT_SCOPES.filter(function(sc){return sc.subcontract_id!==linkedSub.id;});
+      }
+      if(typeof WA_SUBCONTRACT_PROGRESS!=='undefined') WA_SUBCONTRACT_PROGRESS=WA_SUBCONTRACT_PROGRESS.filter(function(pr){return delScopeIds.indexOf(pr.scope_id)===-1;});
       if(typeof execRenderLumpsumScopeProgress==='function') execRenderLumpsumScopeProgress();
     }catch(e){ console.error('Could not delete linked subcontract for this batch',e); }
   }
@@ -7432,7 +7446,9 @@ function execDailySwitchSubTab(tab){
 // progress against scope milestones (e.g. "3 of 8 footings") can be
 // logged right alongside regular BOQ-based daily progress, rather than
 // only from the Subcontract Scope tab. Reuses scOpenProgress()/
-// scSaveProgress() directly - same data, same billing flow.
+// scSaveProgress() directly - same data. Logging progress here does NOT
+// create a bill; unbilled progress is picked up from Bills & Payments →
+// Generate Bills, same as item-rate work.
 function execRenderLumpsumScopeProgress(){
   var el=document.getElementById('dp-lumpsum-scope-content');
   if(!el) return;
@@ -7441,13 +7457,23 @@ function execRenderLumpsumScopeProgress(){
     var sub=SC_SUBCONTRACTS.find(function(s){return s.id===scope.subcontract_id;});
     var progress=SC_PROGRESS.filter(function(p){return p.scope_id===scope.id;});
     var completedQty=progress.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+    var doneAmtTotal=progress.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+    // Billed-so-far is derived from bills' selected_items (scope_id), the
+    // same accounting execOpenBill() uses — kept in sync automatically.
+    var billedAmtTotal=(typeof WA_BILLS!=='undefined'?WA_BILLS:[]).reduce(function(s,b){
+      var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+      return s+si.filter(function(x){return x.scope_id===scope.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+    },0);
+    var unbilledAmt=Math.max(0,doneAmtTotal-billedAmtTotal);
     var scopeQty=parseFloat(scope.scope_qty)||0;
     var remainingQty=Math.max(0,scopeQty-completedQty);
     var pctDone=scopeQty>0?Math.min(100,(completedQty/scopeQty)*100):0;
     return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
       '<div style="flex:1;min-width:0;">'+
         '<div style="font-size:12px;font-weight:800;">'+scope.scope_name+(sub?' <span style="font-weight:600;color:var(--text3);">&#8594; '+sub.party_name+'</span>':'')+'</div>'+
-        '<div style="font-size:10px;color:var(--text3);">'+completedQty.toFixed(3).replace(/\.?0+$/,'')+' of '+scopeQty+' '+(scope.scope_unit||'')+' done ('+pctDone.toFixed(0)+'%)</div>'+
+        '<div style="font-size:10px;color:var(--text3);">'+completedQty.toFixed(3).replace(/\.?0+$/,'')+' of '+scopeQty+' '+(scope.scope_unit||'')+' done ('+pctDone.toFixed(0)+'%)'+
+        (unbilledAmt>0?' <span style="color:#E65100;font-weight:700;">&middot; '+fmtINR(unbilledAmt)+' unbilled</span>':'')+
+        '</div>'+
       '</div>'+
       (remainingQty>0.0001
         ? '<button onclick="scOpenProgress(\''+scope.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Log Progress</button>'
@@ -7458,7 +7484,7 @@ function execRenderLumpsumScopeProgress(){
     '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;border:1px solid var(--border);">'+
       '<div style="padding:10px 14px;background:var(--card-bg);border-bottom:2px solid var(--border);">'+
         '<div style="font-size:12px;font-weight:800;color:#2E7D32;">&#128203; Scope Completed (Lumpsum)</div>'+
-        '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Logging progress here bills the corresponding subcontractor directly.</div>'+
+        '<div style="font-size:9px;color:var(--text3);margin-top:3px;">Logging progress here does not bill automatically — generate the bill from Bills &amp; Payments &rarr; Generate Bills.</div>'+
       '</div>'+
       rows+
     '</div>';
@@ -8813,6 +8839,39 @@ function execRenderBills(){
     var totDoneAmt=Object.keys(allotGroups).reduce(function(s,k){return s+allotGroups[k].doneAmt;},0);
     var totBilledAmt=Object.keys(allotGroups).reduce(function(s,k){return s+(allotGroups[k].billedAmt||0);},0);
 
+    // ── Lumpsum subcontract scope progress rows for this party — logging
+    // progress never bills automatically, so unbilled scope progress is
+    // shown here too, same table as item-rate work, so it's visible
+    // before opening the bill form. ──
+    var scopeRowsHtml='';
+    var scopeSubs=(typeof WA_SUBCONTRACTS!=='undefined'?WA_SUBCONTRACTS:[]).filter(function(s){return s.party_name===p.name;});
+    if(scopeSubs.length && typeof WA_SUBCONTRACT_SCOPES!=='undefined'){
+      var scopeSubIdSet={}; scopeSubs.forEach(function(s){scopeSubIdSet[s.id]=true;});
+      var pScopes=WA_SUBCONTRACT_SCOPES.filter(function(sc){return scopeSubIdSet[sc.subcontract_id];});
+      pScopes.forEach(function(sc){
+        var prog=(typeof WA_SUBCONTRACT_PROGRESS!=='undefined'?WA_SUBCONTRACT_PROGRESS:[]).filter(function(pr){return pr.scope_id===sc.id;});
+        var scDoneQty=prog.reduce(function(s,pr){return s+(parseFloat(pr.completed_qty)||0);},0);
+        if(scDoneQty<=0) return;
+        var scDoneAmt=prog.reduce(function(s,pr){return s+(parseFloat(pr.amount)||0);},0);
+        var scBilled=WA_BILLS.reduce(function(s,b){
+          var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+          return s+si.filter(function(x){return x.scope_id===sc.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+        },0);
+        totDoneAmt+=scDoneAmt; totBilledAmt+=scBilled;
+        scopeRowsHtml+='<tr style="border-bottom:1px solid #F5F5F5;background:#FAFCFF;">'+
+          '<td style="padding:7px 10px;font-size:11px;">'+
+            '<div style="font-weight:800;color:#1B5E20;">'+sc.scope_name+' <span style="font-size:9px;background:#E3F2FD;color:#1565C0;border-radius:3px;padding:1px 5px;font-weight:700;">SCOPE</span></div>'+
+            '<div style="font-size:10px;color:#555;">'+p.name+'</div>'+
+          '</td>'+
+          '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+(parseFloat(sc.scope_qty)||0).toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(sc.scope_unit||'')+'</span></td>'+
+          '<td style="padding:7px 10px;font-size:11px;text-align:right;">—</td>'+
+          '<td style="padding:7px 10px;font-size:11px;text-align:right;color:#1565C0;font-weight:700;">'+scDoneQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(sc.scope_unit||'')+'</span></td>'+
+          '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+inr(scDoneAmt)+'</td>'+
+          '<td style="padding:7px 10px;font-size:11px;text-align:right;font-weight:800;color:#1A237E;">'+(scBilled?inr(scBilled):'—')+'</td>'+
+        '</tr>';
+      });
+    }
+
     // ── Party-level additions from all bills ──
     var partyAddRows='';
     var totalAddAmt=0;
@@ -9058,7 +9117,7 @@ function execRenderBills(){
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:#1A237E;">WORK BILLED</th>'+
 
         '</tr></thead>'+
-        '<tbody>'+allotRows+
+        '<tbody>'+allotRows+scopeRowsHtml+
         // Work sub-total row
         '<tr style="background:#EFF6FF;border-top:2px solid #1565C0;">'+
           '<td style="padding:7px 10px;font-size:11px;font-weight:800;color:#1565C0;">Work Sub-Total</td>'+
@@ -9832,6 +9891,37 @@ async function execOpenBill(partyKey,projId){
     return {a:{id:g.allotIds[0]},resName:g.resName,boqItem:{},allotQty:g.allotQty,allotRate:g.allotRate,doneQty:g.doneQty,doneAmt:g.doneAmt,prevBilled:g.prevBilled,unbilled:g.unbilled,unit:g.unit,allotIds:g.allotIds};
   });
 
+  // Lumpsum subcontract scope progress for this party — logging progress
+  // (Daily Progress / Subcontract Scope tab) never bills automatically,
+  // so any scope with completed qty shows up here as a selectable "work
+  // row" too, same as item-rate work. Billed-so-far is derived from
+  // existing bills' selected_items (scope_id), exactly like allot_id is
+  // used for item-rate rows above — no separate "billed" flag to track.
+  var partySubsForBill=(typeof WA_SUBCONTRACTS!=='undefined'?WA_SUBCONTRACTS:[]).filter(function(s){return s.party_name===partyName;});
+  if(partySubsForBill.length && typeof WA_SUBCONTRACT_SCOPES!=='undefined'){
+    var subIdSet={}; partySubsForBill.forEach(function(s){subIdSet[s.id]=true;});
+    var partyScopesForBill=WA_SUBCONTRACT_SCOPES.filter(function(sc){return subIdSet[sc.subcontract_id];});
+    partyScopesForBill.forEach(function(sc){
+      var prog=(typeof WA_SUBCONTRACT_PROGRESS!=='undefined'?WA_SUBCONTRACT_PROGRESS:[]).filter(function(p){return p.scope_id===sc.id;});
+      var sDoneQty=prog.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+      if(sDoneQty<=0) return; // nothing logged yet for this scope
+      var sDoneAmt=prog.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+      var sBilled=WA_BILLS.reduce(function(s,b){
+        var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+        return s+si.filter(function(x){return x.scope_id===sc.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+      },0);
+      var sUnbilled=Math.max(0,sDoneAmt-sBilled);
+      var sQty=parseFloat(sc.scope_qty)||0;
+      var sRate=sQty>0?(sDoneAmt/sDoneQty):0; // avg rate/unit actually logged
+      workRows.push({
+        a:{id:'scope:'+sc.id}, resName:sc.scope_name+' (Scope)', boqItem:{},
+        allotQty:sQty, allotRate:sRate, doneQty:sDoneQty, doneAmt:sDoneAmt,
+        prevBilled:sBilled, unbilled:sUnbilled, unit:sc.scope_unit||'',
+        allotIds:['scope:'+sc.id], isScope:true, scopeId:sc.id
+      });
+    });
+  }
+
   var nextBillNo=(WA_BILLS.filter(function(b){return b.party_name===partyName&&b.party_type===partyType;}).length)+1;
 
   // Work selection rows
@@ -10371,13 +10461,15 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     var amt=parseFloat(amtInp&&amtInp.value)||0;
     var w=window._blWorkRows&&window._blWorkRows[idx];
     if(w&&amt>0){
-      selectedItems.push({
+      var item={
         allot_id:w.a.id,
         res_name:w.resName,
         done_qty:w.doneQty,
         rate:w.allotRate,
         amount:amt
-      });
+      };
+      if(w.isScope){ item.scope_id=w.scopeId; item.is_scope=true; }
+      selectedItems.push(item);
     }
   });
   if(!selectedItems.length){toast('Select at least one work item','warning');return;}
@@ -13180,14 +13272,22 @@ function scToggleHistory(scopeId){
   if(el) el.style.display=(el.style.display==='none'?'block':'none');
 }
 async function scDeleteProgress(progressId, scopeId){
-  var p=SC_PROGRESS.find(function(x){return x.id===progressId;});
-  if(p&&p.work_bill_id){
-    if(!confirm('This progress entry created a bill in Bills & Payments. Deleting it here will NOT remove that bill — delete it there too if needed.\nDelete this progress entry?')) return;
+  // A scope is "billed" once any bill's selected_items references its
+  // scope_id (same accounting execOpenBill()/execRenderLumpsumScopeProgress()
+  // use) — not a flag on the individual progress row, since a bill can be
+  // generated for the combined total of several progress entries at once.
+  var scopeHasBill=(typeof WA_BILLS!=='undefined'?WA_BILLS:[]).some(function(b){
+    var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+    return si.some(function(x){return x.scope_id===scopeId;});
+  });
+  if(scopeHasBill){
+    if(!confirm('A bill has already been generated for this scope in Bills & Payments. Deleting this progress entry will NOT update that bill — check it there if needed.\nDelete this progress entry?')) return;
   } else {
     if(!confirm('Delete this progress entry?')) return;
   }
   try{
     await sbDelete('subcontract_scope_progress', progressId);
+    if(typeof WA_SUBCONTRACT_PROGRESS!=='undefined') WA_SUBCONTRACT_PROGRESS=WA_SUBCONTRACT_PROGRESS.filter(function(x){return x.id!==progressId;});
     await scLoadItems();
     toast('Deleted','success');
   }catch(e){toast('Error: '+e.message,'error');}
@@ -13215,10 +13315,10 @@ function scOpenProgress(scopeId){
     '<div id="sc-prog-amt-preview" style="font-size:11px;font-weight:800;color:#2E7D32;margin-top:4px;"></div>'+
     '<label class="flbl" style="margin-top:8px;">Date *</label><input id="sc-prog-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Remarks</label><textarea id="sc-prog-remarks" class="ftxt" rows="2" placeholder="Optional"></textarea>'+
-    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">This will create a bill in Bills &amp; Payments for '+sub.party_name+'.</div>';
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:6px;">This logs the progress against '+sub.party_name+'. Generate the bill for it later from Bills &amp; Payments &rarr; Generate Bills.</div>';
   document.getElementById('sc-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeScSheet()">Cancel</button>'+
-    '<button class="btn" style="background:#2E7D32;color:white;" onclick="scSaveProgress(\''+scopeId+'\')">&#10003; Log &amp; Bill</button>';
+    '<button class="btn" style="background:#2E7D32;color:white;" onclick="scSaveProgress(\''+scopeId+'\')">&#10003; Log Progress</button>';
   openScSheet();
 
   setTimeout(function(){
@@ -13253,32 +13353,21 @@ async function scSaveProgress(scopeId){
   var projId=PROJ_MOD_SEL_ID||'';
 
   try{
-    toast('Saving and generating bill...','info');
-    // Fetch a fresh count for the bill number/ref, rather than relying
-    // on WA_BILLS which may not be freshly loaded from this tab.
-    var existingBills=await sbFetch('work_bills',{select:'id'});
-    var billYear=new Date().getFullYear();
-    var billSeq=String((Array.isArray(existingBills)?existingBills.length:0)+1).padStart(4,'0');
-    var billRef='BILL/'+billYear+'/'+billSeq;
-
-    var billRes=await sbInsert('work_bills',{
-      project_id:projId, party_type:'sc', party_name:sub.party_name,
-      bill_number:billSeq, bill_ref:billRef,
-      bill_date:date, bill_amount:Math.round(amount),
-      selected_items:JSON.stringify([{allot_id:null, res_name:scope.scope_name, done_qty:qty, rate:ratePerUnit, amount:amount}]),
-      description:'Subcontract Scope — '+scope.scope_name+(remarks?' — '+remarks:'')
-    });
-    var billId=billRes&&billRes[0]?billRes[0].id:null;
-
-    await sbInsert('subcontract_scope_progress',{
+    toast('Saving progress...','info');
+    // Progress is logged WITHOUT creating a bill — billing for this scope
+    // is a separate, explicit step from Bills & Payments → Generate Bills,
+    // same as item-rate work. work_bill_id stays null until a bill is
+    // generated there and links back to this row.
+    var progRes=await sbInsert('subcontract_scope_progress',{
       scope_id:scopeId, completed_qty:qty, date:date, remarks:remarks||null,
-      rate_used:ratePerUnit, amount:amount, work_bill_id:billId,
+      rate_used:ratePerUnit, amount:amount, work_bill_id:null,
       created_by:(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||null):null)
     });
+    if(progRes&&progRes[0]&&typeof WA_SUBCONTRACT_PROGRESS!=='undefined') WA_SUBCONTRACT_PROGRESS.push(progRes[0]);
 
     closeScSheet();
     await scLoadItems();
     execRenderLumpsumScopeProgress();
-    toast('Progress logged, bill '+billRef+' created for '+fmtINR(amount),'success');
+    toast('Progress logged ('+fmtINR(amount)+'). Generate the bill from Bills & Payments → Generate Bills.','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
