@@ -3209,7 +3209,7 @@ async function rrGroupOpenAllotForm(groupId){
         '<div style="font-size:10px;color:var(--text3);margin-top:4px;margin-bottom:12px;">Split across items in proportion to their planned value \u2014 each item still gets its own rate stored for billing/execution tracking.</div>'+
         '<div style="background:#FFF;border-radius:10px;padding:10px;border:1px solid #B2EBF2;">'+
           '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:2px;">Scope Breakdown *</div>'+
-          '<div style="font-size:9.5px;color:#666;margin-bottom:8px;">Break the lumpsum into billable milestones \u2014 e.g. "Footing", qty 8 Nos, 20% of lumpsum. Progress against each is logged later in Subcontract Scope for billing.</div>'+
+          '<div style="font-size:9.5px;color:#666;margin-bottom:8px;">Break the lumpsum into billable milestones \u2014 e.g. "Footing", qty 8 Nos, 20% of lumpsum. Progress against each is logged later in Daily Progress \u2192 Scope Completed for billing.</div>'+
           '<div id="rr-grp-scope-rows"></div>'+
           '<button type="button" onclick="rrGroupAddScopeLine()" style="background:#E0F7FA;border:none;color:#00838F;font-size:11px;font-weight:800;border-radius:6px;padding:6px 10px;cursor:pointer;margin-top:4px;">+ Add Scope Line</button>'+
           '<div id="rr-grp-scope-total" style="font-size:11px;font-weight:800;margin-top:8px;text-align:right;"></div>'+
@@ -3398,7 +3398,7 @@ async function rrGroupAllotConfirm(groupId){
         }
       }
     }catch(e){
-      toast('Items allotted, but the scope breakdown couldn\'t be saved automatically — set it up in Subcontract Scope instead ('+e.message+')','warning');
+      toast('Items allotted, but the scope breakdown couldn\'t be saved automatically — set it up in Daily Progress \u2192 Scope Completed instead ('+e.message+')','warning');
     }
   }
 
@@ -6685,7 +6685,7 @@ function execRenderAllotted(){
             '</div>'+
           '</div>';
         }).join('')
-      ) : '<div style="padding:14px;font-size:11px;color:var(--text3);text-align:center;">Scope breakdown not found for this lumpsum batch \u2014 set it up in Subcontract Scope.</div>';
+      ) : '<div style="padding:14px;font-size:11px;color:var(--text3);text-align:center;">Scope breakdown not found for this lumpsum batch \u2014 set it up in Daily Progress \u2192 Scope Completed.</div>';
     } else {
     itemRows = items.map(function(a){
       var aCol = tCol[a.exec_type]||'#37474F';
@@ -6725,6 +6725,7 @@ function execRenderAllotted(){
     var downloadRow = (hasWO||hasPO)
       ? '<div style="padding:10px 14px;background:#FAFAFA;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">'+
           '<div style="flex:1;font-size:10px;color:var(--text3);">'+(hasOrder?'Re-download document':'Generate document for this allotment')+'</div>'+
+          (hasOrder?'<button onclick="execEditBatchDocTerms(\''+batchKey+'\',\''+docType+'\')" style="background:none;color:'+(docType==='po'?'#1565C0':'#E65100')+';border:1.5px solid '+(docType==='po'?'#1565C0':'#E65100')+';border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit Terms</button>':'')+
           (hasWO?'<button onclick="execGenBatchDoc(\''+batchKey+'\',\'wo\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#11015; Work Order</button>':'')+
           (hasPO?'<button onclick="execGenBatchDoc(\''+batchKey+'\',\'po\')" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#11015; Purchase Order</button>':'')+
         '</div>'
@@ -7038,17 +7039,27 @@ function execDefaultTerms(docType){
       'This order is valid only when countersigned by authorized representative of the company.';
 }
 
-async function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, docNumber, fullDocNo, projId){
-  document.getElementById('exec-sheet-title').textContent='Terms & Conditions — '+fullDocNo;
+async function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, docNumber, fullDocNo, projId, existingTerms){
+  // existingTerms is passed when editing the terms of an ALREADY-issued
+  // WO/PO (see execEditBatchDocTerms) — same form, pre-filled with what
+  // was actually saved rather than the blank default, and on save this
+  // updates the existing work_orders rows in place instead of creating a
+  // new document.
+  var isUpdate = existingTerms!=null;
+  document.getElementById('exec-sheet-title').textContent=(isUpdate?'Edit Terms & Conditions — ':'Terms & Conditions — ')+fullDocNo;
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#E65100;">Review or edit the terms before generating '+fullDocNo+'. One line per term.</div>'+
+    '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#E65100;">'+
+      (isUpdate
+        ? 'Update the terms already printed on the issued '+fullDocNo+'. This only changes the terms text — qty, rate and amount stay as originally issued.'
+        : 'Review or edit the terms before generating '+fullDocNo+'.')+
+      ' One line per term.</div>'+
     '<label class="flbl">Load a saved template</label>'+
     '<div style="display:flex;gap:6px;margin-bottom:10px;">'+
       '<select id="wo-terms-template-sel" class="fsel" style="flex:1;"><option value="">&#9203; Loading...</option></select>'+
       '<button id="wo-terms-template-del" type="button" onclick="execDeleteTermsTemplate(\''+docType+'\')" style="display:none;background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:8px;padding:0 10px;cursor:pointer;font-size:16px;">&#215;</button>'+
     '</div>'+
     '<label class="flbl">Terms &amp; Conditions</label>'+
-    '<textarea id="wo-terms-edit" class="ftxt" rows="9">'+esc(execDefaultTerms(docType))+'</textarea>'+
+    '<textarea id="wo-terms-edit" class="ftxt" rows="9">'+esc(isUpdate?existingTerms:execDefaultTerms(docType))+'</textarea>'+
     '<div style="display:flex;gap:6px;align-items:flex-end;margin-top:8px;">'+
       '<div style="flex:1;"><label class="flbl">Save current text as a new template</label><input id="wo-terms-save-name" class="finp" placeholder="Template name, e.g. Standard Subcontractor Terms"></div>'+
       '<button type="button" onclick="execSaveTermsTemplate(\''+docType+'\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:9px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128190; Save</button>'+
@@ -7058,12 +7069,31 @@ async function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, doc
   var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
   cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
   var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:'+(docType==='po'?'#1565C0':'#E65100')+';color:white;';
-  sb.innerHTML='&#10003; Generate '+fullDocNo;
-  sb.onclick=function(){execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId);};
+  sb.innerHTML=isUpdate?'&#10003; Update '+fullDocNo:'&#10003; Generate '+fullDocNo;
+  sb.onclick=function(){execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId, isUpdate);};
   sf.appendChild(cb);sf.appendChild(sb);
   openSheet('ov-exec','sh-exec');
 
   await execLoadTermsTemplateOptions(docType);
+}
+
+// Re-open the terms prompt for an already-issued WO/PO, pre-filled with
+// its saved terms, so it can be updated without regenerating the
+// document from scratch (doc number/date/qty/rate/amount are untouched).
+async function execEditBatchDocTerms(batchKey, docType){
+  var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  var batchItems = WA_ALLOT.filter(function(a){
+    return (a.batch_id||('solo-'+a.id)) === batchKey;
+  });
+  if(!batchItems.length){toast('Allotment not found','warning');return;}
+  var prefix = docType==='wo'?'WO':'PO';
+  var existingBatchOrders = WA_ORDERS.filter(function(o){
+    return o.doc_type===docType && batchItems.some(function(a){return a.id===o.allot_id;});
+  });
+  if(!existingBatchOrders.length){toast('No '+prefix+' generated yet for this allotment','warning');return;}
+  var docNumber = existingBatchOrders[0].doc_number;
+  var fullDocNo = prefix+'-'+new Date().getFullYear()+'-'+docNumber;
+  execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, docNumber, fullDocNo, projId, existingBatchOrders[0].terms||'');
 }
 
 async function execLoadTermsTemplateOptions(docType){
@@ -7120,30 +7150,46 @@ async function execDeleteTermsTemplate(docType){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
-async function execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId){
+async function execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId, isUpdate){
   var terms=(document.getElementById('wo-terms-edit')||{}).value||execDefaultTerms(docType);
   var today=new Date().toISOString().slice(0,10);
   try{
-    toast('Generating '+fullDocNo+'...','info');
-    for(var i=0;i<batchItems.length;i++){
-      var a=batchItems[i];
-      var res=await sbInsert('work_orders',{
-        project_id:projId,
-        party_type:a.exec_type,
-        party_name:a.party_name,
-        allot_id:a.id,
-        batch_id:batchKey,
-        doc_type:docType,
-        doc_number:docNumber,
-        doc_date:today,
-        qty:a.qty, rate:a.rate, unit:a.unit||null,
-        amount:Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)),
-        boq_item_id:a.boq_item_id||null,
-        terms:terms
+    if(isUpdate){
+      // Editing an already-issued document's terms — update the existing
+      // work_orders rows in place, don't touch doc number/date/qty/rate.
+      toast('Updating terms for '+fullDocNo+'...','info');
+      var existingBatchOrders = WA_ORDERS.filter(function(o){
+        return o.doc_type===docType && batchItems.some(function(a){return a.id===o.allot_id;});
       });
-      if(res&&res[0]) WA_ORDERS.push(res[0]);
+      for(var j=0;j<existingBatchOrders.length;j++){
+        var o=existingBatchOrders[j];
+        await sbUpdate('work_orders', o.id, {terms:terms});
+        var idx=WA_ORDERS.findIndex(function(x){return x.id===o.id;});
+        if(idx>-1) WA_ORDERS[idx].terms=terms;
+      }
+      toast('Terms updated for '+fullDocNo,'success');
+    } else {
+      toast('Generating '+fullDocNo+'...','info');
+      for(var i=0;i<batchItems.length;i++){
+        var a=batchItems[i];
+        var res=await sbInsert('work_orders',{
+          project_id:projId,
+          party_type:a.exec_type,
+          party_name:a.party_name,
+          allot_id:a.id,
+          batch_id:batchKey,
+          doc_type:docType,
+          doc_number:docNumber,
+          doc_date:today,
+          qty:a.qty, rate:a.rate, unit:a.unit||null,
+          amount:Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)),
+          boq_item_id:a.boq_item_id||null,
+          terms:terms
+        });
+        if(res&&res[0]) WA_ORDERS.push(res[0]);
+      }
+      toast(fullDocNo+' saved!','success');
     }
-    toast(fullDocNo+' saved!','success');
   }catch(e){toast('Error: '+e.message,'error');console.error(e);return;}
   closeSheet('ov-exec','sh-exec');
   execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, terms);
