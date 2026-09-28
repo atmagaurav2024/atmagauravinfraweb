@@ -24662,7 +24662,7 @@ async function accTdsTab(){
     workBills.forEach(function(b){
       var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       deds.filter(function(d){return d.is_tds;}).forEach(function(d){
-        allRows.push({date:b.bill_date, party:b.party_name||'—', billRef:b.bill_ref||('#'+b.bill_number), billId:b.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0});
+        allRows.push({date:b.bill_date, party:b.party_name||'—', billRef:b.bill_ref||('#'+b.bill_number), billId:b.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0, pan:d.pan||''});
       });
     });
     allRows.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
@@ -24671,11 +24671,15 @@ async function accTdsTab(){
     var periodRows=allRows.filter(function(r){return r.date && r.date>=ACC_TDS_FROM && r.date<=ACC_TDS_TO;});
     var periodTotal=periodRows.reduce(function(s,r){return s+r.amount;},0);
 
-    // Party-wise summary (within selected period)
+    // Party-wise summary (within selected period). PAN is the party's PAN
+    // as captured on their most recent TDS entry — periodRows is already
+    // sorted newest-first, so the first hit per party wins and only a
+    // missing PAN gets overwritten by a later (older) row that has one.
     var byParty={};
     periodRows.forEach(function(r){
-      if(!byParty[r.party]) byParty[r.party]={amount:0,count:0};
+      if(!byParty[r.party]) byParty[r.party]={amount:0,count:0,pan:''};
       byParty[r.party].amount+=r.amount; byParty[r.party].count++;
+      if(!byParty[r.party].pan && r.pan) byParty[r.party].pan=r.pan;
     });
     var partyKeys=Object.keys(byParty).sort(function(a,b){return byParty[b].amount-byParty[a].amount;});
 
@@ -24741,16 +24745,16 @@ async function accTdsTab(){
       accTdsPeriodSelectorHtml()+
       '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Party-wise ('+ACC_TDS_LABEL+')</div>'+
       (partyKeys.length?
-        '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Party</th><th style="text-align:right;">Entries</th><th style="text-align:right;">Total TDS</th></tr></thead><tbody>'+
-        partyKeys.map(function(pk){var x=byParty[pk];return '<tr><td>'+pk+'</td><td style="text-align:right;">'+x.count+'</td><td style="text-align:right;font-weight:800;color:#4A148C;">'+fmtINR(x.amount)+'</td></tr>';}).join('')+
+        '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Party</th><th>PAN</th><th style="text-align:right;">Entries</th><th style="text-align:right;">Total TDS</th></tr></thead><tbody>'+
+        partyKeys.map(function(pk){var x=byParty[pk];return '<tr><td>'+pk+'</td><td style="font-family:monospace;font-size:10.5px;">'+(x.pan||'—')+'</td><td style="text-align:right;">'+x.count+'</td><td style="text-align:right;font-weight:800;color:#4A148C;">'+fmtINR(x.amount)+'</td></tr>';}).join('')+
         '</tbody></table></div>'
         :'<div style="text-align:center;padding:20px;color:var(--text3);margin-bottom:14px;">No TDS deducted in this period</div>')+
       '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Date-wise Entries ('+ACC_TDS_LABEL+')</div>'+
       (periodRows.length?
-        '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Bill</th><th>Party</th><th>Head</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+
+        '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Bill</th><th>Party</th><th>PAN</th><th>Head</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+
         periodRows.map(function(r){
           return '<tr><td style="white-space:nowrap;">'+fmtDate(r.date)+'</td><td><strong>'+r.billRef+'</strong></td>'+
-            '<td>'+r.party+'</td><td>'+r.head+'</td>'+
+            '<td>'+r.party+'</td><td style="font-family:monospace;font-size:10.5px;">'+(r.pan||'—')+'</td><td>'+r.head+'</td>'+
             '<td style="text-align:right;font-weight:700;color:#4A148C;">'+fmtINR(r.amount)+'</td></tr>';
         }).join('')+'</tbody></table></div>'
         :'<div style="text-align:center;padding:20px;color:var(--text3);">No TDS entries in this period</div>');
@@ -24764,12 +24768,12 @@ async function accTdsTab(){
 // accTdsTab() fills on every render — same pattern as GST_DRILL.
 function accTdsExportData(){
   if(!TDS_DRILL) return null;
-  var header=['Date','Bill Ref','Party','Head','Amount'];
+  var header=['Date','Bill Ref','Party','PAN','Head','Amount'];
   var rows=TDS_DRILL.periodRows.map(function(r){
-    return [fmtDate(r.date), r.billRef, r.party, r.head, Math.round(r.amount)];
+    return [fmtDate(r.date), r.billRef, r.party, r.pan||'', r.head, Math.round(r.amount)];
   });
   var total=TDS_DRILL.periodRows.reduce(function(s,r){return s+r.amount;},0);
-  rows.push(['TOTAL','','','',Math.round(total)]);
+  rows.push(['TOTAL','','','','',Math.round(total)]);
   return {title:'TDS Entries ('+TDS_DRILL.periodLabel+')', header:header, rows:rows};
 }
 function accTdsExcel(){
@@ -24782,7 +24786,7 @@ function accTdsPDF(){
   var d=accTdsExportData();
   if(!d){toast('Open the TDS tab first','info');return;}
   if(d.rows.length<=1){toast('Nothing to export','warning');return;}
-  var rows=d.rows.map(function(r){ var r2=r.slice(); r2[4]=fmtINR(r2[4]); return r2; });
+  var rows=d.rows.map(function(r){ var r2=r.slice(); r2[5]=fmtINR(r2[5]); return r2; });
   accExportPDF(d.title, d.header, rows);
 }
 

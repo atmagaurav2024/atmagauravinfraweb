@@ -9059,7 +9059,7 @@ function execRenderBills(){
             (isTds
               ?'<span style="background:#EDE7F6;color:#4A148C;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">TDS</span>'
               :'<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>')+
-            d.head+' <span style="font-size:9px;color:var(--text3);">'+(b.bill_ref||'Bill #'+b.bill_number)+(isTds?' — payable to Income Tax':'')+'</span>'+
+            d.head+' <span style="font-size:9px;color:var(--text3);">'+(b.bill_ref||'Bill #'+b.bill_number)+(isTds?' — payable to Income Tax'+(d.pan?' · PAN: '+d.pan:''):'')+'</span>'+
           '</td>'+
           '<td colspan="2" style="padding:5px 10px;font-size:10px;text-align:right;font-weight:800;color:'+(isTds?'#4A148C':'#E65100')+';">-'+inr(d.amount)+'</td>'+
         '</tr>';
@@ -9236,7 +9236,7 @@ function execRenderBills(){
             return '<tr style="border-bottom:1px solid #EEE;background:#F5F3FB;">'+
               '<td style="padding:5px 8px;">'+
                 '<span style="background:#EDE7F6;color:#4A148C;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">TDS</span>'+
-                d.head+' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax)</span>'+
+                d.head+' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+(d.pan?', PAN: '+d.pan:'')+')</span>'+
                 '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:3px;">&#215;</button>'+
               '</td>'+
               '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#4A148C;">- '+inr(d.amount)+'</td>'+
@@ -10616,7 +10616,11 @@ function blAddDeduction(presetHead, isTds){
     '<input class="finp bl-ded-head" placeholder="e.g. Retention, Security Deposit..." value="'+(presetHead||'')+'" style="margin:0;'+(isTds?'font-weight:800;color:#4A148C;':'')+'">'+
     '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="% of work" style="margin:0;text-align:right;" oninput="blDedCalc(\''+id+'\')" title="Enter % to auto-calculate amount (e.g. 1% or 2% u/s 194C)">'+
     '<input class="finp bl-ded-amt" type="number" placeholder="Amount \u20b9" style="margin:0;text-align:right;" oninput="blDedAmtManual(\''+id+'\')" >'+
-    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
+    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>'+
+    // PAN of the party this TDS is being deposited against \u2014 required on the
+    // TDS challan/26Q return, so it's captured with the deduction itself
+    // and carried through everywhere TDS is shown (bill, PDF, Accounts\u2192TDS).
+    (isTds?'<input class="finp bl-ded-pan" placeholder="Party PAN \u2014 e.g. ABCDE1234F" style="grid-column:1/-1;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;" maxlength="10" title="PAN of the party \u2014 shown wherever this TDS is displayed" oninput="this.value=this.value.toUpperCase()">':'');
   container.appendChild(div);
   blUpdateTotal();
 }
@@ -10745,7 +10749,11 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   document.querySelectorAll('#bl-ded-list > div').forEach(function(row){
     var head=(row.querySelector('.bl-ded-head')||{}).value||'';
     var amt=parseFloat((row.querySelector('.bl-ded-amt')||{}).value)||0;
-    if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false,is_tds:row.getAttribute('data-is-tds')==='true'});
+    var isTdsRow=row.getAttribute('data-is-tds')==='true';
+    // PAN of the party this TDS is deposited against — captured on the row,
+    // carried through to every place this bill's TDS is shown/exported.
+    var pan=isTdsRow?((row.querySelector('.bl-ded-pan')||{}).value||'').trim().toUpperCase():'';
+    if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false,is_tds:isTdsRow,pan:pan||undefined});
   });
 
   // Generate unique bill ref: BILL/YYYY/NNNN (global across all bills)
@@ -10841,9 +10849,14 @@ async function execAddDeduction(billId){
   // this keeps it out of the "Held Deductions — Release" flow and shows it
   // distinctly wherever deductions are read back (bill view, PDF, Accounts→TDS).
   var isTds=confirm('Is this a TDS deduction (withheld for Income Tax, not payable to the party)?\n\nOK = Yes, TDS\nCancel = No, regular deduction');
+  // PAN of the party this TDS is deposited against — required on the TDS
+  // challan/26Q return, so it's captured here too and shown wherever this
+  // bill's TDS is displayed (bill view, PDF, Accounts → TDS).
+  var pan='';
+  if(isTds){ pan=(prompt('PAN of the party (for the TDS deposit/challan):')||'').trim().toUpperCase(); }
 
   var deductions=[];try{deductions=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
-  deductions.push({id:'d'+Date.now(),head:head,amount:amt,released:false,is_tds:isTds});
+  deductions.push({id:'d'+Date.now(),head:head,amount:amt,released:false,is_tds:isTds,pan:pan||undefined});
 
   try{
     await sbUpdate('work_bills',billId,{deductions:JSON.stringify(deductions)});
@@ -11394,7 +11407,7 @@ function execDownloadBillPDF(billId){
           '<td colspan="4" style="padding:6px 10px;border-bottom:1px solid #EEE;">'+
             '<span style="background:'+rowBadgeBg+';color:'+rowCol+
               ';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:6px;">'+rowLabel+'</span>'+
-            d.head+(isTds?' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax)</span>':'')+advDetail+purposeNote+
+            d.head+(isTds?' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+(d.pan?', PAN: '+d.pan:'')+')</span>':'')+advDetail+purposeNote+
           '</td>'+
           '<td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;color:'+rowCol+';font-weight:700;">('+inr(d.amount)+')</td>'+
         '</tr>';
@@ -11915,7 +11928,7 @@ async function execEditBill(billId){
     // Pre-fill non-GST additions
     existNonGstAdd.forEach(function(a){blAddAddition(a.head,a.type||'flat',a.pct||0,a.amount);});
     // Pre-fill deductions (skip advance adjustments — those are handled via advance checkboxes)
-    existDeductions.filter(function(d){return !d.is_advance_adj&&!d.released;}).forEach(function(d){blAddDeductionPrefill(d.head,d.amount,d.is_tds);});
+    existDeductions.filter(function(d){return !d.is_advance_adj&&!d.released;}).forEach(function(d){blAddDeductionPrefill(d.head,d.amount,d.is_tds,d.pan);});
     // Pre-fill GST
     existGst.forEach(function(g){blAddGstPrefill(g.head,g.pct||0,g.amount);});
     blUpdateTotal();
@@ -11933,7 +11946,7 @@ async function execEditBill(billId){
 
 // Helper: pre-fill an addition row with existing amount (no auto-recalc)
 
-function blAddDeductionPrefill(head, amount, isTds){
+function blAddDeductionPrefill(head, amount, isTds, pan){
   var id='ded-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
   BL_DEDUCTIONS.push({id:id,isTds:!!isTds});
   var container=document.getElementById('bl-ded-list');if(!container)return;
@@ -11947,7 +11960,8 @@ function blAddDeductionPrefill(head, amount, isTds){
     '<input class="finp bl-ded-head" placeholder="e.g. Retention..." value="'+(head||'')+'" style="margin:0;'+(isTds?'font-weight:800;color:#4A148C;':'')+'">'+
     '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="%" style="margin:0;text-align:right;" oninput="blDedCalc(\''+id+'\')" title="% of work">'+
     '<input class="finp bl-ded-amt" type="number" placeholder="Amount" value="'+(amount||'')+'" style="margin:0;text-align:right;" oninput="blDedAmtManual(\''+id+'\')">'+
-    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>';
+    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>'+
+    (isTds?'<input class="finp bl-ded-pan" placeholder="Party PAN — e.g. ABCDE1234F" value="'+(pan||'')+'" style="grid-column:1/-1;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;" maxlength="10" title="PAN of the party — shown wherever this TDS is displayed" oninput="this.value=this.value.toUpperCase()">':'');
   container.appendChild(div);
 }
 
@@ -12022,7 +12036,9 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
   document.querySelectorAll('#bl-ded-list > div').forEach(function(row){
     var head=(row.querySelector('.bl-ded-head')||{}).value||'';
     var amt=parseFloat((row.querySelector('.bl-ded-amt')||{}).value)||0;
-    if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false,is_tds:row.getAttribute('data-is-tds')==='true'});
+    var isTdsRow=row.getAttribute('data-is-tds')==='true';
+    var pan=isTdsRow?((row.querySelector('.bl-ded-pan')||{}).value||'').trim().toUpperCase():'';
+    if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false,is_tds:isTdsRow,pan:pan||undefined});
   });
 
   // Collect GST and merge into additions
