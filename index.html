@@ -24657,12 +24657,34 @@ async function accTdsTab(){
     var workBills=await sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];});
     workBills=Array.isArray(workBills)?workBills:[];
 
+    // Master-record PAN, keyed by "party_type::party_name", as a fallback
+    // for TDS entries whose own deduction row never had a PAN typed in
+    // (e.g. bills generated before PAN was added to bill entry, or before
+    // the vendor/SC/labourer's master record had one). Editing a bill's own
+    // TDS row still wins — see below — but this is the only way a PAN
+    // added later to the Master Registry can reach TDS entries on bills
+    // already generated. sc and labour_contractor bills both read from the
+    // subcontractors table, matching how the party-picker resolves them
+    // elsewhere in the app.
+    var masterPanMap={};
+    try{
+      var mrRes=await Promise.all([
+        sbFetch('vendors',{select:'name,pan'}).catch(function(){return [];}),
+        sbFetch('subcontractors',{select:'name,pan'}).catch(function(){return [];}),
+        sbFetch('labourers',{select:'name,pan'}).catch(function(){return [];})
+      ]);
+      (mrRes[0]||[]).forEach(function(v){ if(v.pan) masterPanMap['vendor::'+v.name]=v.pan; });
+      (mrRes[1]||[]).forEach(function(s){ if(s.pan){ masterPanMap['sc::'+s.name]=s.pan; masterPanMap['labour_contractor::'+s.name]=s.pan; } });
+      (mrRes[2]||[]).forEach(function(l){ if(l.pan) masterPanMap['labour::'+l.name]=l.pan; });
+    }catch(e){}
+
     // Flatten every TDS-tagged deduction out of every bill into its own row.
     var allRows=[];
     workBills.forEach(function(b){
       var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       deds.filter(function(d){return d.is_tds;}).forEach(function(d){
-        allRows.push({date:b.bill_date, party:b.party_name||'—', billRef:b.bill_ref||('#'+b.bill_number), billId:b.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0, pan:d.pan||''});
+        var pan=d.pan||masterPanMap[(b.party_type||'')+'::'+(b.party_name||'')]||'';
+        allRows.push({date:b.bill_date, party:b.party_name||'—', billRef:b.bill_ref||('#'+b.bill_number), billId:b.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0, pan:pan});
       });
     });
     allRows.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
