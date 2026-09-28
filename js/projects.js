@@ -2365,6 +2365,33 @@ async function planDelRes(id){
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[],WA_COMBINED_PLAN_ITEMS=[],WA_COMBINED_RR_GROUPS=[],WA_COMBINED_RR_ITEMS=[];
 var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[],WA_SALES_PAYMENTS=[];
 var WA_SUBCONTRACTS=[],WA_SUBCONTRACT_SCOPES=[],WA_SUBCONTRACT_PROGRESS=[]; // lumpsum subcontract scope + unbilled progress (for Generate Bill)
+
+// Party PAN, looked up from the vendor/subcontractor/labourer Master
+// Registry record — never typed on a bill itself (see blAddDeduction).
+// Keyed by "party_type::party_name", matching how the rest of the app
+// resolves a bill's party (sc and labour_contractor both read from
+// subcontractors). Loaded once per session (lazily, on first bill render)
+// and reused everywhere a bill's TDS/PAN is displayed; Accounts→TDS always
+// re-fetches fresh, so it stays authoritative if this cache goes stale
+// mid-session (e.g. the party's PAN is edited in Master Registry without
+// reloading the page).
+var EXEC_PAN_CACHE={}, EXEC_PAN_CACHE_LOADED=false, EXEC_PAN_CACHE_LOADING=false;
+function execPanFor(partyType,partyName){ return EXEC_PAN_CACHE[(partyType||'')+'::'+(partyName||'')]||''; }
+function execRefreshPanCache(cb){
+  if(EXEC_PAN_CACHE_LOADED||EXEC_PAN_CACHE_LOADING) return;
+  EXEC_PAN_CACHE_LOADING=true;
+  Promise.all([
+    sbFetch('vendors',{select:'name,pan'}).catch(function(){return [];}),
+    sbFetch('subcontractors',{select:'name,pan'}).catch(function(){return [];}),
+    sbFetch('labourers',{select:'name,pan'}).catch(function(){return [];})
+  ]).then(function(res){
+    (res[0]||[]).forEach(function(v){ if(v.pan) EXEC_PAN_CACHE['vendor::'+v.name]=v.pan; });
+    (res[1]||[]).forEach(function(s){ if(s.pan){ EXEC_PAN_CACHE['sc::'+s.name]=s.pan; EXEC_PAN_CACHE['labour_contractor::'+s.name]=s.pan; } });
+    (res[2]||[]).forEach(function(l){ if(l.pan) EXEC_PAN_CACHE['labour::'+l.name]=l.pan; });
+    EXEC_PAN_CACHE_LOADED=true;
+    if(typeof cb==='function') cb();
+  }).catch(function(){}).finally(function(){ EXEC_PAN_CACHE_LOADING=false; });
+}
 var WA_DAILY_DATE=new Date().toISOString().slice(0,10); // selected date for daily progress view
 var WA_DAILY_SUBTAB='boq'; // 'boq' | 'scope' — which Daily Progress sub-view is active
 var WA_SUBTAB='orders'; // allot | allotted | daily | bills | orders
@@ -8778,6 +8805,7 @@ function billsSubTab(tab){
 
 function execRenderBills(){
   var el=document.getElementById('exec-content');if(!el)return;
+  execRefreshPanCache(execRenderBills); // best-effort: re-render once party PAN data lands, if not already cached
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:0});};
   var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
@@ -9054,12 +9082,13 @@ function execRenderBills(){
       ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).forEach(function(d){
         totalDedHeld+=parseFloat(d.amount)||0;
         var isTds=!!d.is_tds;
+        var dPan=d.pan||execPanFor(p.type,p.name);
         partyDedRows+='<tr style="background:'+(isTds?'#F5F3FB':'#FFF8F8')+';border-bottom:1px solid #EEE;">'+
           '<td colspan="4" style="padding:5px 10px;font-size:10px;">'+
             (isTds
               ?'<span style="background:#EDE7F6;color:#4A148C;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">TDS</span>'
               :'<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>')+
-            d.head+' <span style="font-size:9px;color:var(--text3);">'+(b.bill_ref||'Bill #'+b.bill_number)+(isTds?' — payable to Income Tax'+(d.pan?' · PAN: '+d.pan:''):'')+'</span>'+
+            d.head+' <span style="font-size:9px;color:var(--text3);">'+(b.bill_ref||'Bill #'+b.bill_number)+(isTds?' — payable to Income Tax'+(dPan?' · PAN: '+dPan:''):'')+'</span>'+
           '</td>'+
           '<td colspan="2" style="padding:5px 10px;font-size:10px;text-align:right;font-weight:800;color:'+(isTds?'#4A148C':'#E65100')+';">-'+inr(d.amount)+'</td>'+
         '</tr>';
@@ -9236,7 +9265,7 @@ function execRenderBills(){
             return '<tr style="border-bottom:1px solid #EEE;background:#F5F3FB;">'+
               '<td style="padding:5px 8px;">'+
                 '<span style="background:#EDE7F6;color:#4A148C;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">TDS</span>'+
-                d.head+' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+(d.pan?', PAN: '+d.pan:'')+')</span>'+
+                d.head+' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+((d.pan||execPanFor(b.party_type,b.party_name))?', PAN: '+(d.pan||execPanFor(b.party_type,b.party_name)):'')+')</span>'+
                 '<button onclick="execDeleteDeduction(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:3px;">&#215;</button>'+
               '</td>'+
               '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#4A148C;">- '+inr(d.amount)+'</td>'+
@@ -10612,15 +10641,15 @@ function blAddDeduction(presetHead, isTds){
   div.style.cssText='display:grid;grid-template-columns:1fr 80px 120px 30px;gap:6px;margin-bottom:6px;align-items:center;'+
     (isTds?'background:#EDE7F6;border:1px solid #B39DDB;border-radius:6px;padding:4px 6px;':'');
   div.innerHTML=
-    (isTds?'<div style="grid-column:1/-1;font-size:9px;font-weight:800;color:#4A148C;margin-bottom:2px;">&#127970; TDS \u2014 withheld for Income Tax, not payable to party</div>':'')+
+    // PAN is never typed here \u2014 it's the party's own identity info, kept
+    // and edited only on their Master Registry record (Vendor/SC/Labour),
+    // and looked up from there everywhere TDS/PAN is shown (bill, PDF,
+    // Accounts\u2192TDS).
+    (isTds?'<div style="grid-column:1/-1;font-size:9px;font-weight:800;color:#4A148C;margin-bottom:2px;">&#127970; TDS \u2014 withheld for Income Tax, not payable to party \u2014 PAN comes from the party\'s Master Registry record</div>':'')+
     '<input class="finp bl-ded-head" placeholder="e.g. Retention, Security Deposit..." value="'+(presetHead||'')+'" style="margin:0;'+(isTds?'font-weight:800;color:#4A148C;':'')+'">'+
     '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="% of work" style="margin:0;text-align:right;" oninput="blDedCalc(\''+id+'\')" title="Enter % to auto-calculate amount (e.g. 1% or 2% u/s 194C)">'+
     '<input class="finp bl-ded-amt" type="number" placeholder="Amount \u20b9" style="margin:0;text-align:right;" oninput="blDedAmtManual(\''+id+'\')" >'+
-    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>'+
-    // PAN of the party this TDS is being deposited against \u2014 required on the
-    // TDS challan/26Q return, so it's captured with the deduction itself
-    // and carried through everywhere TDS is shown (bill, PDF, Accounts\u2192TDS).
-    (isTds?'<input class="finp bl-ded-pan" placeholder="Party PAN \u2014 e.g. ABCDE1234F" style="grid-column:1/-1;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;" maxlength="10" title="PAN of the party \u2014 shown wherever this TDS is displayed" oninput="this.value=this.value.toUpperCase()">':'');
+    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
   container.appendChild(div);
   blUpdateTotal();
 }
@@ -10750,10 +10779,9 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     var head=(row.querySelector('.bl-ded-head')||{}).value||'';
     var amt=parseFloat((row.querySelector('.bl-ded-amt')||{}).value)||0;
     var isTdsRow=row.getAttribute('data-is-tds')==='true';
-    // PAN of the party this TDS is deposited against — captured on the row,
-    // carried through to every place this bill's TDS is shown/exported.
-    var pan=isTdsRow?((row.querySelector('.bl-ded-pan')||{}).value||'').trim().toUpperCase():'';
-    if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false,is_tds:isTdsRow,pan:pan||undefined});
+    // PAN is not captured here — it's looked up from the party's Master
+    // Registry record wherever this TDS is shown/exported.
+    if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false,is_tds:isTdsRow});
   });
 
   // Generate unique bill ref: BILL/YYYY/NNNN (global across all bills)
@@ -10849,14 +10877,12 @@ async function execAddDeduction(billId){
   // this keeps it out of the "Held Deductions — Release" flow and shows it
   // distinctly wherever deductions are read back (bill view, PDF, Accounts→TDS).
   var isTds=confirm('Is this a TDS deduction (withheld for Income Tax, not payable to the party)?\n\nOK = Yes, TDS\nCancel = No, regular deduction');
-  // PAN of the party this TDS is deposited against — required on the TDS
-  // challan/26Q return, so it's captured here too and shown wherever this
-  // bill's TDS is displayed (bill view, PDF, Accounts → TDS).
-  var pan='';
-  if(isTds){ pan=(prompt('PAN of the party (for the TDS deposit/challan):')||'').trim().toUpperCase(); }
+  // PAN is not asked here — it's looked up from the party's Master Registry
+  // record wherever this bill's TDS is displayed (bill view, PDF,
+  // Accounts → TDS), never typed on the bill itself.
 
   var deductions=[];try{deductions=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
-  deductions.push({id:'d'+Date.now(),head:head,amount:amt,released:false,is_tds:isTds,pan:pan||undefined});
+  deductions.push({id:'d'+Date.now(),head:head,amount:amt,released:false,is_tds:isTds});
 
   try{
     await sbUpdate('work_bills',billId,{deductions:JSON.stringify(deductions)});
@@ -11403,11 +11429,12 @@ function execDownloadBillPDF(billId){
         var rowBadgeBg=isAdvAdj?'#FFF8E1':(isTds?'#EDE7F6':'#FFF3E0');
         var rowLabel=isAdvAdj?'ADV ADJ':(isTds?'TDS':'DED');
         var purposeNote='';
+        var dPan=isTds?(d.pan||execPanFor(b.party_type,b.party_name)):'';
         return '<tr style="background:'+rowBg+';">'+
           '<td colspan="4" style="padding:6px 10px;border-bottom:1px solid #EEE;">'+
             '<span style="background:'+rowBadgeBg+';color:'+rowCol+
               ';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:6px;">'+rowLabel+'</span>'+
-            d.head+(isTds?' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+(d.pan?', PAN: '+d.pan:'')+')</span>':'')+advDetail+purposeNote+
+            d.head+(isTds?' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+(dPan?', PAN: '+dPan:'')+')</span>':'')+advDetail+purposeNote+
           '</td>'+
           '<td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;color:'+rowCol+';font-weight:700;">('+inr(d.amount)+')</td>'+
         '</tr>';
@@ -11955,13 +11982,17 @@ function blAddDeductionPrefill(head, amount, isTds, pan){
   if(isTds) div.setAttribute('data-is-tds','true');
   div.style.cssText='display:grid;grid-template-columns:1fr 80px 120px 30px;gap:6px;margin-bottom:6px;align-items:center;'+
     (isTds?'background:#EDE7F6;border:1px solid #B39DDB;border-radius:6px;padding:4px 6px;':'');
+  // PAN is never edited here — it's looked up from the party's Master
+  // Registry record wherever TDS/PAN is shown (bill, PDF, Accounts→TDS);
+  // `pan` (from the bill's existing deduction, if any) is accepted for
+  // backward compatibility with older bills but no longer rendered as an
+  // editable field.
   div.innerHTML=
-    (isTds?'<div style="grid-column:1/-1;font-size:9px;font-weight:800;color:#4A148C;margin-bottom:2px;">&#127970; TDS — withheld for Income Tax, not payable to party</div>':'')+
+    (isTds?'<div style="grid-column:1/-1;font-size:9px;font-weight:800;color:#4A148C;margin-bottom:2px;">&#127970; TDS — withheld for Income Tax, not payable to party — PAN comes from the party\'s Master Registry record</div>':'')+
     '<input class="finp bl-ded-head" placeholder="e.g. Retention..." value="'+(head||'')+'" style="margin:0;'+(isTds?'font-weight:800;color:#4A148C;':'')+'">'+
     '<input class="finp bl-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="%" style="margin:0;text-align:right;" oninput="blDedCalc(\''+id+'\')" title="% of work">'+
     '<input class="finp bl-ded-amt" type="number" placeholder="Amount" value="'+(amount||'')+'" style="margin:0;text-align:right;" oninput="blDedAmtManual(\''+id+'\')">'+
-    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>'+
-    (isTds?'<input class="finp bl-ded-pan" placeholder="Party PAN — e.g. ABCDE1234F" value="'+(pan||'')+'" style="grid-column:1/-1;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;" maxlength="10" title="PAN of the party — shown wherever this TDS is displayed" oninput="this.value=this.value.toUpperCase()">':'');
+    '<button onclick="blRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">×</button>';
   container.appendChild(div);
 }
 
@@ -12037,8 +12068,9 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     var head=(row.querySelector('.bl-ded-head')||{}).value||'';
     var amt=parseFloat((row.querySelector('.bl-ded-amt')||{}).value)||0;
     var isTdsRow=row.getAttribute('data-is-tds')==='true';
-    var pan=isTdsRow?((row.querySelector('.bl-ded-pan')||{}).value||'').trim().toUpperCase():'';
-    if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false,is_tds:isTdsRow,pan:pan||undefined});
+    // PAN is not captured here — it's looked up from the party's Master
+    // Registry record wherever this TDS is shown/exported.
+    if(head&&amt>0) deductions.push({id:'d'+Date.now()+Math.random().toString(36).slice(2),head:head,amount:amt,released:false,is_tds:isTdsRow});
   });
 
   // Collect GST and merge into additions
