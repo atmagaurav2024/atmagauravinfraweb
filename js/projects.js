@@ -9094,12 +9094,19 @@ function execRenderBills(){
     var pAdvances=WA_ADVANCES.filter(function(a){return a.party_name===p.name&&a.party_type===p.type;});
     var totalAdvance=pAdvances.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
     var pBills=WA_BILLS.filter(function(b){return b.party_name===p.name&&b.party_type===p.type;});
-    var totalBilledGross=pBills.reduce(function(s,b){return s+(parseFloat(b.bill_amount)||0);},0);
+    // Work sub-total and gross are summed straight from each bill's
+    // selected_items/additions rather than b.bill_amount, so party totals
+    // stay correct even for bills saved before bill_amount was fixed to
+    // store the true gross (work + additions + GST, no deduction baked in).
+    var totalBilled=pBills.reduce(function(s,b){
+      var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+      return s+items.reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+    },0);
     var totalAdditions=pBills.reduce(function(s,b){
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
       return s+adds.reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
     },0);
-    var totalBilled=totalBilledGross-totalAdditions; // work sub-total only
+    var totalBilledGross=totalBilled+totalAdditions; // true gross
     var totalDeductions=pBills.reduce(function(s,b){
       var ded=[];try{ded=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       return s+ded.filter(function(d){return !d.released&&!d.is_advance_adj;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
@@ -9129,13 +9136,20 @@ function execRenderBills(){
       var bAdvAdj=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       // Released deductions count as paid (released back to party)
       var bRelDed=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-      var bNet=(parseFloat(b.bill_amount)||0)-dedTotal;
-      var bBal=bNet-bPaidAmt-bRelDed-bAdvAdj;
 
-      // Parse additions
+      // Work Done and Gross are derived straight from selected_items/
+      // additions — NOT from b.bill_amount — so they're correct even for
+      // bills saved before this fix, when bill_amount was stored net of
+      // deductions (which made "Work Done" here drift from the amount
+      // actually chosen while generating the bill).
+      var billItems=[];try{billItems=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+      var workSubTotal=billItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
       var addTotal=adds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-      var workSubTotal=Math.max(0,(parseFloat(b.bill_amount)||0)-addTotal);
+      var trueGross=workSubTotal+addTotal;
+      var bNet=trueGross-dedTotal;
+      var bBal=bNet-bPaidAmt-bRelDed-bAdvAdj;
+
       var advAdjDeds=activeDed.filter(function(d){return d.is_advance_adj;});
       var regularDeds=activeDed.filter(function(d){return !d.is_advance_adj;});
       var advAdjTotal=advAdjDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
@@ -9185,7 +9199,7 @@ function execRenderBills(){
           (adds.length?
             '<tr style="border-bottom:2px solid #1B5E20;background:#E8F5E9;">'+
               '<td style="padding:6px 8px;font-weight:900;color:#1B5E20;">Gross Bill Amount</td>'+
-              '<td style="padding:6px 8px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(b.bill_amount)+'</td>'+
+              '<td style="padding:6px 8px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(trueGross)+'</td>'+
             '</tr>':'<tr style="border-bottom:2px solid #1B5E20;"><td colspan="2" style="padding:0;"></td></tr>')+
 
           // Regular deductions
@@ -9363,8 +9377,12 @@ function purchaseBillsRegRows(){
     var bPaidAmt=bPaid.reduce(function(s,py){return s+(parseFloat(py.amount)||0);},0);
     var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
     var addTotal=adds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-    var gross=parseFloat(b.bill_amount)||0;
-    var workAmt=Math.max(0,gross-addTotal);
+    // Derived from selected_items/additions rather than b.bill_amount so
+    // this stays correct for bills saved before bill_amount was fixed to
+    // store the true gross (work + additions + GST, no deduction baked in).
+    var billItems=[];try{billItems=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+    var workAmt=billItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+    var gross=workAmt+addTotal;
     var net=gross-dedTotal;
     var bal=net-bPaidAmt-relTotal-advAdjTotal;
     return {b:b,workAmt:workAmt,addTotal:addTotal,gross:gross,dedTotal:dedTotal,advAdjTotal:advAdjTotal,net:net,paid:bPaidAmt,bal:bal};
@@ -10626,7 +10644,14 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   });
   if(!selectedItems.length){toast('Select at least one work item','warning');return;}
 
-  // Gross = sum of selected items; Net = Gross - advance adjustment
+  // bill_amount is always stored GROSS — work + additions + GST, with NO
+  // deduction subtracted — because every reader downstream (party bill
+  // summary, purchase bills register, the "Gross Bill Amount" row on the
+  // bill itself) treats bill_amount as the pre-deduction figure and
+  // subtracts deductions again on top of it to arrive at Net Payable.
+  // Baking deductions into bill_amount here used to double-subtract them
+  // everywhere else, which is what made "Work Done"/"Net Payable" drift
+  // from the amount actually chosen while generating the bill.
   var workAmount=selectedItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
   var additionsTotal=additions.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   // Collect form deductions before using
@@ -10637,12 +10662,12 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     if(head&&amt>0) deductionsList.push({id:'ded-'+Date.now()+'-'+Math.random().toString(36).slice(2,5),head:head,amount:amt,released:false});
   });
   var deductionsTotal=deductionsList.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-  var netBeforeGstSave=workAmount+additionsTotal-deductionsTotal;
+  var netBeforeGstSave=workAmount+additionsTotal; // deductions are NOT subtracted here — see note above
   var gstList=[];document.querySelectorAll('.bl-gst-row').forEach(function(row){var head=(row.querySelector('.bl-gst-head')||{value:''}).value.trim()||'GST';var pct=parseFloat((row.querySelector('.bl-gst-pct')||{value:0}).value)||0;var amt=parseFloat((row.querySelector('.bl-gst-amt')||{value:0}).value)||0;if(amt>0)gstList.push({id:'gst-'+Date.now(),head:head,amount:amt,type:'pct',pct:pct,is_gst:true});});
   var gstTotal=gstList.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
   additions=additions.concat(gstList);
-  var grossAmount=netBeforeGstSave+gstTotal;
-  amount=Math.max(0,grossAmount-adjAdvTotal);
+  var grossAmount=netBeforeGstSave+gstTotal; // = work + additions + GST (true gross)
+  amount=Math.max(0,grossAmount-deductionsTotal-adjAdvTotal); // net payable, for the zero-amount check only
   if(grossAmount===0){toast('Bill amount cannot be zero','warning');return;}
 
   // Collect deductions (include advance adjustment as a deduction line)
@@ -10682,8 +10707,13 @@ async function execSaveBill(partyType,partyName,projId,billNo){
       if(typeof accAutoPost==='function'){
         var pbGst=additions.filter(function(a){return a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
         var pbAdd=additions.filter(function(a){return !a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
-        var pbDed=deductions.reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
-        var pbWork=Math.round(grossAmount)-pbGst-pbAdd+pbDed;
+        // Advance adjustment isn't a deduction (it's a payment against an
+        // existing advance, already posted when the advance itself was
+        // recorded) — exclude it here so it isn't posted a second time.
+        var pbDed=deductions.filter(function(d){return !d.is_advance_adj;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
+        // grossAmount is now true gross (work+additions+GST, deductions not
+        // subtracted), so the work portion is simply gross minus GST/additions.
+        var pbWork=Math.round(grossAmount)-pbGst-pbAdd;
         var pbRef='Purchase/Work Bill '+billRef;
         if(pbWork>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
           debitCode:'4001', creditCode:'2001', amount:pbWork,
@@ -11168,11 +11198,17 @@ function execDownloadBillPDF(billId){
   var totalDed=activeDed.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var totalAdvAdj=activeDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var totalRel=relDed.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-  var grossAmt=parseFloat(b.bill_amount)||0;
-  var netPayable=grossAmt-totalDed;
 
   // Selected work items
   var selItems=[];try{selItems=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
+  // Gross is derived from selected_items/additions rather than
+  // b.bill_amount, so the PDF stays correct even for bills saved before
+  // bill_amount was fixed to store the true gross (work + additions + GST,
+  // no deduction baked in) — this is what made the printed "Gross"/"Work
+  // Sub-Total" drift from the amount actually chosen while generating.
+  var workAmtTotal=selItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  var grossAmt=workAmtTotal+totalAdds;
+  var netPayable=grossAmt-totalDed;
 
   // Payments for this bill
   var billPays=WA_PAYMENTS.filter(function(p){return p.bill_id===b.id;});
@@ -11905,19 +11941,24 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
   });
   additions=additions.concat(gstList);
 
-  // Calculate gross
+  // bill_amount is stored GROSS (work + real additions + released-deduction
+  // add-backs + GST) with NO deduction subtracted — same rule as
+  // execSaveBill (create). addTotal here must exclude the GST rows too
+  // (they're folded into `additions` just above via concat), otherwise
+  // GST gets counted twice: once inside addTotal, once via +gstTotal.
   var workAmount=selectedItems.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
-  var addTotal=additions.filter(function(a){return !a.is_released_ded;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var addTotal=additions.filter(function(a){return !a.is_released_ded&&!a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   var relDedTotal=additions.filter(function(a){return a.is_released_ded;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   var dedTotal=deductions.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var gstTotal=gstList.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
-  var grossAmount=workAmount+addTotal+relDedTotal-dedTotal+gstTotal-adjAdvTotal;
-  if(grossAmount<=0){toast('Bill amount cannot be zero','warning');return;}
+  var grossAmount=workAmount+addTotal+relDedTotal+gstTotal; // true gross
+  var netCheck=grossAmount-dedTotal-adjAdvTotal; // net payable, for the zero-amount check only
+  if(netCheck<=0){toast('Bill amount cannot be zero','warning');return;}
 
   var payload={
     bill_date:date,
     bill_number:parseInt(gv('bl-no'))||billNo,
-    bill_amount:Math.round(workAmount+addTotal+relDedTotal-dedTotal+gstTotal),
+    bill_amount:Math.round(grossAmount),
     selected_items:JSON.stringify(selectedItems),
     additions:additions.length?JSON.stringify(additions):null,
     deductions:deductions.length?JSON.stringify(deductions):null,
