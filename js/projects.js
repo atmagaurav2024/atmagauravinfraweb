@@ -7312,16 +7312,22 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
       '.doc-title{font-size:18px;font-weight:800;letter-spacing:1px;color:'+accentCol+';}'+
       '.doc-meta{font-size:10.5px;color:#555;margin-top:5px;line-height:1.6;}'+
       '.doc-meta b{color:#222;}'+
-      // Two-column info block (party / project)
-      '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}'+
-      '.info-col .lbl{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#888;margin-bottom:3px;}'+
-      '.info-col .val{font-size:12.5px;font-weight:700;color:#111;}'+
-      '.info-col .sub{font-size:10px;color:#666;margin-top:2px;}'+
-      // Items table
-      'table.items{width:100%;border-collapse:collapse;font-size:11px;}'+
-      'table.items th{border-bottom:1.5px solid #222;padding:6px 8px;font-size:10px;font-weight:800;text-align:left;color:#333;text-transform:uppercase;letter-spacing:.3px;}'+
-      'table.items td{border-bottom:1px solid #E5E5E5;padding:7px 8px;vertical-align:top;}'+
-      '.total-row td{font-weight:800;border-top:1.5px solid #222;border-bottom:none;font-size:12.5px;padding-top:9px;}'+
+      // Two-column info block (party / project) — boxed, with a vertical
+      // divider between the two columns so it reads as two cells, not
+      // just floating text.
+      '.info-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #BBB;margin-bottom:18px;}'+
+      '.info-col{padding:9px 14px;border-left:1px solid #BBB;}'+
+      '.info-col:first-child{border-left:none;}'+
+      '.info-full{grid-column:span 2;padding:9px 14px;border-top:1px solid #BBB;}'+
+      '.info-col .lbl,.info-full .lbl{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#888;margin-bottom:3px;}'+
+      '.info-col .val,.info-full .val{font-size:12.5px;font-weight:700;color:#111;}'+
+      '.info-col .sub,.info-full .sub{font-size:10px;color:#666;margin-top:2px;}'+
+      // Items table — full grid lines (vertical + horizontal) so columns
+      // read as clear cells rather than just underlined text.
+      'table.items{width:100%;border-collapse:collapse;font-size:11px;border:1px solid #999;}'+
+      'table.items th{border:1px solid #999;background:#F0F0F0;padding:6px 8px;font-size:10px;font-weight:800;text-align:left;color:#222;text-transform:uppercase;letter-spacing:.3px;}'+
+      'table.items td{border:1px solid #CCC;padding:7px 8px;vertical-align:top;}'+
+      '.total-row td{font-weight:800;background:#F5F5F5;border-top:1.5px solid #222;font-size:12.5px;padding-top:8px;}'+
       '.amt-words{margin:10px 0 20px;font-size:10.5px;color:#666;}'+
       '.amt-words b{color:#222;}'+
       // Terms & conditions
@@ -7379,11 +7385,11 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
           ((commonStart||commonEnd)?(' &nbsp;|&nbsp; '+(fmtD(commonStart)||'—')+' to '+(fmtD(commonEnd)||'—')):'')+
         '</div>'+
       '</div>'+
-      (groupNameLabel?'<div class="info-col" style="grid-column:span 2;">'+
+      (groupNameLabel?'<div class="info-full">'+
         '<div class="lbl">Scope / Package</div>'+
         '<div class="val" style="font-size:11.5px;">'+groupNameLabel+'</div>'+
       '</div>':'')+
-      (commonScope?'<div class="info-col" style="grid-column:span 2;">'+
+      (commonScope?'<div class="info-full">'+
         '<div class="lbl">Scope of Work</div>'+
         '<div class="sub" style="font-size:11px;color:#444;">'+commonScope+'</div>'+
       '</div>':'')+
