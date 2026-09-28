@@ -8766,8 +8766,11 @@ function execRenderBills(){
     var col=tCol[p.type]||'#37474F';
 
     // ── Per-allotment rows — grouped with expandable individual rows ──
+    // Lumpsum-priced allotments are excluded from this per-BOQ-item table —
+    // their billing is scope-based only (see scopeRowsHtml below), never
+    // per-item qty, even if qty was logged against these items elsewhere.
     var allotGroups={}, allotGroupOrder=[];
-    p.allots.forEach(function(a){
+    p.allots.filter(function(a){return !((parseFloat(a.lumpsum_amount)||0)>0);}).forEach(function(a){
       var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
       var resName=planRes.party_name||planRes.resource_category||'';
       var allotRate=parseFloat(a.rate)||0;
@@ -9852,7 +9855,11 @@ async function execOpenBill(partyKey,projId){
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
 
   // Build work rows — grouped by resource name+unit
-  var partyAllots=WA_ALLOT.filter(function(a){return a.party_name===partyName&&a.exec_type===partyType;});
+  // Lumpsum-priced allotments are excluded here: once a batch is priced
+  // lumpsum, billing for it must go through its Scope Breakdown (added
+  // below), never per-BOQ-item qty — even if qty happens to have been
+  // logged against these items via the regular BOQ Item Progress tab.
+  var partyAllots=WA_ALLOT.filter(function(a){return a.party_name===partyName&&a.exec_type===partyType&&!((parseFloat(a.lumpsum_amount)||0)>0);});
   var wrkGroups={}, wrkOrder=[];
   partyAllots.forEach(function(a){
     var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
@@ -11406,8 +11413,10 @@ async function execEditBill(billId){
   var existGst=existAdditions.filter(function(a){return a.is_gst;});
   var existNonGstAdd=existAdditions.filter(function(a){return !a.is_gst&&!a.is_released_ded;});
 
-  // Build work rows from allotments (same as execOpenBill)
-  var partyAllots=WA_ALLOT.filter(function(a){return a.party_name===partyName&&a.exec_type===partyType;});
+  // Build work rows from allotments (same as execOpenBill). Lumpsum-priced
+  // allotments are excluded — billing for those goes through the Scope
+  // Breakdown rows added below, never per-BOQ-item qty.
+  var partyAllots=WA_ALLOT.filter(function(a){return a.party_name===partyName&&a.exec_type===partyType&&!((parseFloat(a.lumpsum_amount)||0)>0);});
   var wrkGroups={}, wrkOrder=[];
   partyAllots.forEach(function(a){
     var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
@@ -11445,6 +11454,34 @@ async function execEditBill(billId){
     var g=wrkGroups[k];
     return {a:{id:g.allotIds[0]},resName:g.resName,boqItem:{},allotQty:g.allotQty,allotRate:g.allotRate,doneQty:g.doneQty,doneAmt:g.doneAmt,prevBilled:g.prevBilled,unbilled:g.unbilled,unit:g.unit,allotIds:g.allotIds};
   });
+
+  // Lumpsum subcontract scope progress for this party (same as
+  // execOpenBill) — prevBilled/unbilled exclude the bill being edited.
+  var partySubsEdit=(typeof WA_SUBCONTRACTS!=='undefined'?WA_SUBCONTRACTS:[]).filter(function(s){return s.party_name===partyName;});
+  if(partySubsEdit.length && typeof WA_SUBCONTRACT_SCOPES!=='undefined'){
+    var subIdSetEdit={}; partySubsEdit.forEach(function(s){subIdSetEdit[s.id]=true;});
+    var partyScopesEdit=WA_SUBCONTRACT_SCOPES.filter(function(sc){return subIdSetEdit[sc.subcontract_id];});
+    partyScopesEdit.forEach(function(sc){
+      var prog=(typeof WA_SUBCONTRACT_PROGRESS!=='undefined'?WA_SUBCONTRACT_PROGRESS:[]).filter(function(p){return p.scope_id===sc.id;});
+      var sDoneQty=prog.reduce(function(s,p){return s+(parseFloat(p.completed_qty)||0);},0);
+      if(sDoneQty<=0) return;
+      var sDoneAmt=prog.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+      var sBilled=WA_BILLS.reduce(function(s,bl){
+        if(bl.id===billId) return s; // exclude the bill being edited
+        var si=[];try{si=bl.selected_items?JSON.parse(bl.selected_items):[];}catch(e){}
+        return s+si.filter(function(x){return x.scope_id===sc.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+      },0);
+      var sUnbilled=Math.max(0,sDoneAmt-sBilled);
+      var sQty=parseFloat(sc.scope_qty)||0;
+      var sRate=sDoneQty>0?(sDoneAmt/sDoneQty):0;
+      workRows.push({
+        a:{id:'scope:'+sc.id}, resName:sc.scope_name+' (Scope)', boqItem:{},
+        allotQty:sQty, allotRate:sRate, doneQty:sDoneQty, doneAmt:sDoneAmt,
+        prevBilled:sBilled, unbilled:sUnbilled, unit:sc.scope_unit||'',
+        allotIds:['scope:'+sc.id], isScope:true, scopeId:sc.id
+      });
+    });
+  }
 
   // For each work row, find if this bill already has an amount for it
   var workSelRows=workRows.map(function(w,i){
@@ -11682,7 +11719,9 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     var amt=parseFloat(amtInp&&amtInp.value)||0;
     var w=window._blWorkRows&&window._blWorkRows[idx];
     if(w&&amt>0){
-      selectedItems.push({allot_id:w.a.id,res_name:w.resName,done_qty:w.doneQty,rate:w.allotRate,amount:amt});
+      var editItem={allot_id:w.a.id,res_name:w.resName,done_qty:w.doneQty,rate:w.allotRate,amount:amt};
+      if(w.isScope){ editItem.scope_id=w.scopeId; editItem.is_scope=true; }
+      selectedItems.push(editItem);
     }
   });
   if(!selectedItems.length){toast('Select at least one work item','warning');return;}
