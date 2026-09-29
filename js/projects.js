@@ -9401,14 +9401,21 @@ function execRenderBills(){
 
           // Advance adjusted — shown as payment rows
           advAdjDeds.map(function(d){
-            return '<tr style="border-bottom:1px solid #EEE;background:#FFF8E1;">'+
+            // TDS-head rows are a non-cash bucket match against the advance
+            // (see advBuildAdjDeductions) — their real amount lives in
+            // display_amount, not amount (which stays 0 so nothing else
+            // treats them as cash). Shown with its own label instead of
+            // "Advance Adjusted ₹0", which would look like a bug.
+            var isNonCash=d.non_cash;
+            var shownAmt=isNonCash?(parseFloat(d.display_amount)||0):d.amount;
+            return '<tr style="border-bottom:1px solid #EEE;background:'+(isNonCash?'#F3E5F5':'#FFF8E1')+';">'+
               '<td style="padding:5px 8px;">'+
-                '<span style="background:#FFF8E1;color:#F57F17;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">PAYMENT</span>'+
-                'Advance Adjusted'+
-                '<button onclick="billDownloadAdvReceipt(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF8E1;color:#F57F17;border:1px solid #FFE0B2;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">&#128438; PDF</button>'+
+                '<span style="background:'+(isNonCash?'#F3E5F5':'#FFF8E1')+';color:'+(isNonCash?'#4A148C':'#F57F17')+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">'+(isNonCash?'NON-CASH':'PAYMENT')+'</span>'+
+                (isNonCash?'TDS Matched to Advance':'Advance Adjusted')+
+                (isNonCash?'':'<button onclick="billDownloadAdvReceipt(\''+b.id+'\',\''+d.id+'\')" style="font-size:9px;background:#FFF8E1;color:#F57F17;border:1px solid #FFE0B2;border-radius:3px;padding:1px 5px;cursor:pointer;font-weight:700;margin-left:6px;">&#128438; PDF</button>')+
                 '<button onclick="execDeleteAdvAdj(\''+b.id+'\',\''+d.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;margin-left:4px;" title="Delete advance adjustment">&#215;</button>'+
               '</td>'+
-              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:#F57F17;">'+inr(d.amount)+' <span style="font-size:9px;font-weight:700;">(Advance Adjusted)</span></td>'+
+              '<td style="padding:5px 8px;text-align:right;font-weight:800;color:'+(isNonCash?'#4A148C':'#F57F17')+';">'+inr(shownAmt)+' <span style="font-size:9px;font-weight:700;">'+(isNonCash?'(TDS bucket, no cash effect)':'(Advance Adjusted)')+'</span></td>'+
             '</tr>';
           }).join('')+
 
@@ -10297,15 +10304,29 @@ function advAdjBreakdownLabel(p){
 // total_adv, work_amt,add_amt,tds_amt,gst_amt} as built by execSaveBill /
 // execSaveBillEdit / execSavePaymentAdv via advSplitAdjustment.
 function advBuildAdjDeductions(adjAdvDetails){
-  var heads=[
+  // Work Amt and GST are real cash owed to the party, so their rows carry
+  // their real amount and count toward the bill's net-payable total same
+  // as any other deduction (every downstream reader sums is_advance_adj
+  // rows as cash paid via advance). TDS is different: it's already
+  // excluded from net payable once via the bill's own TDS deduction row
+  // (TDS money never reaches the party, advance or not), so "TDS adjusted
+  // from advance" is a non-cash bookkeeping match — it marks that much of
+  // the advance's TDS bucket as used, but must NOT also count as cash
+  // paid, or the party's net payable gets reduced twice for the same
+  // rupee. Its row is still created (so it's visible, reversible on
+  // delete/edit, and its advance_details carry the real per-advance
+  // amount) but its top-level `amount` is forced to 0 so every existing
+  // cash-summing consumer (dedTotal, Balance Due, PDFs, GL posts — all of
+  // which just sum is_advance_adj rows' `amount`) naturally treats it as
+  // contributing nothing, with no need to special-case it everywhere.
+  var cashHeads=[
     {keys:['work_amt','add_amt'], label:'Advance Adjustment (Work Amt)'},
-    {keys:['tds_amt'], label:'Advance Adjustment (TDS)'},
     {keys:['gst_amt'], label:'Advance Adjustment (GST)'}
   ];
   var ts=Date.now();
   var out=[];
-  var grandTotal=adjAdvDetails.reduce(function(s,ad){return s+(parseFloat(ad.amount)||0);},0);
-  heads.forEach(function(h,hi){
+  var grandTotal=adjAdvDetails.reduce(function(s,ad){return s+(parseFloat(ad.work_amt)||0)+(parseFloat(ad.add_amt)||0)+(parseFloat(ad.gst_amt)||0);},0);
+  cashHeads.forEach(function(h,hi){
     var rowDetails=[];
     adjAdvDetails.forEach(function(ad){
       var amt=Math.round(h.keys.reduce(function(s,k){return s+(parseFloat(ad[k])||0);},0));
@@ -10316,14 +10337,27 @@ function advBuildAdjDeductions(adjAdvDetails){
       out.push({id:'adv-adj-'+ts+'-'+hi,head:h.label,amount:rowTotal,released:false,is_advance_adj:true,adv_adj_head:h.keys[0],advance_ids:rowDetails.map(function(d){return d.id;}),advance_details:rowDetails});
     }
   });
-  // Fix rounding drift (each component was already rounded per-advance) so
-  // the split's total still matches the amount actually being adjusted —
-  // that total feeds directly into the bill's net-payable calculation.
+  // Fix rounding drift on the cash rows only (each component was already
+  // rounded per-advance) so the split's total still matches the amount
+  // actually being adjusted in cash — that total feeds directly into the
+  // bill's net-payable calculation.
   var splitSum=out.reduce(function(s,d){return s+d.amount;},0);
   var drift=Math.round(grandTotal-splitSum);
   if(drift!==0&&out.length){
     out[0].amount+=drift;
     if(out[0].advance_details.length) out[0].advance_details[0].amount+=drift;
+  }
+  // TDS row: non-cash (see above). advance_details carries the real
+  // per-advance amount so advReverseDeductionRow restores adjusted_tds
+  // correctly on delete/edit; the row's own amount stays 0.
+  var tdsRowDetails=[];
+  adjAdvDetails.forEach(function(ad){
+    var amt=Math.round(parseFloat(ad.tds_amt)||0);
+    if(amt>0) tdsRowDetails.push({id:ad.id,amount:amt,date:ad.date,purpose:ad.purpose,payment_mode:ad.payment_mode,reference:ad.reference,total_adv:ad.total_adv});
+  });
+  var tdsRowTotal=tdsRowDetails.reduce(function(s,d){return s+d.amount;},0);
+  if(tdsRowTotal>0){
+    out.push({id:'adv-adj-'+ts+'-tds',head:'Advance Adjustment (TDS) — bucket match, non-cash',amount:0,display_amount:tdsRowTotal,released:false,is_advance_adj:true,adv_adj_head:'tds_amt',non_cash:true,advance_ids:tdsRowDetails.map(function(d){return d.id;}),advance_details:tdsRowDetails});
   }
   return out;
 }
@@ -11156,17 +11190,29 @@ function blUpdateTotal(){
   // up consuming the whole thing, leaving nothing for TDS/GST even when
   // the advance genuinely has TDS/GST available — so this bill's TDS
   // deduction and GST addition never actually got matched against the
-  // advance's own TDS/GST buckets. Instead: TDS is capped to this bill's
-  // own TDS deduction total (billTdsTotal), GST to this bill's own GST
-  // total (gstTotal) — matching what THIS bill needs under each head —
-  // and Work Amt only fills whatever of the bill's payable value remains
-  // after TDS/GST are matched.
+  // advance's own TDS/GST buckets.
+  //
+  // TDS is handled differently from GST/Work Amt: dedTotal above (which
+  // feeds netBeforeGst, and therefore remainingGross) has ALREADY
+  // subtracted the bill's own TDS once — that money never reaches the
+  // party whether it's "paid" via advance or cash, so there's no leftover
+  // TDS-shaped slice of remainingGross left to hand out. "TDS adjusted
+  // from advance" is a non-cash bookkeeping match instead: it marks that
+  // much of the advance's own TDS bucket as used (so accounts know it was
+  // already remitted once, via the advance, instead of being recorded as
+  // remitted again here) — it does NOT draw from remainingGross and does
+  // NOT reduce net payable a second time. Reserving a TDS slice out of
+  // remainingGross the way GST/Work Amt do double-subtracts TDS and was
+  // why Work Amt adjusted from advance came out lower than Work Amt
+  // billed whenever the bill had TDS on it. GST and Work Amt are real
+  // cash owed to the party, so they still split remainingGross between
+  // themselves in full.
   var remainingGross=Math.round(grossWithAdd);
   var headOrder=['tds','gst','work'];
   var headBudget={};
-  headBudget.tds=Math.max(0,Math.min(Math.round(billTdsTotal),remainingGross));
-  headBudget.gst=Math.max(0,Math.min(Math.round(gstTotal),remainingGross-headBudget.tds));
-  headBudget.work=Math.max(0,remainingGross-headBudget.tds-headBudget.gst);
+  headBudget.tds=Math.max(0,Math.round(billTdsTotal));
+  headBudget.gst=Math.max(0,Math.min(Math.round(gstTotal),remainingGross));
+  headBudget.work=Math.max(0,remainingGross-headBudget.gst);
   var usedByHead={tds:0,gst:0,work:0};
   headOrder.forEach(function(headKey){
     document.querySelectorAll('.adv-adj-head-inp[data-head="'+headKey+'"]').forEach(function(inp){
@@ -11190,7 +11236,9 @@ function blUpdateTotal(){
       }
     });
   });
-  var advAdj=usedByHead.tds+usedByHead.gst+usedByHead.work;
+  // TDS-head usage is a non-cash bookkeeping match (see note above) — it
+  // does not reduce net payable, so it's excluded from advAdj.
+  var advAdj=usedByHead.gst+usedByHead.work;
   var net=Math.max(0,grossWithAdd-advAdj);
   var amtEl=document.getElementById('bl-amount');
   if(amtEl) amtEl.value=Math.round(net);
@@ -11204,9 +11252,15 @@ function blUpdateTotal(){
     if(gstTotal>0) bParts.push('+ GST: ₹'+Math.round(gstTotal).toLocaleString('en-IN'));
     gBreak.textContent=bParts.join(' ');
   }
-  // Update net payable field (gross - advance)
+  // Update net payable field (gross - advance). TDS-head usage is shown
+  // alongside as a separate note since it doesn't reduce this figure.
   var advEl=document.getElementById('bl-adv-adj-display');
-  if(advEl) advEl.textContent=advAdj>0?'Less Advance: ₹'+Math.round(advAdj).toLocaleString('en-IN'):'';
+  if(advEl){
+    var advParts=[];
+    if(advAdj>0) advParts.push('Less Advance: ₹'+Math.round(advAdj).toLocaleString('en-IN'));
+    if(usedByHead.tds>0) advParts.push('TDS bucket matched: ₹'+Math.round(usedByHead.tds).toLocaleString('en-IN'));
+    advEl.textContent=advParts.join(' · ');
+  }
 }
 
 var BL_ADDITIONS=[];
@@ -11379,7 +11433,8 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   // that specific head has available, rather than one combined amount
   // split by ratio.
   var adjAdvIds=[];
-  var adjAdvTotal=0;
+  var adjAdvTotal=0; // work+tds+gst combined — "any advance activity" total, for the toast only
+  var adjAdvCash=0; // work+gst only — TDS is a non-cash bucket match (see advBuildAdjDeductions), so this is what actually reduces net payable
   var adjAdvDetails=[]; // per-advance: {id, amount, date, purpose, payment_mode, reference, total_adv, work_amt, tds_amt, gst_amt}
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
     var aid=chk.getAttribute('data-adv-id');
@@ -11401,6 +11456,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
       work_amt:workAmt, add_amt:0, tds_amt:tdsAmt, gst_amt:gstAmt
     });
     adjAdvTotal+=amt;
+    adjAdvCash+=workAmt+gstAmt;
   });
 
   // Collect selected work items
@@ -11447,7 +11503,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   var gstTotal=gstList.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
   additions=additions.concat(gstList);
   var grossAmount=netBeforeGstSave+gstTotal; // = work + additions + GST (true gross)
-  amount=Math.max(0,grossAmount-deductionsTotal-adjAdvTotal); // net payable, for the zero-amount check only
+  amount=Math.max(0,grossAmount-deductionsTotal-adjAdvCash); // net payable, for the zero-amount check only (adjAdvCash excludes the non-cash TDS bucket match — see advBuildAdjDeductions)
   if(grossAmount===0){toast('Bill amount cannot be zero','warning');return;}
 
   // Collect deductions (include advance adjustment as separate deduction
@@ -12130,21 +12186,27 @@ function execDownloadBillPDF(billId){
         }
         // TDS is withheld for Income Tax, not the party — shown in its own
         // color with a note, same as everywhere else this bill's
-        // deductions are displayed.
+        // deductions are displayed. A non-cash row (TDS matched against an
+        // advance's TDS bucket — see advBuildAdjDeductions) has amount:0 so
+        // it never reduces Net Payable/Balance Due, but the real figure is
+        // in display_amount, shown here instead of a confusing "(₹0)".
         var isTds=!isAdvAdj&&!!d.is_tds;
-        var rowBg=isAdvAdj?'#FFF8E1':(isTds?'#F5F3FB':'white');
-        var rowCol=isAdvAdj?'#F57F17':(isTds?'#4A148C':'#E65100');
-        var rowBadgeBg=isAdvAdj?'#FFF8E1':(isTds?'#EDE7F6':'#FFF3E0');
-        var rowLabel=isAdvAdj?'ADV ADJ':(isTds?'TDS':'DED');
+        var isNonCash=isAdvAdj&&!!d.non_cash;
+        var rowBg=isNonCash?'#F3E5F5':(isAdvAdj?'#FFF8E1':(isTds?'#F5F3FB':'white'));
+        var rowCol=isNonCash?'#4A148C':(isAdvAdj?'#F57F17':(isTds?'#4A148C':'#E65100'));
+        var rowBadgeBg=isNonCash?'#F3E5F5':(isAdvAdj?'#FFF8E1':(isTds?'#EDE7F6':'#FFF3E0'));
+        var rowLabel=isNonCash?'NON-CASH':(isAdvAdj?'ADV ADJ':(isTds?'TDS':'DED'));
+        var rowDisplayAmt=isNonCash?(parseFloat(d.display_amount)||0):d.amount;
         var purposeNote='';
         var dPan=isTds?(d.pan||execPanFor(b.party_type,b.party_name)):'';
         return '<tr style="background:'+rowBg+';">'+
           '<td colspan="4" style="padding:6px 10px;border-bottom:1px solid #EEE;">'+
             '<span style="background:'+rowBadgeBg+';color:'+rowCol+
               ';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:6px;">'+rowLabel+'</span>'+
-            d.head+(isTds?' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+(dPan?', PAN: '+dPan:'')+')</span>':'')+advDetail+purposeNote+
+            d.head+(isTds?' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+(dPan?', PAN: '+dPan:'')+')</span>':'')+
+            (isNonCash?' <span style="font-size:9px;color:#4A148C;">(bucket match — no cash effect)</span>':'')+advDetail+purposeNote+
           '</td>'+
-          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;color:'+rowCol+';font-weight:700;">('+inr(d.amount)+')</td>'+
+          '<td style="padding:6px 10px;border-bottom:1px solid #EEE;text-align:right;color:'+rowCol+';font-weight:700;">('+inr(rowDisplayAmt)+')</td>'+
         '</tr>';
       }).join('') : '';
 
@@ -12763,7 +12825,7 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
   var deductions=[];
   // Advance adjustments — read directly from each head's own input (Work
   // Amt/TDS/GST), already hard-capped to what that head has available.
-  var adjAdvIds=[],adjAdvTotal=0,adjAdvDetails=[];
+  var adjAdvIds=[],adjAdvTotal=0,adjAdvCash=0,adjAdvDetails=[];
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
     var aid=chk.getAttribute('data-adv-id');
     var ai=chk.id.replace('adv-adj-','');
@@ -12776,6 +12838,7 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     adjAdvIds.push(aid);
     adjAdvDetails.push({id:aid,amount:amt,date:origAdv.date||'',purpose:origAdv.purpose||'',payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0,work_amt:workAmt,add_amt:0,tds_amt:tdsAmt,gst_amt:gstAmt});
     adjAdvTotal+=amt;
+    adjAdvCash+=workAmt+gstAmt; // TDS is a non-cash bucket match (see advBuildAdjDeductions) — excluded from cash total
   });
   if(adjAdvTotal>0){
     deductions=deductions.concat(advBuildAdjDeductions(adjAdvDetails));
@@ -12810,7 +12873,7 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
   var dedTotal=deductions.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var gstTotal=gstList.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
   var grossAmount=workAmount+addTotal+relDedTotal+gstTotal; // true gross
-  var netCheck=grossAmount-dedTotal-adjAdvTotal; // net payable, for the zero-amount check only
+  var netCheck=grossAmount-dedTotal-adjAdvCash; // net payable, for the zero-amount check only
   if(netCheck<=0){toast('Bill amount cannot be zero','warning');return;}
 
   var payload={
