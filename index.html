@@ -19569,6 +19569,19 @@ async function lnAutoBookMonthly(){
         (isCurrent?' (to '+fmtDate(todayStr)+')':'')+
         (dir==='given'?' (receivable)':'')+' \u2014 all loans, net of interest paid';
 
+      // Must be computed before both branches below use it. It used to sit
+      // after the "revise in place" block and after the `booked` skip, so
+      // in steady state (every past month already booked, current month
+      // already has an existing voucher -- i.e. every run after the very
+      // first) that assignment was never reached before drCode/crCode were
+      // read, leaving them permanently undefined. That made sideChanged
+      // compare a real account code against undefined -- always true --
+      // which deleted the current month's existing voucher and then failed
+      // to repost it (accAutoPost correctly refuses an undefined code),
+      // while still being counted as posted below.
+      var drCode = dir==='taken' ? (reversing?'2202':'4201') : (reversing?'3005':'1402');
+      var crCode = dir==='taken' ? (reversing?'4201':'2202') : (reversing?'1402':'3005');
+
       var existing=curVouchers[dir];
       if(isCurrent && existing){
         // Revise the running entry in place
@@ -19576,16 +19589,16 @@ async function lnAutoBookMonthly(){
         var sideChanged=(exDr!==drCode);
         if(Math.abs((parseFloat(existing.amount)||0)-amt)>0.5 || amt<=0.5 || sideChanged){
           try{
-            if(amt<=0.5){ await sbDelete('vouchers',existing.id); }
+            if(amt<=0.5){ await sbDelete('vouchers',existing.id); posted++; }
             else if(sideChanged){
               // Direction flipped this month — replace rather than edit
               await sbDelete('vouchers',existing.id);
-              await accAutoPost({type:'Journal', date:todayStr, partyName:'Interest accrual',
+              var raOk=await accAutoPost({type:'Journal', date:todayStr, partyName:'Interest accrual',
                 debitCode:drCode, creditCode:crCode, amount:amt, narration:narr,
                 sourceType:LN_ACCRUAL_SRC, sourceId:null});
+              if(raOk) posted++; else failed++; // only count it as posted if the repost actually succeeded
             }
-            else { await sbUpdate('vouchers',existing.id,{amount:amt, date:todayStr, narration:narr}); }
-            posted++;
+            else { await sbUpdate('vouchers',existing.id,{amount:amt, date:todayStr, narration:narr}); posted++; }
           }catch(e){ failed++; }
         }
         continue;
@@ -19593,8 +19606,6 @@ async function lnAutoBookMonthly(){
       if(booked[end+'|'+dir]) continue;
       if(amt<=0.5) continue;
 
-      var drCode = dir==='taken' ? (reversing?'2202':'4201') : (reversing?'3005':'1402');
-      var crCode = dir==='taken' ? (reversing?'4201':'2202') : (reversing?'1402':'3005');
       var ok=await accAutoPost({
         type:'Journal', date:end, partyName:'Interest accrual',
         debitCode:drCode, creditCode:crCode,
