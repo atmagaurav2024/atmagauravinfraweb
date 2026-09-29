@@ -23078,7 +23078,13 @@ async function accAutoPost(opts){
     var debitId = await accGetAccountId(opts.debitCode);
     var creditId = await accGetAccountId(opts.creditCode);
     if(!debitId || !creditId){
-      console.warn('Auto-post skipped — missing Chart of Accounts entry for code '+(!debitId?opts.debitCode:opts.creditCode)+' ('+opts.sourceType+')');
+      var missingCode=!debitId?opts.debitCode:opts.creditCode;
+      console.warn('Auto-post skipped — missing Chart of Accounts entry for code '+missingCode+' ('+opts.sourceType+')');
+      // Surfaced to whichever caller checks ACC_AUTOPOST_LAST_ERROR (Reconcile's
+      // "Post missing" toast, for one) so this doesn't stay a console-only
+      // mystery — the fix is always the same: Chart of Accounts is missing a
+      // standard code, and "Setup Default Accounts" there adds it back.
+      ACC_AUTOPOST_LAST_ERROR='Chart of Accounts is missing code '+missingCode+' — go to Accounts → Chart of Accounts and click "Setup Default Accounts", then try again.';
       return false;
     }
     var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL','Personal Sales':'PSAL'}[opts.type]||'VOU';
