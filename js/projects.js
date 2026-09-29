@@ -10111,6 +10111,29 @@ function advPrefillBreakdown(rec){
   advUpdateTotal();
 }
 
+// Posts the TDS and GST legs of an advance's breakdown to the General
+// Ledger, same double-entry the equivalent bill legs use (see the
+// 'Auto-post to Accounts' block in the bill save flow): TDS withheld
+// reduces what's owed to the party (2001) and is now owed to the Income
+// Tax Department instead (2102); GST charged increases Input GST Credit
+// (1301), an asset, against the same party liability (2001). Both legs
+// are self-contained, balanced entries independent of whether the rest
+// of the advance's cash movement is separately tracked, so they're safe
+// to post on their own. sourceId ties every voucher back to this advance
+// so accCleanupVouchersForSource can remove them on edit/delete.
+function advPostToAccounts(advId,partyType,partyName,date,purpose,bk){
+  if(typeof accAutoPost!=='function') return;
+  var advTds=bk.deductions.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var advGst=bk.gst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
+  var advRef='Advance to '+partyName+(purpose?' — '+purpose:'');
+  if(advTds>0) accAutoPost({type:'Payment', date:date, partyName:partyName,
+    debitCode:'2001', creditCode:'2102', amount:advTds,
+    narration:'TDS on '+advRef, sourceType:'work_advance_tds', sourceId:advId});
+  if(advGst>0) accAutoPost({type:'Payment', date:date, partyName:partyName,
+    debitCode:'1301', creditCode:'2001', amount:advGst,
+    narration:'GST (ITC) on '+advRef, sourceType:'work_advance_gst', sourceId:advId});
+}
+
 async function execOpenAdvanceBatch(batchKey){
   var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
   if(!items.length){toast('Batch not found','error');return;}
@@ -10187,6 +10210,7 @@ async function execSaveAdvanceBatch(batchKey,partyType,partyName,projId,batchAmt
     });
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
+      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk);
       toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
       closeSheet('ov-exec','sh-exec');
       execAdvanceReceipt(res[0].id,items.length+' item'+(items.length!==1?'s':''),batchAmt);
@@ -10266,6 +10290,7 @@ async function execSaveAdvanceAllot(allotId,partyType,partyName,projId,resName,a
     });
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
+      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk);
       toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
       closeSheet('ov-exec','sh-exec');
       // Download receipt automatically
@@ -10438,6 +10463,7 @@ async function execEditAdvance(advId){
 }
 
 async function execUpdateAdvance(advId){
+  var existing=WA_ADVANCES.find(function(x){return x.id===advId;})||{};
   var date  =(document.getElementById('adva-date')||{value:''}).value;
   var bk=advCollectBreakdown();
   var amount=bk.net;
@@ -10467,6 +10493,11 @@ async function execUpdateAdvance(advId){
     // Update in memory
     var idx=WA_ADVANCES.findIndex(function(x){return x.id===advId;});
     if(idx>-1) Object.assign(WA_ADVANCES[idx],payload);
+    // Re-post TDS/GST to Accounts: drop whatever was posted for the old
+    // breakdown and post fresh legs for the new one, so editing an advance
+    // (or clearing its TDS/GST) doesn't leave stale ledger entries behind.
+    if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(advId);
+    advPostToAccounts(advId,existing.party_type,existing.party_name,date,purpose,bk);
     toast('Advance updated!','success');
     closeSheet('ov-exec','sh-exec');
     if(WA_SUBTAB==='payments') execRenderPayments();
@@ -10478,7 +10509,7 @@ async function execDelAdvance(id){
   if(!confirm('Delete this advance payment record?'))return;
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
   if(WA_SUBTAB==='orders')execRenderOrders();else execRenderAllotted();
-  try{await sbDelete('work_advances',id);}catch(e){console.error(e);}
+  try{await sbDelete('work_advances',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
   toast('Advance deleted','success');
 }
 
@@ -12082,7 +12113,10 @@ async function execSaveAdvance(partyType,partyName,projId){
       reference:utr||null,
       purpose:purpose+(finalRef?' | Against: '+finalRef:'')
     });
-    if(res&&res[0]) WA_ADVANCES.push(res[0]);
+    if(res&&res[0]){
+      WA_ADVANCES.push(res[0]);
+      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk);
+    }
     toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
     closeSheet('ov-exec','sh-exec');
     if(WA_SUBTAB==='payments') execRenderPayments();
@@ -12094,7 +12128,7 @@ async function execDelAdvance(id){
   if(!confirm('Delete this advance payment record?'))return;
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
   if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
-  try{await sbDelete('work_advances',id);}catch(e){console.error(e);}
+  try{await sbDelete('work_advances',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
   toast('Advance deleted','success');
 }
 async function execDelBill(id){

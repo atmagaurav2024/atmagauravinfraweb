@@ -24266,7 +24266,7 @@ function gstShowDetail(which){
     title='ITC Available — Working';
     var rows=d.inRows.filter(function(x){return x.gst>0;})
       .map(function(x){
-        return '<tr><td>'+(x.bill.bill_ref||x.bill.bill_number||'—')+(x.isOverhead?' <span style="font-size:9px;color:#4A148C;font-weight:700;">OVERHEAD</span>':'')+
+        return '<tr><td>'+(x.bill.bill_ref||x.bill.bill_number||'—')+(x.isOverhead?' <span style="font-size:9px;color:#4A148C;font-weight:700;">OVERHEAD</span>':'')+(x.isAdvance?' <span style="font-size:9px;color:#F57F17;font-weight:700;">ADVANCE</span>':'')+
           '<div style="font-size:10px;color:var(--text3);">'+fmtDate(x.bill.bill_date)+(x.bill.party_name?' · '+x.bill.party_name:'')+'</div></td>'+
           '<td style="text-align:right;">'+fmtINR(x.taxable)+'</td>'+
           '<td style="text-align:right;font-weight:700;color:#2E7D32;">'+fmtINR(x.gst)+'</td></tr>';
@@ -24437,10 +24437,12 @@ async function accGstTab(){
       sbFetch('sales_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];}),
       sbFetch('projects',{select:'id,name,client,client_gstin'}).catch(function(){return [];}),
       sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];}),
-      sbFetch('company_expenses',{select:'*',order:'date.desc'}).catch(function(){return [];})
+      sbFetch('company_expenses',{select:'*',order:'date.desc'}).catch(function(){return [];}),
+      sbFetch('work_advances',{select:'*',order:'date.desc'}).catch(function(){return [];})
     ]);
     var bills=Array.isArray(r[0])?r[0]:[], projects=Array.isArray(r[1])?r[1]:[], workBills=Array.isArray(r[2])?r[2]:[];
     var ohExp=Array.isArray(r[3])?r[3]:[];
+    var workAdvances=Array.isArray(r[4])?r[4]:[];
     var projById={}; projects.forEach(function(p){projById[p.id]=p;});
 
     var gstOf=function(b){
@@ -24471,6 +24473,18 @@ async function accGstTab(){
           taxable:tx, gst:g, total:tx+g, month:(x.date||'').slice(0,7), isOverhead:true};
       });
     inRows=inRows.concat(ohRows);
+    // GST charged on Advance Payments is also Input Tax Credit the moment
+    // it's paid — an advance's own breakdown can carry a GST addition just
+    // like a bill's can (see work_advances.gst), so it needs to count
+    // toward ITC here too, not just once the final bill is raised.
+    var advGstRows=workAdvances.map(function(a){
+      var gArr=[]; try{gArr=a.gst?JSON.parse(a.gst):[];}catch(e){}
+      var g=gArr.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+      if(!g) return null;
+      return {bill:{bill_ref:'Advance'+(a.purpose?' — '+a.purpose:''), bill_date:a.date, party_name:a.party_name},
+        taxable:0, gst:g, total:g, month:(a.date||'').slice(0,7), isAdvance:true};
+    }).filter(Boolean);
+    inRows=inRows.concat(advGstRows);
     var inTaxable=inRows.reduce(function(s,x){return s+x.taxable;},0);
     var inGst=inRows.reduce(function(s,x){return s+x.gst;},0);
 
@@ -24574,7 +24588,7 @@ async function accGstTab(){
       (inRows.length?
         '<div class="table-card"><table class="att-table"><thead><tr><th>Bill</th><th>Date</th><th>Vendor / Party</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">GST (ITC)</th><th style="text-align:right;">Total</th></tr></thead><tbody>'+
         inRows.map(function(x){
-          return '<tr><td><strong>'+(x.bill.bill_ref||x.bill.bill_number||'—')+'</strong>'+(x.isOverhead?'<div style="font-size:9px;color:#4A148C;font-weight:700;">OVERHEAD</div>':'')+'</td><td>'+fmtDate(x.bill.bill_date)+'</td>'+
+          return '<tr><td><strong>'+(x.bill.bill_ref||x.bill.bill_number||'—')+'</strong>'+(x.isOverhead?'<div style="font-size:9px;color:#4A148C;font-weight:700;">OVERHEAD</div>':'')+(x.isAdvance?'<div style="font-size:9px;color:#F57F17;font-weight:700;">ADVANCE</div>':'')+'</td><td>'+fmtDate(x.bill.bill_date)+'</td>'+
             '<td>'+(x.bill.party_name||'—')+'</td>'+
             '<td style="text-align:right;">'+fmtINR(x.taxable)+'</td>'+
             '<td style="text-align:right;font-weight:700;color:#2E7D32;">'+(x.gst?fmtINR(x.gst):'—')+'</td>'+
@@ -24654,8 +24668,12 @@ async function accTdsTab(){
   cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading TDS summary…</div>';
   try{
     accTdsInitPeriod();
-    var workBills=await sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];});
-    workBills=Array.isArray(workBills)?workBills:[];
+    var tdsFetch=await Promise.all([
+      sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];}),
+      sbFetch('work_advances',{select:'*',order:'date.desc'}).catch(function(){return [];})
+    ]);
+    var workBills=Array.isArray(tdsFetch[0])?tdsFetch[0]:[];
+    var workAdvances=Array.isArray(tdsFetch[1])?tdsFetch[1]:[];
 
     // Master-record PAN, keyed by "party_type::party_name", as a fallback
     // for TDS entries whose own deduction row never had a PAN typed in
@@ -24685,6 +24703,17 @@ async function accTdsTab(){
       deds.filter(function(d){return d.is_tds;}).forEach(function(d){
         var pan=d.pan||masterPanMap[(b.party_type||'')+'::'+(b.party_name||'')]||'';
         allRows.push({date:b.bill_date, party:b.party_name||'—', billRef:b.bill_ref||('#'+b.bill_number), billId:b.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0, pan:pan});
+      });
+    });
+    // Same, for TDS withheld on Advance Payments — an advance's own
+    // breakdown can carry a TDS deduction exactly like a bill's can, and it
+    // needs to show up here too so the TDS report (and the party/date-wise
+    // totals it drives) isn't missing tax already withheld at advance stage.
+    workAdvances.forEach(function(a){
+      var deds=[]; try{deds=a.deductions?JSON.parse(a.deductions):[];}catch(e){}
+      deds.filter(function(d){return d.is_tds;}).forEach(function(d){
+        var pan=d.pan||masterPanMap[(a.party_type||'')+'::'+(a.party_name||'')]||'';
+        allRows.push({date:a.date, party:a.party_name||'—', billRef:'Advance'+(a.purpose?' — '+a.purpose:''), billId:a.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0, pan:pan});
       });
     });
     allRows.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
@@ -24762,7 +24791,7 @@ async function accTdsTab(){
           '<button onclick="accTdsPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128196; PDF</button>'+
         '</div>'+
       '</div>'+
-      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">TDS withheld from subcontractor/vendor bills, deposited with the Income Tax Department on their behalf — never payable back to the party. For information only — verify before filing TDS returns.</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">TDS withheld from subcontractor/vendor bills and advance payments, deposited with the Income Tax Department on their behalf — never payable back to the party. For information only — verify before filing TDS returns.</div>'+
       '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;">'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL TDS (ALL TIME)</div><div style="font-size:16px;font-weight:900;color:#4A148C;">'+fmtINR(totalAll)+'</div></div>'+
         '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TDS IN '+ACC_TDS_LABEL.toUpperCase()+'</div><div style="font-size:16px;font-weight:900;color:#4A148C;">'+fmtINR(periodTotal)+'</div></div>'+
@@ -28106,8 +28135,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260929e"></script>
-<script src="js/employee.js?v=20260929e"></script>
-<script src="js/projects.js?v=20260929e"></script>
-<script src="js/finance.js?v=20260929e"></script>
+<script src="js/registry.js?v=20260929f"></script>
+<script src="js/employee.js?v=20260929f"></script>
+<script src="js/projects.js?v=20260929f"></script>
+<script src="js/finance.js?v=20260929f"></script>
 </html>
