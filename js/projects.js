@@ -10138,21 +10138,36 @@ function advGenRef(){
   return 'ADV/'+new Date().getFullYear()+'/'+String(WA_ADVANCES.length+1).padStart(4,'0');
 }
 
-// Posts the TDS and GST legs of an advance's breakdown to the General
-// Ledger, same double-entry the equivalent bill legs use (see the
-// 'Auto-post to Accounts' block in the bill save flow): TDS withheld
-// reduces what's owed to the party (2001) and is now owed to the Income
-// Tax Department instead (2102); GST charged increases Input GST Credit
-// (1301), an asset, against the same party liability (2001). Both legs
-// are self-contained, balanced entries independent of whether the rest
-// of the advance's cash movement is separately tracked, so they're safe
-// to post on their own. sourceId ties every voucher back to this advance
-// so accCleanupVouchersForSource can remove them on edit/delete.
-function advPostToAccounts(advId,partyType,partyName,date,purpose,bk){
+// Posts an advance payment's full double-entry to the General Ledger: the
+// actual cash/bank leg for the net amount paid, plus the TDS and GST legs
+// of its breakdown (same pattern the equivalent bill legs use — see the
+// 'Auto-post to Accounts' block in the bill save flow).
+//
+// The cash leg (Dr 2001 party / Cr 1001-or-1002 Cash-Bank, for bk.net) was
+// missing entirely until now — this function used to post ONLY the TDS/GST
+// legs, on the assumption the base payment was "separately tracked"
+// elsewhere. It never actually was: nothing else in the app ever posted an
+// advance's own cash outflow, so every advance recorded left Cash/Bank and
+// the party's running account (2001) understated by however much was
+// actually paid out — only the TDS-withheld and GST-claimed slivers of it
+// ever reached the ledger. Posting the full net amount here, the same way
+// execSavePaymentAdv posts a bill payment's cash leg, closes that gap.
+//
+// TDS withheld reduces what's owed to the party (2001) and is now owed to
+// the Income Tax Department instead (2102); GST charged increases Input
+// GST Credit (1301), an asset, against the same party liability (2001).
+// All legs share sourceId so accCleanupVouchersForSource can remove them
+// together on edit/delete.
+function advPostToAccounts(advId,partyType,partyName,date,purpose,bk,mode){
   if(typeof accAutoPost!=='function') return;
+  var advNet=Math.round(parseFloat(bk.net)||0);
   var advTds=bk.deductions.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var advGst=bk.gst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
   var advRef='Advance to '+partyName+(purpose?' — '+purpose:'');
+  var cashCode=mode==='Cash'?'1001':'1002';
+  if(advNet>0) accAutoPost({type:'Payment', date:date, partyName:partyName,
+    debitCode:'2001', creditCode:cashCode, amount:advNet,
+    narration:advRef, sourceType:'work_advance', sourceId:advId});
   if(advTds>0) accAutoPost({type:'Payment', date:date, partyName:partyName,
     debitCode:'2001', creditCode:'2102', amount:advTds,
     narration:'TDS on '+advRef, sourceType:'work_advance_tds', sourceId:advId});
@@ -10506,7 +10521,7 @@ async function execSaveAdvanceBatch(batchKey,partyType,partyName,projId,batchAmt
     });
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
-      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk);
+      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk,gv('adva-mode'));
       toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
       closeSheet('ov-exec','sh-exec');
       execAdvanceReceipt(res[0].id,items.length+' item'+(items.length!==1?'s':''),batchAmt);
@@ -10587,7 +10602,7 @@ async function execSaveAdvanceAllot(allotId,partyType,partyName,projId,resName,a
     });
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
-      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk);
+      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk,gv('adva-mode'));
       toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
       closeSheet('ov-exec','sh-exec');
       // Download receipt automatically
@@ -10803,7 +10818,7 @@ async function execUpdateAdvance(advId){
     // breakdown and post fresh legs for the new one, so editing an advance
     // (or clearing its TDS/GST) doesn't leave stale ledger entries behind.
     if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(advId);
-    advPostToAccounts(advId,existing.party_type,existing.party_name,date,purpose,bk);
+    advPostToAccounts(advId,existing.party_type,existing.party_name,date,purpose,bk,mode);
     toast('Advance updated!','success');
     closeSheet('ov-exec','sh-exec');
     execRenderSubTab();
@@ -11433,6 +11448,58 @@ function blRemoveDeduction(id){
   blUpdateTotal();
 }
 
+// Posts a work bill's full double-entry to the General Ledger. Shared by
+// both bill creation and bill edit — edit calls accCleanupVouchersForSource
+// first to drop whatever this bill posted before, then calls this again
+// with the new amounts, so an edited bill's vouchers never go stale (they
+// used to just sit there unchanged after an edit, silently drifting from
+// the bill's actual, edited figures).
+//
+// Split the same way as sales bills: GST on purchases is input credit (an
+// asset), not an expense, and additions and deductions post to their own
+// heads. Posting the gross amount to 4001 would inflate expenses and
+// understate profit. Advance adjustment isn't posted here at all (it's a
+// payment against an existing advance, already posted when the advance
+// itself was recorded). TDS is split out from ordinary deductions — it's
+// never owed back to the party, so it posts to its own liability head
+// (2102 TDS Payable) instead of the generic 4003 Purchase Bill Deductions —
+// and whatever portion of it was matched against an advance's TDS bucket
+// is excluded, since that was already posted once when the advance itself
+// was saved. The `adjAdvDetails` param isn't used for that exclusion —
+// deductions already carries every advance-adjustment row ever added to
+// this bill (at creation AND via any later Record Payment), so summing
+// straight from deductions stays correct cumulatively no matter which flow
+// last touched the bill, the same way the TDS tab's own report computes it.
+function blPostToAccounts(billId,date,partyName,billRef,additions,deductions,adjAdvDetails,grossAmount){
+  if(typeof accAutoPost!=='function') return;
+  var pbGst=additions.filter(function(a){return a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
+  var pbAdd=additions.filter(function(a){return !a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
+  var pbTdsRaw=deductions.filter(function(d){return !d.is_advance_adj&&d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
+  var advTdsMatched=deductions.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='tds_amt';})
+    .reduce(function(x,d){return x+(d.advance_details||[]).reduce(function(s,ad){return s+(parseFloat(ad.amount)||0);},0);},0);
+  var pbTds=Math.max(0,pbTdsRaw-advTdsMatched);
+  var pbDed=deductions.filter(function(d){return !d.is_advance_adj&&!d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
+  // grossAmount is true gross (work+additions+GST, deductions not
+  // subtracted), so the work portion is simply gross minus GST/additions.
+  var pbWork=Math.round(grossAmount)-pbGst-pbAdd;
+  var pbRef='Purchase/Work Bill '+billRef;
+  if(pbWork>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+    debitCode:'4001', creditCode:'2001', amount:pbWork,
+    narration:pbRef, sourceType:'work_bill', sourceId:billId});
+  if(pbAdd>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+    debitCode:'4002', creditCode:'2001', amount:pbAdd,
+    narration:'Additions on '+pbRef, sourceType:'work_bill_add', sourceId:billId});
+  if(pbDed>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+    debitCode:'2001', creditCode:'4003', amount:pbDed,
+    narration:'Deductions on '+pbRef, sourceType:'work_bill_ded', sourceId:billId});
+  if(pbTds>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+    debitCode:'2001', creditCode:'2102', amount:pbTds,
+    narration:'TDS on '+pbRef, sourceType:'work_bill_tds', sourceId:billId});
+  if(pbGst>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
+    debitCode:'1301', creditCode:'2001', amount:pbGst,
+    narration:'GST (ITC) on '+pbRef, sourceType:'work_bill_gst', sourceId:billId});
+}
+
 async function execSaveBill(partyType,partyName,projId,billNo){
   var date=gv('bl-date'),amount=parseFloat(gv('bl-amount'))||0;
   if(!date){toast('Bill date required','warning');return;}
@@ -11566,52 +11633,8 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     if(res&&res[0]){
       WA_BILLS.push(res[0]);
 
-      // Auto-post to Accounts, split the same way as sales bills: GST on
-      // purchases is input credit (an asset), not an expense, and additions
-      // and deductions post to their own heads. Posting the gross amount to
-      // 4001 would inflate expenses and understate profit.
-      if(typeof accAutoPost==='function'){
-        var pbGst=additions.filter(function(a){return a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
-        var pbAdd=additions.filter(function(a){return !a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
-        // Advance adjustment isn't a deduction (it's a payment against an
-        // existing advance, already posted when the advance itself was
-        // recorded) — exclude it here so it isn't posted a second time.
-        // TDS is split out from ordinary deductions: it's never owed back
-        // to the party, so it posts to its own liability head (2102 TDS
-        // Payable) instead of the generic 4003 Purchase Bill Deductions.
-        //
-        // Whatever portion of this bill's own TDS was just matched against
-        // an advance's TDS bucket (adjAdvDetails' tds_amt — see
-        // advBuildAdjDeductions) was ALREADY posted to 2102 back when that
-        // advance itself was saved (advPostToAccounts). Posting it again
-        // here would double it up in the TDS Payable ledger/TDS tab for
-        // the same rupee of TDS. Only the un-matched remainder of this
-        // bill's TDS — the part that wasn't already remitted via an
-        // advance — is genuinely fresh and needs posting now.
-        var pbTdsRaw=deductions.filter(function(d){return !d.is_advance_adj&&d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
-        var advTdsMatched=adjAdvDetails.reduce(function(x,ad){return x+(parseFloat(ad.tds_amt)||0);},0);
-        var pbTds=Math.max(0,pbTdsRaw-advTdsMatched);
-        var pbDed=deductions.filter(function(d){return !d.is_advance_adj&&!d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
-        // grossAmount is now true gross (work+additions+GST, deductions not
-        // subtracted), so the work portion is simply gross minus GST/additions.
-        var pbWork=Math.round(grossAmount)-pbGst-pbAdd;
-        var pbRef='Purchase/Work Bill '+billRef;
-        if(pbWork>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
-          debitCode:'4001', creditCode:'2001', amount:pbWork,
-          narration:pbRef, sourceType:'work_bill', sourceId:res[0].id});
-        if(pbAdd>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
-          debitCode:'4002', creditCode:'2001', amount:pbAdd,
-          narration:'Additions on '+pbRef, sourceType:'work_bill_add', sourceId:res[0].id});
-        if(pbDed>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
-          debitCode:'2001', creditCode:'4003', amount:pbDed,
-          narration:'Deductions on '+pbRef, sourceType:'work_bill_ded', sourceId:res[0].id});
-        if(pbTds>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
-          debitCode:'2001', creditCode:'2102', amount:pbTds,
-          narration:'TDS on '+pbRef, sourceType:'work_bill_tds', sourceId:res[0].id});
-        if(pbGst>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
-          debitCode:'1301', creditCode:'2001', amount:pbGst,
-          narration:'GST (ITC) on '+pbRef, sourceType:'work_bill_gst', sourceId:res[0].id});
-      }
+      // Auto-post to Accounts (see blPostToAccounts for the full breakdown).
+      blPostToAccounts(res[0].id,date,partyName,billRef,additions,deductions,adjAdvDetails,grossAmount);
       // Update adjusted_amount for each advance (cumulative partial
       // tracking), AND its per-head running totals (adjusted_work/
       // adjusted_tds/adjusted_gst) from the exact per-head amounts just
@@ -12052,7 +12075,8 @@ async function execSavePaymentAdv(projId,balAmount){
     var deds=[];try{deds=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
     // Split by head (Work Amt / TDS / GST) instead of one flat lump, same
     // as the Bill Generation advance-adjustment flow.
-    deds=deds.concat(advBuildAdjDeductions(advDetails));
+    var newAdjDeds=advBuildAdjDeductions(advDetails);
+    deds=deds.concat(newAdjDeds);
     try{
       await fetch(baseUrl+'/rest/v1/work_bills?id=eq.'+billId,{
         method:'PATCH',
@@ -12061,6 +12085,25 @@ async function execSavePaymentAdv(projId,balAmount){
       });
       if(bill) bill.deductions=JSON.stringify(deds);
     }catch(e){console.warn(e);}
+
+    // Re-post this bill's own GL legs: matching an advance's TDS bucket
+    // here (via Record Payment, after the bill already exists) works the
+    // same as matching it during Bill Generation — it excludes that
+    // matched slice from the bill's own TDS voucher (see blPostToAccounts).
+    // Without this repost, a bill whose TDS was originally posted in full
+    // at creation, then later TDS-matched to an advance here, would keep
+    // its original full-TDS voucher untouched — duplicating the advance's
+    // own TDS voucher in the ledger even though the deductions JSON (and
+    // the TDS tab's report, which reads that JSON) correctly show it
+    // de-duplicated. All other legs (work/additions/deductions/GST)
+    // recompute to the same totals as before, since only new deduction
+    // rows were appended.
+    if(typeof accCleanupVouchersForSource==='function'&&typeof blPostToAccounts==='function'&&bill){
+      var pyAdditions=[];try{pyAdditions=bill.additions?JSON.parse(bill.additions):[];}catch(e){}
+      var pyGross=parseFloat(bill.bill_amount)||0;
+      accCleanupVouchersForSource(billId);
+      blPostToAccounts(billId,bill.bill_date||date,bill.party_name||partyName,bill.bill_ref||('#'+(bill.bill_number||'')),pyAdditions,deds,advDetails,pyGross);
+    }
   }
 
   // 4. Save cash payment if amount > 0
@@ -12492,7 +12535,7 @@ async function execSaveAdvance(partyType,partyName,projId){
     });
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
-      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk);
+      advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk,gv('adv-mode'));
     }
     toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
     closeSheet('ov-exec','sh-exec');
@@ -12932,6 +12975,15 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     await sbUpdate('work_bills',billId,payload);
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx]=Object.assign({},WA_BILLS[idx],payload);
+    // Re-post to Accounts: drop whatever this bill posted before and post
+    // fresh legs for the newly-edited amounts — same cleanup-then-repost
+    // pattern execUpdateAdvance uses. Without this, editing a bill's work
+    // items/additions/deductions/TDS/GST left the vouchers from when it
+    // was first created untouched, silently drifting from the bill's
+    // actual, now-edited figures.
+    if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(billId);
+    var editedBillRef=(idx>-1&&WA_BILLS[idx].bill_ref)||('#'+(billNo||''));
+    blPostToAccounts(billId,date,partyName,editedBillRef,additions,deductions,adjAdvDetails,grossAmount);
     // Update advance adjusted_amount (and its per-head running totals) if
     // changed, using the exact per-head amounts collected into adjAdvDetails.
     if(adjAdvDetails.length){
