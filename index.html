@@ -23406,13 +23406,32 @@ async function accReconcile(){
     };
     var check=function(cat, srcType, id, opts){
       var actual=postedByKey[srcType+':'+id];
+      var expAmt=Math.round(parseFloat(opts.amount)||0);
       if(!actual){
-        jobs.push({cat:cat, srcType:srcType, id:id, opts:opts});
-        groups[cat]=(groups[cat]||0)+1;
+        // Nothing posted and nothing currently due for this leg — fine,
+        // there's genuinely nothing to do (this is the normal case for
+        // e.g. a bill with no additions, so no additions voucher).
+        if(expAmt>0){
+          jobs.push({cat:cat, srcType:srcType, id:id, opts:opts});
+          groups[cat]=(groups[cat]||0)+1;
+        }
+        return;
+      }
+      if(expAmt<=0){
+        // A voucher exists for this leg, but the source record's current
+        // figures say nothing should be posted for it at all — e.g. a
+        // bill's deductions used to be a real amount and are now fully
+        // absorbed elsewhere (an advance adjustment, a TDS bucket match),
+        // so the "Deductions" leg should no longer exist. Callers used to
+        // gate the call to check() itself on the amount being >0, which
+        // meant this exact case — the amount having dropped TO zero —
+        // was never looked at again once posted; the stale voucher just
+        // sat there invisibly. Flag it so it can be reviewed and deleted.
+        addMismatch(cat, srcType, id, actual, Object.assign({}, opts, {amount:0}));
         return;
       }
       var expDebitId=codeToId[opts.debitCode]||null, expCreditId=codeToId[opts.creditCode]||null;
-      var actualAmt=Math.round(parseFloat(actual.amount)||0), expAmt=Math.round(parseFloat(opts.amount)||0);
+      var actualAmt=Math.round(parseFloat(actual.amount)||0);
       var amtOff=Math.abs(actualAmt-expAmt)>1; // small tolerance for rounding drift
       var acctOff=(expDebitId&&actual.debit_account!==expDebitId)||(expCreditId&&actual.credit_account!==expCreditId);
       if(amtOff||acctOff) addMismatch(cat, srcType, id, actual, opts);
@@ -23436,10 +23455,10 @@ async function accReconcile(){
       var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var work=(parseFloat(b.bill_amount)||0)-gst-addAmt+dedAmt;
       var party=proj.client||proj.name||'Client', ref='Sales Bill '+(b.bill_ref||b.id);
-      if(work>0) check('Sales bills','sales_bill',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3001',amount:work,narration:ref});
-      if(addAmt>0) check('Sales bills','sales_bill_add',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3002',amount:addAmt,narration:'Additions on '+ref});
-      if(dedAmt>0) check('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmt,narration:'Deductions on '+ref});
-      if(gst>0) check('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gst,narration:'GST on '+ref});
+      check('Sales bills','sales_bill',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3001',amount:work,narration:ref});
+      check('Sales bills','sales_bill_add',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3002',amount:addAmt,narration:'Additions on '+ref});
+      check('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmt,narration:'Deductions on '+ref});
+      check('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gst,narration:'GST on '+ref});
     });
     salesPayments.forEach(function(p){
       var proj=projById[p.project_id]||{};
@@ -23473,11 +23492,11 @@ async function accReconcile(){
       // net of deductions, no add-back is needed here.
       var work=(parseFloat(b.bill_amount)||0)-gst-addAmt;
       var ref='Purchase/Work Bill '+(b.bill_ref||b.id);
-      if(work>0) check('Purchase bills','work_bill',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4001',creditCode:'2001',amount:work,narration:ref});
-      if(addAmt>0) check('Purchase bills','work_bill_add',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4002',creditCode:'2001',amount:addAmt,narration:'Additions on '+ref});
-      if(dedAmt>0) check('Purchase bills','work_bill_ded',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'4003',amount:dedAmt,narration:'Deductions on '+ref});
-      if(tds>0) check('Purchase bills','work_bill_tds',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'2102',amount:tds,narration:'TDS on '+ref});
-      if(gst>0) check('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gst,narration:'GST (ITC) on '+ref});
+      check('Purchase bills','work_bill',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4001',creditCode:'2001',amount:work,narration:ref});
+      check('Purchase bills','work_bill_add',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4002',creditCode:'2001',amount:addAmt,narration:'Additions on '+ref});
+      check('Purchase bills','work_bill_ded',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'4003',amount:dedAmt,narration:'Deductions on '+ref});
+      check('Purchase bills','work_bill_tds',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'2102',amount:tds,narration:'TDS on '+ref});
+      check('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gst,narration:'GST (ITC) on '+ref});
     });
     advances.forEach(function(a){
       // Mirrors advPostToAccounts (js/projects.js) exactly — cash/bank leg
@@ -23490,9 +23509,9 @@ async function accReconcile(){
       var advGst=agst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
       var advRef='Advance to '+(a.party_name||'')+(a.purpose?' — '+a.purpose:'');
       var cashCode=a.payment_mode==='Cash'?'1001':'1002';
-      if(advNet>0) check('Advances','work_advance',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:cashCode,amount:advNet,narration:advRef});
-      if(advTds>0) check('Advances','work_advance_tds',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:'2102',amount:advTds,narration:'TDS on '+advRef});
-      if(advGst>0) check('Advances','work_advance_gst',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'1301',creditCode:'2001',amount:advGst,narration:'GST (ITC) on '+advRef});
+      check('Advances','work_advance',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:cashCode,amount:advNet,narration:advRef});
+      check('Advances','work_advance_tds',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:'2102',amount:advTds,narration:'TDS on '+advRef});
+      check('Advances','work_advance_gst',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'1301',creditCode:'2001',amount:advGst,narration:'GST (ITC) on '+advRef});
     });
     workPayments.forEach(function(p){
       check('Purchase payments','work_payment',p.id,{type:'Payment',date:p.payment_date,partyName:p.party_name,
@@ -23543,10 +23562,15 @@ async function accReconcile(){
       var tx=parseFloat(x.amount)||0, g=parseFloat(x.gst_amount)||0, itc=(x.itc_claimable!==false);
       var cc=(x.payment_mode==='Cash')?'1001':'1002';
       var narr=(x.category||'Overhead')+(x.description?' — '+x.description:'');
-      if(tx>0) check('Company overheads','company_expense',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
+      check('Company overheads','company_expense',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
         debitCode:(OH_CAT_CODES[x.category]||'4313'),creditCode:cc,amount:(itc?tx:tx+g),narration:narr});
-      if(g>0&&itc) check('Company overheads','company_expense_gst',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
-        debitCode:'1301',creditCode:cc,amount:g,narration:'GST (ITC) on '+narr});
+      // GST (ITC) only gets its own leg when the expense is ITC-claimable;
+      // otherwise it's folded into the base leg above (amount:tx+g), so
+      // the expected amount here must be 0 in that case — not skipped —
+      // so an existing GST leg on a expense later marked non-claimable
+      // still gets caught instead of silently ignored.
+      check('Company overheads','company_expense_gst',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
+        debitCode:'1301',creditCode:cc,amount:(itc?g:0),narration:'GST (ITC) on '+narr});
     });
     loans.forEach(function(l){
       var taken=(l.direction==='taken');
@@ -23825,16 +23849,24 @@ function accReviewMismatches(){
     '<div style="font-size:10.5px;color:var(--text3);margin-bottom:10px;">Each pair below is the same entry: what\'s currently posted on the left, what it should be based on the record today on the right. Fix deletes the wrong voucher and reposts the correct one in a single step.</div>'+
     R.mismatches.map(function(m,i){
       var v=m.voucher, o=m.expected;
+      var shouldNotExist=(Math.round(parseFloat(o.amount)||0)<=0);
+      var shouldBeCard=shouldNotExist
+        ? '<div style="flex:1;min-width:0;background:#E8F5E9;border-radius:6px;padding:6px 8px;display:flex;align-items:center;justify-content:center;text-align:center;">'+
+            '<div><div style="font-size:9px;font-weight:900;color:var(--text3);margin-bottom:4px;">SHOULD BE</div>'+
+            '<div style="font-size:11px;font-weight:800;color:#2E7D32;">Nothing — this leg no longer applies</div>'+
+            '<div style="font-size:9.5px;color:var(--text3);margin-top:2px;">The current record shows this amount is now fully accounted for elsewhere (e.g. an advance adjustment or TDS bucket match).</div></div>'+
+          '</div>'
+        : card('SHOULD BE','#E8F5E9',o.date,o.type,parseFloat(o.amount)||0,accAcctNameByCode(o.debitCode),accAcctNameByCode(o.creditCode),o.narration);
       return '<div id="mis-row-'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">'+
         '<div style="font-size:9.5px;color:var(--text3);margin-bottom:4px;">'+m.cat+'</div>'+
         '<div style="display:flex;gap:6px;">'+
           card('POSTED','#FFEBEE',v.date,v.type,parseFloat(v.amount)||0,accAcctName(v.debit_account),accAcctName(v.credit_account),v.narration,v.vou_no||v.voucher_no)+
-          card('SHOULD BE','#E8F5E9',o.date,o.type,parseFloat(o.amount)||0,accAcctNameByCode(o.debitCode),accAcctNameByCode(o.creditCode),o.narration)+
+          shouldBeCard+
         '</div>'+
         '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">'+
           '<button onclick="accKeepMismatch('+i+')" style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Keep</button>'+
           '<button onclick="accDeleteMismatch('+i+')" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Delete</button>'+
-          '<button onclick="accFixMismatch('+i+')" style="background:#E65100;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Fix (delete &amp; repost correct)</button>'+
+          (shouldNotExist?'':'<button onclick="accFixMismatch('+i+')" style="background:#E65100;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Fix (delete &amp; repost correct)</button>')+
         '</div></div>';
     }).join('');
   document.getElementById('acc-sheet-foot').innerHTML=
