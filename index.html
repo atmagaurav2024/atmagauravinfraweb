@@ -23343,13 +23343,19 @@ async function accReconcile(){
   var failed=[];
   var get=function(t,sel){ return sbFetch(t,{select:sel||'*'}).catch(function(){ failed.push(t); return null; }); };
   try{
-    var posted=await sbFetch('vouchers',{select:'source_type,source_id',filter:'source_id=not.is.null'});
-    var done={}; (posted||[]).forEach(function(v){ done[v.source_type+':'+v.source_id]=1; });
-    var postedNarr=[];
-    try{
-      var pn2=await sbFetch('vouchers',{select:'narration',filter:'source_type=in.(loan_pay_interest,loan_pay_principal)'});
-      postedNarr=(pn2||[]).map(function(v){return String(v.narration||'');});
-    }catch(e){}
+    // One fetch of every voucher, reused for presence, amount/account
+    // verification, duplicate detection and orphan detection, instead of
+    // four separate round trips over the same table.
+    var allVouchers=await sbFetch('vouchers',{select:'*',order:'created_at.asc'});
+    allVouchers=Array.isArray(allVouchers)?allVouchers:[];
+    var done={}, postedByKey={}, dupes=[];
+    allVouchers.forEach(function(v){
+      if(!v.source_id) return;
+      var k=v.source_type+':'+v.source_id;
+      done[k]=1;
+      if(postedByKey[k]) dupes.push({dup:v, original:postedByKey[k]});
+      else postedByKey[k]=v; // first-created (by created_at asc) is "the original"
+    });
     var isDone=function(t,id){ return !!done[t+':'+id]; };
 
     var r=await Promise.all([
@@ -23357,20 +23363,52 @@ async function accReconcile(){
       get('sales_bills'), get('sales_payments'), get('work_bills'), get('work_payments'),
       get('petty_cash_in'), get('petty_cash_expenses'), get('other_expenses'),
       get('company_expenses'), get('loans'), get('loan_transactions'), get('loan_parties','id,name'),
-      get('work_advances')
+      get('work_advances'), get('chart_of_accounts','id,code')
     ]);
     var projects=r[0]||[], emps=r[1]||[], salesBills=r[2]||[], salesPayments=r[3]||[],
         workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[],
         otherExp=r[8]||[], companyExp=r[9]||[], loans=r[10]||[], loanTxns=r[11]||[], lparties=r[12]||[],
-        advances=r[13]||[];
+        advances=r[13]||[], coaRows=r[14]||[];
 
     var projById={}; projects.forEach(function(p){projById[p.id]=p;});
     var empName={}; emps.forEach(function(e){empName[e.emp_id]=((e.first_name||'')+' '+(e.last_name||'')).trim();});
     var partyName={}; lparties.forEach(function(p){partyName[p.id]=p.name;});
     var loanById={}; loans.forEach(function(l){loanById[l.id]=l;});
+    var codeToId={}; coaRows.forEach(function(a){ codeToId[String(a.code)]=a.id; });
 
-    // Build the list of postings each unposted record would produce.
-    var jobs=[], groups={};
+    // Build the list of postings each unposted record would produce, and —
+    // this is the part that goes beyond "is something posted at all" — for
+    // a record that already has a voucher, check whether that voucher's
+    // amount and accounts still match what the source record's current
+    // figures say they should be. A stale formula bug, or a source record
+    // edited after it was posted, can leave a voucher sitting there that's
+    // present (so the old presence-only check called it done) but wrong.
+    var jobs=[], groups={}, mismatches={};
+    var addMismatch=function(cat, srcType, id, voucher, expected, dedupKey){
+      // dedupKey defaults to srcType+id, but the loan-repayment group below
+      // needs to dedup on the voucher's own id (id is always null for that
+      // category — see checkGroup) without that null leaking into `id`,
+      // which Fix later reuses as the reposted voucher's source_id.
+      var k=dedupKey||(srcType+':'+id);
+      if(mismatches[k]) return; // one report per source, even if checked twice
+      mismatches[k]={cat:cat, srcType:srcType, id:id, voucher:voucher, expected:expected};
+    };
+    var check=function(cat, srcType, id, opts){
+      var actual=postedByKey[srcType+':'+id];
+      if(!actual){
+        jobs.push({cat:cat, srcType:srcType, id:id, opts:opts});
+        groups[cat]=(groups[cat]||0)+1;
+        return;
+      }
+      var expDebitId=codeToId[opts.debitCode]||null, expCreditId=codeToId[opts.creditCode]||null;
+      var actualAmt=Math.round(parseFloat(actual.amount)||0), expAmt=Math.round(parseFloat(opts.amount)||0);
+      var amtOff=Math.abs(actualAmt-expAmt)>1; // small tolerance for rounding drift
+      var acctOff=(expDebitId&&actual.debit_account!==expDebitId)||(expCreditId&&actual.credit_account!==expCreditId);
+      if(amtOff||acctOff) addMismatch(cat, srcType, id, actual, opts);
+    };
+    // Kept for the two call sites below that still gate on isDone directly
+    // (grouped loan-repayment postings, matched by narration rather than a
+    // clean source id — see where payGroups is built).
     var add=function(cat, srcType, id, opts){
       jobs.push({cat:cat, srcType:srcType, id:id, opts:opts});
       groups[cat]=(groups[cat]||0)+1;
@@ -23387,15 +23425,14 @@ async function accReconcile(){
       var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var work=(parseFloat(b.bill_amount)||0)-gst-addAmt+dedAmt;
       var party=proj.client||proj.name||'Client', ref='Sales Bill '+(b.bill_ref||b.id);
-      if(work>0&&!isDone('sales_bill',b.id)) add('Sales bills','sales_bill',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3001',amount:work,narration:ref});
-      if(addAmt>0&&!isDone('sales_bill_add',b.id)) add('Sales bills','sales_bill_add',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3002',amount:addAmt,narration:'Additions on '+ref});
-      if(dedAmt>0&&!isDone('sales_bill_ded',b.id)) add('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmt,narration:'Deductions on '+ref});
-      if(gst>0&&!isDone('sales_bill_gst',b.id)) add('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gst,narration:'GST on '+ref});
+      if(work>0) check('Sales bills','sales_bill',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3001',amount:work,narration:ref});
+      if(addAmt>0) check('Sales bills','sales_bill_add',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3002',amount:addAmt,narration:'Additions on '+ref});
+      if(dedAmt>0) check('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmt,narration:'Deductions on '+ref});
+      if(gst>0) check('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gst,narration:'GST on '+ref});
     });
     salesPayments.forEach(function(p){
-      if(isDone('sales_payment',p.id)) return;
       var proj=projById[p.project_id]||{};
-      add('Sales payments','sales_payment',p.id,{type:'Receipt',date:p.payment_date,partyName:proj.client||proj.name||'Client',
+      check('Sales payments','sales_payment',p.id,{type:'Receipt',date:p.payment_date,partyName:proj.client||proj.name||'Client',
         debitCode:(p.payment_mode==='Cash'?'1001':'1002'),creditCode:'1201',amount:parseFloat(p.amount)||0,
         narration:'Payment received'+(p.reference?' (Ref: '+p.reference+')':'')});
     });
@@ -23425,11 +23462,11 @@ async function accReconcile(){
       // net of deductions, no add-back is needed here.
       var work=(parseFloat(b.bill_amount)||0)-gst-addAmt;
       var ref='Purchase/Work Bill '+(b.bill_ref||b.id);
-      if(work>0&&!isDone('work_bill',b.id)) add('Purchase bills','work_bill',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4001',creditCode:'2001',amount:work,narration:ref});
-      if(addAmt>0&&!isDone('work_bill_add',b.id)) add('Purchase bills','work_bill_add',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4002',creditCode:'2001',amount:addAmt,narration:'Additions on '+ref});
-      if(dedAmt>0&&!isDone('work_bill_ded',b.id)) add('Purchase bills','work_bill_ded',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'4003',amount:dedAmt,narration:'Deductions on '+ref});
-      if(tds>0&&!isDone('work_bill_tds',b.id)) add('Purchase bills','work_bill_tds',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'2102',amount:tds,narration:'TDS on '+ref});
-      if(gst>0&&!isDone('work_bill_gst',b.id)) add('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gst,narration:'GST (ITC) on '+ref});
+      if(work>0) check('Purchase bills','work_bill',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4001',creditCode:'2001',amount:work,narration:ref});
+      if(addAmt>0) check('Purchase bills','work_bill_add',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4002',creditCode:'2001',amount:addAmt,narration:'Additions on '+ref});
+      if(dedAmt>0) check('Purchase bills','work_bill_ded',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'4003',amount:dedAmt,narration:'Deductions on '+ref});
+      if(tds>0) check('Purchase bills','work_bill_tds',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'2102',amount:tds,narration:'TDS on '+ref});
+      if(gst>0) check('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gst,narration:'GST (ITC) on '+ref});
     });
     advances.forEach(function(a){
       // Mirrors advPostToAccounts (js/projects.js) exactly — cash/bank leg
@@ -23442,13 +23479,12 @@ async function accReconcile(){
       var advGst=agst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
       var advRef='Advance to '+(a.party_name||'')+(a.purpose?' — '+a.purpose:'');
       var cashCode=a.payment_mode==='Cash'?'1001':'1002';
-      if(advNet>0&&!isDone('work_advance',a.id)) add('Advances','work_advance',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:cashCode,amount:advNet,narration:advRef});
-      if(advTds>0&&!isDone('work_advance_tds',a.id)) add('Advances','work_advance_tds',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:'2102',amount:advTds,narration:'TDS on '+advRef});
-      if(advGst>0&&!isDone('work_advance_gst',a.id)) add('Advances','work_advance_gst',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'1301',creditCode:'2001',amount:advGst,narration:'GST (ITC) on '+advRef});
+      if(advNet>0) check('Advances','work_advance',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:cashCode,amount:advNet,narration:advRef});
+      if(advTds>0) check('Advances','work_advance_tds',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:'2102',amount:advTds,narration:'TDS on '+advRef});
+      if(advGst>0) check('Advances','work_advance_gst',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'1301',creditCode:'2001',amount:advGst,narration:'GST (ITC) on '+advRef});
     });
     workPayments.forEach(function(p){
-      if(isDone('work_payment',p.id)) return;
-      add('Purchase payments','work_payment',p.id,{type:'Payment',date:p.payment_date,partyName:p.party_name,
+      check('Purchase payments','work_payment',p.id,{type:'Payment',date:p.payment_date,partyName:p.party_name,
         debitCode:'2001',creditCode:(p.payment_mode==='Cash'?'1001':'1002'),amount:parseFloat(p.amount)||0,
         narration:'Payment made'+(p.reference?' (Ref: '+p.reference+')':'')});
     });
@@ -23465,7 +23501,6 @@ async function accReconcile(){
     });
 
     pettyIn.forEach(function(p){
-      if(isDone('petty_cash_in',p.id)) return;
       var amt=parseFloat(p.amount)||0;
       if(p.funded_by_type==='emp'||p.funded_by_type==='transfer_out'||amt<=0) return;  // between staff, no GL effect
       var nm=empName[p.emp_id]||p.emp_id;
@@ -23474,22 +23509,20 @@ async function accReconcile(){
       // from the employee's account into petty cash.
       var fromLoan=(p.funded_by_type==='loan'||p.loan_id||loanFunded[(p.emp_id||'')+'|'+(p.date||'')+'|'+Math.round(amt)]);
       var srcCode=fromLoan?'1102':(p.funded_by_type==='cash'?'1001':'1002');
-      add('Petty cash funding','petty_cash_in',p.id,{type:'Contra',date:p.date,partyName:nm,
+      check('Petty cash funding','petty_cash_in',p.id,{type:'Contra',date:p.date,partyName:nm,
         debitCode:'1101',creditCode:srcCode,amount:amt,
         narration:(fromLoan?'Transfer to petty cash — '+nm+' · from loan':'Petty cash funded to '+nm)+(p.purpose?' — '+p.purpose:'')});
     });
     pettyExp.forEach(function(p){
-      if(isDone('petty_cash_expense',p.id)) return;
       var amt=parseFloat(p.amount)||0; if(amt<=0) return;
       var nm=empName[p.emp_id]||p.emp_id;
-      add('Petty cash expenses','petty_cash_expense',p.id,{type:'Payment',date:p.date,partyName:nm,
+      check('Petty cash expenses','petty_cash_expense',p.id,{type:'Payment',date:p.date,partyName:nm,
         debitCode:(ACC_PETTY_CAT_CODES[p.category]||'4110'),creditCode:'1101',amount:amt,
         narration:(p.category||'Petty expense')+(p.description?' — '+p.description:'')});
     });
     otherExp.forEach(function(x){
-      if(isDone('other_expense',x.id)) return;
       var amt=parseFloat(x.amount)||0; if(amt<=0) return;
-      add('Other expenses','other_expense',x.id,{type:'Payment',date:x.date,partyName:(projById[x.project_id]||{}).name||'',
+      check('Other expenses','other_expense',x.id,{type:'Payment',date:x.date,partyName:(projById[x.project_id]||{}).name||'',
         debitCode:(ACC_OTHEREXP_CODES[x.type]||'4204'),creditCode:'1002',amount:amt,
         narration:(x.type||'Other expense')+(x.description?' — '+x.description:'')});
     });
@@ -23499,17 +23532,16 @@ async function accReconcile(){
       var tx=parseFloat(x.amount)||0, g=parseFloat(x.gst_amount)||0, itc=(x.itc_claimable!==false);
       var cc=(x.payment_mode==='Cash')?'1001':'1002';
       var narr=(x.category||'Overhead')+(x.description?' — '+x.description:'');
-      if(tx>0&&!isDone('company_expense',x.id)) add('Company overheads','company_expense',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
+      if(tx>0) check('Company overheads','company_expense',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
         debitCode:(OH_CAT_CODES[x.category]||'4313'),creditCode:cc,amount:(itc?tx:tx+g),narration:narr});
-      if(g>0&&itc&&!isDone('company_expense_gst',x.id)) add('Company overheads','company_expense_gst',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
+      if(g>0&&itc) check('Company overheads','company_expense_gst',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
         debitCode:'1301',creditCode:cc,amount:g,narration:'GST (ITC) on '+narr});
     });
     loans.forEach(function(l){
-      if(isDone('loan',l.id)) return;
       var taken=(l.direction==='taken');
       var cc=l.to_petty_cash?'1102':(l.mode==='Cash'?'1001':(l.mode==='EmpBank'?'1102':'1002'));
       var pn=partyName[l.party_id]||'Party';
-      add('Loans','loan',l.id,{type:taken?'Receipt':'Payment',date:l.start_date,partyName:pn,
+      check('Loans','loan',l.id,{type:taken?'Receipt':'Payment',date:l.start_date,partyName:pn,
         debitCode:taken?cc:'1401',creditCode:taken?'2201':cc,amount:parseFloat(l.principal)||0,
         narration:(taken?'Loan taken from ':'Loan given to ')+pn});
     });
@@ -23528,49 +23560,63 @@ async function accReconcile(){
       else g.principal+=(parseFloat(t.amount)||0);
       g.ids.push(t.id);
     });
+    // These have no clean source id to key off (a receipt can cover several
+    // loan_transactions rows, consolidated into one voucher), so matching
+    // \u2014 and therefore mismatch-checking \u2014 is by receipt number appearing in
+    // the voucher's narration instead. A legacy group with no receipt
+    // number can never be matched this way and always reports as missing,
+    // same as before this rewrite; fixing that needs a different matching
+    // key (party+date+mode) and is a separate piece of work.
+    var findPostedByReceipt=function(srcType, receipt){
+      if(!receipt) return null;
+      return allVouchers.find(function(v){ return v.source_type===srcType && (v.narration||'').indexOf(receipt)>-1; })||null;
+    };
+    var checkGroup=function(srcType, id, opts, receipt){
+      var actual=findPostedByReceipt(srcType, receipt);
+      if(!actual){ add('Loan repayments/interest', srcType, id, opts); return; }
+      var expDebitId=codeToId[opts.debitCode]||null, expCreditId=codeToId[opts.creditCode]||null;
+      var amtOff=Math.abs(Math.round(parseFloat(actual.amount)||0)-Math.round(opts.amount))>1;
+      var acctOff=(expDebitId&&actual.debit_account!==expDebitId)||(expCreditId&&actual.credit_account!==expCreditId);
+      // id stays null here (matching how this category's "missing" jobs are
+      // always posted with source_id:null — matched by receipt number in
+      // narration, not a clean source id), so Fix reposts the same way.
+      // Dedup on the voucher's own id instead, so distinct mismatched
+      // receipts don't collide into a single reported entry.
+      if(amtOff||acctOff) addMismatch('Loan repayments/interest', srcType, null, actual, opts, srcType+':'+actual.id);
+    };
     Object.keys(payGroups).forEach(function(k){
       var g=payGroups[k], l=g.loan;
       var taken=(l.direction==='taken'), pn=partyName[l.party_id]||'Party';
       var cc=(g.mode==='Cash'?'1001':(g.mode==='EmpBank'?'1102':'1002'));
       var tag=g.receipt?(' \u00b7 '+g.receipt):'';
-      // Already posted if a voucher carries this receipt number
-      var seen=(postedNarr||[]).some(function(n){ return g.receipt && n.indexOf(g.receipt)>-1; });
-      if(seen) return;
       if(g.interest>0.5){
-        add('Loan repayments/interest','loan_pay_interest',null,
+        checkGroup('loan_pay_interest', null,
           taken?{type:'Payment',date:g.date,partyName:pn,debitCode:'4201',creditCode:cc,amount:Math.round(g.interest),narration:'Interest paid to '+pn+tag}
-               :{type:'Receipt',date:g.date,partyName:pn,debitCode:cc,creditCode:'3005',amount:Math.round(g.interest),narration:'Interest received from '+pn+tag});
+               :{type:'Receipt',date:g.date,partyName:pn,debitCode:cc,creditCode:'3005',amount:Math.round(g.interest),narration:'Interest received from '+pn+tag},
+          g.receipt);
       }
       if(g.principal>0.5){
-        add('Loan repayments/interest','loan_pay_principal',null,
+        checkGroup('loan_pay_principal', null,
           taken?{type:'Payment',date:g.date,partyName:pn,debitCode:'2201',creditCode:cc,amount:Math.round(g.principal),narration:'Loan repaid to '+pn+tag}
-               :{type:'Receipt',date:g.date,partyName:pn,debitCode:cc,creditCode:'1401',amount:Math.round(g.principal),narration:'Loan recovered from '+pn+tag});
+               :{type:'Receipt',date:g.date,partyName:pn,debitCode:cc,creditCode:'1401',amount:Math.round(g.principal),narration:'Loan recovered from '+pn+tag},
+          g.receipt);
       }
     });
 
-    // Vouchers whose source no longer exists — reported only, never removed
+    // Vouchers whose source no longer exists — reported only, never removed.
+    // dupes was already built above, in the same pass that built
+    // postedByKey, off this same allVouchers fetch.
     var orphans=[];
     if(!failed.length){
       var live={};
       [salesBills,salesPayments,workBills,workPayments,pettyIn,pettyExp,otherExp,companyExp,loans,loanTxns,advances]
         .forEach(function(a){a.forEach(function(x){live[x.id]=1;});});
-      var allV=await sbFetch('vouchers',{select:'id,source_id,source_type',filter:'source_id=not.is.null'});
-      orphans=(allV||[]).filter(function(v){ return v.source_type!=='loan_interest_accrual' && v.source_id && !live[v.source_id]; });
+      orphans=allVouchers.filter(function(v){ return v.source_type!=='loan_interest_accrual' && v.source_id && !live[v.source_id]; });
     }
 
-    // Same source posted more than once — the signature of a double entry
-    var dupes=[];
-    try{
-      var allPosted=await sbFetch('vouchers',{select:'*',filter:'source_id=not.is.null',order:'created_at.asc'});
-      var firstOf={};
-      (allPosted||[]).forEach(function(v){
-        var k=v.source_type+':'+v.source_id;
-        if(firstOf[k]) dupes.push({dup:v, original:firstOf[k]});
-        else firstOf[k]=v;
-      });
-    }catch(e){}
+    var mismatchList=Object.keys(mismatches).map(function(k){return mismatches[k];});
 
-    ACC_RECON={jobs:jobs, groups:groups, orphans:orphans, failed:failed, dupes:dupes,
+    ACC_RECON={jobs:jobs, groups:groups, orphans:orphans, failed:failed, dupes:dupes, mismatches:mismatchList,
       counts:{'Sales bills':salesBills.length,'Sales payments':salesPayments.length,
         'Purchase bills':workBills.length,'Purchase payments':workPayments.length,
         'Advances':advances.length,
@@ -23605,6 +23651,9 @@ function accShowReconReport(){
     ((R.dupes&&R.dupes.length)?'<div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
       '<b style="color:#C62828;">'+R.dupes.length+' possible duplicate'+(R.dupes.length!==1?'s':'')+'</b> \u2014 the same source record appears to be posted more than once.'+
       '<button onclick="accReviewDupes()" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:6px;display:block;">Review one by one</button></div>':'')+
+    ((R.mismatches&&R.mismatches.length)?'<div style="background:#FFF3E0;border:1px solid #FFE0B2;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
+      '<b style="color:#E65100;">'+R.mismatches.length+' voucher'+(R.mismatches.length!==1?'s':'')+' posted with the wrong amount or accounts</b> \u2014 the current figures no longer match what was posted (often from an old formula bug, or the source record being edited after posting).'+
+      '<button onclick="accReviewMismatches()" style="background:#E65100;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:6px;display:block;">Review one by one</button></div>':'')+
     (R.orphans.length?'<div style="background:#FFF3E0;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:11px;">'+
       '<b>'+R.orphans.length+' voucher'+(R.orphans.length!==1?'s':'')+'</b> reference a record that no longer exists. Review them in the voucher list before deleting \u2014 nothing is removed automatically.'+
       '<button onclick="accReviewOrphans()" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;margin-top:6px;display:block;">Review one by one</button></div>':'')+
@@ -23747,6 +23796,85 @@ async function accDeleteOrphan(i){
     var el=document.getElementById('orphan-row-'+i);
     if(el) el.innerHTML='<div style="font-size:11px;color:#2E7D32;font-weight:700;padding:4px;">\u2713 Voucher deleted.</div>';
     toast('Deleted','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// Lists each voucher whose posted amount or accounts no longer match what
+// the source record (bill/payment/expense/etc.) says today — e.g. it was
+// posted under an old formula that's since been fixed, or the source was
+// edited after posting. Shows POSTED vs SHOULD BE side by side so nothing
+// is corrected blindly.
+function accReviewMismatches(){
+  var R=ACC_RECON; if(!R||!R.mismatches||!R.mismatches.length) return;
+  var card=function(label,colour,date,type,amount,debitTxt,creditTxt,narration,voNo){
+    return '<div style="flex:1;min-width:0;background:'+colour+';border-radius:6px;padding:6px 8px;">'+
+      '<div style="font-size:9px;font-weight:900;color:var(--text3);margin-bottom:2px;">'+label+'</div>'+
+      (voNo?'<div style="font-size:11px;font-weight:800;">'+voNo+'</div>':'')+
+      '<div style="font-size:10px;color:var(--text3);">'+fmtDate(date)+' · '+(type||'')+'</div>'+
+      '<div style="font-size:11px;font-weight:800;">'+fmtINR(amount)+'</div>'+
+      '<div style="font-size:9.5px;color:var(--text3);">Dr '+debitTxt+'</div>'+
+      '<div style="font-size:9.5px;color:var(--text3);">Cr '+creditTxt+'</div>'+
+      (narration?'<div style="font-size:9.5px;color:var(--text3);margin-top:2px;">'+narration+'</div>':'')+
+    '</div>';
+  };
+  document.getElementById('acc-sheet-title').textContent='Review Mismatches ('+R.mismatches.length+')';
+  document.getElementById('acc-sheet-body').innerHTML=
+    '<div style="font-size:10.5px;color:var(--text3);margin-bottom:10px;">Each pair below is the same entry: what\'s currently posted on the left, what it should be based on the record today on the right. Fix deletes the wrong voucher and reposts the correct one in a single step.</div>'+
+    R.mismatches.map(function(m,i){
+      var v=m.voucher, o=m.expected;
+      return '<div id="mis-row-'+i+'" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">'+
+        '<div style="font-size:9.5px;color:var(--text3);margin-bottom:4px;">'+m.cat+'</div>'+
+        '<div style="display:flex;gap:6px;">'+
+          card('POSTED','#FFEBEE',v.date,v.type,parseFloat(v.amount)||0,accAcctName(v.debit_account),accAcctName(v.credit_account),v.narration,v.vou_no||v.voucher_no)+
+          card('SHOULD BE','#E8F5E9',o.date,o.type,parseFloat(o.amount)||0,accAcctNameByCode(o.debitCode),accAcctNameByCode(o.creditCode),o.narration)+
+        '</div>'+
+        '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px;">'+
+          '<button onclick="accKeepMismatch('+i+')" style="background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Keep</button>'+
+          '<button onclick="accDeleteMismatch('+i+')" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Delete</button>'+
+          '<button onclick="accFixMismatch('+i+')" style="background:#E65100;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">Fix (delete &amp; repost correct)</button>'+
+        '</div></div>';
+    }).join('');
+  document.getElementById('acc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeAccSheet();initAccounts();">Done</button>';
+  openSheet('ov-acc','sh-acc');
+}
+
+function accKeepMismatch(i){
+  var el=document.getElementById('mis-row-'+i);
+  if(el) el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px;">Kept — left as posted.</div>';
+}
+
+async function accDeleteMismatch(i){
+  var R=ACC_RECON; if(!R||!R.mismatches[i]) return;
+  var m=R.mismatches[i], v=m.voucher;
+  var label=(v.vou_no||v.voucher_no||'this voucher')+' · '+fmtINR(parseFloat(v.amount)||0);
+  if(!confirm('Delete '+label+'?\n\nNothing will be posted in its place. This cannot be undone.')) return;
+  try{
+    await sbDelete('vouchers',v.id);
+    ACC_VOUCHERS=ACC_VOUCHERS.filter(function(x){return x.id!==v.id;});
+    var el=document.getElementById('mis-row-'+i);
+    if(el) el.innerHTML='<div style="font-size:11px;color:#2E7D32;font-weight:700;padding:4px;">✓ Voucher deleted.</div>';
+    toast('Deleted','success');
+  }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+async function accFixMismatch(i){
+  var R=ACC_RECON; if(!R||!R.mismatches[i]) return;
+  var m=R.mismatches[i], v=m.voucher, o=m.expected;
+  if(!confirm('Replace this voucher with the correct figures?\n\nPosted: '+fmtINR(parseFloat(v.amount)||0)+'\nShould be: '+fmtINR(parseFloat(o.amount)||0)+'\n\nThe wrong voucher will be deleted and the correct one posted. This cannot be undone.')) return;
+  try{
+    await sbDelete('vouchers',v.id);
+    ACC_VOUCHERS=ACC_VOUCHERS.filter(function(x){return x.id!==v.id;});
+    var opts=Object.assign({},o,{sourceType:m.srcType,sourceId:m.id});
+    var ok=await accAutoPost(opts);
+    var el=document.getElementById('mis-row-'+i);
+    if(ok){
+      if(el) el.innerHTML='<div style="font-size:11px;color:#2E7D32;font-weight:700;padding:4px;">✓ Fixed — reposted at '+fmtINR(parseFloat(o.amount)||0)+'.</div>';
+      toast('Fixed','success');
+    }else{
+      if(el) el.innerHTML='<div style="font-size:11px;color:#C62828;font-weight:700;padding:4px;">Old voucher deleted, but repost failed'+(ACC_AUTOPOST_LAST_ERROR?': '+ACC_AUTOPOST_LAST_ERROR:'')+'.</div>';
+      toast('Repost failed'+(ACC_AUTOPOST_LAST_ERROR?': '+ACC_AUTOPOST_LAST_ERROR:''),'error');
+    }
   }catch(e){ toast('Error: '+e.message,'error'); }
 }
 
@@ -24055,6 +24183,7 @@ function accExportPDF(title, tableHeaders, tableRows, extraNoteHtml){
 
 // ── Per-view export data builders ────────────────────────────────────────
 function accAcctName(id){ var a=ACC_ACCOUNTS.find(function(x){return x.id===id;}); return a?(a.code+' - '+a.name):'—'; }
+function accAcctNameByCode(code){ var a=ACC_ACCOUNTS.find(function(x){return String(x.code)===String(code);}); return a?(a.code+' - '+a.name):(code||'—'); }
 
 function accVouchersExportData(){
   var header=['Vou No','Date','Type','Party','Debit Account','Credit Account','Amount','Narration'];
