@@ -3498,27 +3498,64 @@ async function rrGroupAllotConfirm(groupId){
   }
 }
 
-function rrGroupDownloadPDF(groupId, projName){
+async function rrGroupDownloadPDF(groupId, projName){
   var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
   if(!group){ toast('Group not found','error'); return; }
   var giItems=RR_COMBINED_RR_ITEMS.filter(function(ri){return ri.group_id===groupId;});
+  if(!giItems.length){ toast('No items found for this group','warning'); return; }
   var itemById={}; RR_PLAN_ITEMS.forEach(function(it){ itemById[it.id]=it; });
   var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
   function fmtD(d){if(!d)return '\u2014';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
+  var inr=function(n){return '\u20b9'+Math.round(parseFloat(n)||0).toLocaleString('en-IN');};
   var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
   var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var stLbl={pending:'PENDING',approved:'APPROVED',rejected:'REJECTED',allotted:'ALLOTTED'};
   var sc=stCol[group.status]||'#555';
-  var partyNames=Array.from(new Set(giItems.map(function(it){return it.party_name;})));
+
+  // Once allotted, rrGroupAllotConfirm() has already written the real
+  // rate/party/dates/scope onto boq_exec_resources rows (one per item,
+  // linked back by combined_rr_item_id) \u2014 this PDF was previously just
+  // reprinting the pre-allotment requisition (qty only, no rate, no
+  // allotment terms) even after allotment, which is the "not proper
+  // format" complaint: for an ALLOTTED group it looked identical to a
+  // still-pending one. Pull those rows in and show the real allotment.
+  var allotByRiId={};
+  if(group.status==='allotted'){
+    try{
+      var allotRows=await sbFetch('boq_exec_resources',{select:'*',filter:'combined_rr_group_id=eq.'+groupId});
+      (Array.isArray(allotRows)?allotRows:[]).forEach(function(a){ if(a.combined_rr_item_id) allotByRiId[a.combined_rr_item_id]=a; });
+    }catch(e){ console.warn('could not load allotment detail for combined RR PDF', e); }
+  }
+  var isAllotted=group.status==='allotted' && Object.keys(allotByRiId).length>0;
+
+  // Party shown is the party actually allotted (once allotted), falling
+  // back to who it was raised against otherwise \u2014 these can legitimately
+  // differ, since Allot Group lets a different party be picked at
+  // allotment time.
+  var partyNames=Array.from(new Set(giItems.map(function(ri){
+    var a=allotByRiId[ri.id]; return (a&&a.party_name)||ri.party_name;
+  })));
+  var total=isAllotted?giItems.reduce(function(s,ri){var a=allotByRiId[ri.id];return s+(a?(parseFloat(a.qty)||0)*(parseFloat(a.rate)||0):0);},0):0;
+  // Allotment terms are the same for every item in the group (one Allot
+  // Group action sets them all at once) \u2014 read them off the first row.
+  var firstAllot=isAllotted?allotByRiId[giItems[0].id]:null;
 
   var rows=giItems.map(function(ri,i){
     var boqItem=itemById[ri.boq_item_id];
+    var a=allotByRiId[ri.id];
+    var party=(a&&a.party_name)||ri.party_name;
+    var partyType=(a&&a.party_type)||ri.party_type;
+    var qty=(a?a.qty:ri.qty)||0, unit=(a&&a.unit)||ri.unit||'';
     return '<tr>'+
       '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:10px;">'+(i+1)+'</td>'+
       '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:10px;font-family:monospace;">'+(boqItem?boqItem.item_code:'')+'</td>'+
       '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;">'+(boqItem?(boqItem.short_name||boqItem.description):'')+'</td>'+
-      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;">'+ri.party_name+'<div style="font-size:9px;color:#888;">'+(tLbl[ri.party_type]||ri.party_type||'')+'</div></td>'+
-      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;text-align:right;font-weight:700;">'+ri.qty+' '+(ri.unit||'')+'</td>'+
+      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;">'+party+'<div style="font-size:9px;color:#888;">'+(tLbl[partyType]||partyType||'')+'</div></td>'+
+      '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;text-align:right;font-weight:700;">'+qty+' '+unit+'</td>'+
+      (isAllotted?
+        '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;text-align:right;">'+(a?inr(a.rate):'\u2014')+'</td>'+
+        '<td style="padding:7px 8px;border-bottom:1px solid #EEE;font-size:11px;text-align:right;font-weight:700;">'+(a?inr((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)):'\u2014')+'</td>'
+        :'')+
     '</tr>';
   }).join('');
 
@@ -3529,11 +3566,12 @@ function rrGroupDownloadPDF(groupId, projName){
     '.rr-title{font-size:20px;font-weight:900;color:#00838F;}.rr-no{font-size:12px;color:#555;margin-top:4px;}'+
     '.status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:900;font-size:11px;color:white;background:'+sc+';}'+
     '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:16px;}'+
-    '.info-cell{padding:10px 14px;}.info-cell+.info-cell{border-left:1px solid #DDD;}.info-cell.full{grid-column:span 2;border-top:1px solid #DDD;}'+
+    '.info-cell{padding:10px 14px;}.info-cell:nth-child(even){border-left:1px solid #DDD;}.info-cell.full{grid-column:span 2;border-top:1px solid #DDD;}'+
     '.lbl{font-size:9px;font-weight:800;text-transform:uppercase;color:#888;letter-spacing:.5px;margin-bottom:3px;}'+
     '.val{font-size:13px;font-weight:800;}'+
     'table{width:100%;border-collapse:collapse;margin-bottom:16px;}'+
     'th{background:#00838F;color:white;padding:8px;font-size:9px;text-align:left;text-transform:uppercase;}'+
+    '.total-row td{font-weight:900;background:#E0F7FA;font-size:12px;}'+
     '.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:40px;}'+
     '.sig-box{border-top:1.5px solid #333;padding-top:6px;text-align:center;font-size:10px;color:#555;}'+
     '@media print{button{display:none;}}</style></head><body>'+
@@ -3545,7 +3583,7 @@ function rrGroupDownloadPDF(groupId, projName){
         '<div class="co-info">'+(co.address||'')+(co.gstin?'<br>GSTIN: '+co.gstin:'')+'</div>'+
       '</div>'+
       '<div style="text-align:right;">'+
-        '<div class="rr-title">COMBINED RESOURCE REQUISITION</div>'+
+        '<div class="rr-title">COMBINED RESOURCE REQUISITION'+(isAllotted?' \u2014 ALLOTMENT':'')+'</div>'+
         '<div class="rr-no">'+group.rr_number+'</div>'+
         '<div style="margin-top:6px;"><span class="status-badge">'+(stLbl[group.status]||group.status)+'</span></div>'+
       '</div>'+
@@ -3556,17 +3594,27 @@ function rrGroupDownloadPDF(groupId, projName){
       '<div class="info-cell"><div class="lbl">Date of Requisition</div><div class="val">'+fmtD(group.created_at?group.created_at.slice(0,10):'')+'</div></div>'+
       '<div class="info-cell"><div class="lbl">Required By Date</div><div class="val" style="color:#E65100;">'+fmtD(group.required_date)+'</div></div>'+
       '<div class="info-cell"><div class="lbl">Requested By</div><div class="val">'+(group.requested_by||'\u2014')+'</div></div>'+
-      '<div class="info-cell full"><div class="lbl">Subcontractor'+(partyNames.length!==1?'s':'')+'</div><div class="val" style="font-size:12px;">'+partyNames.join(', ')+'</div></div>'+
+      '<div class="info-cell full"><div class="lbl">'+(isAllotted?'Allotted To':('Subcontractor'+(partyNames.length!==1?'s':'')))+'</div><div class="val" style="font-size:12px;">'+partyNames.join(', ')+'</div></div>'+
+      (isAllotted?
+        '<div class="info-cell"><div class="lbl">Start Date</div><div class="val">'+fmtD(firstAllot&&firstAllot.start_date)+'</div></div>'+
+        '<div class="info-cell"><div class="lbl">End Date</div><div class="val">'+fmtD(firstAllot&&firstAllot.end_date)+'</div></div>'
+        :'')+
     '</div>'+
 
-    '<table><thead><tr><th>#</th><th>Code</th><th>Item</th><th>Party</th><th style="text-align:right;">Qty Required</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<table><thead><tr><th>#</th><th>Code</th><th>Item</th><th>Party</th><th style="text-align:right;">Qty'+(isAllotted?' Allotted':' Required')+'</th>'+
+      (isAllotted?'<th style="text-align:right;">Rate (\u20b9)</th><th style="text-align:right;">Amount (\u20b9)</th>':'')+
+    '</tr></thead><tbody>'+rows+
+      (isAllotted?'<tr class="total-row"><td colspan="'+(6)+'" style="padding:7px 8px;text-align:right;">Total</td><td style="padding:7px 8px;text-align:right;">'+inr(total)+'</td></tr>':'')+
+    '</tbody></table>'+
+
+    (isAllotted&&firstAllot&&firstAllot.scope?'<div style="background:#FFFDE7;border-radius:8px;padding:10px;margin-bottom:16px;font-size:11px;"><b>Scope of Work / Terms:</b><br>'+firstAllot.scope+'</div>':'')+
 
     (group.remarks?'<div style="margin-bottom:16px;"><div class="lbl">Purpose / Remarks</div><div style="font-size:11px;color:#333;margin-top:3px;">'+group.remarks+'</div></div>':'')+
 
     '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(group.requested_by||'Requester')+'</div><div>Requested By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Site Engineer / PM</div><div>Verified By</div></div>'+
-      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Approved By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(isAllotted?(partyNames[0]||'Party'):(co.name||'Management'))+'</div><div>'+(isAllotted?'Accepted By':'Approved By')+'</div></div>'+
     '</div>'+
 
     '</body></html>';
