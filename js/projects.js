@@ -10169,6 +10169,103 @@ function advSplitAdjustment(adv, adjAmt){
   };
 }
 
+// How much of EACH head — Work Amt (+Additions), TDS, GST — an advance
+// still has left to adjust, tracked via its own running total
+// (adjusted_work/adjusted_tds/adjusted_gst) instead of one shared
+// adjusted_amount pool. This is what lets an adjustment be capped to
+// "only what's actually available under THIS head", rather than letting
+// e.g. a GST adjustment silently draw down the Work Amt balance instead.
+function advRemainingByHead(adv){
+  var p=advParseBreakdown(adv);
+  var workTotal=p.work+p.add;
+  var usedWork=parseFloat(adv.adjusted_work)||0;
+  var usedTds=parseFloat(adv.adjusted_tds)||0;
+  var usedGst=parseFloat(adv.adjusted_gst)||0;
+  var work=Math.max(0,workTotal-usedWork);
+  var tds=Math.max(0,p.tds-usedTds);
+  var gst=Math.max(0,p.gst-usedGst);
+  // Guard for advances adjusted before per-head tracking existed (or via
+  // any path that only updated the aggregate): adjusted_amount is always
+  // the source of truth for how much of the advance overall is used, so
+  // if the per-head totals would add up to MORE than the true aggregate
+  // remaining, scale them down proportionally instead of letting the
+  // untracked heads look fully available again (double-dipping).
+  var sumHeads=work+tds+gst;
+  var aggRemaining=Math.max(0,(parseFloat(adv.amount)||0)-(parseFloat(adv.adjusted_amount)||0));
+  if(sumHeads>aggRemaining+0.5&&sumHeads>0){
+    var scale=aggRemaining/sumHeads;
+    work=Math.round(work*scale);
+    tds=Math.round(tds*scale);
+    gst=Math.round(gst*scale);
+  }
+  return {work:work, workTotal:workTotal, tds:tds, tdsTotal:p.tds, gst:gst, gstTotal:p.gst};
+}
+
+// Like advSplitAdjustment, but hard-caps each component to what's still
+// actually available under that head in the advance (advRemainingByHead).
+// Used wherever a NEW adjustment is being created from a single combined
+// amount (Record Payment's advance offset) rather than from separate
+// per-head inputs — so it can never draw more GST/TDS out of an advance
+// than that advance genuinely still has as GST/TDS. Returns the capped
+// split plus `shortfall`: whatever couldn't be drawn from the advance and
+// must be paid in cash/bank instead.
+function advSplitAdjustmentCapped(adv, adjAmt){
+  var raw=advSplitAdjustment(adv, adjAmt);
+  var rem=advRemainingByHead(adv);
+  var work=Math.min(raw.work_amt+raw.add_amt, rem.work);
+  var tds=Math.min(raw.tds_amt, rem.tds);
+  var gst=Math.min(raw.gst_amt, rem.gst);
+  var used=work+tds+gst;
+  var requested=Math.round(parseFloat(adjAmt)||0);
+  return {
+    work_amt:work, add_amt:0, tds_amt:tds, gst_amt:gst,
+    amount:used, shortfall:Math.max(0,requested-used)
+  };
+}
+
+// Builds one advance-adjustment row for the Bill Generation form (shared by
+// execOpenBill and execEditBill): a checkbox to include the advance, plus
+// one editable amount input PER HEAD that still has a balance (Work Amt,
+// TDS, GST) — never a single combined "Adjust amount". Each input is
+// hard-capped to what THAT head still has left in this specific advance
+// (advRemainingByHead); typing more than that clamps back down
+// (blAdvAdjHeadChange) with a note that the rest must be paid in
+// cash/bank, instead of silently drawing it from a different head.
+function advAdjRowHtml(adv, ai, resLabel){
+  var advAmt=parseFloat(adv.amount)||0;
+  var adjSoFar=parseFloat(adv.adjusted_amount)||0;
+  var hb=advRemainingByHead(adv);
+  var remaining=hb.work+hb.tds+hb.gst;
+  var alreadyAdj=remaining<=0;
+  var heads=[
+    {key:'work',label:'Work Amt',color:'#1565C0',rem:hb.work},
+    {key:'tds',label:'TDS',color:'#4A148C',rem:hb.tds},
+    {key:'gst',label:'GST',color:'#2E7D32',rem:hb.gst}
+  ].filter(function(h){return h.rem>0;});
+  return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
+      '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-max="'+remaining+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
+      '<div style="flex:1;font-size:11px;">'+
+        (resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+
+        (adv.payment_mode?' · '+adv.payment_mode:'')+
+        (alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(fully adjusted)</span>':'')+
+      '</div>'+
+      '<span style="font-size:10px;color:var(--text3);">Total: <b style="color:#F57F17;">₹'+Number(advAmt).toLocaleString('en-IN')+'</b>'+(adjSoFar>0?' | Adj: <b style="color:#E65100;">₹'+Number(adjSoFar).toLocaleString('en-IN')+'</b> | Rem: <b style="color:#2E7D32;">₹'+Number(remaining).toLocaleString('en-IN')+'</b>':'')+'</span>'+
+    '</div>'+
+    (!alreadyAdj?
+      heads.map(function(h){
+        return '<div style="display:flex;align-items:center;gap:8px;padding:2px 0 2px 23px;">'+
+          '<span style="font-size:10px;color:'+h.color+';font-weight:700;width:64px;flex-shrink:0;">'+h.label+':</span>'+
+          '<input id="adv-adj-'+h.key+'-'+ai+'" type="number" class="adv-adj-head-inp" data-adv-idx="'+ai+'" data-head="'+h.key+'" data-hmax="'+h.rem+'" value="'+h.rem+'" min="0" max="'+h.rem+'" '+
+            'style="width:110px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:'+h.color+';" '+
+            'onchange="blAdvAdjHeadChange(this,'+ai+')">'+
+          '<span style="font-size:10px;color:var(--text3);">of ₹'+Number(h.rem).toLocaleString('en-IN')+'</span>'+
+        '</div>';
+      }).join('')
+      :'')+
+  '</div>';
+}
+
 // Short "Work: ₹.. · TDS: ₹.. · GST: ₹.." label for a split, used both in
 // the live adjustment UI and wherever a bill shows what was carried over
 // from an adjusted advance. Zero components are omitted.
@@ -10179,21 +10276,6 @@ function advAdjBreakdownLabel(p){
   if(p.tds_amt) parts.push('TDS: '+inr(p.tds_amt));
   if(p.gst_amt) parts.push('GST: '+inr(p.gst_amt));
   return parts.join(' · ');
-}
-
-// Re-renders the live "Work / TDS / GST" breakdown line under an
-// advance-adjustment row after its checkbox or amount input changes.
-function advRefreshAdjBreakdown(chk, ai, val){
-  var el=document.getElementById('adv-adj-break-'+ai);
-  if(!el||!chk) return;
-  var net=parseFloat(chk.getAttribute('data-net'))||0;
-  var ratio=net>0?((parseFloat(val)||0)/net):0;
-  el.textContent=advAdjBreakdownLabel({
-    work_amt:(parseFloat(chk.getAttribute('data-work'))||0)*ratio,
-    add_amt:(parseFloat(chk.getAttribute('data-add'))||0)*ratio,
-    tds_amt:(parseFloat(chk.getAttribute('data-tds'))||0)*ratio,
-    gst_amt:(parseFloat(chk.getAttribute('data-gst'))||0)*ratio
-  });
 }
 
 // Splits a combined advance-adjustment amount into SEPARATE bill deduction
@@ -10248,15 +10330,21 @@ function advBuildAdjDeductions(adjAdvDetails){
 async function advReverseDeductionRow(ded){
   var advDetails=ded.advance_details||[];
   var advIds=ded.advance_ids||[];
+  // Each row built by advBuildAdjDeductions is single-head, so ded.adv_adj_head
+  // (work_amt/tds_amt/gst_amt) says which per-head running total to reverse
+  // too, alongside the aggregate adjusted_amount.
+  var headCol=({work_amt:'adjusted_work',tds_amt:'adjusted_tds',gst_amt:'adjusted_gst'})[ded.adv_adj_head]||null;
   if(advDetails.length){
     for(var i=0;i<advDetails.length;i++){
       var ad=advDetails[i];
       var origAdv=WA_ADVANCES.find(function(a){return a.id===ad.id;})||{};
       var newAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-(parseFloat(ad.amount)||0));
+      var patch={adjusted_amount:newAdj};
+      if(headCol) patch[headCol]=Math.max(0,(parseFloat(origAdv[headCol])||0)-(parseFloat(ad.amount)||0));
       try{
-        await sbUpdate('work_advances',ad.id,{adjusted_amount:newAdj});
+        await sbUpdate('work_advances',ad.id,patch);
         var idx=WA_ADVANCES.findIndex(function(a){return a.id===ad.id;});
-        if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdj;
+        if(idx>-1) Object.assign(WA_ADVANCES[idx],patch);
       }catch(e){console.warn(e);}
     }
   } else if(advIds.length){
@@ -10875,40 +10963,12 @@ async function execOpenBill(partyKey,projId){
       var grossBillAmt=workRows.reduce(function(s,w){return s+(w.unbilled||0);},0);
       return '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#9315; Advance Adjustment</div>'+
-        '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances to adjust against this bill. Amounts are capped to current bill value.</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances to adjust against this bill — each head (Work Amt/TDS/GST) is adjusted only from its own matching balance in the advance; anything not available under a head is left to be paid in cash/bank.</div>'+
         partyAdvances.map(function(adv,ai){
           var allot=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
           var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
           var resLabel=planRes.party_name||planRes.resource_category||allot.scope||adv.purpose||'';
-          var advAmt=parseFloat(adv.amount)||0;
-          var adjSoFar=parseFloat(adv.adjusted_amount)||0;
-          var remaining=Math.max(0,advAmt-adjSoFar);
-          var alreadyAdj=remaining<=0; // fully adjusted only when nothing left
-          // Auto-cap: if bill < remaining advance, only adjust up to bill amount
-          var defaultAdj=remaining; // blUpdateTotal will cap to actual bill amount
-          var advBd=advParseBreakdown(adv);
-          var defaultSplit=advSplitAdjustment(adv,defaultAdj);
-          return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
-              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+remaining+'" data-work="'+advBd.work+'" data-add="'+advBd.add+'" data-tds="'+advBd.tds+'" data-gst="'+advBd.gst+'" data-net="'+(advBd.net||1)+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
-              '<div style="flex:1;font-size:11px;">'+
-                (resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+
-                (adv.payment_mode?' · '+adv.payment_mode:'')+
-                (alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(fully adjusted)</span>':'')+
-              '</div>'+
-              '<span style="font-size:10px;color:var(--text3);">Total: <b style="color:#F57F17;">₹'+Number(advAmt).toLocaleString("en-IN")+'</b>'+(adjSoFar>0?' | Adj: <b style="color:#E65100;">₹'+Number(adjSoFar).toLocaleString("en-IN")+'</b> | Rem: <b style="color:#2E7D32;">₹'+Number(remaining).toLocaleString("en-IN")+'</b>':'')+'</span>'+
-            '</div>'+
-            (!alreadyAdj?
-              '<div style="display:flex;align-items:center;gap:8px;padding:0 0 2px 23px;">'+
-                '<span style="font-size:10px;color:var(--text3);">Adjust amount:</span>'+
-                '<input id="adv-adj-amt-'+ai+'" type="number" value="'+defaultAdj+'" min="0" max="'+remaining+'" '+
-                  'style="width:120px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:#F57F17;" '+
-                  'onchange="blAdvAdjAmtChange(this,'+ai+')">'+
-                '<span style="font-size:10px;color:var(--text3);">of ₹'+Number(remaining).toLocaleString("en-IN")+(defaultAdj<remaining?' <b style="color:#E65100;">(₹'+Number(remaining-defaultAdj).toLocaleString("en-IN")+' carried forward)</b>':'')+'</span>'+
-              '</div>'+
-              '<div id="adv-adj-break-'+ai+'" style="font-size:9px;color:var(--text3);padding:1px 0 0 23px;">'+advAdjBreakdownLabel(defaultSplit)+'</div>'
-              :'')+
-          '</div>';
+          return advAdjRowHtml(adv,ai,resLabel);
         }).join('')+
       '</div>';
     })()+
@@ -10976,41 +11036,36 @@ async function execOpenBill(partyKey,projId){
 
 
 function blAdvAdjChange(chk, ai){
-  // When checkbox toggled, enable/disable the amount input
-  var amtInp=document.getElementById('adv-adj-amt-'+ai);
-  if(amtInp){
-    amtInp.disabled=!chk.checked;
-    if(chk.checked){
-      // Restore to max if was cleared
-      var max=parseFloat(chk.getAttribute('data-max'))||0;
-      if(!parseFloat(amtInp.value)) amtInp.value=max;
+  // When the advance's checkbox is toggled, enable/disable all of its
+  // per-head amount inputs (Work Amt/TDS/GST) together.
+  var headInps=document.querySelectorAll('.adv-adj-head-inp[data-adv-idx="'+ai+'"]');
+  headInps.forEach(function(inp){
+    inp.disabled=!chk.checked;
+    if(chk.checked&&!parseFloat(inp.value)){
+      // Restore to its own head max if it was cleared
+      inp.value=parseFloat(inp.getAttribute('data-hmax'))||0;
     }
-  }
-  if(!chk.checked){
-    // Unchecked — nothing of this advance is being adjusted, so its
-    // Work/TDS/GST breakdown line should read zero, not whatever amount
-    // was last entered.
-    chk.setAttribute('data-amount','0');
-    advRefreshAdjBreakdown(chk, ai, 0);
-    blUpdateTotal();
-    return;
-  }
-  // Update data-amount from input
-  blAdvAdjAmtChange(amtInp,ai);
+  });
   blUpdateTotal();
 }
 
-function blAdvAdjAmtChange(inp, ai){
+// Called when a single head's amount (Work Amt / TDS / GST) is edited.
+// Hard-caps to what that head actually still has available in this
+// advance — never lets one head's shortfall be silently drawn from a
+// different head — and tells the user the rest must be paid in cash/bank
+// when they try to type more than that.
+function blAdvAdjHeadChange(inp, ai){
   if(!inp) return;
-  var chk=document.getElementById('adv-adj-'+ai);
-  if(!chk) return;
-  var max=parseFloat(chk.getAttribute('data-max'))||0;
-  var cap=Math.min(max, Math.round(parseFloat((document.getElementById('bl-gross-display')||{textContent:'0'}).textContent.replace(/[^0-9.]/g,''))||max));
-  var val=Math.min(Math.max(0,parseFloat(inp.value)||0), cap);
+  var hmax=parseFloat(inp.getAttribute('data-hmax'))||0;
+  var val=parseFloat(inp.value)||0;
+  if(val>hmax){
+    var headLabel=({work:'Work Amt',tds:'TDS',gst:'GST'})[inp.getAttribute('data-head')]||'this head';
+    toast('Only ₹'+Math.round(hmax).toLocaleString('en-IN')+' available as '+headLabel+' in this advance — the rest must be paid via cash/bank transfer.','warning');
+    val=hmax;
+  }
+  val=Math.max(0,val);
   inp.value=val;
   inp.setAttribute('data-manual','1'); // mark as manually edited
-  chk.setAttribute('data-amount',val);
-  advRefreshAdjBreakdown(chk, ai, val);
   blUpdateTotal();
 }
 
@@ -11079,45 +11134,36 @@ function blUpdateTotal(){
     gstTotal+=parseFloat(amtInp&&amtInp.value)||0;
   });
   var grossWithAdd=netBeforeGst+gstTotal; // final gross = net + GST
-  var advAdj=0;
-  document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
-    var ai=chk.id.replace('adv-adj-','');
-    var amtInp=document.getElementById('adv-adj-amt-'+ai);
-    var amt=amtInp?parseFloat(amtInp.value)||0:parseFloat(chk.getAttribute('data-amount'))||0;
-    advAdj+=amt;
-    chk.setAttribute('data-amount',amt);
-  });
-  // Cap each advance input to min(remaining, grossWithAdd) — updates whenever gross changes
+  // Advance adjustment — summed across each head's own input (Work Amt/
+  // TDS/GST), never a single combined amount. Each input is already
+  // hard-capped to what that head has left in its own advance
+  // (data-hmax, enforced in blAdvAdjHeadChange); here we additionally cap
+  // the RUNNING total across every selected advance/head so it never
+  // exceeds what this bill can actually absorb — same "carried forward"
+  // idea as before, just applied per head-input instead of per-advance.
   var remainingGross=Math.round(grossWithAdd);
-  document.querySelectorAll('.adv-adj-chk:not([disabled])').forEach(function(chk){
-    var ai=chk.id.replace('adv-adj-','');
-    var amtInp=document.getElementById('adv-adj-amt-'+ai);
-    if(amtInp){
-      var maxRem=parseFloat(chk.getAttribute('data-max'))||0;
-      var cap=Math.min(maxRem, remainingGross);
-      var cur=parseFloat(amtInp.value)||0;
-      var isManual=amtInp.getAttribute('data-manual')==='1';
-      if(!isManual || cur>cap){
-        // Auto-set: not manually edited, OR current exceeds new cap
-        amtInp.value=cap;
-      }
-      amtInp.setAttribute('max', cap);
-      chk.setAttribute('data-amount', parseFloat(amtInp.value)||0);
-      // Update "carried forward" display
-      var finalVal=parseFloat(amtInp.value)||0;
-      var nextSpan=amtInp.nextElementSibling;
-      if(nextSpan&&nextSpan.tagName==='SPAN'){
-        nextSpan.innerHTML='of ₹'+Number(maxRem).toLocaleString('en-IN')+
-          (finalVal<maxRem?' <b style="color:#E65100;">(₹'+Number(maxRem-finalVal).toLocaleString('en-IN')+' carried forward)</b>':'');
-      }
+  var usedSoFar=0;
+  document.querySelectorAll('.adv-adj-head-inp').forEach(function(inp){
+    var ai=inp.getAttribute('data-adv-idx');
+    var chk=document.getElementById('adv-adj-'+ai);
+    if(!chk||!chk.checked||chk.disabled||inp.disabled) return;
+    var hmax=parseFloat(inp.getAttribute('data-hmax'))||0;
+    var cap=Math.max(0,Math.min(hmax, remainingGross-usedSoFar));
+    var cur=parseFloat(inp.value)||0;
+    var isManual=inp.getAttribute('data-manual')==='1';
+    if(!isManual||cur>cap){
+      inp.value=cap;
+    }
+    var finalVal=parseFloat(inp.value)||0;
+    usedSoFar+=finalVal;
+    inp.setAttribute('max',cap);
+    var nextSpan=inp.nextElementSibling;
+    if(nextSpan&&nextSpan.tagName==='SPAN'){
+      nextSpan.innerHTML='of ₹'+Number(hmax).toLocaleString('en-IN')+
+        (finalVal<hmax?' <b style="color:#E65100;">(₹'+Number(hmax-finalVal).toLocaleString('en-IN')+' carried forward)</b>':'');
     }
   });
-  var advAdj=0;
-  document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
-    var ai=chk.id.replace('adv-adj-','');
-    var amtInp=document.getElementById('adv-adj-amt-'+ai);
-    advAdj+=amtInp?parseFloat(amtInp.value)||0:0;
-  });
+  var advAdj=usedSoFar;
   var net=Math.max(0,grossWithAdd-advAdj);
   var amtEl=document.getElementById('bl-amount');
   if(amtEl) amtEl.value=Math.round(net);
@@ -11301,18 +11347,22 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     if(amt>0) additions.push({head:head,amount:amt,type:'flat',pct:0,is_released_ded:true});
   });
 
-  // Collect adjusted advance IDs
+  // Collect adjusted advance IDs — read directly from each head's own
+  // input (Work Amt/TDS/GST), already hard-capped in blUpdateTotal to what
+  // that specific head has available, rather than one combined amount
+  // split by ratio.
   var adjAdvIds=[];
   var adjAdvTotal=0;
-  var adjAdvDetails=[]; // per-advance: {id, amount, date, purpose, payment_mode, reference, total_adv}
+  var adjAdvDetails=[]; // per-advance: {id, amount, date, purpose, payment_mode, reference, total_adv, work_amt, tds_amt, gst_amt}
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
     var aid=chk.getAttribute('data-adv-id');
     var ai=chk.id.replace('adv-adj-','');
-    var amtInp=document.getElementById('adv-adj-amt-'+ai);
-    var amt=amtInp?parseFloat(amtInp.value)||0:parseFloat(chk.getAttribute('data-amount'))||0;
+    var workAmt=parseFloat((document.getElementById('adv-adj-work-'+ai)||{}).value)||0;
+    var tdsAmt=parseFloat((document.getElementById('adv-adj-tds-'+ai)||{}).value)||0;
+    var gstAmt=parseFloat((document.getElementById('adv-adj-gst-'+ai)||{}).value)||0;
+    var amt=workAmt+tdsAmt+gstAmt;
     if(amt<=0) return; // skip zero-amount
     var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
-    var split=advSplitAdjustment(origAdv,amt);
     adjAdvIds.push(aid);
     adjAdvDetails.push({
       id:aid, amount:amt,
@@ -11321,7 +11371,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
       payment_mode:origAdv.payment_mode||'',
       reference:origAdv.reference||'',
       total_adv:parseFloat(origAdv.amount)||0,
-      work_amt:split.work_amt, add_amt:split.add_amt, tds_amt:split.tds_amt, gst_amt:split.gst_amt
+      work_amt:workAmt, add_amt:0, tds_amt:tdsAmt, gst_amt:gstAmt
     });
     adjAdvTotal+=amt;
   });
@@ -11443,20 +11493,28 @@ async function execSaveBill(partyType,partyName,projId,billNo){
           debitCode:'1301', creditCode:'2001', amount:pbGst,
           narration:'GST (ITC) on '+pbRef, sourceType:'work_bill_gst', sourceId:res[0].id});
       }
-      // Update adjusted_amount for each advance (cumulative partial tracking)
-      if(adjAdvIds.length){
-        // Collect per-advance amounts from checkboxes
-        document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
-          var advId=chk.getAttribute('data-adv-id');
-          var adjAmt=parseFloat(chk.getAttribute('data-amount'))||0;
-          if(!adjAmt) return;
-          var idx=WA_ADVANCES.findIndex(function(a){return a.id===advId;});
+      // Update adjusted_amount for each advance (cumulative partial
+      // tracking), AND its per-head running totals (adjusted_work/
+      // adjusted_tds/adjusted_gst) from the exact per-head amounts just
+      // collected into adjAdvDetails — so a future bill only ever sees
+      // what's genuinely still left under each specific head.
+      if(adjAdvDetails.length){
+        adjAdvDetails.forEach(function(ad){
+          var idx=WA_ADVANCES.findIndex(function(a){return a.id===ad.id;});
           if(idx>-1){
             var prev=parseFloat(WA_ADVANCES[idx].adjusted_amount)||0;
-            var newAdj=prev+adjAmt;
-            WA_ADVANCES[idx].adjusted_amount=newAdj;
-            WA_ADVANCES[idx].adjusted_in_bill=res[0].id;
-            sbUpdate('work_advances',advId,{adjusted_amount:newAdj,adjusted_in_bill:res[0].id}).catch(function(){});
+            var prevWork=parseFloat(WA_ADVANCES[idx].adjusted_work)||0;
+            var prevTds=parseFloat(WA_ADVANCES[idx].adjusted_tds)||0;
+            var prevGst=parseFloat(WA_ADVANCES[idx].adjusted_gst)||0;
+            var patch={
+              adjusted_amount:prev+ad.amount,
+              adjusted_work:prevWork+(ad.work_amt||0),
+              adjusted_tds:prevTds+(ad.tds_amt||0),
+              adjusted_gst:prevGst+(ad.gst_amt||0),
+              adjusted_in_bill:res[0].id
+            };
+            Object.assign(WA_ADVANCES[idx],patch);
+            sbUpdate('work_advances',ad.id,patch).catch(function(){});
           }
         });
       }
@@ -11825,36 +11883,53 @@ async function execSavePaymentAdv(projId,balAmount){
     if(amt>0&&advId) advAdjs.push({id:advId,amt:amt});
   });
 
-  // 2. Save advance adjustments — update adjusted_amount on each advance
-  //    AND add to bill deductions
+  // 2. Save advance adjustments — update adjusted_amount (and its per-head
+  //    running totals) on each advance AND add to bill deductions. Each
+  //    advance's amount is capped per-head to what it actually still has
+  //    available (Work Amt/TDS/GST — advSplitAdjustmentCapped), so this
+  //    can never draw more of a head out of an advance than it genuinely
+  //    has left; any shortfall stays payable in cash/bank instead.
   var advAdjTotal=0;
+  var advDetails=[];
+  var totalShortfall=0;
   for(var i=0;i<advAdjs.length;i++){
     var adj=advAdjs[i];
     var origAdv=WA_ADVANCES.find(function(a){return a.id===adj.id;})||{};
-    var newAdjAmt=(parseFloat(origAdv.adjusted_amount)||0)+adj.amt;
-    advAdjTotal+=adj.amt;
+    var split=advSplitAdjustmentCapped(origAdv,adj.amt);
+    if(split.amount<=0){ totalShortfall+=split.shortfall; continue; }
+    totalShortfall+=split.shortfall;
+    advAdjTotal+=split.amount;
+    advDetails.push({id:adj.id,amount:split.amount,date:origAdv.date||'',purpose:origAdv.purpose||'',
+      payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0,
+      work_amt:split.work_amt,add_amt:0,tds_amt:split.tds_amt,gst_amt:split.gst_amt});
+    var prevAmt=parseFloat(origAdv.adjusted_amount)||0;
+    var prevWork=parseFloat(origAdv.adjusted_work)||0;
+    var prevTds=parseFloat(origAdv.adjusted_tds)||0;
+    var prevGst=parseFloat(origAdv.adjusted_gst)||0;
+    var patch={
+      adjusted_amount:prevAmt+split.amount,
+      adjusted_work:prevWork+split.work_amt,
+      adjusted_tds:prevTds+split.tds_amt,
+      adjusted_gst:prevGst+split.gst_amt
+    };
     try{
       await fetch(baseUrl+'/rest/v1/work_advances?id=eq.'+adj.id,{
         method:'PATCH',
         headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-        body:JSON.stringify({adjusted_amount:newAdjAmt})
+        body:JSON.stringify(patch)
       });
       var idx=WA_ADVANCES.findIndex(function(a){return a.id===adj.id;});
-      if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdjAmt;
+      if(idx>-1) Object.assign(WA_ADVANCES[idx],patch);
     }catch(e){console.warn(e);}
+  }
+  if(totalShortfall>0){
+    toast('₹'+Math.round(totalShortfall).toLocaleString('en-IN')+' of the selected advance(s) wasn\'t available under its Work Amt/TDS/GST heads — that portion stays payable in cash/bank.','warning');
   }
 
   // 3. If advances were adjusted, add to bill deductions
   if(advAdjTotal>0){
     var bill=WA_BILLS.find(function(b){return b.id===billId;})||{};
     var deds=[];try{deds=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
-    var advDetails=advAdjs.map(function(adj){
-      var oa=WA_ADVANCES.find(function(a){return a.id===adj.id;})||{};
-      var split=advSplitAdjustment(oa,adj.amt);
-      return {id:adj.id,amount:adj.amt,date:oa.date||'',purpose:oa.purpose||'',
-        payment_mode:oa.payment_mode||'',reference:oa.reference||'',total_adv:parseFloat(oa.amount)||0,
-        work_amt:split.work_amt,add_amt:split.add_amt,tds_amt:split.tds_amt,gst_amt:split.gst_amt};
-    });
     // Split by head (Work Amt / TDS / GST) instead of one flat lump, same
     // as the Bill Generation advance-adjustment flow.
     deds=deds.concat(advBuildAdjDeductions(advDetails));
@@ -12526,27 +12601,12 @@ async function execEditBill(billId){
     (partyAdvances.length?
       '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">⑥ Advance Adjustment</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Each head (Work Amt/TDS/GST) is adjusted only from its own matching balance in the advance; anything not available under a head is left to be paid in cash/bank.</div>'+
         partyAdvances.map(function(adv,ai){
-          var advAmt=parseFloat(adv.amount)||0;
-          var adjSoFar=parseFloat(adv.adjusted_amount)||0;
-          var remaining=Math.max(0,advAmt-adjSoFar);
-          var alreadyAdj=remaining<=0;
           var allot2=WA_ALLOT.find(function(a){return a.id===adv.allot_id;})||{};
           var planRes2=WA_PLANNED.find(function(r){return r.id===allot2.boq_exec_resource_id;})||{};
           var resLabel=planRes2.party_name||planRes2.resource_category||allot2.scope||adv.purpose||'';
-          var defaultAdj=remaining;
-          var advBd=advParseBreakdown(adv);
-          var defaultSplit=advSplitAdjustment(adv,defaultAdj);
-          return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
-              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+remaining+'" data-work="'+advBd.work+'" data-add="'+advBd.add+'" data-tds="'+advBd.tds+'" data-gst="'+advBd.gst+'" data-net="'+(advBd.net||1)+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
-              '<div style="flex:1;font-size:11px;">'+(resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+(adv.payment_mode?' · '+adv.payment_mode:'')+(alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(fully adjusted)</span>':'')+'</div>'+
-              '<span style="font-size:10px;color:var(--text3);">Total: <b style="color:#F57F17;">₹'+Number(advAmt).toLocaleString('en-IN')+'</b>'+(adjSoFar>0?' | Adj: <b style="color:#E65100;">₹'+Number(adjSoFar).toLocaleString('en-IN')+'</b> | Rem: <b style="color:#2E7D32;">₹'+Number(remaining).toLocaleString('en-IN')+'</b>':'')+'</span>'+
-            '</div>'+
-            (!alreadyAdj?'<div style="display:flex;align-items:center;gap:8px;padding:0 0 2px 23px;"><span style="font-size:10px;color:var(--text3);">Adjust amount:</span><input id="adv-adj-amt-'+ai+'" type="number" value="'+defaultAdj+'" min="0" max="'+remaining+'" style="width:120px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:#F57F17;" onchange="blAdvAdjAmtChange(this,'+ai+')"><span style="font-size:10px;color:var(--text3);">of ₹'+Number(remaining).toLocaleString('en-IN')+'</span></div>'+
-              '<div id="adv-adj-break-'+ai+'" style="font-size:9px;color:var(--text3);padding:1px 0 0 23px;">'+advAdjBreakdownLabel(defaultSplit)+'</div>'
-              :'')+
-          '</div>';
+          return advAdjRowHtml(adv,ai,resLabel);
         }).join('')+
       '</div>':'')+
     (totalRelDed>0?
@@ -12674,18 +12734,20 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
 
   // Collect deductions
   var deductions=[];
-  // Advance adjustments
+  // Advance adjustments — read directly from each head's own input (Work
+  // Amt/TDS/GST), already hard-capped to what that head has available.
   var adjAdvIds=[],adjAdvTotal=0,adjAdvDetails=[];
   document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
     var aid=chk.getAttribute('data-adv-id');
     var ai=chk.id.replace('adv-adj-','');
-    var amtInp=document.getElementById('adv-adj-amt-'+ai);
-    var amt=amtInp?parseFloat(amtInp.value)||0:parseFloat(chk.getAttribute('data-amount'))||0;
+    var workAmt=parseFloat((document.getElementById('adv-adj-work-'+ai)||{}).value)||0;
+    var tdsAmt=parseFloat((document.getElementById('adv-adj-tds-'+ai)||{}).value)||0;
+    var gstAmt=parseFloat((document.getElementById('adv-adj-gst-'+ai)||{}).value)||0;
+    var amt=workAmt+tdsAmt+gstAmt;
     if(amt<=0)return;
     var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
-    var split=advSplitAdjustment(origAdv,amt);
     adjAdvIds.push(aid);
-    adjAdvDetails.push({id:aid,amount:amt,date:origAdv.date||'',purpose:origAdv.purpose||'',payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0,work_amt:split.work_amt,add_amt:split.add_amt,tds_amt:split.tds_amt,gst_amt:split.gst_amt});
+    adjAdvDetails.push({id:aid,amount:amt,date:origAdv.date||'',purpose:origAdv.purpose||'',payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0,work_amt:workAmt,add_amt:0,tds_amt:tdsAmt,gst_amt:gstAmt});
     adjAdvTotal+=amt;
   });
   if(adjAdvTotal>0){
@@ -12738,17 +12800,24 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     await sbUpdate('work_bills',billId,payload);
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx]=Object.assign({},WA_BILLS[idx],payload);
-    // Update advance adjusted_amount if changed
-    if(adjAdvIds.length){
-      document.querySelectorAll('.adv-adj-chk:checked:not([disabled])').forEach(function(chk){
-        var advId=chk.getAttribute('data-adv-id');
-        var adjAmt=parseFloat(chk.getAttribute('data-amount'))||0;
-        if(!adjAmt)return;
-        var aidx=WA_ADVANCES.findIndex(function(a){return a.id===advId;});
+    // Update advance adjusted_amount (and its per-head running totals) if
+    // changed, using the exact per-head amounts collected into adjAdvDetails.
+    if(adjAdvDetails.length){
+      adjAdvDetails.forEach(function(ad){
+        var aidx=WA_ADVANCES.findIndex(function(a){return a.id===ad.id;});
         if(aidx>-1){
           var prev=parseFloat(WA_ADVANCES[aidx].adjusted_amount)||0;
-          WA_ADVANCES[aidx].adjusted_amount=prev+adjAmt;
-          sbUpdate('work_advances',advId,{adjusted_amount:prev+adjAmt}).catch(function(){});
+          var prevWork=parseFloat(WA_ADVANCES[aidx].adjusted_work)||0;
+          var prevTds=parseFloat(WA_ADVANCES[aidx].adjusted_tds)||0;
+          var prevGst=parseFloat(WA_ADVANCES[aidx].adjusted_gst)||0;
+          var patch={
+            adjusted_amount:prev+ad.amount,
+            adjusted_work:prevWork+(ad.work_amt||0),
+            adjusted_tds:prevTds+(ad.tds_amt||0),
+            adjusted_gst:prevGst+(ad.gst_amt||0)
+          };
+          Object.assign(WA_ADVANCES[aidx],patch);
+          sbUpdate('work_advances',ad.id,patch).catch(function(){});
         }
       });
     }
@@ -12768,45 +12837,9 @@ async function execDeleteAdvAdj(billId,dedId){
   var ded=deductions.find(function(d){return d.id===dedId;});
   if(!ded) return;
 
-  // Reverse adjusted_amount on each advance
-  var advDetails=ded.advance_details||[];
-  var advIds=ded.advance_ids||[];
-  var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
-  var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
-  var token=(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken)?currentUser.accessToken:anonKey;
-
-  if(advDetails.length){
-    for(var i=0;i<advDetails.length;i++){
-      var ad=advDetails[i];
-      var origAdv=WA_ADVANCES.find(function(a){return a.id===ad.id;})||{};
-      var newAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-(parseFloat(ad.amount)||0));
-      try{
-        await fetch(baseUrl+'/rest/v1/work_advances?id=eq.'+ad.id,{
-          method:'PATCH',
-          headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-          body:JSON.stringify({adjusted_amount:newAdj})
-        });
-        var idx=WA_ADVANCES.findIndex(function(a){return a.id===ad.id;});
-        if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdj;
-      }catch(e){console.warn(e);}
-    }
-  } else if(advIds.length){
-    // Fallback: split reversal proportionally (old records without advance_details)
-    var splitAmt=(parseFloat(ded.amount)||0)/advIds.length;
-    for(var j=0;j<advIds.length;j++){
-      var origAdv=WA_ADVANCES.find(function(a){return a.id===advIds[j];})||{};
-      var newAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-splitAmt);
-      try{
-        await fetch(baseUrl+'/rest/v1/work_advances?id=eq.'+advIds[j],{
-          method:'PATCH',
-          headers:{'apikey':anonKey,'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-          body:JSON.stringify({adjusted_amount:newAdj})
-        });
-        var idx=WA_ADVANCES.findIndex(function(a){return a.id===advIds[j];});
-        if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdj;
-      }catch(e){console.warn(e);}
-    }
-  }
+  // Reverse adjusted_amount (and its per-head running total) on each
+  // advance this row drew from — shared with the whole-bill-delete path.
+  await advReverseDeductionRow(ded);
 
   // Remove from bill deductions
   deductions=deductions.filter(function(d){return d.id!==dedId;});
