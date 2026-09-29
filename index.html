@@ -23485,6 +23485,19 @@ async function accReconcile(){
       var advTdsMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='tds_amt';})
         .reduce(function(s,d){return s+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
       var tds=Math.max(0,tdsRaw-advTdsMatched);
+      // GST needs the same exclusion as TDS, for the same reason: when a
+      // bill's GST is settled by drawing on an advance's own GST bucket
+      // ("Advance Adjustment (GST)" — see advBuildAdjDeductions), that ITC
+      // was already claimed once, when the advance itself was posted
+      // (work_advance_gst). Posting the bill's full GST again claims the
+      // same rupee of input credit a second time — this is what was
+      // showing as GST "duplicating" in the GST tab. Unlike TDS, this
+      // exclusion must NOT touch `gst` itself (used below to back out
+      // `work` from the true-gross bill_amount) — only the amount actually
+      // posted to the GST leg.
+      var advGstMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='gst_amt';})
+        .reduce(function(s,d){return s+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
+      var gstToPost=Math.max(0,gst-advGstMatched);
       var dedAmt=deds.filter(function(d){return !d.is_advance_adj&&!d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       // bill_amount is stored as true gross (work+additions+GST, deductions
       // NOT subtracted — see blPostToAccounts), so the work portion is just
@@ -23496,7 +23509,7 @@ async function accReconcile(){
       check('Purchase bills','work_bill_add',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4002',creditCode:'2001',amount:addAmt,narration:'Additions on '+ref});
       check('Purchase bills','work_bill_ded',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'4003',amount:dedAmt,narration:'Deductions on '+ref});
       check('Purchase bills','work_bill_tds',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'2102',amount:tds,narration:'TDS on '+ref});
-      check('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gst,narration:'GST (ITC) on '+ref});
+      check('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gstToPost,narration:'GST (ITC) on '+ref});
     });
     advances.forEach(function(a){
       // Mirrors advPostToAccounts (js/projects.js) exactly — cash/bank leg
@@ -28607,8 +28620,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260929r"></script>
-<script src="js/employee.js?v=20260929r"></script>
-<script src="js/projects.js?v=20260929r"></script>
-<script src="js/finance.js?v=20260929r"></script>
+<script src="js/registry.js?v=20260929s"></script>
+<script src="js/employee.js?v=20260929s"></script>
+<script src="js/projects.js?v=20260929s"></script>
+<script src="js/finance.js?v=20260929s"></script>
 </html>

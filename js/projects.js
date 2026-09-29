@@ -11472,16 +11472,27 @@ function blRemoveDeduction(id){
 // last touched the bill, the same way the TDS tab's own report computes it.
 function blPostToAccounts(billId,date,partyName,billRef,additions,deductions,adjAdvDetails,grossAmount){
   if(typeof accAutoPost!=='function') return;
-  var pbGst=additions.filter(function(a){return a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
+  var pbGstRaw=additions.filter(function(a){return a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
   var pbAdd=additions.filter(function(a){return !a.is_gst;}).reduce(function(x,a){return x+(parseFloat(a.amount)||0);},0);
   var pbTdsRaw=deductions.filter(function(d){return !d.is_advance_adj&&d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
   var advTdsMatched=deductions.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='tds_amt';})
     .reduce(function(x,d){return x+(d.advance_details||[]).reduce(function(s,ad){return s+(parseFloat(ad.amount)||0);},0);},0);
   var pbTds=Math.max(0,pbTdsRaw-advTdsMatched);
+  // GST needs the same exclusion as TDS: when a bill's GST is settled by
+  // drawing on an advance's own GST bucket ("Advance Adjustment (GST)" —
+  // see advBuildAdjDeductions), that input credit was already claimed
+  // once, when the advance itself was posted (advPostToAccounts's GST
+  // leg). Posting the bill's full GST again claims the same rupee of ITC
+  // a second time — this is what showed up as GST duplicating in the GST
+  // tab. Only the amount actually posted below is reduced; pbGstRaw (not
+  // this) still backs pbWork out of the true-gross grossAmount.
+  var advGstMatched=deductions.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='gst_amt';})
+    .reduce(function(x,d){return x+(d.advance_details||[]).reduce(function(s,ad){return s+(parseFloat(ad.amount)||0);},0);},0);
+  var pbGst=Math.max(0,pbGstRaw-advGstMatched);
   var pbDed=deductions.filter(function(d){return !d.is_advance_adj&&!d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
   // grossAmount is true gross (work+additions+GST, deductions not
   // subtracted), so the work portion is simply gross minus GST/additions.
-  var pbWork=Math.round(grossAmount)-pbGst-pbAdd;
+  var pbWork=Math.round(grossAmount)-pbGstRaw-pbAdd;
   var pbRef='Purchase/Work Bill '+billRef;
   if(pbWork>0) accAutoPost({type:'Purchase', date:date, partyName:partyName,
     debitCode:'4001', creditCode:'2001', amount:pbWork,
