@@ -10501,8 +10501,7 @@ async function execUpdateAdvance(advId){
     advPostToAccounts(advId,existing.party_type,existing.party_name,date,purpose,bk);
     toast('Advance updated!','success');
     closeSheet('ov-exec','sh-exec');
-    if(WA_SUBTAB==='payments') execRenderPayments();
-    else execRenderBills();
+    execRenderSubTab();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
@@ -11296,7 +11295,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     BL_DEDUCTIONS=[];
     window._blWorkRows=null;
     closeSheet('ov-exec','sh-exec');
-    if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+    execRenderSubTab();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
@@ -11325,7 +11324,7 @@ async function execAddDeduction(billId){
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
     toast(head+' deduction added','success');
-    if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+    execRenderSubTab();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -11436,8 +11435,7 @@ async function execUndoRelease(billId,dedId){
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
     toast('Release undone — deduction restored to held','success');
-    if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='genbills') execRenderBills();
-    else execRenderBills();
+    execRenderSubTab();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -11479,7 +11477,7 @@ async function execReleaseDeduction(billId,dedId){
       if(idx>-1) WA_BILLS[idx].deductions=JSON.stringify(deductions);
       toast('Deduction released — ₹'+Number(ded.amount||0).toLocaleString('en-IN')+' on '+relDate,'success');
       closeSheet('ov-exec','sh-exec');
-      if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+      execRenderSubTab();
     }catch(e){toast('Error: '+e.message,'error');}
   };
   sf.appendChild(cb);sf.appendChild(sb);
@@ -11726,7 +11724,7 @@ async function execSavePaymentAdv(projId,balAmount){
   var settled=advAdjTotal+cashAmt;
   toast('₹'+Math.round(settled).toLocaleString('en-IN')+' settled'+(advAdjTotal>0?' (incl. advance adj.)':''),'success');
   closeSheet('ov-exec','sh-exec');
-  if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+  execRenderSubTab();
 }
 
 
@@ -12120,15 +12118,14 @@ async function execSaveAdvance(partyType,partyName,projId){
     }
     toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
     closeSheet('ov-exec','sh-exec');
-    if(WA_SUBTAB==='payments') execRenderPayments();
-    else execRenderBills();
+    execRenderSubTab();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
 async function execDelAdvance(id){
   if(!confirm('Delete this advance payment record?'))return;
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
-  if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+  execRenderSubTab();
   try{await sbDelete('work_advances',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
   toast('Advance deleted','success');
 }
@@ -12145,7 +12142,7 @@ async function execDelBill(id){
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
-  if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+  execRenderSubTab();
   try{await sbDelete('work_bills',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);toast('Bill deleted','success');}catch(e){console.error(e);}
 }
 
@@ -12634,7 +12631,7 @@ async function execDeleteAdvAdj(billId,dedId){
     var bidx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(bidx>-1) WA_BILLS[bidx].deductions=deductions.length?JSON.stringify(deductions):null;
     toast('Advance adjustment deleted — balance restored','success');
-    if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+    execRenderSubTab();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -12649,7 +12646,7 @@ async function execDeleteDeduction(billId,dedId){
     var idx=WA_BILLS.findIndex(function(b){return b.id===billId;});
     if(idx>-1) WA_BILLS[idx].deductions=deductions.length?JSON.stringify(deductions):null;
     toast('Deduction deleted','success');
-    if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+    execRenderSubTab();
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
@@ -12693,7 +12690,7 @@ function execPaymentSlip(payId){
 async function execDelPayment(id){
   if(!confirm('Delete this payment record?'))return;
   WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.id!==id;});
-  if(WA_SUBTAB==='payments'){execRenderPayments();}else if(WA_SUBTAB==='bills'&&BILL_SUBTAB==='payments'){execRenderBills();}else{execRenderBills();}
+  execRenderSubTab();
   try{await sbDelete('work_payments',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){}
 }
 
