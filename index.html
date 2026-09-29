@@ -23184,6 +23184,7 @@ var ACC_DEFAULT_COA=[
   {code:'1102', name:'Loan Received (Clearing)', type:'Asset',     group:'Current Assets'},
   {code:'1201', name:'Sundry Debtors (Clients)', type:'Asset',     group:'Current Assets'},
   {code:'1301', name:'GST Input Credit (ITC)',   type:'Asset',     group:'Current Assets'},
+  {code:'1302', name:'TDS Receivable (Claimable)',type:'Asset',    group:'Current Assets'},
   {code:'1401', name:'Loans & Advances Receivable',type:'Asset',    group:'Loans & Advances'},
   {code:'1402', name:'Interest Receivable (Accrued)',type:'Asset',  group:'Loans & Advances'},
   {code:'1403', name:'Salary Advances to Staff', type:'Asset',      group:'Loans & Advances'},
@@ -23374,12 +23375,12 @@ async function accReconcile(){
       get('sales_bills'), get('sales_payments'), get('work_bills'), get('work_payments'),
       get('petty_cash_in'), get('petty_cash_expenses'), get('other_expenses'),
       get('company_expenses'), get('loans'), get('loan_transactions'), get('loan_parties','id,name'),
-      get('work_advances'), get('chart_of_accounts','id,code')
+      get('work_advances'), get('chart_of_accounts','id,code'), get('client_advances')
     ]);
     var projects=r[0]||[], emps=r[1]||[], salesBills=r[2]||[], salesPayments=r[3]||[],
         workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[],
         otherExp=r[8]||[], companyExp=r[9]||[], loans=r[10]||[], loanTxns=r[11]||[], lparties=r[12]||[],
-        advances=r[13]||[], coaRows=r[14]||[];
+        advances=r[13]||[], coaRows=r[14]||[], clientAdvances=r[15]||[];
 
     var projById={}; projects.forEach(function(p){projById[p.id]=p;});
     var empName={}; emps.forEach(function(e){empName[e.emp_id]=((e.first_name||'')+' '+(e.last_name||'')).trim();});
@@ -23453,18 +23454,54 @@ async function accReconcile(){
       var gst=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var addAmt=adds.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      // "Deductions" leg excludes advance-adjustment rows — those already
+      // have their own GL effect from when the client advance itself was
+      // received (client_advance below), so posting them again here would
+      // credit 1201 a second time for the same rupees. Mirrors pbDed in
+      // execSaveSalesBill (js/projects.js) and workBills' dedAmt below.
+      var dedAmtForPost=deds.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      // Same exclusion for GST: when this bill's GST was settled by drawing
+      // on a client advance's own GST bucket ("Advance Adjustment (GST)" —
+      // see caBuildAdjDeductions), that Output GST was already recognised
+      // once, when the advance itself was posted (client_advance_gst). Must
+      // not touch `gst` itself (used below to back out `work`) — only the
+      // amount actually posted to the GST leg.
+      var advGstMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='gst_amt';})
+        .reduce(function(s,d){return s+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
+      var gstToPost=Math.max(0,gst-advGstMatched);
       var work=(parseFloat(b.bill_amount)||0)-gst-addAmt+dedAmt;
       var party=proj.client||proj.name||'Client', ref='Sales Bill '+(b.bill_ref||b.id);
       check('Sales bills','sales_bill',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3001',amount:work,narration:ref});
       check('Sales bills','sales_bill_add',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3002',amount:addAmt,narration:'Additions on '+ref});
-      check('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmt,narration:'Deductions on '+ref});
-      check('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gst,narration:'GST on '+ref});
+      check('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmtForPost,narration:'Deductions on '+ref});
+      check('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gstToPost,narration:'GST on '+ref});
     });
     salesPayments.forEach(function(p){
       var proj=projById[p.project_id]||{};
       check('Sales payments','sales_payment',p.id,{type:'Receipt',date:p.payment_date,partyName:proj.client||proj.name||'Client',
         debitCode:(p.payment_mode==='Cash'?'1001':'1002'),creditCode:'1201',amount:parseFloat(p.amount)||0,
         narration:'Payment received'+(p.reference?' (Ref: '+p.reference+')':'')});
+      // TDS the client withheld when paying this bill — tracked separately
+      // from the cash leg above, not folded into it. See execSaveSalesPayment.
+      check('Sales payments','sales_payment_tds',p.id,{type:'Receipt',date:p.payment_date,partyName:proj.client||proj.name||'Client',
+        debitCode:'1302',creditCode:'1201',amount:parseFloat(p.tds_amount)||0,
+        narration:'TDS deducted by client on payment'+(p.reference?' (Ref: '+p.reference+')':'')});
+    });
+    clientAdvances.forEach(function(a){
+      // Mirrors caPostToAccounts (js/projects.js) exactly — cash/bank leg
+      // for the net amount received, plus TDS and GST legs of its breakdown.
+      var abd=[]; try{abd=a.deductions?JSON.parse(a.deductions):[];}catch(e){}
+      var agst=[]; try{agst=a.gst?JSON.parse(a.gst):[];}catch(e){}
+      var proj=projById[a.project_id]||{};
+      var partyName=proj.client||proj.name||'Client';
+      var advNet=Math.round(parseFloat(a.amount)||0);
+      var advTds=abd.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var advGst=agst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
+      var advRef='Advance from '+partyName+(a.purpose?' — '+a.purpose:'');
+      var cashCode=a.payment_mode==='Cash'?'1001':'1002';
+      check('Advances received','client_advance',a.id,{type:'Receipt',date:a.date,partyName:partyName,debitCode:cashCode,creditCode:'1201',amount:advNet,narration:advRef});
+      check('Advances received','client_advance_tds',a.id,{type:'Receipt',date:a.date,partyName:partyName,debitCode:'1302',creditCode:'1201',amount:advTds,narration:'TDS on '+advRef});
+      check('Advances received','client_advance_gst',a.id,{type:'Receipt',date:a.date,partyName:partyName,debitCode:'1201',creditCode:'2101',amount:advGst,narration:'GST on '+advRef});
     });
     workBills.forEach(function(b){
       // Checked leg-by-leg (not "does the main leg exist, then assume the
@@ -24240,9 +24277,10 @@ function accAcctNameByCode(code){ var a=ACC_ACCOUNTS.find(function(x){return Str
 // detail sheet, etc.), so the mapping lives in one place.
 function accSrcLabel(t){
   var m={sales_bill:'Sales bill',sales_bill_add:'Sales bill — additions',sales_bill_ded:'Sales bill — deductions',sales_bill_gst:'Sales bill — GST',
-    sales_payment:'Sales payment',work_bill:'Purchase bill',work_bill_add:'Purchase bill — additions',work_bill_ded:'Purchase bill — deductions',
+    sales_payment:'Sales payment',sales_payment_tds:'Sales payment — TDS',work_bill:'Purchase bill',work_bill_add:'Purchase bill — additions',work_bill_ded:'Purchase bill — deductions',
     work_bill_tds:'Purchase bill — TDS',work_bill_gst:'Purchase bill — GST',work_payment:'Purchase payment',
     work_advance:'Advance payment',work_advance_tds:'Advance — TDS',work_advance_gst:'Advance — GST',
+    client_advance:'Advance received',client_advance_tds:'Advance received — TDS',client_advance_gst:'Advance received — GST',
     petty_in:'Petty cash funding',petty_cash_in:'Petty cash funding',petty_expense:'Petty cash expense',petty_cash_expense:'Petty cash expense',other_expense:'Other expense',
     company_expense:'Company overhead',company_expense_gst:'Company overhead — GST',personal_from_overhead:'Personal share of overhead',
     loan:'Loan',loan_txn:'Loan transaction',loan_pay_interest:'Loan interest payment',loan_pay_principal:'Loan repayment',
@@ -24258,10 +24296,11 @@ function accSrcLabel(t){
 // explains those instead of trying to fetch a row.
 var ACC_SRC_TABLE={
   sales_bill:'sales_bills', sales_bill_add:'sales_bills', sales_bill_ded:'sales_bills', sales_bill_gst:'sales_bills',
-  sales_payment:'sales_payments',
+  sales_payment:'sales_payments', sales_payment_tds:'sales_payments',
   work_bill:'work_bills', work_bill_add:'work_bills', work_bill_ded:'work_bills', work_bill_tds:'work_bills', work_bill_gst:'work_bills',
   work_payment:'work_payments',
   work_advance:'work_advances', work_advance_tds:'work_advances', work_advance_gst:'work_advances',
+  client_advance:'client_advances', client_advance_tds:'client_advances', client_advance_gst:'client_advances',
   petty_cash_in:'petty_cash_in', petty_in:'petty_cash_in', petty_cash_expense:'petty_cash_expenses', petty_expense:'petty_cash_expenses',
   other_expense:'other_expenses',
   company_expense:'company_expenses', company_expense_gst:'company_expenses', personal_from_overhead:'company_expenses',
@@ -24377,7 +24416,8 @@ var ACC_PDF_KIND={
   work_payment:'work_bill_ref',
   work_advance:'advance', work_advance_tds:'advance', work_advance_gst:'advance',
   sales_bill:'sales_bill', sales_bill_add:'sales_bill', sales_bill_ded:'sales_bill', sales_bill_gst:'sales_bill',
-  sales_payment:'sales_bill_ref'
+  sales_payment:'sales_bill_ref', sales_payment_tds:'sales_bill_ref',
+  client_advance:'client_advance', client_advance_tds:'client_advance', client_advance_gst:'client_advance'
 };
 function accCanOpenRefBill(sourceType){ return !!ACC_PDF_KIND[sourceType]; }
 var ACC_VOU_SRC_TYPE=null, ACC_VOU_SRC_ROW=null;
@@ -24403,6 +24443,7 @@ async function accOpenRefBillPDF(sourceType, row){
   if(kind==='work_bill') billId=row.id;
   else if(kind==='work_bill_ref') billId=row.bill_id;
   else if(kind==='advance') advId=row.id;
+  else if(kind==='client_advance') advId=row.id;
   else if(kind==='sales_bill') billId=row.id;
   else if(kind==='sales_bill_ref') billId=row.sales_bill_id;
   if((kind==='work_bill_ref'||kind==='sales_bill_ref') && !billId){
@@ -24416,6 +24457,7 @@ async function accOpenRefBillPDF(sourceType, row){
     WA_DAILY:WA_DAILY, WA_BILLS:WA_BILLS, WA_PAYMENTS:WA_PAYMENTS, WA_ORDERS:WA_ORDERS,
     WA_JMS:WA_JMS, WA_APPROVED_RRS:WA_APPROVED_RRS, WA_ADVANCES:WA_ADVANCES,
     WA_SALES_BILLS:WA_SALES_BILLS, WA_SALES_PAYMENTS:WA_SALES_PAYMENTS,
+    WA_CLIENT_ADVANCES:(typeof WA_CLIENT_ADVANCES!=='undefined'?WA_CLIENT_ADVANCES:undefined),
     WA_SUBCONTRACTS:(typeof WA_SUBCONTRACTS!=='undefined'?WA_SUBCONTRACTS:undefined)};
   try{
     PROJ_MOD_SEL_ID=projId;
@@ -24427,6 +24469,9 @@ async function accOpenRefBillPDF(sourceType, row){
     }else if(kind==='advance'){
       if(typeof execAdvanceReceipt!=='function'){ toast('Receipt printing is unavailable here','error'); return; }
       execAdvanceReceipt(advId);
+    }else if(kind==='client_advance'){
+      if(typeof execClientAdvanceReceipt!=='function'){ toast('Receipt printing is unavailable here','error'); return; }
+      execClientAdvanceReceipt(advId);
     }else if(kind==='sales_bill'||kind==='sales_bill_ref'){
       if(typeof execGenerateSalesBillInvoice!=='function'){ toast('Invoice printing is unavailable here','error'); return; }
       execGenerateSalesBillInvoice(billId,'boq');
@@ -24896,11 +24941,13 @@ async function accGstTab(){
       sbFetch('projects',{select:'id,name,client,client_gstin'}).catch(function(){return [];}),
       sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];}),
       sbFetch('company_expenses',{select:'*',order:'date.desc'}).catch(function(){return [];}),
-      sbFetch('work_advances',{select:'*',order:'date.desc'}).catch(function(){return [];})
+      sbFetch('work_advances',{select:'*',order:'date.desc'}).catch(function(){return [];}),
+      sbFetch('client_advances',{select:'*',order:'date.desc'}).catch(function(){return [];})
     ]);
     var bills=Array.isArray(r[0])?r[0]:[], projects=Array.isArray(r[1])?r[1]:[], workBills=Array.isArray(r[2])?r[2]:[];
     var ohExp=Array.isArray(r[3])?r[3]:[];
     var workAdvances=Array.isArray(r[4])?r[4]:[];
+    var clientAdvances=Array.isArray(r[5])?r[5]:[];
     var projById={}; projects.forEach(function(p){projById[p.id]=p;});
 
     var gstOf=function(b){
@@ -24910,10 +24957,34 @@ async function accGstTab(){
 
     // Outward (sales) per-bill breakdown
     var outRows=bills.map(function(b){
-      var gst=gstOf(b);
+      var gstRaw=gstOf(b);
       var total=parseFloat(b.bill_amount)||0;
-      return {bill:b, proj:projById[b.project_id]||{}, taxable:total-gst, gst:gst, total:total, month:(b.bill_date||'').slice(0,7)};
+      // A bill's GST that was settled by drawing on a client advance's own
+      // GST bucket ("Advance Adjustment (GST)" — see caBuildAdjDeductions)
+      // was already counted once as Output GST below, via advOutGstRows, at
+      // the moment the advance itself was received — same exclusion inRows
+      // already applies on the ITC side, mirrored here for Output GST so a
+      // client-advance-funded bill doesn't double-count. Taxable value is
+      // unaffected.
+      var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      var advGstMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='gst_amt';})
+        .reduce(function(s,d){return s+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
+      var gst=Math.max(0,gstRaw-advGstMatched);
+      return {bill:b, proj:projById[b.project_id]||{}, taxable:total-gstRaw, gst:gst, total:total-advGstMatched, month:(b.bill_date||'').slice(0,7)};
     });
+    // GST recognised on a client advance is Output GST the moment it's
+    // received — same time-of-supply logic as advGstRows on the ITC side,
+    // mirrored here so a client advance's own GST shows up in Output GST
+    // even before any sales bill is raised against it.
+    var advOutGstRows=clientAdvances.map(function(a){
+      var gArr=[]; try{gArr=a.gst?JSON.parse(a.gst):[];}catch(e){}
+      var g=gArr.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+      if(!g) return null;
+      var proj=projById[a.project_id]||{};
+      return {bill:{bill_ref:a.adv_ref||('Advance'+(a.purpose?' — '+a.purpose:'')), bill_date:a.date, party_name:proj.client||proj.name||'Client'},
+        proj:proj, taxable:0, gst:g, total:g, month:(a.date||'').slice(0,7), isAdvance:true};
+    }).filter(Boolean);
+    outRows=outRows.concat(advOutGstRows);
     var outTaxable=outRows.reduce(function(s,x){return s+x.taxable;},0);
     var outGst=outRows.reduce(function(s,x){return s+x.gst;},0);
 
@@ -28634,8 +28705,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260929s"></script>
-<script src="js/employee.js?v=20260929s"></script>
-<script src="js/projects.js?v=20260929s"></script>
-<script src="js/finance.js?v=20260929s"></script>
+<script src="js/registry.js?v=20260929t"></script>
+<script src="js/employee.js?v=20260929t"></script>
+<script src="js/projects.js?v=20260929t"></script>
+<script src="js/finance.js?v=20260929t"></script>
 </html>

@@ -2385,7 +2385,7 @@ async function planDelRes(id){
 
 // ════ WORK ALLOTMENT ════════════════════════════════════
 var WA_ITEMS=[],WA_JMS=[],WA_SUBS=[],WA_PLANNED=[],WA_ALLOT=[],WA_COMBINED_PLAN_ITEMS=[],WA_COMBINED_RR_GROUPS=[],WA_COMBINED_RR_ITEMS=[];
-var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[],WA_SALES_PAYMENTS=[];
+var WA_DAILY=[],WA_BILLS=[],WA_PAYMENTS=[],WA_ORDERS=[],WA_JMS=[],WA_APPROVED_RRS=[],STORE_ISSUE_LOG=[],WA_ADVANCES=[],WA_SALES_BILLS=[],WA_SALES_PAYMENTS=[],WA_CLIENT_ADVANCES=[];
 var WA_SUBCONTRACTS=[],WA_SUBCONTRACT_SCOPES=[],WA_SUBCONTRACT_PROGRESS=[]; // lumpsum subcontract scope + unbilled progress (for Generate Bill)
 
 // Party PAN, looked up from the vendor/subcontractor/labourer Master
@@ -2491,7 +2491,8 @@ async function execLoadItems(silent){
       safe(sbFetch('work_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'})),
       safe(sbFetch('sales_bills',{select:'*',filter:'project_id=eq.'+projId,order:'created_at.desc'})),
       safe(sbFetch('sales_payments',{select:'*',filter:'project_id=eq.'+projId,order:'payment_date.desc'})),
-      safe(sbFetch('subcontracts',{select:'*',filter:'project_id=eq.'+projId}))
+      safe(sbFetch('subcontracts',{select:'*',filter:'project_id=eq.'+projId})),
+      safe(sbFetch('client_advances',{select:'*',filter:'project_id=eq.'+projId,order:'date.desc'}))
     ]);
     WA_ITEMS=sortByItemCode(Array.isArray(r[0])?r[0]:[]);
     WA_SUBS=Array.isArray(r[1])?r[1]:[];
@@ -2510,6 +2511,7 @@ async function execLoadItems(silent){
     WA_SALES_BILLS=Array.isArray(r[12])?r[12]:[];
     WA_SALES_PAYMENTS=Array.isArray(r[13])?r[13]:[];
     WA_SUBCONTRACTS=Array.isArray(r[14])?r[14]:[];
+    WA_CLIENT_ADVANCES=Array.isArray(r[15])?r[15]:[];
     STORE_PROJ_ID=projId;
     WA_LOADED_PROJ = projId; // mark this project as loaded
   }catch(e){WA_ITEMS=[];WA_LOADED_PROJ='';console.error(e);}
@@ -5211,10 +5213,21 @@ function execRegenDoc(allotId, docType){
 
 // ── Daily Progress ─────────────────────────────────────────────────────
 // ── Orders Tab ─────────────────────────────────────────────────────────
+function execSalesPaySplitHint(){
+  var amt=parseFloat((document.getElementById('spy-amount')||{value:0}).value)||0;
+  var tds=parseFloat((document.getElementById('spy-tds')||{value:0}).value)||0;
+  var el=document.getElementById('spy-split-hint');
+  if(el) el.textContent=tds>0?('Settles ₹'+(amt+tds).toLocaleString('en-IN')+' against the bill — ₹'+amt.toLocaleString('en-IN')+' cash + ₹'+tds.toLocaleString('en-IN')+' TDS receivable'):'';
+}
+
 async function execSalesBillPay(billId, billAmt){
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
-  var paidAmt=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.sales_bill_id===billId;}).reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
-  var balDue=Math.max(0,(parseFloat(billAmt)||0)-paidAmt);
+  // "Settled" against the bill = cash actually received + whatever the
+  // client withheld as TDS on that receipt (a receivable now, but no
+  // longer part of the outstanding balance) — see execSaveSalesPayment.
+  var settledAmt=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.sales_bill_id===billId;})
+    .reduce(function(s,p){return s+(parseFloat(p.amount)||0)+(parseFloat(p.tds_amount)||0);},0);
+  var balDue=Math.max(0,(parseFloat(billAmt)||0)-settledAmt);
   document.getElementById('exec-sheet-title').textContent='Record Payment';
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
@@ -5222,14 +5235,18 @@ async function execSalesBillPay(billId, billAmt){
     '</div>'+
     '<label class="flbl">Payment Date *</label>'+
     '<input type="date" id="spy-date" class="finp" value="'+new Date().toISOString().slice(0,10)+'">'+
-    '<label class="flbl">Amount *</label>'+
-    '<input type="number" id="spy-amount" class="finp" value="'+balDue+'" step="0.01" min="0">'+
+    '<label class="flbl">Amount Received *</label>'+
+    '<input type="number" id="spy-amount" class="finp" value="'+balDue+'" step="0.01" min="0" oninput="execSalesPaySplitHint()">'+
+    '<label class="flbl">TDS Deducted by Client (₹)</label>'+
+    '<input type="number" id="spy-tds" class="finp" value="0" step="0.01" min="0" placeholder="0" oninput="execSalesPaySplitHint()" title="If the client withheld TDS from this payment (194C/194J), enter it here — tracked as a receivable (1302), not lost">'+
+    '<div id="spy-split-hint" style="font-size:10px;color:var(--text3);margin:-6px 0 8px;"></div>'+
     '<label class="flbl">Mode</label>'+
     '<select id="spy-mode" class="fsel"><option value="">Select</option><option>NEFT</option><option>RTGS</option><option>IMPS</option><option>Cheque</option><option>Cash</option><option>UPI</option></select>'+
     '<label class="flbl">Reference / UTR</label>'+
     '<input type="text" id="spy-ref" class="finp" placeholder="UTR / Cheque No.">'+
     '<label class="flbl">Remarks</label>'+
     '<input type="text" id="spy-remarks" class="finp" placeholder="Optional remarks">';
+  execSalesPaySplitHint();
   var foot=document.getElementById('exec-sheet-foot');foot.innerHTML='';
   var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
   cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
@@ -5243,31 +5260,42 @@ async function execSalesBillPay(billId, billAmt){
 async function execSaveSalesPayment(billId,projId){
   var date=(document.getElementById('spy-date')||{value:''}).value;
   var amount=parseFloat((document.getElementById('spy-amount')||{value:0}).value)||0;
+  var tdsAmt=parseFloat((document.getElementById('spy-tds')||{value:0}).value)||0;
   var mode=(document.getElementById('spy-mode')||{value:''}).value;
   var ref=(document.getElementById('spy-ref')||{value:''}).value.trim();
   var remarks=(document.getElementById('spy-remarks')||{value:''}).value.trim();
   if(!date){toast('Payment date required','warning');return;}
-  if(!amount||amount<=0){toast('Enter payment amount','warning');return;}
+  if(amount<=0&&tdsAmt<=0){toast('Enter payment amount or TDS deducted','warning');return;}
   try{
     var res=await sbInsert('sales_payments',{
       project_id:projId,sales_bill_id:billId,
-      payment_date:date,amount:amount,
+      payment_date:date,amount:amount,tds_amount:tdsAmt,
       payment_mode:mode||null,reference:ref||null,remarks:remarks||null
     });
     if(res&&res[0]){
       if(!WA_SALES_PAYMENTS) WA_SALES_PAYMENTS=[];
       WA_SALES_PAYMENTS.push(res[0]);
-      toast('₹'+amount.toLocaleString('en-IN')+' payment recorded','success');
+      toast('₹'+(amount+tdsAmt).toLocaleString('en-IN')+' settled'+(tdsAmt?' (₹'+tdsAmt.toLocaleString('en-IN')+' TDS)':'')+' against the bill','success');
       closeSheet('ov-exec','sh-exec');
       execRenderSales();
 
-      // Auto-post to Accounts: Dr Bank/Cash, Cr Sundry Debtors
+      // Auto-post to Accounts: Dr Bank/Cash, Cr Sundry Debtors for the cash
+      // actually received, plus — if the client withheld TDS on this
+      // payment (194C/194J, client as deductor) — Dr TDS Receivable
+      // (1302)/Cr Sundry Debtors for the withheld portion, so it settles
+      // the bill without looking like a shortfall (see the "regular sale
+      // bill amt receive" TDS case in the Accounting Review doc).
       if(typeof accAutoPost==='function'){
         var acProj2=PROJ_DATA.find(function(p){return p.id===projId;})||{};
-        accAutoPost({type:'Receipt', date:date, partyName:acProj2.client||acProj2.name||'Client',
+        var acParty2=acProj2.client||acProj2.name||'Client';
+        if(amount>0) accAutoPost({type:'Receipt', date:date, partyName:acParty2,
           debitCode:(mode==='Cash'?'1001':'1002'), creditCode:'1201', amount:amount,
           narration:'Payment received'+(ref?' (Ref: '+ref+')':'')+(acProj2.name?' — '+acProj2.name:''),
           sourceType:'sales_payment', sourceId:res[0].id});
+        if(tdsAmt>0) accAutoPost({type:'Receipt', date:date, partyName:acParty2,
+          debitCode:'1302', creditCode:'1201', amount:tdsAmt,
+          narration:'TDS deducted by client on payment'+(ref?' (Ref: '+ref+')':''),
+          sourceType:'sales_payment_tds', sourceId:res[0].id});
       }
     }
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
@@ -5442,7 +5470,7 @@ function execGenerateSalesBillInvoice(billId,mode,civilHsn,civilDesc){
   var fmtD=function(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
   var esc2=function(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
   var bPays=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.sales_bill_id===b.id;}).sort(function(a,x){return (a.payment_date||'').localeCompare(x.payment_date||'');});
-  var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+  var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0)+(parseFloat(p.tds_amount)||0);},0);
   var balDue=Math.max(0,(parseFloat(b.bill_amount)||0)-paidAmt);
   var items=[];try{items=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
   var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
@@ -5954,7 +5982,7 @@ function execRenderSales(){
     // View generated sales bills
     var sBills=WA_SALES_BILLS.filter(function(b){return b.project_id===projId;});
     if(!sBills.length){
-      el.innerHTML=tabBar+'<div style="text-align:center;padding:40px;color:var(--text3);">No sales bills generated yet</div>';
+      el.innerHTML=tabBar+'<div style="padding:10px;">'+caRenderBlock(projId)+'</div>'+'<div style="text-align:center;padding:40px;color:var(--text3);">No sales bills generated yet</div>';
       return;
     }
 
@@ -6056,14 +6084,14 @@ function execRenderSales(){
           (function(){
             var bPays=WA_SALES_PAYMENTS?WA_SALES_PAYMENTS.filter(function(p){return p.sales_bill_id===b.id;}):[];
             if(!bPays.length) return '';
-            var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+            var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0)+(parseFloat(p.tds_amount)||0);},0);
             var balDue=b.bill_amount-paidAmt;
             return '<div style="padding:8px 14px;border-top:1px solid var(--border);background:#F8FAFC;">'+
               '<div style="font-size:10px;font-weight:800;color:#2E7D32;margin-bottom:4px;">&#128176; PAYMENTS</div>'+
               bPays.map(function(p){return '<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #F0F0F0;">'+
-                '<span>'+p.payment_date+(p.payment_mode?' · '+p.payment_mode:'')+(p.reference?' · '+p.reference:'')+'</span>'+
+                '<span>'+p.payment_date+(p.payment_mode?' · '+p.payment_mode:'')+(p.reference?' · '+p.reference:'')+(parseFloat(p.tds_amount)>0?' · TDS: '+inr(p.tds_amount):'')+'</span>'+
                 '<div style="display:flex;align-items:center;gap:6px;">'+
-                  '<span style="font-weight:800;color:#2E7D32;">'+inr(p.amount)+'</span>'+
+                  '<span style="font-weight:800;color:#2E7D32;">'+inr((parseFloat(p.amount)||0)+(parseFloat(p.tds_amount)||0))+'</span>'+
                   '<button onclick="execDelSalesPayment(\''+p.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;">&#215;</button>'+
                 '</div>'+
               '</div>';}).join('')+
@@ -6076,7 +6104,7 @@ function execRenderSales(){
         '</div>'+
       '</div>';
     }).join('');
-    el.innerHTML=tabBar+'<div style="padding:10px;">'+gstStrip+billsHtml+'</div>';
+    el.innerHTML=tabBar+'<div style="padding:10px;">'+caRenderBlock(projId)+gstStrip+billsHtml+'</div>';
     return;
   }
 
@@ -6090,7 +6118,7 @@ function execRenderSales(){
   });
 
   if(!items.length){
-    el.innerHTML=tabBar+'<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items found. Add BOQ items first.</div>';
+    el.innerHTML=tabBar+'<div style="padding:10px;">'+caRenderBlock(projId)+'</div>'+'<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items found. Add BOQ items first.</div>';
     return;
   }
 
@@ -6142,8 +6170,16 @@ function execRenderSales(){
   var prevSalesBills=WA_SALES_BILLS.filter(function(b){return b.project_id===projId;});
   var nextBillNo=prevSalesBills.length+1;
 
+  // Client advances still carrying an unadjusted Work Amt or GST balance —
+  // shown as an "Advance Adjustment" panel below, same idea as the
+  // purchase side's, but with a single capped "Adjust Amount" per advance
+  // instead of per-head inputs (see caSplitAdjustmentCapped).
+  var pendingClientAdvs=(WA_CLIENT_ADVANCES||[]).filter(function(a){return a.project_id===projId;})
+    .filter(function(a){var hb=caRemainingByHead(a);return (hb.work+hb.gst)>0;});
+
   el.innerHTML=tabBar+
     '<div style="padding:10px;">'+
+      caRenderBlock(projId)+
       '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
         '<div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:center;gap:10px;">'+
           '<div style="flex:1;">'+
@@ -6180,6 +6216,28 @@ function execRenderSales(){
           '<span style="font-size:11px;font-weight:800;color:#4A148C;">Work Sub-Total</span>'+
           '<span style="font-size:13px;font-weight:900;color:#4A148C;" id="sl-work-subtotal">'+inr(0)+'</span>'+
         '</div>'+
+
+        // Advance Adjustment — client advances with a pending Work Amt/GST
+        // balance can be adjusted against this bill (see caBuildAdjDeductions).
+        (pendingClientAdvs.length?
+          '<div style="background:#F8F0FD;border-top:1px solid var(--border);padding:10px 14px;">'+
+            '<div style="font-size:11px;font-weight:800;color:#4A148C;margin-bottom:8px;">&#9315; Advance Adjustment</div>'+
+            '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances received from the client to adjust against this bill — capped to what each advance still has available.</div>'+
+            pendingClientAdvs.map(function(adv,ai){
+              var hb=caRemainingByHead(adv);
+              var remaining=hb.work+hb.gst;
+              return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #E1BEE7;">'+
+                '<input type="checkbox" id="ca-adj-'+ai+'" class="ca-adj-chk" data-adv-id="'+adv.id+'" data-max="'+remaining+'" checked style="width:15px;height:15px;accent-color:#4A148C;flex-shrink:0;" onchange="caAdjToggle('+ai+')">'+
+                '<div style="flex:1;font-size:11px;">'+
+                  (adv.adv_ref?'<b style="font-family:monospace;color:#4A148C;">'+adv.adv_ref+'</b> · ':'')+
+                  fmtD(adv.date)+(adv.purpose?' — '+adv.purpose:'')+
+                '</div>'+
+                '<input id="ca-adj-amt-'+ai+'" type="number" class="ca-adj-amt-inp" data-adv-idx="'+ai+'" data-hmax="'+remaining+'" value="'+remaining+'" min="0" max="'+remaining+'" '+
+                  'style="width:110px;padding:3px 8px;border:1px solid #E1BEE7;border-radius:5px;font-size:12px;font-weight:800;color:#4A148C;text-align:right;" onchange="caAdjAmtChange(this)">'+
+                '<span style="font-size:10px;color:var(--text3);">of '+inr(remaining)+'</span>'+
+              '</div>';
+            }).join('')+
+          '</div>':'')+
 
         // Additions
         '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
@@ -6241,7 +6299,7 @@ function salesRegRows(){
     var gstAmt=gstAdds.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
     var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
     var bPays=WA_SALES_PAYMENTS?WA_SALES_PAYMENTS.filter(function(p){return p.sales_bill_id===b.id;}):[];
-    var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+    var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0)+(parseFloat(p.tds_amount)||0);},0);
     var balDue=(parseFloat(b.bill_amount)||0)-paidAmt;
     return {b:b,workAmt:workAmt,addAmt:addAmt,gstAmt:gstAmt,dedAmt:dedAmt,paidAmt:paidAmt,balDue:balDue};
   });
@@ -6466,11 +6524,56 @@ async function execSaveSalesBill(){
     if(amt>0) additions.push({head:head,type:'pct',pct:pct,amount:amt,is_gst:true});
   });
 
+  // Collect checked client-advance adjustments — see caBuildAdjDeductions.
+  // adjAdvTotal (work+gst) is real cash reducing this bill's net payable;
+  // adjAdvDetails also drives the post-save update of each advance's
+  // adjusted_work/adjusted_gst/adjusted_amount running totals.
+  var adjAdvTotal=0;
+  var adjAdvDetails=[];
+  document.querySelectorAll('.ca-adj-chk:checked:not(:disabled)').forEach(function(chk){
+    var aid=chk.getAttribute('data-adv-id');
+    var ai=chk.id.replace('ca-adj-','');
+    var amtInp=document.getElementById('ca-adj-amt-'+ai);
+    var reqAmt=parseFloat(amtInp&&amtInp.value)||0;
+    if(reqAmt<=0) return;
+    var origAdv=(WA_CLIENT_ADVANCES||[]).find(function(a){return a.id===aid;});
+    if(!origAdv) return;
+    var split=caSplitAdjustmentCapped(origAdv,reqAmt);
+    if(split.amount<=0) return;
+    adjAdvDetails.push({
+      id:aid, work_amt:split.work_amt, gst_amt:split.gst_amt,
+      adv_ref:origAdv.adv_ref||'', date:origAdv.date||'', purpose:origAdv.purpose||'',
+      payment_mode:origAdv.payment_mode||'', reference:origAdv.reference||'',
+      total_adv:parseFloat(origAdv.amount)||0
+    });
+    adjAdvTotal+=split.amount;
+  });
+  if(adjAdvTotal>0){
+    deductions=deductions.concat(caBuildAdjDeductions(adjAdvDetails));
+  }
+  // GST already recognised when a client advance was received (see
+  // caPostToAccounts) and now being adjusted against this bill must not be
+  // posted again as Output GST — same exclusion blPostToAccounts applies
+  // on the purchase side for advance-matched ITC. The bill's own stored
+  // gstAmt (and totalAmt below) are unaffected — the deduction row above
+  // already reduces net payable by this amount; only the amount actually
+  // POSTED to the GST leg is reduced.
+  var advGstMatched=adjAdvDetails.reduce(function(s,ad){return s+(parseFloat(ad.gst_amt)||0);},0);
+
   var workAmt=selectedItems.reduce(function(s,x){return s+x.amount;},0);
   var addAmt=additions.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   var gstAmt=additions.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   var dedAmt=deductions.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  // Posted separately from dedAmt: the advance-adjustment rows above already
+  // have their own GL effect (the advance's own receipt credited 1201; see
+  // caPostToAccounts), so including them again in the "Deductions" (Dr 3003/
+  // Cr 1201) leg would credit 1201 twice for the same rupees. dedAmt itself
+  // (all rows, including advance-adjustment) is still the right figure for
+  // totalAmt/bill_amount — net payable genuinely is reduced by the advance —
+  // only the POSTED leg needs to exclude it. Mirrors pbDed in blPostToAccounts.
+  var dedAmtForPost=deductions.filter(function(d){return !d.is_advance_adj;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var totalAmt=workAmt+addAmt+gstAmt-dedAmt;
+  if(totalAmt<0){toast('Advance adjustment exceeds this bill\'s value — reduce the amount adjusted','warning');return;}
   var prevSalesBills=WA_SALES_BILLS.filter(function(b){return b.project_id===projId;});
   var nextBillNo=prevSalesBills.length+1;
   var billRef=ref||('SALES/'+new Date().getFullYear()+'/'+String(nextBillNo).padStart(4,'0'));
@@ -6490,7 +6593,7 @@ async function execSaveSalesBill(){
     if(res&&res[0]){
       WA_SALES_BILLS.push(res[0]);
       BL_DEDUCTIONS=[];BL_GST=[];
-      toast(billRef+' generated \u2014 '+'\u20b9'+totalAmt.toLocaleString('en-IN'),'success');
+      toast(billRef+' generated'+(adjAdvTotal?' \u2014 advance \u20b9'+adjAdvTotal.toLocaleString('en-IN')+' adjusted':'')+' \u2014 '+'\u20b9'+totalAmt.toLocaleString('en-IN'),'success');
       SALES_SUBTAB='viewbills';
       execRenderSales();
 
@@ -6507,12 +6610,35 @@ async function execSaveSalesBill(){
         if(addAmt>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
           debitCode:'1201', creditCode:'3002', amount:addAmt,
           narration:'Additions on '+acRef, sourceType:'sales_bill_add', sourceId:res[0].id});
-        if(dedAmt>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
-          debitCode:'3003', creditCode:'1201', amount:dedAmt,
+        if(dedAmtForPost>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
+          debitCode:'3003', creditCode:'1201', amount:dedAmtForPost,
           narration:'Deductions on '+acRef, sourceType:'sales_bill_ded', sourceId:res[0].id});
-        if(gstAmt>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
-          debitCode:'1201', creditCode:'2101', amount:gstAmt,
+        var gstToPost=Math.max(0,gstAmt-advGstMatched);
+        if(gstToPost>0) accAutoPost({type:'Sales', date:date, partyName:acParty,
+          debitCode:'1201', creditCode:'2101', amount:gstToPost,
           narration:'GST on '+acRef, sourceType:'sales_bill_gst', sourceId:res[0].id});
+      }
+
+      // Update adjusted_amount/adjusted_work/adjusted_gst on each client
+      // advance drawn on, and mark which bill it was last adjusted into —
+      // mirrors execSaveBill's equivalent update on the purchase side.
+      if(adjAdvDetails.length){
+        adjAdvDetails.forEach(function(ad){
+          var idx=(WA_CLIENT_ADVANCES||[]).findIndex(function(a){return a.id===ad.id;});
+          if(idx>-1){
+            var prevAdj=parseFloat(WA_CLIENT_ADVANCES[idx].adjusted_amount)||0;
+            var prevWork=parseFloat(WA_CLIENT_ADVANCES[idx].adjusted_work)||0;
+            var prevGst=parseFloat(WA_CLIENT_ADVANCES[idx].adjusted_gst)||0;
+            var patch={
+              adjusted_amount:prevAdj+ad.work_amt+ad.gst_amt,
+              adjusted_work:prevWork+ad.work_amt,
+              adjusted_gst:prevGst+ad.gst_amt,
+              adjusted_in_bill:res[0].id
+            };
+            Object.assign(WA_CLIENT_ADVANCES[idx],patch);
+            sbUpdate('client_advances',ad.id,patch).catch(function(){});
+          }
+        });
       }
     }
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
@@ -6520,9 +6646,14 @@ async function execSaveSalesBill(){
 
 async function execDelSalesBill(id){
   if(!confirm('Delete this sales bill?')) return;
+  var delBill=WA_SALES_BILLS.find(function(b){return b.id===id;});
   WA_SALES_BILLS=WA_SALES_BILLS.filter(function(b){return b.id!==id;});
   execRenderSales();
-  try{await sbDelete('sales_bills',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
+  try{
+    if(delBill) await caReverseAllBillAdjustments(delBill);
+    await sbDelete('sales_bills',id);
+    if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);
+  }catch(e){console.error(e);}
   toast('Sales bill deleted','success');
 }
 
@@ -10442,6 +10573,675 @@ async function advReverseAllBillAdjustments(bill){
   for(var k=0;k<advDeds.length;k++){
     await advReverseDeductionRow(advDeds[k]);
   }
+}
+
+// ===== Client Advance (Advance RECEIVED from a client, before a sales
+// bill exists) — mirrors the purchase-side Advance Payment breakdown
+// (ADV_DEDUCTIONS/ADV_GST, advUpdateTotal) but for money coming IN from a
+// client instead of going OUT to a vendor, and without the
+// allotment/batch linkage purchase advances have (sales has no BOQ
+// allotment concept — a client advance is always against a project as a
+// whole, later adjusted against whichever sales bill is raised against
+// it). No Additions block either — a client advance is a plain receipt,
+// not something that itself picks up transport/mobilization add-ons.
+//
+// GST is recognised on receipt (see caPostToAccounts) per the decision
+// recorded in the "Advances, Bills & GST/TDS — Accounting Review" doc:
+// this matches Section 13(2) time-of-supply for services and mirrors how
+// the app already claims ITC at advance stage on the purchase side. TDS
+// deducted BY the client (194C/194J, but here the client is the deductor)
+// is tracked as a receivable (1302), never netted against what we owe —
+// it's money the Income Tax Dept owes back to us, claimable via Form 26AS.
+var CA_DEDUCTIONS=[];
+var CA_GST=[];
+function caResetBreakdown(){ CA_DEDUCTIONS=[];CA_GST=[]; }
+
+function caBreakdownHtml(baseDefault){
+  return '<label class="flbl">Base Amount (₹) *</label>'+
+    '<input id="ca-base-amt" class="finp" type="number" step="1" placeholder="0" value="'+(baseDefault||'')+'" oninput="caUpdateTotal()" style="font-weight:800;">'+
+    '<div style="margin-top:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">'+
+      '<div style="padding:10px 14px;">'+
+        '<div style="font-size:10px;font-weight:800;color:#E65100;margin-bottom:6px;">− DEDUCTIONS</div>'+
+        '<div id="ca-ded-list"></div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+          '<button type="button" onclick="caAddDeduction()" style="font-size:10px;padding:4px 10px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:5px;cursor:pointer;font-weight:700;">+ Add Deduction</button>'+
+          '<button type="button" onclick="caAddDeduction(\'TDS\',true)" style="font-size:10px;padding:4px 10px;background:#EDE7F6;color:#4A148C;border:1px solid #B39DDB;border-radius:5px;cursor:pointer;font-weight:700;" title="Withheld by the client for Income Tax — claimable by us, not lost">&#127970; + Add TDS</button>'+
+        '</div>'+
+      '</div>'+
+      '<div style="padding:6px 14px;background:#F3E5F5;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
+        '<span style="font-size:10px;font-weight:800;color:#7B1FA2;">Net before GST</span>'+
+        '<span style="font-size:12px;font-weight:900;color:#7B1FA2;" id="ca-net-before-gst-amt">₹0</span>'+
+      '</div>'+
+      '<div style="padding:10px 14px;border-top:1px solid var(--border);">'+
+        '<div style="font-size:10px;font-weight:800;color:#1B5E20;margin-bottom:6px;">+ GST</div>'+
+        '<div id="ca-gst-list"></div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+          '<button type="button" onclick="caAddGst(18)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 18%</button>'+
+          '<button type="button" onclick="caAddGst(12)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 12%</button>'+
+          '<button type="button" onclick="caAddGst(5)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ GST 5%</button>'+
+          '<button type="button" onclick="caAddGst(0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom %</button>'+
+        '</div>'+
+      '</div>'+
+      '<div style="padding:10px 14px;border-top:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#F8F0FD;">'+
+        '<span style="font-size:12px;font-weight:900;color:#4A148C;">Net Advance Receivable</span>'+
+        '<span style="font-size:15px;font-weight:900;color:#4A148C;" id="ca-net-payable-amt">₹0</span>'+
+      '</div>'+
+    '</div>';
+}
+
+function caUpdateTotal(){
+  var inr=function(n){return '₹'+Math.round(n||0).toLocaleString('en-IN');};
+  var base=parseFloat((document.getElementById('ca-base-amt')||{value:0}).value)||0;
+
+  var dedTotal=0;
+  var caTdsTotal=0; // just the TDS-flagged rows, for the GST base below
+  document.querySelectorAll('.ca-ded-row').forEach(function(row){
+    var pctInp=row.querySelector('.ca-ded-pct');
+    var amtInp=row.querySelector('.ca-ded-amt');
+    var pct=parseFloat(pctInp&&pctInp.value)||0;
+    if(pct&&amtInp) amtInp.value=Math.round(base*pct/100);
+    var amt=parseFloat(amtInp&&amtInp.value)||0;
+    dedTotal+=amt;
+    if(row.getAttribute('data-is-tds')==='true') caTdsTotal+=amt;
+  });
+
+  var netBeforeGst=base-dedTotal;
+  var nbgEl=document.getElementById('ca-net-before-gst-amt');
+  if(nbgEl) nbgEl.textContent=inr(netBeforeGst);
+
+  // GST is charged on the taxable value — TDS withholding by the client
+  // doesn't reduce that value — so the %-based GST row is calculated with
+  // the TDS portion added back (gstBase), not on the TDS-net figure.
+  var gstBase=netBeforeGst+caTdsTotal;
+  var gstTotal=0;
+  document.querySelectorAll('.ca-gst-row').forEach(function(row){
+    var pctInp=row.querySelector('.ca-gst-pct');
+    var amtInp=row.querySelector('.ca-gst-amt');
+    var pct=parseFloat(pctInp&&pctInp.value)||0;
+    if(pct&&amtInp) amtInp.value=Math.round(gstBase*pct/100);
+    gstTotal+=parseFloat(amtInp&&amtInp.value)||0;
+  });
+
+  var netReceivable=Math.max(0,Math.round(netBeforeGst+gstTotal));
+  var netEl=document.getElementById('ca-net-payable-amt');
+  if(netEl) netEl.textContent=inr(netReceivable);
+  var amtEl=document.getElementById('ca-amount');
+  if(amtEl) amtEl.value=netReceivable;
+  return netReceivable;
+}
+
+function caAddGst(pct,existingAmt,head){
+  var id='cgst-'+Date.now()+'-'+Math.floor(Math.random()*1000);
+  CA_GST.push({id:id});
+  var container=document.getElementById('ca-gst-list');
+  if(!container)return;
+  var div=document.createElement('div');
+  div.id=id;
+  div.className='ca-gst-row';
+  div.style.cssText='display:grid;grid-template-columns:1fr 70px 110px 26px;gap:6px;margin-bottom:6px;align-items:center;';
+  div.innerHTML=
+    '<input class="finp ca-gst-head" placeholder="GST description" value="'+(head||(pct?'GST @'+pct+'%':''))+'" style="margin:0;">'+
+    '<input class="finp ca-gst-pct" type="number" step="0.01" min="0" max="100" placeholder="%" value="'+(pct||'')+'" style="margin:0;text-align:right;" oninput="caUpdateTotal()" title="% of net before GST">'+
+    '<input class="finp ca-gst-amt" type="number" placeholder="Amount ₹" value="'+(existingAmt||'')+'" style="margin:0;text-align:right;color:#2E7D32;font-weight:800;" oninput="caGstAmtManual(\''+id+'\')">'+
+    '<button type="button" onclick="caRemoveGst(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
+  container.appendChild(div);
+  caUpdateTotal();
+}
+function caGstAmtManual(id){
+  var row=document.getElementById(id);
+  if(!row) return;
+  var pctInp=row.querySelector('.ca-gst-pct');
+  if(pctInp) pctInp.value='';
+  caUpdateTotal();
+}
+function caRemoveGst(id){
+  CA_GST=CA_GST.filter(function(g){return g.id!==id;});
+  var el=document.getElementById(id); if(el) el.remove();
+  caUpdateTotal();
+}
+
+// isTds mirrors advAddDeduction's data-is-tds convention, but here the
+// client is the one withholding — this money isn't lost, it's a tax
+// credit claimable by us via Form 26AS (see caPostToAccounts's 1302 leg).
+function caAddDeduction(presetHead,isTds,pct,existingAmt){
+  var id='cded-'+Date.now()+'-'+Math.floor(Math.random()*1000);
+  CA_DEDUCTIONS.push({id:id,isTds:!!isTds});
+  var container=document.getElementById('ca-ded-list');
+  if(!container)return;
+  var div=document.createElement('div');
+  div.id=id;
+  div.className='ca-ded-row';
+  if(isTds) div.setAttribute('data-is-tds','true');
+  div.style.cssText='display:grid;grid-template-columns:1fr 70px 110px 26px;gap:6px;margin-bottom:6px;align-items:center;'+
+    (isTds?'background:#EDE7F6;border:1px solid #B39DDB;border-radius:6px;padding:4px 6px;':'');
+  div.innerHTML=
+    (isTds?'<div style="grid-column:1/-1;font-size:9px;font-weight:800;color:#4A148C;margin-bottom:2px;">&#127970; TDS — withheld by the client for Income Tax, claimable by us via Form 26AS, not lost</div>':'')+
+    '<input class="finp ca-ded-head" placeholder="e.g. TDS u/s 194C/194J" value="'+(presetHead||'')+'" style="margin:0;'+(isTds?'font-weight:800;color:#4A148C;':'')+'">'+
+    '<input class="finp ca-ded-pct" type="number" step="0.01" min="0" max="100" placeholder="%" value="'+(pct||'')+'" style="margin:0;text-align:right;" oninput="caDedCalc(\''+id+'\')" title="Enter % to auto-calculate amount (e.g. 1% or 2% u/s 194C)">'+
+    '<input class="finp ca-ded-amt" type="number" placeholder="Amount ₹" value="'+(existingAmt||'')+'" style="margin:0;text-align:right;" oninput="caDedAmtManual(\''+id+'\')">'+
+    '<button type="button" onclick="caRemoveDeduction(\''+id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:16px;">&#215;</button>';
+  container.appendChild(div);
+  if(pct) caDedCalc(id); else caUpdateTotal();
+}
+function caDedCalc(id){ caUpdateTotal(); }
+function caDedAmtManual(id){
+  var row=document.getElementById(id);
+  if(!row) return;
+  var pctInp=row.querySelector('.ca-ded-pct');
+  if(pctInp) pctInp.value='';
+  caUpdateTotal();
+}
+function caRemoveDeduction(id){
+  CA_DEDUCTIONS=CA_DEDUCTIONS.filter(function(d){return d.id!==id;});
+  var el=document.getElementById(id); if(el) el.remove();
+  caUpdateTotal();
+}
+
+function caCollectBreakdown(){
+  var deductions=[];
+  document.querySelectorAll('.ca-ded-row').forEach(function(row){
+    var head=(row.querySelector('.ca-ded-head')||{value:''}).value.trim();
+    var amt=parseFloat((row.querySelector('.ca-ded-amt')||{value:0}).value)||0;
+    var pct=parseFloat((row.querySelector('.ca-ded-pct')||{value:0}).value)||0;
+    var isTds=row.getAttribute('data-is-tds')==='true';
+    if(head&&amt>0) deductions.push({head:head,amount:amt,pct:pct,is_tds:isTds});
+  });
+  var gst=[];
+  document.querySelectorAll('.ca-gst-row').forEach(function(row){
+    var head=(row.querySelector('.ca-gst-head')||{value:''}).value.trim()||'GST';
+    var amt=parseFloat((row.querySelector('.ca-gst-amt')||{value:0}).value)||0;
+    var pct=parseFloat((row.querySelector('.ca-gst-pct')||{value:0}).value)||0;
+    if(amt>0) gst.push({head:head,amount:amt,pct:pct});
+  });
+  var baseAmt=parseFloat((document.getElementById('ca-base-amt')||{value:0}).value)||0;
+  return {base_amount:baseAmt,deductions:deductions,gst:gst,net:caUpdateTotal()};
+}
+
+// Re-populates the breakdown rows from a previously-saved client advance
+// (used by the Edit Advance Received form).
+function caPrefillBreakdown(rec){
+  caResetBreakdown();
+  var baseEl=document.getElementById('ca-base-amt');
+  if(baseEl) baseEl.value=(rec.base_amount!=null?rec.base_amount:rec.amount)||'';
+  var deds=[];try{deds=rec.deductions?JSON.parse(rec.deductions):[];}catch(e){}
+  deds.forEach(function(d){ caAddDeduction(d.head,!!d.is_tds,d.pct||0,d.amount||0); });
+  var gsts=[];try{gsts=rec.gst?JSON.parse(rec.gst):[];}catch(e){}
+  gsts.forEach(function(g){ caAddGst(g.pct||0,g.amount||0,g.head); });
+  caUpdateTotal();
+}
+
+// CADV/YYYY/NNNN — same numbering pattern as ADV/YYYY/NNNN on the
+// purchase side, just its own series so the two never collide.
+function caGenRef(){
+  return 'CADV/'+new Date().getFullYear()+'/'+String((WA_CLIENT_ADVANCES||[]).length+1).padStart(4,'0');
+}
+
+// Posts a client advance's full double-entry to the General Ledger — the
+// receipt/bank leg for the net amount actually received, plus the
+// TDS-receivable and GST legs of its breakdown. Mirrors advPostToAccounts
+// (purchase side) with the shared party account's debit/credit sides
+// flipped: there it's 2001 Sundry Creditors (a liability, debited to
+// record a prepayment); here it's 1201 Sundry Debtors (an asset, credited
+// on receipt to record "we now owe this client work"), which nets
+// cleanly against the eventual sales bill's own Dr 1201 leg for the same
+// client — no separate adjustment voucher needed (see caBuildAdjDeductions
+// for the printed-bill deduction rows that explain that net figure).
+function caPostToAccounts(advId,projId,date,purpose,bk,mode){
+  if(typeof accAutoPost!=='function') return;
+  var proj=(typeof PROJ_DATA!=='undefined'?PROJ_DATA:[]).find(function(p){return p.id===projId;})||{};
+  var partyName=proj.client||proj.name||'Client';
+  var advNet=Math.round(parseFloat(bk.net)||0);
+  var advTds=bk.deductions.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var advGst=bk.gst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
+  var advRef='Advance from '+partyName+(purpose?' — '+purpose:'');
+  var cashCode=mode==='Cash'?'1001':'1002';
+  if(advNet>0) accAutoPost({type:'Receipt', date:date, partyName:partyName,
+    debitCode:cashCode, creditCode:'1201', amount:advNet,
+    narration:advRef, sourceType:'client_advance', sourceId:advId});
+  if(advTds>0) accAutoPost({type:'Receipt', date:date, partyName:partyName,
+    debitCode:'1302', creditCode:'1201', amount:advTds,
+    narration:'TDS on '+advRef, sourceType:'client_advance_tds', sourceId:advId});
+  if(advGst>0) accAutoPost({type:'Receipt', date:date, partyName:partyName,
+    debitCode:'1201', creditCode:'2101', amount:advGst,
+    narration:'GST on '+advRef, sourceType:'client_advance_gst', sourceId:advId});
+}
+
+// Reads a client advance's own recorded composition (Work/Base Amount,
+// TDS, GST) out of its saved breakdown columns.
+function caParseBreakdown(adv){
+  var ded=[];try{ded=adv.deductions?JSON.parse(adv.deductions):[];}catch(e){}
+  var gst=[];try{gst=adv.gst?JSON.parse(adv.gst):[];}catch(e){}
+  var work=parseFloat(adv.base_amount!=null?adv.base_amount:adv.amount)||0;
+  var tdsTotal=ded.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var dedTotal=ded.filter(function(d){return !d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var gstTotal=gst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
+  var net=parseFloat(adv.amount)||(work-tdsTotal-dedTotal+gstTotal);
+  return {work:work, tds:tdsTotal, ded:dedTotal, gst:gstTotal, net:net};
+}
+
+// Splits an amount being adjusted out of this advance into Work/GST
+// components, scaled by the ratios the advance itself was recorded with.
+// Only two heads — unlike the purchase side's three (Work/TDS/GST), TDS
+// deducted by the client isn't something a bill adjusts against (see the
+// client_advances.sql comment): it's a receivable resolved once, at the
+// cash event, never carried forward as an adjustable head.
+function caSplitAdjustment(adv, adjAmt){
+  var p=caParseBreakdown(adv);
+  var ratio=p.net>0?((parseFloat(adjAmt)||0)/p.net):0;
+  return {
+    work_amt:Math.round(p.work*ratio),
+    gst_amt:Math.round(p.gst*ratio)
+  };
+}
+
+// How much of EACH head — Work Amt, GST — a client advance still has left
+// to adjust, tracked via its own running total (adjusted_work/
+// adjusted_gst), same guard against double-dipping as advRemainingByHead.
+function caRemainingByHead(adv){
+  var p=caParseBreakdown(adv);
+  var usedWork=parseFloat(adv.adjusted_work)||0;
+  var usedGst=parseFloat(adv.adjusted_gst)||0;
+  var work=Math.max(0,p.work-usedWork);
+  var gst=Math.max(0,p.gst-usedGst);
+  var sumHeads=work+gst;
+  var aggRemaining=Math.max(0,(parseFloat(adv.amount)||0)-(parseFloat(adv.adjusted_amount)||0));
+  if(sumHeads>aggRemaining+0.5&&sumHeads>0){
+    var scale=aggRemaining/sumHeads;
+    work=Math.round(work*scale);
+    gst=Math.round(gst*scale);
+  }
+  return {work:work, workTotal:p.work, gst:gst, gstTotal:p.gst};
+}
+
+// Like caSplitAdjustment, but hard-caps each component to what's still
+// actually available under that head (caRemainingByHead) — mirrors
+// advSplitAdjustmentCapped, used so the simplified single "Adjust Amount"
+// input on the sales-bill Advance Adjustment panel can never draw more
+// GST out of an advance than that advance genuinely still has as GST.
+function caSplitAdjustmentCapped(adv, adjAmt){
+  var raw=caSplitAdjustment(adv, adjAmt);
+  var rem=caRemainingByHead(adv);
+  var work=Math.min(raw.work_amt, rem.work);
+  var gst=Math.min(raw.gst_amt, rem.gst);
+  var used=work+gst;
+  var requested=Math.round(parseFloat(adjAmt)||0);
+  return {work_amt:work, gst_amt:gst, amount:used, shortfall:Math.max(0,requested-used)};
+}
+
+// Builds the sales bill's "Advance Adjustment" deduction rows from checked
+// client advances — Work Amt and GST, both real cash reducing net payable
+// (mirrors advBuildAdjDeductions's cashHeads). No TDS row here: TDS
+// deducted by the client is only ever recognised at a cash event (this
+// advance, or a later bill payment — see execSaveSalesPayment), never
+// carried forward as a head to adjust against the bill itself.
+function caBuildAdjDeductions(adjAdvDetails){
+  var cashHeads=[
+    {key:'work_amt', label:'Advance Adjustment (Work Amt)'},
+    {key:'gst_amt', label:'Advance Adjustment (GST)'}
+  ];
+  var ts=Date.now();
+  var out=[];
+  var grandTotal=adjAdvDetails.reduce(function(s,ad){return s+(parseFloat(ad.work_amt)||0)+(parseFloat(ad.gst_amt)||0);},0);
+  cashHeads.forEach(function(h,hi){
+    var rowDetails=[];
+    adjAdvDetails.forEach(function(ad){
+      var amt=Math.round(parseFloat(ad[h.key])||0);
+      if(amt>0) rowDetails.push({id:ad.id,amount:amt,adv_ref:ad.adv_ref||'',date:ad.date,purpose:ad.purpose,payment_mode:ad.payment_mode,reference:ad.reference,total_adv:ad.total_adv});
+    });
+    var rowTotal=rowDetails.reduce(function(s,d){return s+d.amount;},0);
+    if(rowTotal>0){
+      out.push({id:'ca-adj-'+ts+'-'+hi,head:h.label,amount:rowTotal,is_advance_adj:true,adv_adj_head:h.key,advance_ids:rowDetails.map(function(d){return d.id;}),advance_details:rowDetails});
+    }
+  });
+  var splitSum=out.reduce(function(s,d){return s+d.amount;},0);
+  var drift=Math.round(grandTotal-splitSum);
+  if(drift!==0&&out.length){
+    out[0].amount+=drift;
+    if(out[0].advance_details.length) out[0].advance_details[0].amount+=drift;
+  }
+  return out;
+}
+
+// Reverses whatever adjusted_amount ONE advance-adjustment deduction row
+// contributed to each client advance it drew from — mirrors
+// advReverseDeductionRow, used when a sales bill's deduction row (or the
+// whole bill) is deleted/edited, so advances it consumed go back to being
+// available.
+async function caReverseDeductionRow(ded){
+  var advDetails=ded.advance_details||[];
+  var advIds=ded.advance_ids||[];
+  var headCol=({work_amt:'adjusted_work',gst_amt:'adjusted_gst'})[ded.adv_adj_head]||null;
+  if(advDetails.length){
+    for(var i=0;i<advDetails.length;i++){
+      var ad=advDetails[i];
+      var origAdv=(WA_CLIENT_ADVANCES||[]).find(function(a){return a.id===ad.id;})||{};
+      var newAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-(parseFloat(ad.amount)||0));
+      var patch={adjusted_amount:newAdj};
+      if(headCol) patch[headCol]=Math.max(0,(parseFloat(origAdv[headCol])||0)-(parseFloat(ad.amount)||0));
+      try{
+        await sbUpdate('client_advances',ad.id,patch);
+        var idx=WA_CLIENT_ADVANCES.findIndex(function(a){return a.id===ad.id;});
+        if(idx>-1) Object.assign(WA_CLIENT_ADVANCES[idx],patch);
+      }catch(e){console.warn(e);}
+    }
+  } else if(advIds.length){
+    var splitAmt=(parseFloat(ded.amount)||0)/advIds.length;
+    for(var j=0;j<advIds.length;j++){
+      var origAdv2=(WA_CLIENT_ADVANCES||[]).find(function(a){return a.id===advIds[j];})||{};
+      var newAdj2=Math.max(0,(parseFloat(origAdv2.adjusted_amount)||0)-splitAmt);
+      try{
+        await sbUpdate('client_advances',advIds[j],{adjusted_amount:newAdj2});
+        var idx2=WA_CLIENT_ADVANCES.findIndex(function(a){return a.id===advIds[j];});
+        if(idx2>-1) WA_CLIENT_ADVANCES[idx2].adjusted_amount=newAdj2;
+      }catch(e){console.warn(e);}
+    }
+  }
+}
+
+// Reverses EVERY advance-adjustment deduction row on a sales bill — call
+// this before a sales bill is deleted, mirrors advReverseAllBillAdjustments.
+async function caReverseAllBillAdjustments(bill){
+  if(!bill) return;
+  var deds=[];try{deds=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
+  var advDeds=deds.filter(function(d){return d.is_advance_adj;});
+  for(var k=0;k<advDeds.length;k++){
+    await caReverseDeductionRow(advDeds[k]);
+  }
+}
+
+async function execOpenClientAdvance(projId){
+  projId=projId||PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
+  if(!projId){toast('Select a project first','warning');return;}
+  var proj=(typeof PROJ_DATA!=='undefined'?PROJ_DATA:[]).find(function(p){return p.id===projId;})||{};
+  var partyName=proj.client||proj.name||'Client';
+  caResetBreakdown();
+  document.getElementById('exec-sheet-title').textContent='Advance Received — '+partyName;
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<label class="flbl">Date *</label><input id="ca-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    caBreakdownHtml(0)+
+    '<input id="ca-amount" type="hidden" value="0">'+
+    '<div class="g2" style="margin-top:8px;">'+
+      '<div><label class="flbl">Payment Mode</label>'+
+        '<select id="ca-mode" class="fsel"><option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option></select>'+
+      '</div>'+
+      '<div><label class="flbl">Reference / UTR</label><input id="ca-ref" class="finp" placeholder="UTR / Cheque no."></div>'+
+    '</div>'+
+    '<label class="flbl">Purpose / Remarks *</label>'+
+    '<input id="ca-purpose" class="finp" placeholder="e.g. Mobilization advance from client...">';
+  caUpdateTotal();
+
+  var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#4A148C;color:white;';
+  sb.innerHTML='&#128176; Record Advance Received';
+  sb.onclick=function(){execSaveClientAdvance(projId);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execSaveClientAdvance(projId){
+  var date=gv('ca-date');
+  var bk=caCollectBreakdown();
+  var amount=bk.net;
+  var purpose=(gv('ca-purpose')||'').trim();
+  if(!date||!bk.base_amount){toast('Date and base amount required','warning');return;}
+  if(!purpose){toast('Purpose/remarks required','warning');return;}
+  try{
+    var res=await sbInsert('client_advances',{
+      project_id:projId,date:date,amount:amount,
+      base_amount:bk.base_amount,
+      deductions:bk.deductions.length?JSON.stringify(bk.deductions):null,
+      gst:bk.gst.length?JSON.stringify(bk.gst):null,
+      payment_mode:gv('ca-mode')||null,
+      reference:gv('ca-ref')||null,
+      purpose:purpose,
+      adv_ref:caGenRef()
+    });
+    if(res&&res[0]){
+      if(!WA_CLIENT_ADVANCES) WA_CLIENT_ADVANCES=[];
+      WA_CLIENT_ADVANCES.push(res[0]);
+      caPostToAccounts(res[0].id,projId,date,purpose,bk,gv('ca-mode'));
+      toast('Advance of ₹'+amount.toLocaleString('en-IN')+' recorded!','success');
+      closeSheet('ov-exec','sh-exec');
+      execClientAdvanceReceipt(res[0].id);
+      execRenderSales();
+    }
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+// PDF receipt for a client advance — mirrors execAdvanceReceipt but
+// simpler (no allotment/resource line — a client advance isn't tied to a
+// specific BOQ item the way a purchase advance can be).
+function execClientAdvanceReceipt(advId){
+  var adv=(WA_CLIENT_ADVANCES||[]).find(function(x){return x.id===advId;});
+  if(!adv){toast('Advance not found','error');return;}
+  var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
+  var proj=(typeof PROJ_DATA!=='undefined'?PROJ_DATA:[]).find(function(p){return p.id===adv.project_id;})||{};
+  var partyName=proj.client||proj.name||'Client';
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+  function fmtD(d){if(!d)return '—';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+
+  var rcptNo=adv.adv_ref||('CADV/'+new Date().getFullYear()+'/'+String((WA_CLIENT_ADVANCES||[]).length).padStart(4,'0'));
+  var totalAdv=(WA_CLIENT_ADVANCES||[]).filter(function(x){return x.project_id===adv.project_id;})
+    .reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+
+  var bDeds=[];try{bDeds=adv.deductions?JSON.parse(adv.deductions):[];}catch(e){}
+  var bGst=[];try{bGst=adv.gst?JSON.parse(adv.gst):[];}catch(e){}
+  var hasBreakdown=(adv.base_amount!=null)&&(bDeds.length||bGst.length);
+  var breakdownHtml='';
+  if(hasBreakdown){
+    var rowsHtml=
+      '<tr><td>Base Amount</td><td style="text-align:right;">'+inr(adv.base_amount)+'</td></tr>'+
+      bDeds.map(function(x){
+        return '<tr><td>− '+(x.head||'Deduction')+(x.is_tds?' <span style="font-size:9px;color:#4A148C;">(TDS)</span>':'')+'</td><td style="text-align:right;color:#C62828;">'+inr(x.amount)+'</td></tr>';
+      }).join('')+
+      bGst.map(function(x){return '<tr><td>+ '+(x.head||'GST')+'</td><td style="text-align:right;color:#2E7D32;">'+inr(x.amount)+'</td></tr>';}).join('');
+    breakdownHtml=
+      '<div style="border:1px solid #EEE;border-radius:8px;padding:12px 14px;margin-bottom:16px;">'+
+        '<div class="lbl" style="margin-bottom:8px;">Amount Breakdown</div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:11px;">'+
+          '<tbody>'+rowsHtml+'</tbody>'+
+          '<tfoot><tr style="border-top:1.5px solid #DDD;"><td style="padding-top:6px;font-weight:800;">Net Advance Received</td><td style="padding-top:6px;text-align:right;font-weight:800;color:#4A148C;">'+inr(adv.amount)+'</td></tr></tfoot>'+
+        '</table>'+
+      '</div>';
+  }
+
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Advance Receipt — '+rcptNo+'</title>'+
+    '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:12px;padding:32px;color:#1a1a1a;}'+
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #4A148C;padding-bottom:12px;margin-bottom:16px;}'+
+    '.co{font-size:17px;font-weight:900;color:#4A148C;}.co-info{font-size:10px;color:#555;margin-top:3px;}'+
+    '.rcpt-title{font-size:20px;font-weight:900;color:#4A148C;text-align:right;}.rcpt-no{font-size:12px;color:#555;text-align:right;margin-top:4px;}'+
+    '.info-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:16px;}'+
+    '.info-cell{padding:10px 14px;}.info-cell+.info-cell{border-left:1px solid #DDD;}'+
+    '.lbl{font-size:9px;font-weight:800;color:#888;text-transform:uppercase;margin-bottom:3px;}'+
+    '.val{font-size:13px;font-weight:800;}'+
+    '.amt-box{background:#F8F0FD;border:2px solid #4A148C;border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;}'+
+    '.amt-lbl{font-size:11px;color:#888;font-weight:700;margin-bottom:6px;}'+
+    '.amt-val{font-size:32px;font-weight:900;color:#4A148C;}'+
+    '.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;border:1px solid #EEE;border-radius:8px;padding:12px;margin-bottom:16px;background:#FAFAFA;}'+
+    '.detail-cell .d-lbl{font-size:9px;color:#888;font-weight:700;margin-bottom:3px;}'+
+    '.detail-cell .d-val{font-size:12px;font-weight:800;}'+
+    '.purpose-box{background:#F8FAFC;border-radius:8px;padding:12px;margin-bottom:16px;}'+
+    '.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;}'+
+    '.sig-box{border-top:1.5px solid #333;padding-top:8px;text-align:center;font-size:10px;color:#555;}'+
+    '@media print{button{display:none;}}</style></head><body>'+
+    '<button onclick="window.print()" style="background:#4A148C;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:18px;font-family:Arial;font-weight:700;">&#128438; Print / Save PDF</button>'+
+
+    '<div class="hdr">'+
+      '<div><div class="co">'+(co.name||'Company Name')+'</div>'+
+        '<div class="co-info">'+(co.address||'')+(co.gstin?'<br>GSTIN: '+co.gstin:'')+'</div></div>'+
+      '<div><div class="rcpt-title">ADVANCE RECEIPT</div>'+
+        '<div class="rcpt-no">'+rcptNo+'</div>'+
+        '<div style="font-size:10px;color:#555;text-align:right;margin-top:3px;">Date: '+fmtD(adv.date)+'</div>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="info-grid">'+
+      '<div class="info-cell"><div class="lbl">Received From</div><div class="val">'+partyName+'</div></div>'+
+      '<div class="info-cell"><div class="lbl">Project</div><div class="val">'+(proj.name||'')+'</div></div>'+
+    '</div>'+
+
+    '<div class="amt-box">'+
+      '<div class="amt-lbl">ADVANCE AMOUNT RECEIVED</div>'+
+      '<div class="amt-val">'+inr(adv.amount)+'</div>'+
+      '<div style="font-size:11px;color:#888;margin-top:6px;">'+(adv.payment_mode||'')+(adv.reference?' · Ref: '+adv.reference:'')+'</div>'+
+    '</div>'+
+
+    breakdownHtml+
+
+    '<div class="detail-grid">'+
+      '<div class="detail-cell"><div class="d-lbl">Total Advance Received (this project)</div><div class="d-val" style="color:#4A148C;">'+inr(totalAdv)+'</div></div>'+
+      '<div class="detail-cell"><div class="d-lbl">Payment Mode</div><div class="d-val">'+(adv.payment_mode||'—')+'</div></div>'+
+    '</div>'+
+
+    (adv.purpose?'<div class="purpose-box"><div class="lbl" style="margin-bottom:4px;">Purpose / Remarks</div><div style="font-size:11px;">'+adv.purpose+'</div></div>':'')+
+
+    '<div class="sig-grid">'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+partyName+'</div><div>Paid By</div></div>'+
+      '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Company')+'</div><div>Received By / Authorized</div></div>'+
+    '</div>'+
+  '</body></html>';
+
+  openPDF(html);
+}
+
+async function execEditClientAdvance(advId){
+  var adv=(WA_CLIENT_ADVANCES||[]).find(function(x){return x.id===advId;});
+  if(!adv){toast('Advance not found','error');return;}
+  document.getElementById('exec-sheet-title').textContent='Edit Advance Received'+(adv.adv_ref?' — '+adv.adv_ref:'');
+  document.getElementById('exec-sheet-body').innerHTML=
+    '<label class="flbl">Date *</label>'+
+    '<input id="ca-date" class="finp" type="date" value="'+(adv.date||'')+'">'+
+    caBreakdownHtml(adv.base_amount!=null?adv.base_amount:adv.amount)+
+    '<input id="ca-amount" type="hidden" value="'+(adv.amount||'')+'">'+
+    '<label class="flbl">Payment Mode</label>'+
+    '<select id="ca-mode" class="fsel">'+
+      '<option value="">— Select —</option>'+
+      ['Cash','NEFT','RTGS','IMPS','Cheque','UPI','DD'].map(function(m){
+        return '<option value="'+m+'"'+(adv.payment_mode===m?' selected':'')+'>'+m+'</option>';
+      }).join('')+
+    '</select>'+
+    '<label class="flbl">Reference / Cheque No.</label>'+
+    '<input id="ca-ref" class="finp" placeholder="UTR / Cheque number" value="'+(adv.reference||'')+'">'+
+    '<label class="flbl">Purpose / Remarks *</label>'+
+    '<input id="ca-purpose" class="finp" value="'+(adv.purpose||'')+'" placeholder="e.g. Mobilization advance...">';
+  caPrefillBreakdown(adv);
+
+  var sf=document.getElementById('exec-sheet-foot');sf.innerHTML='';
+  var cb=document.createElement('button');cb.className='btn btn-outline';cb.textContent='Cancel';
+  cb.onclick=function(){closeSheet('ov-exec','sh-exec');};
+  var sb=document.createElement('button');sb.className='btn';sb.style.cssText='background:#4A148C;color:white;';
+  sb.innerHTML='&#10003; Update Advance';
+  sb.onclick=function(){execUpdateClientAdvance(advId);};
+  sf.appendChild(cb);sf.appendChild(sb);
+  openSheet('ov-exec','sh-exec');
+}
+
+async function execUpdateClientAdvance(advId){
+  var existing=(WA_CLIENT_ADVANCES||[]).find(function(x){return x.id===advId;})||{};
+  var date=(document.getElementById('ca-date')||{value:''}).value;
+  var bk=caCollectBreakdown();
+  var amount=bk.net;
+  var mode=(document.getElementById('ca-mode')||{value:''}).value||null;
+  var ref=(document.getElementById('ca-ref')||{value:''}).value.trim()||null;
+  var purpose=(document.getElementById('ca-purpose')||{value:''}).value.trim();
+  if(!date||!bk.base_amount){toast('Date and base amount required','warning');return;}
+  if(!purpose){toast('Purpose required','warning');return;}
+  var payload={
+    date:date,amount:amount,payment_mode:mode,reference:ref,purpose:purpose,
+    base_amount:bk.base_amount,
+    deductions:bk.deductions.length?JSON.stringify(bk.deductions):null,
+    gst:bk.gst.length?JSON.stringify(bk.gst):null
+  };
+  if(!existing.adv_ref) payload.adv_ref=caGenRef();
+  try{
+    await sbUpdate('client_advances',advId,payload);
+    var idx=WA_CLIENT_ADVANCES.findIndex(function(x){return x.id===advId;});
+    if(idx>-1) Object.assign(WA_CLIENT_ADVANCES[idx],payload);
+    // Re-post TDS/GST to Accounts: drop whatever was posted for the old
+    // breakdown and post fresh legs for the new one, same as
+    // execUpdateAdvance does on the purchase side.
+    if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(advId);
+    caPostToAccounts(advId,existing.project_id,date,purpose,bk,mode);
+    toast('Advance updated!','success');
+    closeSheet('ov-exec','sh-exec');
+    execRenderSales();
+  }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+async function execDelClientAdvance(id){
+  if(!confirm('Delete this advance received record?'))return;
+  WA_CLIENT_ADVANCES=(WA_CLIENT_ADVANCES||[]).filter(function(a){return a.id!==id;});
+  execRenderSales();
+  try{await sbDelete('client_advances',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
+  toast('Advance deleted','success');
+}
+
+// Advance Adjustment panel helpers (Generate Bill tab) — unchecking an
+// advance disables its amount input so it's skipped on save; changing the
+// amount clamps it back down to the advance's remaining balance for that
+// combined Work+GST head, mirroring blAdvAdjChange/blAdvAdjHeadChange's
+// role on the purchase side's per-head panel.
+function caAdjToggle(ai){
+  var chk=document.getElementById('ca-adj-'+ai);
+  var inp=document.getElementById('ca-adj-amt-'+ai);
+  if(!chk||!inp) return;
+  inp.disabled=!chk.checked;
+}
+function caAdjAmtChange(inp){
+  var hmax=parseFloat(inp.getAttribute('data-hmax'))||0;
+  var v=parseFloat(inp.value)||0;
+  if(v>hmax){ inp.value=hmax; toast('Capped to the advance\'s remaining balance (₹'+hmax.toLocaleString('en-IN')+')','info'); }
+  if(v<0) inp.value=0;
+}
+
+// Renders the "Advances Received" block for the current project, shown at
+// the top of both Sales sub-tabs — mirrors the purchase side's "💰
+// Advances Paid" block in execRenderBills, but as a card (execRenderSales
+// is card-based throughout, not table-row-based).
+function caRenderBlock(projId){
+  var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
+  var fmtD=function(d){if(!d)return '—';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
+  var advs=(WA_CLIENT_ADVANCES||[]).filter(function(a){return a.project_id===projId;});
+  if(!advs.length){
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">'+
+      '<div style="font-size:11px;color:var(--text3);">No advances received from the client yet on this project.</div>'+
+      '<button onclick="execOpenClientAdvance(\''+projId+'\')" style="background:#4A148C;color:white;border:none;border-radius:6px;padding:5px 12px;font-size:10px;font-weight:800;cursor:pointer;">+ Advance Received</button>'+
+    '</div>';
+  }
+  var totalRecv=advs.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var totalAdj=advs.reduce(function(s,a){return s+(parseFloat(a.adjusted_amount)||0);},0);
+  var rows=advs.map(function(adv){
+    var adjAmt=parseFloat(adv.adjusted_amount)||0;
+    var pending=Math.max(0,(parseFloat(adv.amount)||0)-adjAmt);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F0F0F0;font-size:10px;">'+
+      '<div style="flex:1;">'+
+        (adv.adv_ref?'<b style="font-family:monospace;color:#4A148C;">'+adv.adv_ref+'</b> · ':'')+
+        fmtD(adv.date)+(adv.purpose?' — '+adv.purpose:'')+
+        (adv.payment_mode?' · '+adv.payment_mode:'')+(adv.reference?' · Ref: '+adv.reference:'')+
+        ' <span style="font-size:9px;color:'+(pending>0?'#E65100':'#2E7D32')+';font-weight:700;">'+
+          (pending>0?'Pending: '+inr(pending):'Fully Adjusted')+
+        '</span>'+
+      '</div>'+
+      '<b style="color:#4A148C;">'+inr(adv.amount)+'</b>'+
+      '<button onclick="execClientAdvanceReceipt(\''+adv.id+'\')" style="font-size:9px;background:#F8F0FD;color:#4A148C;border:1px solid #E1BEE7;border-radius:3px;padding:1px 5px;cursor:pointer;">PDF</button>'+
+      '<button onclick="execEditClientAdvance(\''+adv.id+'\')" style="font-size:9px;background:#FFF8E1;color:#1565C0;border:1px solid #BBDEFB;border-radius:3px;padding:1px 5px;cursor:pointer;">&#9998;</button>'+
+      '<button onclick="execDelClientAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:12px;">&#215;</button>'+
+    '</div>';
+  }).join('');
+  return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+    '<div style="padding:8px 14px;background:#F8F0FD;display:flex;align-items:center;justify-content:space-between;">'+
+      '<div style="font-size:11px;font-weight:800;color:#4A148C;">&#128176; Advances Received ('+advs.length+' entries) '+
+        '<span style="font-size:9px;font-weight:400;color:var(--text3);">Adj: '+inr(totalAdj)+' | Pending: '+inr(totalRecv-totalAdj)+'</span>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;">'+
+        '<b style="font-size:12px;color:#4A148C;">'+inr(totalRecv)+'</b>'+
+        '<button onclick="execOpenClientAdvance(\''+projId+'\')" style="background:#4A148C;color:white;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;">+ Add</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="padding:6px 14px;">'+rows+'</div>'+
+  '</div>';
 }
 
 async function execOpenAdvanceBatch(batchKey){
