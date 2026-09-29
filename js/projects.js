@@ -6882,6 +6882,7 @@ function execRenderAllotted(){
             '<span style="color:var(--text3);">'+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+'</span>'+
             '<span style="color:#555;font-size:9px;">'+( adv.purpose||'')+'</span>'+
             '<button onclick="execAdvanceReceipt(\''+adv.id+'\',\'\',0)" style="background:#F57F17;color:white;border:none;border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer;font-weight:700;">PDF</button>'+
+            '<button onclick="execEditAdvance(\''+adv.id+'\')" style="font-size:9px;background:#FFF8E1;color:#1565C0;border:1px solid #BBDEFB;border-radius:3px;padding:1px 5px;cursor:pointer;">&#9998;</button>'+
             '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;">&#215;</button>'+
           '</div>';
         }).join('')+
