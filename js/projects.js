@@ -10135,6 +10135,67 @@ function advPostToAccounts(advId,partyType,partyName,date,purpose,bk){
     narration:'GST (ITC) on '+advRef, sourceType:'work_advance_gst', sourceId:advId});
 }
 
+// Reads an advance's own recorded composition (Work/Base Amount,
+// Additions, TDS, other Deductions, GST) out of its saved breakdown
+// columns. Falls back to treating the whole amount as pure work value for
+// an older advance saved before the breakdown existed (base_amount null).
+function advParseBreakdown(adv){
+  var add=[];try{add=adv.additions?JSON.parse(adv.additions):[];}catch(e){}
+  var ded=[];try{ded=adv.deductions?JSON.parse(adv.deductions):[];}catch(e){}
+  var gst=[];try{gst=adv.gst?JSON.parse(adv.gst):[];}catch(e){}
+  var work=parseFloat(adv.base_amount!=null?adv.base_amount:adv.amount)||0;
+  var addTotal=add.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  var tdsTotal=ded.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var dedTotal=ded.filter(function(d){return !d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var gstTotal=gst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
+  var net=parseFloat(adv.amount)||(work+addTotal-tdsTotal-dedTotal+gstTotal);
+  return {work:work, add:addTotal, tds:tdsTotal, ded:dedTotal, gst:gstTotal, net:net};
+}
+
+// Splits an amount being adjusted out of this advance (adjAmt, out of its
+// total net amount) into Work/Additions/TDS/GST components, scaled by the
+// same ratios the advance itself was recorded with — so adjusting an
+// advance against a bill carries over its actual composition ("as per
+// available in advance") instead of lumping it into one flat deduction.
+function advSplitAdjustment(adv, adjAmt){
+  var p=advParseBreakdown(adv);
+  var ratio=p.net>0?((parseFloat(adjAmt)||0)/p.net):0;
+  return {
+    work_amt:Math.round(p.work*ratio),
+    add_amt:Math.round(p.add*ratio),
+    tds_amt:Math.round(p.tds*ratio),
+    ded_amt:Math.round(p.ded*ratio),
+    gst_amt:Math.round(p.gst*ratio)
+  };
+}
+
+// Short "Work: ₹.. · TDS: ₹.. · GST: ₹.." label for a split, used both in
+// the live adjustment UI and wherever a bill shows what was carried over
+// from an adjusted advance. Zero components are omitted.
+function advAdjBreakdownLabel(p){
+  var inr=function(n){return '₹'+Math.round(n||0).toLocaleString('en-IN');};
+  var parts=['Work: '+inr(p.work_amt)];
+  if(p.add_amt) parts.push('+Add: '+inr(p.add_amt));
+  if(p.tds_amt) parts.push('TDS: '+inr(p.tds_amt));
+  if(p.gst_amt) parts.push('GST: '+inr(p.gst_amt));
+  return parts.join(' · ');
+}
+
+// Re-renders the live "Work / TDS / GST" breakdown line under an
+// advance-adjustment row after its checkbox or amount input changes.
+function advRefreshAdjBreakdown(chk, ai, val){
+  var el=document.getElementById('adv-adj-break-'+ai);
+  if(!el||!chk) return;
+  var net=parseFloat(chk.getAttribute('data-net'))||0;
+  var ratio=net>0?((parseFloat(val)||0)/net):0;
+  el.textContent=advAdjBreakdownLabel({
+    work_amt:(parseFloat(chk.getAttribute('data-work'))||0)*ratio,
+    add_amt:(parseFloat(chk.getAttribute('data-add'))||0)*ratio,
+    tds_amt:(parseFloat(chk.getAttribute('data-tds'))||0)*ratio,
+    gst_amt:(parseFloat(chk.getAttribute('data-gst'))||0)*ratio
+  });
+}
+
 async function execOpenAdvanceBatch(batchKey){
   var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
   if(!items.length){toast('Batch not found','error');return;}
@@ -10734,9 +10795,11 @@ async function execOpenBill(partyKey,projId){
           var alreadyAdj=remaining<=0; // fully adjusted only when nothing left
           // Auto-cap: if bill < remaining advance, only adjust up to bill amount
           var defaultAdj=remaining; // blUpdateTotal will cap to actual bill amount
+          var advBd=advParseBreakdown(adv);
+          var defaultSplit=advSplitAdjustment(adv,defaultAdj);
           return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
-              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+remaining+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
+              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+remaining+'" data-work="'+advBd.work+'" data-add="'+advBd.add+'" data-tds="'+advBd.tds+'" data-gst="'+advBd.gst+'" data-net="'+(advBd.net||1)+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
               '<div style="flex:1;font-size:11px;">'+
                 (resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+
                 (adv.payment_mode?' · '+adv.payment_mode:'')+
@@ -10751,7 +10814,9 @@ async function execOpenBill(partyKey,projId){
                   'style="width:120px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:#F57F17;" '+
                   'onchange="blAdvAdjAmtChange(this,'+ai+')">'+
                 '<span style="font-size:10px;color:var(--text3);">of ₹'+Number(remaining).toLocaleString("en-IN")+(defaultAdj<remaining?' <b style="color:#E65100;">(₹'+Number(remaining-defaultAdj).toLocaleString("en-IN")+' carried forward)</b>':'')+'</span>'+
-              '</div>':'')+
+              '</div>'+
+              '<div id="adv-adj-break-'+ai+'" style="font-size:9px;color:var(--text3);padding:1px 0 0 23px;">'+advAdjBreakdownLabel(defaultSplit)+'</div>'
+              :'')+
           '</div>';
         }).join('')+
       '</div>';
@@ -10830,6 +10895,15 @@ function blAdvAdjChange(chk, ai){
       if(!parseFloat(amtInp.value)) amtInp.value=max;
     }
   }
+  if(!chk.checked){
+    // Unchecked — nothing of this advance is being adjusted, so its
+    // Work/TDS/GST breakdown line should read zero, not whatever amount
+    // was last entered.
+    chk.setAttribute('data-amount','0');
+    advRefreshAdjBreakdown(chk, ai, 0);
+    blUpdateTotal();
+    return;
+  }
   // Update data-amount from input
   blAdvAdjAmtChange(amtInp,ai);
   blUpdateTotal();
@@ -10845,6 +10919,7 @@ function blAdvAdjAmtChange(inp, ai){
   inp.value=val;
   inp.setAttribute('data-manual','1'); // mark as manually edited
   chk.setAttribute('data-amount',val);
+  advRefreshAdjBreakdown(chk, ai, val);
   blUpdateTotal();
 }
 
@@ -11146,6 +11221,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     var amt=amtInp?parseFloat(amtInp.value)||0:parseFloat(chk.getAttribute('data-amount'))||0;
     if(amt<=0) return; // skip zero-amount
     var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
+    var split=advSplitAdjustment(origAdv,amt);
     adjAdvIds.push(aid);
     adjAdvDetails.push({
       id:aid, amount:amt,
@@ -11153,7 +11229,8 @@ async function execSaveBill(partyType,partyName,projId,billNo){
       purpose:origAdv.purpose||'',
       payment_mode:origAdv.payment_mode||'',
       reference:origAdv.reference||'',
-      total_adv:parseFloat(origAdv.amount)||0
+      total_adv:parseFloat(origAdv.amount)||0,
+      work_amt:split.work_amt, add_amt:split.add_amt, tds_amt:split.tds_amt, gst_amt:split.gst_amt
     });
     adjAdvTotal+=amt;
   });
@@ -11824,6 +11901,7 @@ function execDownloadBillPDF(billId){
                 (ref?' · Ref: '+ref:'')+
                 (totalAdv?' | Total Adv: '+inr(totalAdv):'')+
                 ' | <b style="color:#F57F17;">Adjusted in this bill: '+inr(ad.amount)+'</b>'+
+                (ad.work_amt!=null?'<br><span style="color:#795548;">'+advAdjBreakdownLabel(ad)+'</span>':'')+
                 '</div>';
             });
             advDetail+='</div>';
@@ -11841,6 +11919,7 @@ function execDownloadBillPDF(billId){
                 var prevAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-(parseFloat(d.amount)||0));
                 var thisAdv=Math.max(0,advAmt-prevAdj);
                 var thisAdj=advIds.length===1?parseFloat(d.amount)||0:Math.round((thisAdv/totalRemaining)*(parseFloat(d.amount)||0));
+                var fbSplit=advSplitAdjustment(origAdv,thisAdj);
                 advDetail+='<div style="font-size:9px;color:#555;padding:2px 0;border-bottom:1px dashed #FFE0B2;">'+
                   '<b>'+fmtD(origAdv.date||'')+'</b>'+
                   (origAdv.purpose?' — '+origAdv.purpose:'')+
@@ -11848,6 +11927,7 @@ function execDownloadBillPDF(billId){
                   (origAdv.reference?' · Ref: '+origAdv.reference:'')+
                   ' | Total Adv: '+inr(advAmt)+
                   ' | <b style="color:#F57F17;">Adj in this bill: '+inr(thisAdj)+'</b>'+
+                  '<br><span style="color:#795548;">'+advAdjBreakdownLabel(fbSplit)+'</span>'+
                   '</div>';
               }
             });
@@ -12356,13 +12436,17 @@ async function execEditBill(billId){
           var planRes2=WA_PLANNED.find(function(r){return r.id===allot2.boq_exec_resource_id;})||{};
           var resLabel=planRes2.party_name||planRes2.resource_category||allot2.scope||adv.purpose||'';
           var defaultAdj=remaining;
+          var advBd=advParseBreakdown(adv);
+          var defaultSplit=advSplitAdjustment(adv,defaultAdj);
           return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
-              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+remaining+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
+              '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-amount="'+defaultAdj+'" data-max="'+remaining+'" data-work="'+advBd.work+'" data-add="'+advBd.add+'" data-tds="'+advBd.tds+'" data-gst="'+advBd.gst+'" data-net="'+(advBd.net||1)+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
               '<div style="flex:1;font-size:11px;">'+(resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+(adv.payment_mode?' · '+adv.payment_mode:'')+(alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(fully adjusted)</span>':'')+'</div>'+
               '<span style="font-size:10px;color:var(--text3);">Total: <b style="color:#F57F17;">₹'+Number(advAmt).toLocaleString('en-IN')+'</b>'+(adjSoFar>0?' | Adj: <b style="color:#E65100;">₹'+Number(adjSoFar).toLocaleString('en-IN')+'</b> | Rem: <b style="color:#2E7D32;">₹'+Number(remaining).toLocaleString('en-IN')+'</b>':'')+'</span>'+
             '</div>'+
-            (!alreadyAdj?'<div style="display:flex;align-items:center;gap:8px;padding:0 0 2px 23px;"><span style="font-size:10px;color:var(--text3);">Adjust amount:</span><input id="adv-adj-amt-'+ai+'" type="number" value="'+defaultAdj+'" min="0" max="'+remaining+'" style="width:120px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:#F57F17;" onchange="blAdvAdjAmtChange(this,'+ai+')"><span style="font-size:10px;color:var(--text3);">of ₹'+Number(remaining).toLocaleString('en-IN')+'</span></div>':'')+
+            (!alreadyAdj?'<div style="display:flex;align-items:center;gap:8px;padding:0 0 2px 23px;"><span style="font-size:10px;color:var(--text3);">Adjust amount:</span><input id="adv-adj-amt-'+ai+'" type="number" value="'+defaultAdj+'" min="0" max="'+remaining+'" style="width:120px;padding:3px 8px;border:1px solid #FFE0B2;border-radius:5px;font-size:12px;font-weight:800;color:#F57F17;" onchange="blAdvAdjAmtChange(this,'+ai+')"><span style="font-size:10px;color:var(--text3);">of ₹'+Number(remaining).toLocaleString('en-IN')+'</span></div>'+
+              '<div id="adv-adj-break-'+ai+'" style="font-size:9px;color:var(--text3);padding:1px 0 0 23px;">'+advAdjBreakdownLabel(defaultSplit)+'</div>'
+              :'')+
           '</div>';
         }).join('')+
       '</div>':'')+
@@ -12500,8 +12584,9 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     var amt=amtInp?parseFloat(amtInp.value)||0:parseFloat(chk.getAttribute('data-amount'))||0;
     if(amt<=0)return;
     var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
+    var split=advSplitAdjustment(origAdv,amt);
     adjAdvIds.push(aid);
-    adjAdvDetails.push({id:aid,amount:amt,date:origAdv.date||'',purpose:origAdv.purpose||'',payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0});
+    adjAdvDetails.push({id:aid,amount:amt,date:origAdv.date||'',purpose:origAdv.purpose||'',payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0,work_amt:split.work_amt,add_amt:split.add_amt,tds_amt:split.tds_amt,gst_amt:split.gst_amt});
     adjAdvTotal+=amt;
   });
   if(adjAdvTotal>0){
