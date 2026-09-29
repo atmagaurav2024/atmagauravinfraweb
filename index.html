@@ -24703,9 +24703,23 @@ async function accTdsTab(){
     var allRows=[];
     workBills.forEach(function(b){
       var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      // Whatever portion of this bill's own TDS was matched against an
+      // advance's TDS bucket (the non-cash "Advance Adjustment (TDS)" row
+      // — see advBuildAdjDeductions in projects.js) was ALREADY withheld
+      // once when that advance was paid, and already shows up here via
+      // that advance's own row (below). Counting the bill's full TDS on
+      // top of that double-counts the same rupees — the same reasoning
+      // that stopped it being posted twice to the ledger (accAutoPost),
+      // just applied here to this report too.
+      var advTdsMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='tds_amt';})
+        .reduce(function(s,d){return s+(d.advance_details||[]).reduce(function(s2,ad){return s2+(parseFloat(ad.amount)||0);},0);},0);
       deds.filter(function(d){return d.is_tds;}).forEach(function(d){
+        var amt=parseFloat(d.amount)||0;
+        var shown=Math.max(0,amt-advTdsMatched);
+        advTdsMatched=Math.max(0,advTdsMatched-amt); // consume the match before it reduces any further TDS row on this bill
+        if(shown<=0) return;
         var pan=d.pan||masterPanMap[(b.party_type||'')+'::'+(b.party_name||'')]||'';
-        allRows.push({date:b.bill_date, party:b.party_name||'—', billRef:b.bill_ref||('#'+b.bill_number), billId:b.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0, pan:pan});
+        allRows.push({date:b.bill_date, party:b.party_name||'—', billRef:b.bill_ref||('#'+b.bill_number), billId:b.id, dedId:d.id, head:d.head||'TDS', amount:shown, pan:pan});
       });
     });
     // Same, for TDS withheld on Advance Payments — an advance's own
