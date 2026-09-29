@@ -23342,7 +23342,8 @@ async function accReconcile(){
     };
 
     salesBills.forEach(function(b){
-      if(isDone('sales_bill',b.id)) return;
+      // Checked leg-by-leg, same as purchase bills — the main leg existing
+      // doesn't guarantee additions/deductions/GST posted too.
       var proj=projById[b.project_id]||{};
       var adds=[]; try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
       var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
@@ -23351,10 +23352,10 @@ async function accReconcile(){
       var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var work=(parseFloat(b.bill_amount)||0)-gst-addAmt+dedAmt;
       var party=proj.client||proj.name||'Client', ref='Sales Bill '+(b.bill_ref||b.id);
-      if(work>0) add('Sales bills','sales_bill',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3001',amount:work,narration:ref});
-      if(addAmt>0) add('Sales bills','sales_bill_add',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3002',amount:addAmt,narration:'Additions on '+ref});
-      if(dedAmt>0) add('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmt,narration:'Deductions on '+ref});
-      if(gst>0) add('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gst,narration:'GST on '+ref});
+      if(work>0&&!isDone('sales_bill',b.id)) add('Sales bills','sales_bill',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3001',amount:work,narration:ref});
+      if(addAmt>0&&!isDone('sales_bill_add',b.id)) add('Sales bills','sales_bill_add',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'3002',amount:addAmt,narration:'Additions on '+ref});
+      if(dedAmt>0&&!isDone('sales_bill_ded',b.id)) add('Sales bills','sales_bill_ded',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'3003',creditCode:'1201',amount:dedAmt,narration:'Deductions on '+ref});
+      if(gst>0&&!isDone('sales_bill_gst',b.id)) add('Sales bills','sales_bill_gst',b.id,{type:'Sales',date:b.bill_date,partyName:party,debitCode:'1201',creditCode:'2101',amount:gst,narration:'GST on '+ref});
     });
     salesPayments.forEach(function(p){
       if(isDone('sales_payment',p.id)) return;
@@ -23458,13 +23459,14 @@ async function accReconcile(){
         narration:(x.type||'Other expense')+(x.description?' — '+x.description:'')});
     });
     companyExp.forEach(function(x){
-      if(isDone('company_expense',x.id)) return;
+      // Checked leg-by-leg — the base expense leg existing doesn't
+      // guarantee its GST (ITC) leg posted too.
       var tx=parseFloat(x.amount)||0, g=parseFloat(x.gst_amount)||0, itc=(x.itc_claimable!==false);
       var cc=(x.payment_mode==='Cash')?'1001':'1002';
       var narr=(x.category||'Overhead')+(x.description?' — '+x.description:'');
-      if(tx>0) add('Company overheads','company_expense',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
+      if(tx>0&&!isDone('company_expense',x.id)) add('Company overheads','company_expense',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
         debitCode:(OH_CAT_CODES[x.category]||'4313'),creditCode:cc,amount:(itc?tx:tx+g),narration:narr});
-      if(g>0&&itc) add('Company overheads','company_expense_gst',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
+      if(g>0&&itc&&!isDone('company_expense_gst',x.id)) add('Company overheads','company_expense_gst',x.id,{type:'Payment',date:x.date,partyName:x.party_name||x.category,
         debitCode:'1301',creditCode:cc,amount:g,narration:'GST (ITC) on '+narr});
     });
     loans.forEach(function(l){
