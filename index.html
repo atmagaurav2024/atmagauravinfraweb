@@ -19494,19 +19494,48 @@ async function lnAutoBookMonthly(){
     (done||[]).forEach(function(v){ booked[String(v.date)+'|'+((v.narration||'').indexOf('receivable')>-1?'given':'taken')]=1; });
   }catch(e){ console.warn('Interest accrual skipped — could not read vouchers', e); return; }
 
-  // The current month's entries are revised rather than duplicated
+  // The current month's entries are revised rather than duplicated. `today`
+  // has to exist before this block runs (it's used to work out the current
+  // month's date range) — it used to be declared further down, after this
+  // block already read it, so every call hit `today.getFullYear()` on
+  // undefined, threw, and the catch below swallowed it silently. That left
+  // curVouchers permanently empty, so the "revise in place" branch further
+  // down was never taken — every run created a brand-new Journal voucher
+  // for the current month instead of updating the existing one, leaving
+  // one stale, superseded entry behind per prior run within the same
+  // still-open month.
+  var today=new Date();
   var curVouchers={};
   try{
     var curStart=new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0,10);
     var cv=await sbFetch('vouchers',{select:'*',filter:'source_type=eq.'+LN_ACCRUAL_SRC+'&date=gte.'+curStart});
+    // The bug above means a still-open month can already carry more than one
+    // voucher for the same direction (a fresh one from each day this ran
+    // while broken). Self-heal here: keep only the most recent per
+    // direction to revise going forward, and delete the rest so they stop
+    // double-counting in Interest Expense / Interest Payable. A closed
+    // month can have this too, but past months fall outside this
+    // current-month block and need a one-off manual cleanup instead.
+    var byDir={};
     (cv||[]).forEach(function(v){
-      curVouchers[(v.narration||'').indexOf('receivable')>-1?'given':'taken']=v;
-      delete booked[String(v.date)+'|'+((v.narration||'').indexOf('receivable')>-1?'given':'taken')];
+      var dir=(v.narration||'').indexOf('receivable')>-1?'given':'taken';
+      (byDir[dir]=byDir[dir]||[]).push(v);
     });
+    for(var dirKey in byDir){
+      var rows=byDir[dirKey].sort(function(a,b){
+        var ka=String(a.date)+'|'+String(a.created_at||''), kb=String(b.date)+'|'+String(b.created_at||'');
+        return ka<kb?-1:(ka>kb?1:0);
+      });
+      var keepV=rows[rows.length-1];
+      curVouchers[dirKey]=keepV;
+      delete booked[String(keepV.date)+'|'+dirKey];
+      for(var si=0; si<rows.length-1; si++){
+        try{ await sbDelete('vouchers',rows[si].id); }catch(e){}
+      }
+    }
   }catch(e){}
 
   var first=new Date(starts[0]+'T00:00:00');
-  var today=new Date();
   var y=first.getFullYear(), m=first.getMonth()+1;
   var prevEnd=null, posted=0, failed=0;
   var todayStr=today.toISOString().slice(0,10);
