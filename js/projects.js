@@ -9935,24 +9935,31 @@ function advUpdateTotal(){
   });
 
   var dedTotal=0;
+  var advTdsTotal=0; // just the TDS-flagged rows, for the GST base below
   document.querySelectorAll('.adv-ded-row').forEach(function(row){
     var pctInp=row.querySelector('.adv-ded-pct');
     var amtInp=row.querySelector('.adv-ded-amt');
     var pct=parseFloat(pctInp&&pctInp.value)||0;
     if(pct&&amtInp) amtInp.value=Math.round(base*pct/100);
-    dedTotal+=parseFloat(amtInp&&amtInp.value)||0;
+    var amt=parseFloat(amtInp&&amtInp.value)||0;
+    dedTotal+=amt;
+    if(row.getAttribute('data-is-tds')==='true') advTdsTotal+=amt;
   });
 
   var netBeforeGst=base+addTotal-dedTotal;
   var nbgEl=document.getElementById('adv-net-before-gst-amt');
   if(nbgEl) nbgEl.textContent=inr(netBeforeGst);
 
+  // GST is charged on the taxable value — TDS withholding doesn't reduce
+  // that value — so the %-based GST row is calculated with the TDS
+  // portion added back (gstBase), not on the TDS-net figure.
+  var gstBase=netBeforeGst+advTdsTotal;
   var gstTotal=0;
   document.querySelectorAll('.adv-gst-row').forEach(function(row){
     var pctInp=row.querySelector('.adv-gst-pct');
     var amtInp=row.querySelector('.adv-gst-amt');
     var pct=parseFloat(pctInp&&pctInp.value)||0;
-    if(pct&&amtInp) amtInp.value=Math.round(netBeforeGst*pct/100);
+    if(pct&&amtInp) amtInp.value=Math.round(gstBase*pct/100);
     gstTotal+=parseFloat(amtInp&&amtInp.value)||0;
   });
 
@@ -11105,7 +11112,7 @@ function blUpdateTotal(){
   // typed amount (which clears the % field, see blDedAmtManual) is left
   // exactly as entered.
   var dedTotal=0;
-  var billTdsTotal=0; // just the TDS-flagged rows, for the advance-adjustment head budget below
+  var billTdsTotal=0; // just the TDS-flagged rows — used below both for the GST base (GST is charged on the pre-TDS value) and the advance-adjustment head budget
   document.querySelectorAll('.bl-ded-row').forEach(function(row){
     var pctInp=row.querySelector('.bl-ded-pct');
     var amtInp=row.querySelector('.bl-ded-amt');
@@ -11124,14 +11131,20 @@ function blUpdateTotal(){
   // Update net before GST display
   var nbgEl=document.getElementById('bl-net-before-gst-amt');
   if(nbgEl) nbgEl.textContent='₹'+Math.round(netBeforeGst).toLocaleString('en-IN');
-  // Sum GST entries (calculated on netBeforeGst)
+  // Sum GST entries. GST is charged on the taxable value of the supply —
+  // TDS is only an income-tax withholding mechanism and does NOT reduce
+  // that taxable value — so a %-based GST row is calculated on netBeforeGst
+  // with the TDS portion added back (gstBase), not on the TDS-net figure.
+  // E.g. ₹100,000 work with 1% TDS (₹1,000) and 18% GST should charge GST
+  // on the full ₹100,000 (₹18,000), not on the post-TDS ₹99,000 (₹17,820).
+  var gstBase=netBeforeGst+billTdsTotal;
   var gstTotal=0;
   document.querySelectorAll('.bl-gst-row').forEach(function(row){
     var pctInp=row.querySelector('.bl-gst-pct');
     var amtInp=row.querySelector('.bl-gst-amt');
     var pct=parseFloat(pctInp&&pctInp.value)||0;
     if(pct&&amtInp){
-      var calcAmt=Math.round(netBeforeGst*pct/100);
+      var calcAmt=Math.round(gstBase*pct/100);
       amtInp.value=calcAmt;
     }
     gstTotal+=parseFloat(amtInp&&amtInp.value)||0;
