@@ -24481,7 +24481,10 @@ async function accGstTab(){
       var gArr=[]; try{gArr=a.gst?JSON.parse(a.gst):[];}catch(e){}
       var g=gArr.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
       if(!g) return null;
-      return {bill:{bill_ref:'Advance'+(a.purpose?' — '+a.purpose:''), bill_date:a.date, party_name:a.party_name},
+      // bill_ref here is the advance's own number (adv_ref) so this row
+      // shows an actual reference in the ITC table, same as a real bill's
+      // bill_ref does — older advances without one fall back to the text.
+      return {bill:{bill_ref:a.adv_ref||('Advance'+(a.purpose?' — '+a.purpose:'')), bill_date:a.date, party_name:a.party_name},
         taxable:0, gst:g, total:g, month:(a.date||'').slice(0,7), isAdvance:true};
     }).filter(Boolean);
     inRows=inRows.concat(advGstRows);
@@ -24713,7 +24716,12 @@ async function accTdsTab(){
       var deds=[]; try{deds=a.deductions?JSON.parse(a.deductions):[];}catch(e){}
       deds.filter(function(d){return d.is_tds;}).forEach(function(d){
         var pan=d.pan||masterPanMap[(a.party_type||'')+'::'+(a.party_name||'')]||'';
-        allRows.push({date:a.date, party:a.party_name||'—', billRef:'Advance'+(a.purpose?' — '+a.purpose:''), billId:a.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0, pan:pan});
+        // billRef here is the advance's own number (adv_ref, e.g.
+        // ADV/2026/0004) — same column bill-originated rows use for their
+        // bill_ref — so the Date-wise Entries table shows an actual
+        // reference instead of the literal word "Advance". Older advances
+        // recorded before adv_ref existed fall back to that text.
+        allRows.push({date:a.date, party:a.party_name||'—', billRef:a.adv_ref||('Advance'+(a.purpose?' — '+a.purpose:'')), billId:a.id, dedId:d.id, head:d.head||'TDS', amount:parseFloat(d.amount)||0, pan:pan});
       });
     });
     allRows.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
