@@ -11105,12 +11105,15 @@ function blUpdateTotal(){
   // typed amount (which clears the % field, see blDedAmtManual) is left
   // exactly as entered.
   var dedTotal=0;
+  var billTdsTotal=0; // just the TDS-flagged rows, for the advance-adjustment head budget below
   document.querySelectorAll('.bl-ded-row').forEach(function(row){
     var pctInp=row.querySelector('.bl-ded-pct');
     var amtInp=row.querySelector('.bl-ded-amt');
     var pct=parseFloat(pctInp&&pctInp.value)||0;
     if(pct&&amtInp) amtInp.value=Math.round(total*pct/100);
-    dedTotal+=parseFloat(amtInp&&amtInp.value)||0;
+    var amt=parseFloat(amtInp&&amtInp.value)||0;
+    dedTotal+=amt;
+    if(row.getAttribute('data-is-tds')==='true') billTdsTotal+=amt;
   });
   // Sum released deductions (they are payable to party — add to net)
   var relDedTotal=0;
@@ -11134,36 +11137,47 @@ function blUpdateTotal(){
     gstTotal+=parseFloat(amtInp&&amtInp.value)||0;
   });
   var grossWithAdd=netBeforeGst+gstTotal; // final gross = net + GST
-  // Advance adjustment — summed across each head's own input (Work Amt/
-  // TDS/GST), never a single combined amount. Each input is already
-  // hard-capped to what that head has left in its own advance
-  // (data-hmax, enforced in blAdvAdjHeadChange); here we additionally cap
-  // the RUNNING total across every selected advance/head so it never
-  // exceeds what this bill can actually absorb — same "carried forward"
-  // idea as before, just applied per head-input instead of per-advance.
+  // Advance adjustment — each head type draws from its OWN budget instead
+  // of one shared running total taken in DOM order. With a single shared
+  // budget, Work Amt (usually the largest figure, and listed first) ends
+  // up consuming the whole thing, leaving nothing for TDS/GST even when
+  // the advance genuinely has TDS/GST available — so this bill's TDS
+  // deduction and GST addition never actually got matched against the
+  // advance's own TDS/GST buckets. Instead: TDS is capped to this bill's
+  // own TDS deduction total (billTdsTotal), GST to this bill's own GST
+  // total (gstTotal) — matching what THIS bill needs under each head —
+  // and Work Amt only fills whatever of the bill's payable value remains
+  // after TDS/GST are matched.
   var remainingGross=Math.round(grossWithAdd);
-  var usedSoFar=0;
-  document.querySelectorAll('.adv-adj-head-inp').forEach(function(inp){
-    var ai=inp.getAttribute('data-adv-idx');
-    var chk=document.getElementById('adv-adj-'+ai);
-    if(!chk||!chk.checked||chk.disabled||inp.disabled) return;
-    var hmax=parseFloat(inp.getAttribute('data-hmax'))||0;
-    var cap=Math.max(0,Math.min(hmax, remainingGross-usedSoFar));
-    var cur=parseFloat(inp.value)||0;
-    var isManual=inp.getAttribute('data-manual')==='1';
-    if(!isManual||cur>cap){
-      inp.value=cap;
-    }
-    var finalVal=parseFloat(inp.value)||0;
-    usedSoFar+=finalVal;
-    inp.setAttribute('max',cap);
-    var nextSpan=inp.nextElementSibling;
-    if(nextSpan&&nextSpan.tagName==='SPAN'){
-      nextSpan.innerHTML='of ₹'+Number(hmax).toLocaleString('en-IN')+
-        (finalVal<hmax?' <b style="color:#E65100;">(₹'+Number(hmax-finalVal).toLocaleString('en-IN')+' carried forward)</b>':'');
-    }
+  var headOrder=['tds','gst','work'];
+  var headBudget={};
+  headBudget.tds=Math.max(0,Math.min(Math.round(billTdsTotal),remainingGross));
+  headBudget.gst=Math.max(0,Math.min(Math.round(gstTotal),remainingGross-headBudget.tds));
+  headBudget.work=Math.max(0,remainingGross-headBudget.tds-headBudget.gst);
+  var usedByHead={tds:0,gst:0,work:0};
+  headOrder.forEach(function(headKey){
+    document.querySelectorAll('.adv-adj-head-inp[data-head="'+headKey+'"]').forEach(function(inp){
+      var ai=inp.getAttribute('data-adv-idx');
+      var chk=document.getElementById('adv-adj-'+ai);
+      if(!chk||!chk.checked||chk.disabled||inp.disabled) return;
+      var hmax=parseFloat(inp.getAttribute('data-hmax'))||0;
+      var cap=Math.max(0,Math.min(hmax, headBudget[headKey]-usedByHead[headKey]));
+      var cur=parseFloat(inp.value)||0;
+      var isManual=inp.getAttribute('data-manual')==='1';
+      if(!isManual||cur>cap){
+        inp.value=cap;
+      }
+      var finalVal=parseFloat(inp.value)||0;
+      usedByHead[headKey]+=finalVal;
+      inp.setAttribute('max',cap);
+      var nextSpan=inp.nextElementSibling;
+      if(nextSpan&&nextSpan.tagName==='SPAN'){
+        nextSpan.innerHTML='of ₹'+Number(hmax).toLocaleString('en-IN')+
+          (finalVal<hmax?' <b style="color:#E65100;">(₹'+Number(hmax-finalVal).toLocaleString('en-IN')+' carried forward)</b>':'');
+      }
+    });
   });
-  var advAdj=usedSoFar;
+  var advAdj=usedByHead.tds+usedByHead.gst+usedByHead.work;
   var net=Math.max(0,grossWithAdd-advAdj);
   var amtEl=document.getElementById('bl-amount');
   if(amtEl) amtEl.value=Math.round(net);
