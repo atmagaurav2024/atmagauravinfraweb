@@ -24290,6 +24290,30 @@ function accRenderSourceFields(row){
   return html||'<div style="font-size:11px;color:var(--text3);">No further detail on this record.</div>';
 }
 
+// A work_advance's `amount` (and a work_bill's `bill_amount`) already
+// includes GST — the separate GST voucher doesn't add to what was paid,
+// it reclassifies that slice out of "Advance/Sundry Creditors" into "GST
+// Input Credit" within the books (same credit account both sides, cash
+// only ever touched once). Read on its own, a raw field dump plus a
+// separate GST voucher in Vouchers looks exactly like GST was paid on
+// top — that's a real point of confusion, not just this once — so this
+// note is shown whenever a record actually carries a GST breakdown.
+function accGstInclusiveNote(table, row){
+  var gstTotal=0;
+  if(table==='work_advances'){
+    var g=[]; try{g=row.gst?JSON.parse(row.gst):[];}catch(e){}
+    gstTotal=g.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
+  } else if(table==='work_bills' || table==='sales_bills'){
+    var adds=[]; try{adds=row.additions?JSON.parse(row.additions):[];}catch(e){}
+    gstTotal=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+  }
+  if(gstTotal<=0) return '';
+  var total=parseFloat(row.amount!=null?row.amount:row.bill_amount)||0;
+  return '<div style="background:#E3F2FD;border:1px solid #90CAF9;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#0D47A1;">'+
+    'The total above ('+fmtINR(total)+') already includes GST of '+fmtINR(gstTotal)+'. The separate GST voucher doesn’t add to what was paid — it moves that portion into GST Input Credit within the books, using the same account the main entry credited. Only '+fmtINR(total)+' actually moved through cash/bank.'+
+  '</div>';
+}
+
 // Fills the "Source Record" section of the voucher detail sheet, fetching
 // the actual bill/advance/payment/expense row the voucher was posted
 // from — not just the two GL accounts, but every field on the real record.
@@ -24325,6 +24349,7 @@ async function accLoadVoucherSource(v){
         '<div style="font-size:11px;font-weight:900;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">'+accSrcLabel(v.source_type)+' — full record</div>'+
         (accCanOpenRefBill(v.source_type)?'<button onclick="accOpenRefBillPDF(ACC_VOU_SRC_TYPE,ACC_VOU_SRC_ROW)" style="background:#1565C0;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128196; Open Bill PDF</button>':'')+
       '</div>'+
+      accGstInclusiveNote(table, row)+
       '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;">'+accRenderSourceFields(row)+'</div>';
   }catch(e){
     el.innerHTML='<div style="font-size:11px;color:#C62828;padding:6px 0;">Could not load the source record: '+e.message+'</div>';
