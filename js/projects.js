@@ -11554,7 +11554,18 @@ async function execSaveBill(partyType,partyName,projId,billNo){
         // TDS is split out from ordinary deductions: it's never owed back
         // to the party, so it posts to its own liability head (2102 TDS
         // Payable) instead of the generic 4003 Purchase Bill Deductions.
-        var pbTds=deductions.filter(function(d){return !d.is_advance_adj&&d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
+        //
+        // Whatever portion of this bill's own TDS was just matched against
+        // an advance's TDS bucket (adjAdvDetails' tds_amt — see
+        // advBuildAdjDeductions) was ALREADY posted to 2102 back when that
+        // advance itself was saved (advPostToAccounts). Posting it again
+        // here would double it up in the TDS Payable ledger/TDS tab for
+        // the same rupee of TDS. Only the un-matched remainder of this
+        // bill's TDS — the part that wasn't already remitted via an
+        // advance — is genuinely fresh and needs posting now.
+        var pbTdsRaw=deductions.filter(function(d){return !d.is_advance_adj&&d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
+        var advTdsMatched=adjAdvDetails.reduce(function(x,ad){return x+(parseFloat(ad.tds_amt)||0);},0);
+        var pbTds=Math.max(0,pbTdsRaw-advTdsMatched);
         var pbDed=deductions.filter(function(d){return !d.is_advance_adj&&!d.is_tds;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
         // grossAmount is now true gross (work+additions+GST, deductions not
         // subtracted), so the work portion is simply gross minus GST/additions.
