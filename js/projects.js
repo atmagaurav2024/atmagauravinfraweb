@@ -6877,6 +6877,7 @@ function execRenderAllotted(){
         '<div style="font-size:9px;font-weight:800;color:#F57F17;margin-bottom:4px;">ADVANCES PAID</div>'+
         batchAdvances.map(function(adv){
           return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:3px 0;border-bottom:1px solid #FFF3E0;">'+
+            (adv.adv_ref?'<span style="font-family:monospace;font-weight:800;color:#F57F17;">'+adv.adv_ref+'</span>':'')+
             '<span style="color:var(--text3);">'+adv.date+'</span>'+
             '<span style="flex:1;font-weight:700;">'+inrFmt(adv.amount)+'</span>'+
             '<span style="color:var(--text3);">'+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+'</span>'+
@@ -9216,6 +9217,7 @@ function execRenderBills(){
         var pending=Math.max(0,(parseFloat(adv.amount)||0)-adjAmt);
         partyAdvRows+='<tr style="background:#FFFDE7;border-bottom:1px solid #FFF3CD;">'+
           '<td colspan="4" style="padding:4px 10px 4px 22px;font-size:10px;">'+
+            (adv.adv_ref?'<b style="font-family:monospace;color:#F57F17;">'+adv.adv_ref+'</b> · ':'')+
             fmtD(adv.date)+(adv.purpose?' — '+adv.purpose:'')+
             (adv.payment_mode?' · '+adv.payment_mode:'')+(adv.reference?' · Ref: '+adv.reference:'')+
             ' <span style="font-size:9px;color:'+(pending>0?'#E65100':'#2E7D32')+';font-weight:700;">'+
@@ -9752,7 +9754,7 @@ function execRenderPaymentsCore(el, projId){
       '<div style="margin-bottom:10px;">'+
         '<div style="font-size:10px;font-weight:800;color:#F57F17;margin-bottom:4px;">&#128181; ADVANCES PAID</div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+
-          '<tr style="background:#FFF8E1;"><th style="padding:4px 8px;text-align:left;">Date</th><th style="padding:4px 8px;text-align:left;">Purpose</th><th style="padding:4px 8px;text-align:left;">Mode</th><th style="padding:4px 8px;text-align:left;">Ref</th><th style="padding:4px 8px;text-align:right;">Amount</th><th style="padding:4px 8px;text-align:right;">Adjusted</th><th style="padding:4px 8px;text-align:right;">Pending</th><th style="padding:4px 8px;"></th></tr>'+
+          '<tr style="background:#FFF8E1;"><th style="padding:4px 8px;text-align:left;">Adv No.</th><th style="padding:4px 8px;text-align:left;">Date</th><th style="padding:4px 8px;text-align:left;">Purpose</th><th style="padding:4px 8px;text-align:left;">Mode</th><th style="padding:4px 8px;text-align:left;">Ref</th><th style="padding:4px 8px;text-align:right;">Amount</th><th style="padding:4px 8px;text-align:right;">Adjusted</th><th style="padding:4px 8px;text-align:right;">Pending</th><th style="padding:4px 8px;"></th></tr>'+
           g.advances.map(function(a){
             var adjAmt=parseFloat(a.adjusted_amount)||0;
             var pending=Math.max(0,(parseFloat(a.amount)||0)-adjAmt);
@@ -9761,12 +9763,13 @@ function execRenderPaymentsCore(el, projId){
               return Array.isArray(x.ded.advance_ids)&&x.ded.advance_ids.indexOf(a.id)>-1;
             });
             var breakdown=thisAdvBillAdjs.length?
-              '<tr style="border-bottom:1px solid #FFF3CD;background:#FFFDF5;"><td colspan="8" style="padding:2px 8px 6px 24px;font-size:9px;color:#8D6E00;">'+
+              '<tr style="border-bottom:1px solid #FFF3CD;background:#FFFDF5;"><td colspan="9" style="padding:2px 8px 6px 24px;font-size:9px;color:#8D6E00;">'+
                 '&#8618; Adjusted in: '+thisAdvBillAdjs.map(function(x){
                   return (x.bill.bill_ref||'Bill #'+x.bill.bill_number)+' ('+fmtD(x.bill.bill_date)+') &mdash; '+inr(x.ded.amount);
                 }).join(' &bull; ')+
               '</td></tr>' : '';
             return '<tr style="border-bottom:1px solid #FFF3CD;">'+
+              '<td style="padding:4px 8px;font-family:monospace;font-weight:700;color:#F57F17;">'+(a.adv_ref||'\u2014')+'</td>'+
               '<td style="padding:4px 8px;">'+fmtD(a.date)+'</td>'+
               '<td style="padding:4px 8px;">'+( a.purpose||'\u2014')+'</td>'+
               '<td style="padding:4px 8px;color:var(--text3);">'+(a.payment_mode||'\u2014')+'</td>'+
@@ -9780,7 +9783,7 @@ function execRenderPaymentsCore(el, projId){
               '</td>'+
             '</tr>'+breakdown;
           }).join('')+
-          '<tr style="background:#FFF3CD;font-weight:800;"><td colspan="4" style="padding:5px 8px;">Total Advances</td><td style="padding:5px 8px;text-align:right;color:#F57F17;">'+inr(totalAdv)+'</td><td style="padding:5px 8px;text-align:right;color:#E65100;">'+inr(totalAdjusted)+'</td><td style="padding:5px 8px;text-align:right;color:'+(totalAdv-totalAdjusted>0?'#C62828':'#2E7D32')+';">'+inr(totalAdv-totalAdjusted)+'</td><td></td></tr>'+
+          '<tr style="background:#FFF3CD;font-weight:800;"><td colspan="5" style="padding:5px 8px;">Total Advances</td><td style="padding:5px 8px;text-align:right;color:#F57F17;">'+inr(totalAdv)+'</td><td style="padding:5px 8px;text-align:right;color:#E65100;">'+inr(totalAdjusted)+'</td><td style="padding:5px 8px;text-align:right;color:'+(totalAdv-totalAdjusted>0?'#C62828':'#2E7D32')+';">'+inr(totalAdv-totalAdjusted)+'</td><td></td></tr>'+
         '</table>'+
       '</div>':'';
 
@@ -10126,6 +10129,15 @@ function advPrefillBreakdown(rec){
   advUpdateTotal();
 }
 
+// Generates the next advance reference number — ADV/YYYY/NNNN, global
+// across all advances, same numbering pattern as bill_ref for bills — so
+// every advance has its own identifiable number to show wherever it's
+// referenced: the advance list, the bill-generation advance-adjustment
+// section, receipts, and any bill's advance-adjustment breakdown.
+function advGenRef(){
+  return 'ADV/'+new Date().getFullYear()+'/'+String(WA_ADVANCES.length+1).padStart(4,'0');
+}
+
 // Posts the TDS and GST legs of an advance's breakdown to the General
 // Ledger, same double-entry the equivalent bill legs use (see the
 // 'Auto-post to Accounts' block in the bill save flow): TDS withheld
@@ -10260,6 +10272,7 @@ function advAdjRowHtml(adv, ai, resLabel){
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
       '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-max="'+remaining+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
       '<div style="flex:1;font-size:11px;">'+
+        (adv.adv_ref?'<b style="font-family:monospace;color:#F57F17;">'+adv.adv_ref+'</b> · ':'')+
         (resLabel?'<b>'+resLabel+'</b> — ':'')+adv.date+
         (adv.payment_mode?' · '+adv.payment_mode:'')+
         (alreadyAdj?'<span style="font-size:9px;color:#C62828;margin-left:6px;">(fully adjusted)</span>':'')+
@@ -10330,7 +10343,7 @@ function advBuildAdjDeductions(adjAdvDetails){
     var rowDetails=[];
     adjAdvDetails.forEach(function(ad){
       var amt=Math.round(h.keys.reduce(function(s,k){return s+(parseFloat(ad[k])||0);},0));
-      if(amt>0) rowDetails.push({id:ad.id,amount:amt,date:ad.date,purpose:ad.purpose,payment_mode:ad.payment_mode,reference:ad.reference,total_adv:ad.total_adv});
+      if(amt>0) rowDetails.push({id:ad.id,amount:amt,adv_ref:ad.adv_ref||'',date:ad.date,purpose:ad.purpose,payment_mode:ad.payment_mode,reference:ad.reference,total_adv:ad.total_adv});
     });
     var rowTotal=rowDetails.reduce(function(s,d){return s+d.amount;},0);
     if(rowTotal>0){
@@ -10353,7 +10366,7 @@ function advBuildAdjDeductions(adjAdvDetails){
   var tdsRowDetails=[];
   adjAdvDetails.forEach(function(ad){
     var amt=Math.round(parseFloat(ad.tds_amt)||0);
-    if(amt>0) tdsRowDetails.push({id:ad.id,amount:amt,date:ad.date,purpose:ad.purpose,payment_mode:ad.payment_mode,reference:ad.reference,total_adv:ad.total_adv});
+    if(amt>0) tdsRowDetails.push({id:ad.id,amount:amt,adv_ref:ad.adv_ref||'',date:ad.date,purpose:ad.purpose,payment_mode:ad.payment_mode,reference:ad.reference,total_adv:ad.total_adv});
   });
   var tdsRowTotal=tdsRowDetails.reduce(function(s,d){return s+d.amount;},0);
   if(tdsRowTotal>0){
@@ -10488,7 +10501,8 @@ async function execSaveAdvanceBatch(batchKey,partyType,partyName,projId,batchAmt
       gst:bk.gst.length?JSON.stringify(bk.gst):null,
       payment_mode:gv('adva-mode')||null,
       reference:gv('adva-ref')||null,
-      purpose:purpose
+      purpose:purpose,
+      adv_ref:advGenRef()
     });
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
@@ -10568,7 +10582,8 @@ async function execSaveAdvanceAllot(allotId,partyType,partyName,projId,resName,a
       gst:bk.gst.length?JSON.stringify(bk.gst):null,
       payment_mode:gv('adva-mode')||null,
       reference:gv('adva-ref')||null,
-      purpose:purpose
+      purpose:purpose,
+      adv_ref:advGenRef()
     });
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
@@ -10592,8 +10607,11 @@ function execAdvanceReceipt(advId,resName,allotAmt){
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
   function fmtD(d){if(!d)return '—';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 
-  // Receipt number
-  var rcptNo='ADV/'+new Date().getFullYear()+'/'+String(WA_ADVANCES.length).padStart(4,'0');
+  // Receipt number — use the advance's own stored adv_ref (assigned once,
+  // at creation, so it stays the same every time this receipt is
+  // reprinted). Older advances saved before adv_ref existed fall back to
+  // a number computed from the current list position, same as before.
+  var rcptNo=adv.adv_ref||('ADV/'+new Date().getFullYear()+'/'+String(WA_ADVANCES.length).padStart(4,'0'));
   // Self-sufficient regardless of what's passed in: if this advance
   // belongs to a batch, always compute the true batch total from every
   // item sharing that batch_id - the re-print button (from the
@@ -10710,10 +10728,13 @@ async function execEditAdvance(advId){
   var allotAmt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN');};
 
-  document.getElementById('exec-sheet-title').textContent='Edit Advance — '+adv.party_name;
+  document.getElementById('exec-sheet-title').textContent='Edit Advance — '+(adv.adv_ref||adv.party_name);
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
-      '<div style="font-size:11px;font-weight:800;color:#F57F17;">'+adv.party_name+'</div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+        '<div style="font-size:11px;font-weight:800;color:#F57F17;">'+adv.party_name+'</div>'+
+        (adv.adv_ref?'<div style="font-size:11px;font-weight:800;font-family:monospace;color:#F57F17;">'+adv.adv_ref+'</div>':'')+
+      '</div>'+
       (resName?'<div style="font-size:10px;color:var(--text3);">'+resName+'</div>':'')+
     '</div>'+
     '<label class="flbl">Date *</label>'+
@@ -10765,6 +10786,9 @@ async function execUpdateAdvance(advId){
     deductions:bk.deductions.length?JSON.stringify(bk.deductions):null,
     gst:bk.gst.length?JSON.stringify(bk.gst):null
   };
+  // Backfill an adv_ref for an older advance that predates this numbering
+  // (never overwrites one that's already assigned).
+  if(!existing.adv_ref) payload.adv_ref=advGenRef();
   try{
     var res=await fetch(baseUrl+'/rest/v1/work_advances?id=eq.'+advId,{
       method:'PATCH',
@@ -11448,6 +11472,7 @@ async function execSaveBill(partyType,partyName,projId,billNo){
     adjAdvIds.push(aid);
     adjAdvDetails.push({
       id:aid, amount:amt,
+      adv_ref:origAdv.adv_ref||'',
       date:origAdv.date||'',
       purpose:origAdv.purpose||'',
       payment_mode:origAdv.payment_mode||'',
@@ -11714,9 +11739,9 @@ function billDownloadAdvReceipt(billId, dedId){
 
     (advList.length?
       '<div class="lbl" style="margin-bottom:6px;">ADVANCE PAYMENTS ADJUSTED</div>'+
-      '<table><thead><tr><th>Date</th><th>Purpose</th><th>Mode</th><th>Reference</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+
+      '<table><thead><tr><th>Adv No.</th><th>Date</th><th>Purpose</th><th>Mode</th><th>Reference</th><th style="text-align:right;">Amount</th></tr></thead><tbody>'+
       advList.map(function(adv){
-        return '<tr><td>'+fmtD(adv.date)+'</td><td>'+(adv.purpose||'—')+'</td><td>'+(adv.payment_mode||'—')+'</td><td>'+(adv.reference||'—')+'</td><td style="text-align:right;font-weight:800;color:#F57F17;">'+inr(adv.amount)+'</td></tr>';
+        return '<tr><td style="font-weight:800;color:#F57F17;">'+(adv.adv_ref||'—')+'</td><td>'+fmtD(adv.date)+'</td><td>'+(adv.purpose||'—')+'</td><td>'+(adv.payment_mode||'—')+'</td><td>'+(adv.reference||'—')+'</td><td style="text-align:right;font-weight:800;color:#F57F17;">'+inr(adv.amount)+'</td></tr>';
       }).join('')+
       '</tbody></table>':'')+
 
@@ -11841,6 +11866,7 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
           '<input type="checkbox" id="py-adv-chk-'+ai+'" class="py-adv-chk" data-adv-id="'+adv.id+'" data-max="'+remaining+'" checked '+
             'style="width:15px;height:15px;accent-color:#F57F17;" onchange="pyAdvChange('+ai+')">'+
           '<div style="flex:1;font-size:11px;">'+
+            (adv.adv_ref?'<b style="font-family:monospace;color:#F57F17;">'+adv.adv_ref+'</b> · ':'')+
             (adv.purpose?'<b>'+adv.purpose+'</b> — ':'')+
             (adv.date||'')+
             (adv.payment_mode?' · '+adv.payment_mode:'')+
@@ -11993,7 +12019,7 @@ async function execSavePaymentAdv(projId,balAmount){
     if(split.amount<=0){ totalShortfall+=split.shortfall; continue; }
     totalShortfall+=split.shortfall;
     advAdjTotal+=split.amount;
-    advDetails.push({id:adj.id,amount:split.amount,date:origAdv.date||'',purpose:origAdv.purpose||'',
+    advDetails.push({id:adj.id,amount:split.amount,adv_ref:origAdv.adv_ref||'',date:origAdv.date||'',purpose:origAdv.purpose||'',
       payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0,
       work_amt:split.work_amt,add_amt:0,tds_amt:split.tds_amt,gst_amt:split.gst_amt});
     var prevAmt=parseFloat(origAdv.adjusted_amount)||0;
@@ -12148,6 +12174,7 @@ function execDownloadBillPDF(billId){
               var mode=ad.payment_mode||'';
               var ref=ad.reference||'';
               var totalAdv=ad.total_adv||0;
+              var advRefNo=ad.adv_ref||'';
               // Also try live WA_ADVANCES for any missing fields
               var origAdv=WA_ADVANCES.find(function(a){return a.id===ad.id;})||{};
               if(!date) date=origAdv.date||'';
@@ -12155,7 +12182,9 @@ function execDownloadBillPDF(billId){
               if(!mode) mode=origAdv.payment_mode||'';
               if(!ref) ref=origAdv.reference||'';
               if(!totalAdv) totalAdv=parseFloat(origAdv.amount)||0;
+              if(!advRefNo) advRefNo=origAdv.adv_ref||'';
               advDetail+='<div style="font-size:9px;color:#555;padding:3px 0;border-bottom:1px dashed #FFE0B2;">'+
+                (advRefNo?'<b style="color:#F57F17;">'+advRefNo+'</b> · ':'')+
                 '<b>'+fmtD(date)+'</b>'+
                 (purpose?' — '+purpose:'')+
                 (mode?' · '+mode:'')+
@@ -12182,6 +12211,7 @@ function execDownloadBillPDF(billId){
                 var thisAdj=advIds.length===1?parseFloat(d.amount)||0:Math.round((thisAdv/totalRemaining)*(parseFloat(d.amount)||0));
                 var fbSplit=advSplitAdjustment(origAdv,thisAdj);
                 advDetail+='<div style="font-size:9px;color:#555;padding:2px 0;border-bottom:1px dashed #FFE0B2;">'+
+                  (origAdv.adv_ref?'<b style="color:#F57F17;">'+origAdv.adv_ref+'</b> · ':'')+
                   '<b>'+fmtD(origAdv.date||'')+'</b>'+
                   (origAdv.purpose?' — '+origAdv.purpose:'')+
                   (origAdv.payment_mode?' · '+origAdv.payment_mode:'')+
@@ -12457,7 +12487,8 @@ async function execSaveAdvance(partyType,partyName,projId){
       gst:bk.gst.length?JSON.stringify(bk.gst):null,
       payment_mode:gv('adv-mode')||null,
       reference:utr||null,
-      purpose:purpose+(finalRef?' | Against: '+finalRef:'')
+      purpose:purpose+(finalRef?' | Against: '+finalRef:''),
+      adv_ref:advGenRef()
     });
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
@@ -12847,7 +12878,7 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     if(amt<=0)return;
     var origAdv=WA_ADVANCES.find(function(a){return a.id===aid;})||{};
     adjAdvIds.push(aid);
-    adjAdvDetails.push({id:aid,amount:amt,date:origAdv.date||'',purpose:origAdv.purpose||'',payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0,work_amt:workAmt,add_amt:0,tds_amt:tdsAmt,gst_amt:gstAmt});
+    adjAdvDetails.push({id:aid,amount:amt,adv_ref:origAdv.adv_ref||'',date:origAdv.date||'',purpose:origAdv.purpose||'',payment_mode:origAdv.payment_mode||'',reference:origAdv.reference||'',total_adv:parseFloat(origAdv.amount)||0,work_amt:workAmt,add_amt:0,tds_amt:tdsAmt,gst_amt:gstAmt});
     adjAdvTotal+=amt;
     adjAdvCash+=workAmt+gstAmt; // TDS is a non-cash bucket match (see advBuildAdjDeductions) — excluded from cash total
   });
