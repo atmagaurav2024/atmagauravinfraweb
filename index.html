@@ -23321,11 +23321,13 @@ async function accReconcile(){
       get('projects','id,name,client'), get('employees','id,emp_id,first_name,last_name'),
       get('sales_bills'), get('sales_payments'), get('work_bills'), get('work_payments'),
       get('petty_cash_in'), get('petty_cash_expenses'), get('other_expenses'),
-      get('company_expenses'), get('loans'), get('loan_transactions'), get('loan_parties','id,name')
+      get('company_expenses'), get('loans'), get('loan_transactions'), get('loan_parties','id,name'),
+      get('work_advances')
     ]);
     var projects=r[0]||[], emps=r[1]||[], salesBills=r[2]||[], salesPayments=r[3]||[],
         workBills=r[4]||[], workPayments=r[5]||[], pettyIn=r[6]||[], pettyExp=r[7]||[],
-        otherExp=r[8]||[], companyExp=r[9]||[], loans=r[10]||[], loanTxns=r[11]||[], lparties=r[12]||[];
+        otherExp=r[8]||[], companyExp=r[9]||[], loans=r[10]||[], loanTxns=r[11]||[], lparties=r[12]||[],
+        advances=r[13]||[];
 
     var projById={}; projects.forEach(function(p){projById[p.id]=p;});
     var empName={}; emps.forEach(function(e){empName[e.emp_id]=((e.first_name||'')+' '+(e.last_name||'')).trim();});
@@ -23362,18 +23364,51 @@ async function accReconcile(){
         narration:'Payment received'+(p.reference?' (Ref: '+p.reference+')':'')});
     });
     workBills.forEach(function(b){
-      if(isDone('work_bill',b.id)) return;
+      // Checked leg-by-leg (not "does the main leg exist, then assume the
+      // rest is fine") so a partial post — e.g. work/additions went
+      // through but GST or TDS failed — still gets caught instead of
+      // being silently skipped because *a* voucher for this bill exists.
       var adds=[]; try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
       var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
       var gst=adds.filter(function(a){return a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
       var addAmt=adds.filter(function(a){return !a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
-      var dedAmt=deds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
-      var work=(parseFloat(b.bill_amount)||0)-gst-addAmt+dedAmt;
+      // Same split blPostToAccounts uses (js/projects.js): TDS posts to its
+      // own liability head, minus whatever portion was matched against an
+      // advance's TDS bucket (already posted once when that advance was
+      // saved); advance-adjustment rows — cash or TDS-bucket — are excluded
+      // entirely, since they're a payment against an advance, not a
+      // bill-side deduction.
+      var tdsRaw=deds.filter(function(d){return !d.is_advance_adj&&d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var advTdsMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='tds_amt';})
+        .reduce(function(s,d){return s+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
+      var tds=Math.max(0,tdsRaw-advTdsMatched);
+      var dedAmt=deds.filter(function(d){return !d.is_advance_adj&&!d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      // bill_amount is stored as true gross (work+additions+GST, deductions
+      // NOT subtracted — see blPostToAccounts), so the work portion is just
+      // gross minus GST/additions. Unlike sales bills, whose bill_amount IS
+      // net of deductions, no add-back is needed here.
+      var work=(parseFloat(b.bill_amount)||0)-gst-addAmt;
       var ref='Purchase/Work Bill '+(b.bill_ref||b.id);
-      if(work>0) add('Purchase bills','work_bill',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4001',creditCode:'2001',amount:work,narration:ref});
-      if(addAmt>0) add('Purchase bills','work_bill_add',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4002',creditCode:'2001',amount:addAmt,narration:'Additions on '+ref});
-      if(dedAmt>0) add('Purchase bills','work_bill_ded',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'4003',amount:dedAmt,narration:'Deductions on '+ref});
-      if(gst>0) add('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gst,narration:'GST (ITC) on '+ref});
+      if(work>0&&!isDone('work_bill',b.id)) add('Purchase bills','work_bill',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4001',creditCode:'2001',amount:work,narration:ref});
+      if(addAmt>0&&!isDone('work_bill_add',b.id)) add('Purchase bills','work_bill_add',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'4002',creditCode:'2001',amount:addAmt,narration:'Additions on '+ref});
+      if(dedAmt>0&&!isDone('work_bill_ded',b.id)) add('Purchase bills','work_bill_ded',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'4003',amount:dedAmt,narration:'Deductions on '+ref});
+      if(tds>0&&!isDone('work_bill_tds',b.id)) add('Purchase bills','work_bill_tds',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'2001',creditCode:'2102',amount:tds,narration:'TDS on '+ref});
+      if(gst>0&&!isDone('work_bill_gst',b.id)) add('Purchase bills','work_bill_gst',b.id,{type:'Purchase',date:b.bill_date,partyName:b.party_name,debitCode:'1301',creditCode:'2001',amount:gst,narration:'GST (ITC) on '+ref});
+    });
+    advances.forEach(function(a){
+      // Mirrors advPostToAccounts (js/projects.js) exactly — cash/bank leg
+      // for the net amount paid, plus TDS and GST legs of its breakdown.
+      // Checked leg-by-leg for the same reason as purchase bills above.
+      var abd=[]; try{abd=a.deductions?JSON.parse(a.deductions):[];}catch(e){}
+      var agst=[]; try{agst=a.gst?JSON.parse(a.gst):[];}catch(e){}
+      var advNet=Math.round(parseFloat(a.amount)||0);
+      var advTds=abd.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+      var advGst=agst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
+      var advRef='Advance to '+(a.party_name||'')+(a.purpose?' — '+a.purpose:'');
+      var cashCode=a.payment_mode==='Cash'?'1001':'1002';
+      if(advNet>0&&!isDone('work_advance',a.id)) add('Advances','work_advance',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:cashCode,amount:advNet,narration:advRef});
+      if(advTds>0&&!isDone('work_advance_tds',a.id)) add('Advances','work_advance_tds',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:'2102',amount:advTds,narration:'TDS on '+advRef});
+      if(advGst>0&&!isDone('work_advance_gst',a.id)) add('Advances','work_advance_gst',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'1301',creditCode:'2001',amount:advGst,narration:'GST (ITC) on '+advRef});
     });
     workPayments.forEach(function(p){
       if(isDone('work_payment',p.id)) return;
@@ -23480,7 +23515,7 @@ async function accReconcile(){
     var orphans=[];
     if(!failed.length){
       var live={};
-      [salesBills,salesPayments,workBills,workPayments,pettyIn,pettyExp,otherExp,companyExp,loans,loanTxns]
+      [salesBills,salesPayments,workBills,workPayments,pettyIn,pettyExp,otherExp,companyExp,loans,loanTxns,advances]
         .forEach(function(a){a.forEach(function(x){live[x.id]=1;});});
       var allV=await sbFetch('vouchers',{select:'id,source_id,source_type',filter:'source_id=not.is.null'});
       orphans=(allV||[]).filter(function(v){ return v.source_type!=='loan_interest_accrual' && v.source_id && !live[v.source_id]; });
@@ -23501,6 +23536,7 @@ async function accReconcile(){
     ACC_RECON={jobs:jobs, groups:groups, orphans:orphans, failed:failed, dupes:dupes,
       counts:{'Sales bills':salesBills.length,'Sales payments':salesPayments.length,
         'Purchase bills':workBills.length,'Purchase payments':workPayments.length,
+        'Advances':advances.length,
         'Petty cash funding':pettyIn.length,'Petty cash expenses':pettyExp.length,
         'Other expenses':otherExp.length,'Company overheads':companyExp.length,
         'Loans':loans.length,'Loan repayments/interest':loanTxns.length}};
@@ -23625,9 +23661,12 @@ async function accReviewOrphans(){
   });
 
   var srcLabel=function(t){
-    var m={sales_bill:'Sales bill',sales_payment:'Sales payment',work_bill:'Purchase bill',work_payment:'Purchase payment',
-      petty_in:'Petty cash funding',petty_expense:'Petty cash expense',other_expense:'Other expense',
-      company_expense:'Company overhead',loan:'Loan',loan_pay_interest:'Loan interest payment',loan_pay_principal:'Loan repayment'};
+    var m={sales_bill:'Sales bill',sales_bill_add:'Sales bill \u2014 additions',sales_bill_ded:'Sales bill \u2014 deductions',sales_bill_gst:'Sales bill \u2014 GST',
+      sales_payment:'Sales payment',work_bill:'Purchase bill',work_bill_add:'Purchase bill \u2014 additions',work_bill_ded:'Purchase bill \u2014 deductions',
+      work_bill_tds:'Purchase bill \u2014 TDS',work_bill_gst:'Purchase bill \u2014 GST',work_payment:'Purchase payment',
+      work_advance:'Advance payment',work_advance_tds:'Advance \u2014 TDS',work_advance_gst:'Advance \u2014 GST',
+      petty_in:'Petty cash funding',petty_cash_in:'Petty cash funding',petty_expense:'Petty cash expense',petty_cash_expense:'Petty cash expense',other_expense:'Other expense',
+      company_expense:'Company overhead',company_expense_gst:'Company overhead \u2014 GST',loan:'Loan',loan_pay_interest:'Loan interest payment',loan_pay_principal:'Loan repayment'};
     return m[t]||t||'\u2014';
   };
 
