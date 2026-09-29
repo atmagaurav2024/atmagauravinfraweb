@@ -24288,10 +24288,83 @@ async function accLoadVoucherSource(v){
       el.innerHTML='<div style="font-size:11px;color:#C62828;padding:6px 0;">The '+accSrcLabel(v.source_type).toLowerCase()+' this was posted from no longer exists — see Reconcile’s orphan check.</div>';
       return;
     }
-    el.innerHTML='<div style="font-size:11px;font-weight:900;color:var(--text3);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px;">'+accSrcLabel(v.source_type)+' — full record</div>'+
+    ACC_VOU_SRC_TYPE=v.source_type; ACC_VOU_SRC_ROW=row;
+    el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 6px;">'+
+        '<div style="font-size:11px;font-weight:900;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">'+accSrcLabel(v.source_type)+' — full record</div>'+
+        (accCanOpenRefBill(v.source_type)?'<button onclick="accOpenRefBillPDF(ACC_VOU_SRC_TYPE,ACC_VOU_SRC_ROW)" style="background:#1565C0;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128196; Open Bill PDF</button>':'')+
+      '</div>'+
       '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;">'+accRenderSourceFields(row)+'</div>';
   }catch(e){
     el.innerHTML='<div style="font-size:11px;color:#C62828;padding:6px 0;">Could not load the source record: '+e.message+'</div>';
+  }
+}
+
+// Which categories have a printable bill/receipt, and what to open. Kept
+// as a lookup table rather than scattering source_type checks around, so
+// adding a new printable category later is a one-line change.
+var ACC_PDF_KIND={
+  work_bill:'work_bill', work_bill_add:'work_bill', work_bill_ded:'work_bill', work_bill_tds:'work_bill', work_bill_gst:'work_bill',
+  work_payment:'work_bill_ref',
+  work_advance:'advance', work_advance_tds:'advance', work_advance_gst:'advance',
+  sales_bill:'sales_bill', sales_bill_add:'sales_bill', sales_bill_ded:'sales_bill', sales_bill_gst:'sales_bill',
+  sales_payment:'sales_bill_ref'
+};
+function accCanOpenRefBill(sourceType){ return !!ACC_PDF_KIND[sourceType]; }
+var ACC_VOU_SRC_TYPE=null, ACC_VOU_SRC_ROW=null;
+
+// Opens the actual bill/advance receipt a voucher was posted from — the
+// "ref bill" — by reusing the same PDF generators the Projects module
+// uses (execDownloadBillPDF / execAdvanceReceipt / execGenerateSalesBillInvoice)
+// rather than re-implementing bill layout here a second time. Those
+// generators read the Projects module's project-scoped globals (WA_BILLS,
+// WA_ADVANCES, WA_SALES_BILLS, ...), which only hold whichever project is
+// currently open there. So this swaps in the right project's data, builds
+// the PDF (a synchronous window.open + document.write — nothing deferred
+// to wait on), and puts every global back exactly as it was, so nothing
+// is left pointing at the wrong project for whatever the Projects module
+// does next.
+async function accOpenRefBillPDF(sourceType, row){
+  if(!row) return;
+  var kind=ACC_PDF_KIND[sourceType];
+  if(!kind){ toast('No printable document for this entry type','info'); return; }
+  var projId=row.project_id;
+  if(!projId){ toast('No project linked to this record','warning'); return; }
+  var billId=null, advId=null;
+  if(kind==='work_bill') billId=row.id;
+  else if(kind==='work_bill_ref') billId=row.bill_id;
+  else if(kind==='advance') advId=row.id;
+  else if(kind==='sales_bill') billId=row.id;
+  else if(kind==='sales_bill_ref') billId=row.sales_bill_id;
+  if((kind==='work_bill_ref'||kind==='sales_bill_ref') && !billId){
+    toast('This payment is not linked to a bill','warning'); return;
+  }
+  if(typeof execLoadItems!=='function'){ toast('Bill printing is unavailable here','error'); return; }
+
+  toast('Opening…','info');
+  var saved={PROJ_MOD_SEL_ID:PROJ_MOD_SEL_ID, WA_LOADED_PROJ:WA_LOADED_PROJ,
+    WA_ITEMS:WA_ITEMS, WA_SUBS:WA_SUBS, WA_PLANNED:WA_PLANNED, WA_ALLOT:WA_ALLOT,
+    WA_DAILY:WA_DAILY, WA_BILLS:WA_BILLS, WA_PAYMENTS:WA_PAYMENTS, WA_ORDERS:WA_ORDERS,
+    WA_JMS:WA_JMS, WA_APPROVED_RRS:WA_APPROVED_RRS, WA_ADVANCES:WA_ADVANCES,
+    WA_SALES_BILLS:WA_SALES_BILLS, WA_SALES_PAYMENTS:WA_SALES_PAYMENTS,
+    WA_SUBCONTRACTS:(typeof WA_SUBCONTRACTS!=='undefined'?WA_SUBCONTRACTS:undefined)};
+  try{
+    PROJ_MOD_SEL_ID=projId;
+    WA_LOADED_PROJ=''; // force a fresh fetch for this project even on an id coincidence
+    await execLoadItems(true);
+    if(kind==='work_bill'||kind==='work_bill_ref'){
+      if(typeof execDownloadBillPDF!=='function'){ toast('Bill printing is unavailable here','error'); return; }
+      execDownloadBillPDF(billId);
+    }else if(kind==='advance'){
+      if(typeof execAdvanceReceipt!=='function'){ toast('Receipt printing is unavailable here','error'); return; }
+      execAdvanceReceipt(advId);
+    }else if(kind==='sales_bill'||kind==='sales_bill_ref'){
+      if(typeof execGenerateSalesBillInvoice!=='function'){ toast('Invoice printing is unavailable here','error'); return; }
+      execGenerateSalesBillInvoice(billId,'boq');
+    }
+  }catch(e){
+    toast('Could not open the bill: '+e.message,'error');
+  }finally{
+    Object.keys(saved).forEach(function(k){ if(saved[k]!==undefined) window[k]=saved[k]; });
   }
 }
 
