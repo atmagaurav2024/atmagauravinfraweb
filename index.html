@@ -23757,15 +23757,7 @@ async function accReviewOrphans(){
     return v ? Object.assign({},v,{source_type:o.source_type}) : {id:o.id,source_type:o.source_type,_missing:true};
   });
 
-  var srcLabel=function(t){
-    var m={sales_bill:'Sales bill',sales_bill_add:'Sales bill \u2014 additions',sales_bill_ded:'Sales bill \u2014 deductions',sales_bill_gst:'Sales bill \u2014 GST',
-      sales_payment:'Sales payment',work_bill:'Purchase bill',work_bill_add:'Purchase bill \u2014 additions',work_bill_ded:'Purchase bill \u2014 deductions',
-      work_bill_tds:'Purchase bill \u2014 TDS',work_bill_gst:'Purchase bill \u2014 GST',work_payment:'Purchase payment',
-      work_advance:'Advance payment',work_advance_tds:'Advance \u2014 TDS',work_advance_gst:'Advance \u2014 GST',
-      petty_in:'Petty cash funding',petty_cash_in:'Petty cash funding',petty_expense:'Petty cash expense',petty_cash_expense:'Petty cash expense',other_expense:'Other expense',
-      company_expense:'Company overhead',company_expense_gst:'Company overhead \u2014 GST',loan:'Loan',loan_pay_interest:'Loan interest payment',loan_pay_principal:'Loan repayment'};
-    return m[t]||t||'\u2014';
-  };
+  var srcLabel=accSrcLabel;
 
   document.getElementById('acc-sheet-body').innerHTML=
     '<div style="font-size:10.5px;color:var(--text3);margin-bottom:10px;">Each voucher below points to a source record (a bill, payment, expense, etc.) that has since been deleted elsewhere in the app. The voucher itself was never removed. Check whether it still reflects something real before deleting it.</div>'+
@@ -23945,11 +23937,12 @@ function accDash(){
         '<button onclick="accOpenVoucher()" style="background:var(--accent);color:white;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Voucher</button>'+
       '</div></div>'+
     (!BIZ.length?'<div style="text-align:center;padding:30px;color:var(--text3);">No vouchers yet</div>':
-    '<div class="table-card"><table class="att-table"><thead><tr><th>Vou No</th><th>Date</th><th>Type</th><th>Party</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
+    '<div class="table-card"><table class="att-table"><thead><tr><th>Vou No</th><th>Date</th><th>Type</th><th>Entry</th><th>Party</th><th>Amount</th><th>Actions</th></tr></thead><tbody>'+
       (ACC_DASH_ALL?BIZ:BIZ.slice(0,20)).map(function(v){
         var typeColors={Payment:'vou-payment',Receipt:'vou-receipt',Purchase:'vou-purchase',Journal:'vou-journal',Contra:'vou-contra',Sales:'vou-receipt'};
         return '<tr><td><strong>'+v.vou_no+'</strong></td><td>'+fmtDate(v.date)+'</td>'+
           '<td><span class="vou-badge '+(typeColors[v.type]||'vou-journal')+'">'+v.type+'</span></td>'+
+          '<td style="font-size:10.5px;color:var(--text3);">'+accSrcLabel(v.source_type)+'</td>'+
           '<td>'+(v.party_name||'—')+'</td><td>'+fmtINR(v.amount||0)+'</td>'+
           '<td><button class="btn btn-sm" onclick="accViewVoucher(\''+v.id+'\')">👁</button> '+
           '<button class="btn btn-sm btn-red" onclick="accDelVoucher(\''+v.id+'\')">🗑</button></td></tr>';
@@ -24195,6 +24188,112 @@ function accExportPDF(title, tableHeaders, tableRows, extraNoteHtml){
 // ── Per-view export data builders ────────────────────────────────────────
 function accAcctName(id){ var a=ACC_ACCOUNTS.find(function(x){return x.id===id;}); return a?(a.code+' - '+a.name):'—'; }
 function accAcctNameByCode(code){ var a=ACC_ACCOUNTS.find(function(x){return String(x.code)===String(code);}); return a?(a.code+' - '+a.name):(code||'—'); }
+
+// Human-readable label for a voucher's source_type — used on the Vouchers
+// dashboard's "Entry" column and everywhere a voucher needs to say what
+// kind of record it came from (Reconcile's orphan review, the voucher
+// detail sheet, etc.), so the mapping lives in one place.
+function accSrcLabel(t){
+  var m={sales_bill:'Sales bill',sales_bill_add:'Sales bill — additions',sales_bill_ded:'Sales bill — deductions',sales_bill_gst:'Sales bill — GST',
+    sales_payment:'Sales payment',work_bill:'Purchase bill',work_bill_add:'Purchase bill — additions',work_bill_ded:'Purchase bill — deductions',
+    work_bill_tds:'Purchase bill — TDS',work_bill_gst:'Purchase bill — GST',work_payment:'Purchase payment',
+    work_advance:'Advance payment',work_advance_tds:'Advance — TDS',work_advance_gst:'Advance — GST',
+    petty_in:'Petty cash funding',petty_cash_in:'Petty cash funding',petty_expense:'Petty cash expense',petty_cash_expense:'Petty cash expense',other_expense:'Other expense',
+    company_expense:'Company overhead',company_expense_gst:'Company overhead — GST',personal_from_overhead:'Personal share of overhead',
+    loan:'Loan',loan_txn:'Loan transaction',loan_pay_interest:'Loan interest payment',loan_pay_principal:'Loan repayment',
+    loan_interest_month:'Loan interest accrual',employee_advance:'Employee advance'};
+  return m[t]||t||'—';
+}
+
+// Which table a voucher's source_id points into, for pulling up the full
+// record behind an entry. Categories with no single source row — the
+// grouped loan-repayment postings (matched by receipt, not a source id)
+// and the monthly interest accrual (computed across all loans, source_id
+// always null) — are deliberately left out; accLoadVoucherSource()
+// explains those instead of trying to fetch a row.
+var ACC_SRC_TABLE={
+  sales_bill:'sales_bills', sales_bill_add:'sales_bills', sales_bill_ded:'sales_bills', sales_bill_gst:'sales_bills',
+  sales_payment:'sales_payments',
+  work_bill:'work_bills', work_bill_add:'work_bills', work_bill_ded:'work_bills', work_bill_tds:'work_bills', work_bill_gst:'work_bills',
+  work_payment:'work_payments',
+  work_advance:'work_advances', work_advance_tds:'work_advances', work_advance_gst:'work_advances',
+  petty_cash_in:'petty_cash_in', petty_in:'petty_cash_in', petty_cash_expense:'petty_cash_expenses', petty_expense:'petty_cash_expenses',
+  other_expense:'other_expenses',
+  company_expense:'company_expenses', company_expense_gst:'company_expenses', personal_from_overhead:'company_expenses',
+  loan:'loans', loan_txn:'loan_transactions',
+  employee_advance:'employee_advances'
+};
+
+function accPrettyFieldLabel(k){
+  return k.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+}
+
+// Generic "show every field" renderer for a source record, since each
+// table's shape is different and building a bespoke layout per type would
+// be a lot of surface area to keep in sync. Amount-shaped and date-shaped
+// fields are formatted; additions/deductions/gst JSON breakdowns are
+// unpacked into a readable list; empty/internal-id fields are skipped.
+function accRenderSourceFields(row){
+  var skip={id:1,company_id:1,created_at:1,created_by:1,batch_id:1,allot_id:1};
+  var jsonFields={additions:1,deductions:1,gst:1};
+  var dateRe=/date$/i, amtRe=/(amount|amt|principal)$/i;
+  var html='';
+  Object.keys(row).forEach(function(k){
+    if(skip[k]) return;
+    var v=row[k];
+    if(v===null||v===''||v===undefined) return;
+    if(jsonFields[k]){
+      var arr=[]; try{arr=typeof v==='string'?JSON.parse(v):v;}catch(e){}
+      if(!arr||!arr.length) return;
+      html+=ir(accPrettyFieldLabel(k), arr.map(function(x){
+        return (x.head||x.category||'Item')+': '+fmtINR(parseFloat(x.amount)||0)+(x.pct?' ('+x.pct+'%)':'');
+      }).join('<br>'));
+      return;
+    }
+    if(dateRe.test(k)){ html+=ir(accPrettyFieldLabel(k), fmtDate(v)); return; }
+    if(amtRe.test(k) && !isNaN(parseFloat(v))){ html+=ir(accPrettyFieldLabel(k), fmtINR(parseFloat(v))); return; }
+    if(typeof v==='boolean'){ html+=ir(accPrettyFieldLabel(k), v?'Yes':'No'); return; }
+    html+=ir(accPrettyFieldLabel(k), String(v));
+  });
+  return html||'<div style="font-size:11px;color:var(--text3);">No further detail on this record.</div>';
+}
+
+// Fills the "Source Record" section of the voucher detail sheet, fetching
+// the actual bill/advance/payment/expense row the voucher was posted
+// from — not just the two GL accounts, but every field on the real record.
+async function accLoadVoucherSource(v){
+  var el=document.getElementById('acc-vou-source'); if(!el) return;
+  var groupedNoRow={loan_pay_interest:1, loan_pay_principal:1, loan_interest_month:1};
+  if(!v.source_type || !v.source_id){
+    el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:6px 0;">Manually entered — not linked to a bill, payment or other record.</div>';
+    return;
+  }
+  if(groupedNoRow[v.source_type]){
+    el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:6px 0;">'+
+      (v.source_type==='loan_interest_month'
+        ? 'Computed monthly interest accrual across all loans — not tied to a single record.'
+        : 'Consolidated posting for a repayment receipt covering one or more loan transactions — not tied to a single record.')+
+      '</div>';
+    return;
+  }
+  var table=ACC_SRC_TABLE[v.source_type];
+  if(!table){
+    el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:6px 0;">Source: '+accSrcLabel(v.source_type)+'</div>';
+    return;
+  }
+  try{
+    var rows=await sbFetch(table,{select:'*',filter:'id=eq.'+v.source_id});
+    var row=(rows&&rows[0])||null;
+    if(!row){
+      el.innerHTML='<div style="font-size:11px;color:#C62828;padding:6px 0;">The '+accSrcLabel(v.source_type).toLowerCase()+' this was posted from no longer exists — see Reconcile’s orphan check.</div>';
+      return;
+    }
+    el.innerHTML='<div style="font-size:11px;font-weight:900;color:var(--text3);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px;">'+accSrcLabel(v.source_type)+' — full record</div>'+
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;">'+accRenderSourceFields(row)+'</div>';
+  }catch(e){
+    el.innerHTML='<div style="font-size:11px;color:#C62828;padding:6px 0;">Could not load the source record: '+e.message+'</div>';
+  }
+}
 
 function accVouchersExportData(){
   var header=['Vou No','Date','Type','Party','Debit Account','Credit Account','Amount','Narration'];
@@ -25210,10 +25309,15 @@ function accViewVoucher(id){
   document.getElementById('acc-sheet-body').innerHTML=
     '<div style="background:#f7fafc;border-radius:12px;padding:14px;margin-bottom:14px;">'+
     ir('Voucher No',v.vou_no,true)+ir('Type','<span class="vou-badge vou-'+v.type.toLowerCase()+'">'+v.type+'</span>')+
+    ir('Entry',accSrcLabel(v.source_type))+
     ir('Date',fmtDate(v.date))+ir('Party',v.party_name||'—')+ir('Amount','<strong>'+fmtINR(v.amount||0)+'</strong>')+
+    ir('Dr','<span style="font-size:11.5px;">'+accAcctName(v.debit_account)+'</span>')+
+    ir('Cr','<span style="font-size:11.5px;">'+accAcctName(v.credit_account)+'</span>')+
     (v.narration?ir('Narration',v.narration):'')+
-    '</div>';
+    '</div>'+
+    '<div id="acc-vou-source"><div style="text-align:center;padding:14px;color:var(--text3);font-size:11px;">Loading source record…</div></div>';
   var foot=document.getElementById('acc-sheet-foot');if(foot)foot.innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-acc\',\'sh-acc\')">Close</button><button class="btn btn-red" onclick="accDelVoucher(\''+id+'\')">🗑 Delete</button>';
+  accLoadVoucherSource(v);
 }
 
 // Delete a GST settlement voucher (ITC set-off or payment to Govt) and stay
