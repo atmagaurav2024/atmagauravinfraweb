@@ -10196,6 +10196,49 @@ function advRefreshAdjBreakdown(chk, ai, val){
   });
 }
 
+// Splits a combined advance-adjustment amount into SEPARATE bill deduction
+// lines by head — Work Amount (incl. Additions), TDS, GST — instead of one
+// flat "Advance Adjustment" lump. Each line only ever draws from its own
+// matching head in the advance ("work amt from work amt advance, gst from
+// gst advance"), and carries its own scoped advance_details (per-advance
+// amount for THAT head only), so per-advance reversal (execDeleteAdvAdj)
+// and PDF rendering keep working unchanged, just against the smaller,
+// head-specific sub-amount instead of the full advance.
+// adjAdvDetails: array of {id,amount,date,purpose,payment_mode,reference,
+// total_adv, work_amt,add_amt,tds_amt,gst_amt} as built by execSaveBill /
+// execSaveBillEdit / execSavePaymentAdv via advSplitAdjustment.
+function advBuildAdjDeductions(adjAdvDetails){
+  var heads=[
+    {keys:['work_amt','add_amt'], label:'Advance Adjustment (Work Amt)'},
+    {keys:['tds_amt'], label:'Advance Adjustment (TDS)'},
+    {keys:['gst_amt'], label:'Advance Adjustment (GST)'}
+  ];
+  var ts=Date.now();
+  var out=[];
+  var grandTotal=adjAdvDetails.reduce(function(s,ad){return s+(parseFloat(ad.amount)||0);},0);
+  heads.forEach(function(h,hi){
+    var rowDetails=[];
+    adjAdvDetails.forEach(function(ad){
+      var amt=Math.round(h.keys.reduce(function(s,k){return s+(parseFloat(ad[k])||0);},0));
+      if(amt>0) rowDetails.push({id:ad.id,amount:amt,date:ad.date,purpose:ad.purpose,payment_mode:ad.payment_mode,reference:ad.reference,total_adv:ad.total_adv});
+    });
+    var rowTotal=rowDetails.reduce(function(s,d){return s+d.amount;},0);
+    if(rowTotal>0){
+      out.push({id:'adv-adj-'+ts+'-'+hi,head:h.label,amount:rowTotal,released:false,is_advance_adj:true,adv_adj_head:h.keys[0],advance_ids:rowDetails.map(function(d){return d.id;}),advance_details:rowDetails});
+    }
+  });
+  // Fix rounding drift (each component was already rounded per-advance) so
+  // the split's total still matches the amount actually being adjusted —
+  // that total feeds directly into the bill's net-payable calculation.
+  var splitSum=out.reduce(function(s,d){return s+d.amount;},0);
+  var drift=Math.round(grandTotal-splitSum);
+  if(drift!==0&&out.length){
+    out[0].amount+=drift;
+    if(out[0].advance_details.length) out[0].advance_details[0].amount+=drift;
+  }
+  return out;
+}
+
 async function execOpenAdvanceBatch(batchKey){
   var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
   if(!items.length){toast('Batch not found','error');return;}
@@ -11282,10 +11325,12 @@ async function execSaveBill(partyType,partyName,projId,billNo){
   amount=Math.max(0,grossAmount-deductionsTotal-adjAdvTotal); // net payable, for the zero-amount check only
   if(grossAmount===0){toast('Bill amount cannot be zero','warning');return;}
 
-  // Collect deductions (include advance adjustment as a deduction line)
+  // Collect deductions (include advance adjustment as separate deduction
+  // lines by head — Work Amt / TDS / GST — so each is adjusted from its
+  // own matching head in the advance, not lumped into one flat line).
   var deductions=[];
   if(adjAdvTotal>0){
-    deductions.push({id:'adv-adj-'+Date.now(),head:'Advance Adjustment',amount:adjAdvTotal,released:false,is_advance_adj:true,advance_ids:adjAdvIds,advance_details:adjAdvDetails});
+    deductions=deductions.concat(advBuildAdjDeductions(adjAdvDetails));
   }
   document.querySelectorAll('#bl-ded-list > div').forEach(function(row){
     var head=(row.querySelector('.bl-ded-head')||{}).value||'';
@@ -11757,15 +11802,14 @@ async function execSavePaymentAdv(projId,balAmount){
     var deds=[];try{deds=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
     var advDetails=advAdjs.map(function(adj){
       var oa=WA_ADVANCES.find(function(a){return a.id===adj.id;})||{};
+      var split=advSplitAdjustment(oa,adj.amt);
       return {id:adj.id,amount:adj.amt,date:oa.date||'',purpose:oa.purpose||'',
-        payment_mode:oa.payment_mode||'',reference:oa.reference||'',total_adv:parseFloat(oa.amount)||0};
+        payment_mode:oa.payment_mode||'',reference:oa.reference||'',total_adv:parseFloat(oa.amount)||0,
+        work_amt:split.work_amt,add_amt:split.add_amt,tds_amt:split.tds_amt,gst_amt:split.gst_amt};
     });
-    deds.push({
-      id:'adv-adj-'+Date.now(),head:'Advance Adjustment',
-      amount:advAdjTotal,released:false,is_advance_adj:true,
-      advance_ids:advAdjs.map(function(a){return a.id;}),
-      advance_details:advDetails
-    });
+    // Split by head (Work Amt / TDS / GST) instead of one flat lump, same
+    // as the Bill Generation advance-adjustment flow.
+    deds=deds.concat(advBuildAdjDeductions(advDetails));
     try{
       await fetch(baseUrl+'/rest/v1/work_bills?id=eq.'+billId,{
         method:'PATCH',
@@ -12590,7 +12634,7 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     adjAdvTotal+=amt;
   });
   if(adjAdvTotal>0){
-    deductions.push({id:'adv-adj-'+Date.now(),head:'Advance Adjustment',amount:adjAdvTotal,released:false,is_advance_adj:true,advance_ids:adjAdvIds,advance_details:adjAdvDetails});
+    deductions=deductions.concat(advBuildAdjDeductions(adjAdvDetails));
   }
   document.querySelectorAll('#bl-ded-list > div').forEach(function(row){
     var head=(row.querySelector('.bl-ded-head')||{}).value||'';
