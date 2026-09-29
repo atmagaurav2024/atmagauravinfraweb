@@ -10239,6 +10239,54 @@ function advBuildAdjDeductions(adjAdvDetails){
   return out;
 }
 
+// Reverses whatever adjusted_amount ONE advance-adjustment deduction row
+// contributed to each advance it drew from, restoring that portion of the
+// advance's balance. Same reversal execDeleteAdvAdj does for a single
+// deleted row, factored out here so deleting the WHOLE bill (below) can
+// apply it to every advance-adjustment row on that bill, not just skip
+// past them and leave the advances permanently marked as used up.
+async function advReverseDeductionRow(ded){
+  var advDetails=ded.advance_details||[];
+  var advIds=ded.advance_ids||[];
+  if(advDetails.length){
+    for(var i=0;i<advDetails.length;i++){
+      var ad=advDetails[i];
+      var origAdv=WA_ADVANCES.find(function(a){return a.id===ad.id;})||{};
+      var newAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-(parseFloat(ad.amount)||0));
+      try{
+        await sbUpdate('work_advances',ad.id,{adjusted_amount:newAdj});
+        var idx=WA_ADVANCES.findIndex(function(a){return a.id===ad.id;});
+        if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdj;
+      }catch(e){console.warn(e);}
+    }
+  } else if(advIds.length){
+    // Fallback for older rows without advance_details: split proportionally.
+    var splitAmt=(parseFloat(ded.amount)||0)/advIds.length;
+    for(var j=0;j<advIds.length;j++){
+      var origAdv=WA_ADVANCES.find(function(a){return a.id===advIds[j];})||{};
+      var newAdj=Math.max(0,(parseFloat(origAdv.adjusted_amount)||0)-splitAmt);
+      try{
+        await sbUpdate('work_advances',advIds[j],{adjusted_amount:newAdj});
+        var idx=WA_ADVANCES.findIndex(function(a){return a.id===advIds[j];});
+        if(idx>-1) WA_ADVANCES[idx].adjusted_amount=newAdj;
+      }catch(e){console.warn(e);}
+    }
+  }
+}
+
+// Reverses EVERY advance-adjustment deduction row on a bill (there can be
+// several now — Work Amt/TDS/GST split into separate rows — and a bill can
+// also have absorbed adjustments via Record Payment). Call this before a
+// bill is deleted so advances it consumed go back to being available.
+async function advReverseAllBillAdjustments(bill){
+  if(!bill) return;
+  var deds=[];try{deds=bill.deductions?JSON.parse(bill.deductions):[];}catch(e){}
+  var advDeds=deds.filter(function(d){return d.is_advance_adj;});
+  for(var k=0;k<advDeds.length;k++){
+    await advReverseDeductionRow(advDeds[k]);
+  }
+}
+
 async function execOpenAdvanceBatch(batchKey){
   var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
   if(!items.length){toast('Batch not found','error');return;}
@@ -12255,19 +12303,26 @@ async function execDelAdvance(id){
 }
 async function execDelBill(id){
   var fmtInr=function(n){ return '₹'+Math.round(n||0).toLocaleString('en-IN'); };
+  var bill=WA_BILLS.find(function(b){return b.id===id;});
   var relPays=WA_PAYMENTS.filter(function(p){return p.bill_id===id;});
   var hasPaid=relPays.length>0;
+  var billAdvDeds=[];try{billAdvDeds=(bill&&bill.deductions?JSON.parse(bill.deductions):[]).filter(function(d){return d.is_advance_adj;});}catch(e){}
+  var hasAdvAdj=billAdvDeds.length>0;
+  var advAdjTotal=billAdvDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var msg=hasPaid
-    ? 'This bill has '+relPays.length+' payment'+(relPays.length>1?'s':'')+' totaling '+fmtInr(relPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0))+'.\nDeleting this bill will also permanently delete '+(relPays.length>1?'these payments':'this payment')+'. This cannot be undone.\n\nContinue?'
-    : 'Delete this bill? This cannot be undone.';
+    ? 'This bill has '+relPays.length+' payment'+(relPays.length>1?'s':'')+' totaling '+fmtInr(relPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0))+'.\nDeleting this bill will also permanently delete '+(relPays.length>1?'these payments':'this payment')+'.'+(hasAdvAdj?' Advance adjustments of '+fmtInr(advAdjTotal)+' will also be reversed, restoring that balance to the advance(s).':'')+' This cannot be undone.\n\nContinue?'
+    : 'Delete this bill?'+(hasAdvAdj?' Advance adjustments of '+fmtInr(advAdjTotal)+' will also be reversed, restoring that balance to the advance(s).':'')+' This cannot be undone.';
   if(!confirm(msg))return;
   if(hasPaid){
     for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(relPays[i].id);}catch(e){}
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
+  if(hasAdvAdj){
+    try{await advReverseAllBillAdjustments(bill);}catch(e){console.warn(e);}
+  }
   WA_BILLS=WA_BILLS.filter(function(b){return b.id!==id;});
   execRenderSubTab();
-  try{await sbDelete('work_bills',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);toast('Bill deleted','success');}catch(e){console.error(e);}
+  try{await sbDelete('work_bills',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);toast('Bill deleted'+(hasAdvAdj?' — advance balance restored':''),'success');}catch(e){console.error(e);}
 }
 
 async function execEditBill(billId){
