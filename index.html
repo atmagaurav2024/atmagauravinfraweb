@@ -24919,9 +24919,23 @@ async function accGstTab(){
 
     // Inward (purchases) per-bill breakdown — input GST / ITC
     var inRows=workBills.map(function(b){
-      var gst=gstOf(b);
+      var gstRaw=gstOf(b);
       var total=parseFloat(b.bill_amount)||0;
-      return {bill:b, taxable:total-gst, gst:gst, total:total, month:(b.bill_date||'').slice(0,7)};
+      // A bill's GST that was settled by drawing on an advance's own GST
+      // bucket ("Advance Adjustment (GST)") was already counted once as
+      // ITC below, via advGstRows, at the moment the advance itself was
+      // paid — same double-count this session already fixed in what gets
+      // POSTED to the ledger (accReconcile/blPostToAccounts), but this GST
+      // tab computes its own ITC total straight from work_bills/
+      // work_advances and never looked at the ledger fix, so it needed the
+      // same exclusion applied here independently. Taxable value is
+      // unaffected — it's still the bill's real non-GST amount regardless
+      // of how the GST portion was funded.
+      var deds=[]; try{deds=b.deductions?JSON.parse(b.deductions):[];}catch(e){}
+      var advGstMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='gst_amt';})
+        .reduce(function(s,d){return s+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
+      var gstForItc=Math.max(0,gstRaw-advGstMatched);
+      return {bill:b, taxable:total-gstRaw, gst:gstForItc, total:total-advGstMatched, month:(b.bill_date||'').slice(0,7)};
     });
     // Overheads with claimable ITC also count as inward supplies
     var ohRows=ohExp.filter(function(x){return (parseFloat(x.gst_amount)||0)>0 && x.itc_claimable!==false;})
