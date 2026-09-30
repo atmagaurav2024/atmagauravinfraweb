@@ -2650,6 +2650,16 @@ var DASH_SELECTED_FY = null;
 // How many months the Billing vs Expenses chart shows — user-selectable
 // via the chart's own "Last N Months" dropdown.
 var DASH_CHART_MONTHS = 6;
+// Lets the dashboard paint instantly from the last successful render
+// (cached in localStorage, scoped per company) instead of sitting on
+// "Loading insights..." every single time it opens — the real fetch
+// still always runs and replaces it within a couple of seconds, this
+// just avoids a blank wait while that happens. Only used for the one
+// render this page load before any real data has shown, and only for
+// the default (no project filter) view, so it can never show stale
+// data in place of something fresher already on screen.
+var DASH_FIRST_PAINT_DONE = false;
+var DASH_CACHE_KEY = 'rydax_dash_cache_v1';
 function fyRange(startYear){
   return { from: startYear+'-04-01', to: (startYear+1)+'-03-31' };
 }
@@ -2758,6 +2768,25 @@ async function loadDashboardInsights(filterProjId){
   var kraEl=document.getElementById('dash-kra-section');
   var filterEl=document.getElementById('dash-proj-filter');
   if(!gridEl) return;
+
+  // Paint last session's dashboard instantly while the real, current
+  // numbers load in the background — only on this page load's first
+  // render, and only for the unfiltered default view, so a fresher
+  // render already on screen is never replaced by an older cached one.
+  var dashPaintedFromCache = false;
+  if(!DASH_FIRST_PAINT_DONE && !filterProjId){
+    try{
+      var cached = JSON.parse(localStorage.getItem(DASH_CACHE_KEY)||'null');
+      var mySlug = (currentUser&&currentUser.companySlug)||'';
+      if(cached && cached.gridHtml && mySlug && cached.companySlug===mySlug){
+        gridEl.innerHTML = cached.gridHtml;
+        dashPaintedFromCache = true;
+        var fyTextElCache=document.getElementById('dash-fy-text');
+        if(fyTextElCache && cached.fyLabel) fyTextElCache.textContent = cached.fyLabel;
+      }
+    }catch(e){}
+  }
+
   var inr=function(n){
     var v=Math.round(Number(n||0));
     var sign=v<0?'-':'';
@@ -3595,13 +3624,33 @@ async function loadDashboardInsights(filterProjId){
       else notifBadge.style.display='none';
     }
 
+    DASH_FIRST_PAINT_DONE = true;
+    if(!filterProjId){
+      try{
+        localStorage.setItem(DASH_CACHE_KEY, JSON.stringify({
+          companySlug: (currentUser&&currentUser.companySlug)||'',
+          gridHtml: gridEl.innerHTML,
+          fyLabel: fyLabel,
+          ts: Date.now()
+        }));
+      }catch(e){}
+    }
+
     kraEl.innerHTML='';
 
     setTimeout(fitDashboardToScreen, 30);
 
   }catch(e){
     console.error('Dashboard insights error:',e);
-    gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F857A6;font-size:13px;background:var(--card-bg);border-radius:12px;border:1px solid var(--border);">Could not load insights. Pull to refresh.</div>';
+    // If a cached dashboard is already on screen from the instant-paint
+    // above, leave it showing (stale but useful) rather than replacing
+    // it with an error — only show the error when there was nothing to
+    // fall back to.
+    if(!dashPaintedFromCache){
+      gridEl.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:#F857A6;font-size:13px;background:var(--card-bg);border-radius:12px;border:1px solid var(--border);">Could not load insights. Pull to refresh.</div>';
+    } else {
+      toast('Could not refresh dashboard — showing last known data','warning');
+    }
   }
 }
 
