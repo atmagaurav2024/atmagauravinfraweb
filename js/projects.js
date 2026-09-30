@@ -2659,9 +2659,9 @@ function rrRender(){
         '</div>';
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-        '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||g.party_name)+'</div>'+
-          '<div style="font-size:10px;color:#1565C0;">'+(g.party_name||'Party not yet assigned')+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
+        '<div style="padding:10px 14px;background:var(--bg);display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><div style="font-size:13px;font-weight:800;color:var(--text);">'+(g.group_name||g.party_name)+'</div>'+
+          '<div style="font-size:10px;color:var(--text2);">'+(g.party_name||'Party not yet assigned')+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
           (totalRemaining>0.0001
             ? '<button onclick="rrOpenGroupPrompt(\''+g.id+'\')" style="background:#00838F;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Raise Combined RR</button>'
             : '<span style="font-size:10px;background:#E8F5E9;color:#2E7D32;padding:4px 10px;border-radius:5px;font-weight:700;">Fully Raised</span>')+
@@ -2760,9 +2760,9 @@ function rrRender(){
       : '';
 
     return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:9px 14px;background:#E0F7FA;border-bottom:1px solid var(--border);">'+
+      '<div style="padding:9px 14px;background:var(--bg);border-bottom:1px solid var(--border);">'+
         '<span style="font-size:10px;font-family:monospace;background:#B2EBF2;color:#00838F;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
-        '<span style="font-size:13px;font-weight:800;margin-left:8px;color:#004D5C;">'+(item.short_name||item.description)+'</span>'+
+        '<span style="font-size:13px;font-weight:800;margin-left:8px;color:var(--text);">'+(item.short_name||item.description)+'</span>'+
       '</div>'+
       '<div style="padding:4px 0;border-bottom:1px solid var(--border);">'+
         '<div style="padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">PLANNED RESOURCES</div>'+
@@ -3272,7 +3272,7 @@ async function rrGroupOpenAllotForm(groupId){
 
   document.getElementById('exec-sheet-title').textContent='Allot Combined RR — '+group.rr_number;
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#E0F7FA;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:8px;">Items in this Combined RR</div>'+
       '<div style="font-size:12px;font-weight:800;margin-bottom:6px;">Planned as: '+(partyNames.join(', ')||'Not yet assigned')+'</div>'+
       '<div style="display:flex;gap:14px;margin-bottom:10px;">'+
@@ -3297,7 +3297,7 @@ async function rrGroupOpenAllotForm(groupId){
       '</div>'+
       '<div id="rr-grp-itemwise-rows">'+pctFillHtml+rowsHtml+'</div>'+
     '</div>'+
-    '<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-bottom:14px;">'+
+    '<div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:14px;">'+
       '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Allot To</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
         '<div><label class="flbl">Party Type *</label>'+
@@ -8294,10 +8294,10 @@ function execRenderExecutedWork(){
       '</tr>';
     }).join('');
     return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:10px 14px;background:#FFF3E0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'+
+      '<div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">'+
         '<div>'+
           '<span style="font-size:11px;font-family:monospace;font-weight:800;color:#E65100;">'+(s.item.item_code||'')+'</span>'+
-          '<span style="font-size:12px;font-weight:800;margin-left:8px;color:#5D3A00;">'+(s.item.short_name||s.item.description||'')+'</span>'+
+          '<span style="font-size:12px;font-weight:800;margin-left:8px;color:var(--text);">'+(s.item.short_name||s.item.description||'')+'</span>'+
         '</div>'+
         '<div style="font-size:11px;font-weight:800;color:#E65100;">Total Qty Executed: '+s.totalQtyDone+' '+s.unit+'</div>'+
       '</div>'+
@@ -8309,7 +8309,7 @@ function execRenderExecutedWork(){
           '<th style="padding:5px 8px;font-size:9px;font-weight:800;text-align:right;color:var(--text3);">RATE ARRIVED</th>'+
         '</tr></thead><tbody>'+resRows+'</tbody></table>'
         :'<div style="padding:10px 14px;font-size:11px;color:var(--text3);">No resources logged against this item</div>')+
-      '<div style="padding:8px 14px;background:#FFF8F0;display:flex;justify-content:flex-end;gap:16px;align-items:center;border-top:2px solid #FFCC80;">'+
+      '<div style="padding:8px 14px;background:var(--bg);display:flex;justify-content:flex-end;gap:16px;align-items:center;border-top:2px solid #FFCC80;">'+
         '<span style="font-size:11px;font-weight:800;color:#E65100;">Item Total: '+inr(s.itemTotalAmount)+'</span>'+
         '<span style="font-size:10px;color:var(--text3);">Rate Arrived: '+inr(itemRateArrived)+'</span>'+
       '</div>'+
