@@ -483,7 +483,7 @@ function pfRenderCoords(){
   var el=document.getElementById('pf-coord-list');if(!el)return;
   if(!PF_COORDS.length){el.innerHTML='<div style="font-size:10px;color:var(--text3);padding:4px 0;">No coordinates added yet</div>';return;}
   el.innerHTML=PF_COORDS.map(function(c,i){
-    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#F0F4FF;border-radius:6px;margin-bottom:4px;font-size:10px;">'+
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px;font-size:10px;">'+
       '<span style="font-size:16px;">&#128205;</span>'+
       '<div style="flex:1;"><b>'+c.label+'</b><div style="color:var(--text3);">'+c.lat+', '+c.lng+'</div></div>'+
       '<button onclick="pfRemoveCoord('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
@@ -633,7 +633,7 @@ async function openProjForm(id){
     // ── Status + Client ──
     '<div class="g2" style="margin-bottom:8px;">'+
       '<div><label class="flbl">Status <span style="font-size:9px;font-weight:400;color:var(--text3);">(auto — based on dates below)</span></label>'+
-        '<select id="pf-status" class="fsel" disabled style="background:#F1F1F1;color:#4B5563;cursor:not-allowed;">'+statusOpts+'</select></div>'+
+        '<select id="pf-status" class="fsel" disabled style="background:var(--bg);color:var(--text2);cursor:not-allowed;">'+statusOpts+'</select></div>'+
       '<div><label class="flbl">Client / Owner</label><input id="pf-client" class="finp" value="'+esc(p.client||'')+'"></div>'+
     '</div>'+
     '<div style="margin-bottom:8px;"><label class="flbl">Execution Mode</label>'+
@@ -665,7 +665,7 @@ async function openProjForm(id){
         '<div><label class="flbl">DLP Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(Defects Liability Period)</span></label>'+
           '<input id="pf-dlp-date" class="finp" type="date" value="'+(p.dlp_date||'')+'" oninput="pfCalcStatus()"></div>'+
         '<div><label class="flbl">Revised Completion Date <span style="font-size:9px;font-weight:400;color:var(--text3);">(SCD + total EOT)</span></label>'+
-          '<input id="pf-revised-completion" class="finp" type="date" readonly style="background:#F1F1F1;color:#4B5563;"></div>'+
+          '<input id="pf-revised-completion" class="finp" type="date" readonly style="background:var(--bg);color:var(--text2);"></div>'+
       '</div>'+
       '<div style="margin-top:10px;">'+
         '<label class="flbl">Extension of Time (EOT) <span style="font-size:9px;font-weight:400;color:var(--text3);">— add multiple as they\'re granted</span></label>'+
@@ -1249,7 +1249,7 @@ function jmRender(){
   }).length;
   el.innerHTML='<div style="background:#E8EAF6;border:1px solid #C5CAE9;border-radius:12px;padding:10px 14px;margin-bottom:10px;">'+
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+
-        '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">TOTAL BOQ VALUE</div><div style="font-size:15px;font-weight:900;color:var(--text);">'+fmtINR(grandBoq)+'</div></div>'+
+        '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">TOTAL BOQ VALUE</div><div style="font-size:15px;font-weight:900;color:#1A237E;">'+fmtINR(grandBoq)+'</div></div>'+
         '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">TOTAL JM VALUE</div><div style="font-size:15px;font-weight:900;color:#283593;">'+fmtINR(grandJM)+'</div></div>'+
         '<div><div style="font-size:9.5px;color:var(--text3);font-weight:800;">BALANCE</div><div style="font-size:15px;font-weight:900;color:'+((grandBoq-grandJM)<0?'#C62828':'#2E7D32')+';">'+fmtINR(grandBoq-grandJM)+'</div></div>'+
       '</div>'+
@@ -1265,7 +1265,7 @@ function jmRender(){
     var balance=boqQty-totalJM;var pct=boqQty>0?Math.min(100,Math.round(totalJM/boqQty*100)):0;
     var rate=parseFloat(item.rate)||0;
     var jmAmt=totalJM*rate, boqAmt=boqQty*rate;
-    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;color:#1E293B;">'+(item.short_name||item.description)+'</div><div style=\"text-align:right;flex-shrink:0;margin-right:6px;\"><div style=\"font-size:13px;font-weight:900;color:#283593;\">'+fmtINR(jmAmt)+'</div><div style=\"font-size:9.5px;color:#5C6BC0;\">of '+fmtINR(boqAmt)+'</div></div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:#6B7280;background:#F3F4F6;display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' &#215; &#8377;'+rate+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+' <span style=\"color:#283593;\">= '+fmtINR((parseFloat(jm.jm_qty)||0)*rate)+'</span></div><div style="font-size:10px;color:var(--text3);">'+jmDate(jm.date)+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E8EAF6;display:flex;align-items:center;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#C5CAE9;color:#283593;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:3px;color:#1E293B;">'+(item.short_name||item.description)+'</div><div style=\"text-align:right;flex-shrink:0;margin-right:6px;\"><div style=\"font-size:13px;font-weight:900;color:#283593;\">'+fmtINR(jmAmt)+'</div><div style=\"font-size:9.5px;color:#5C6BC0;\">of '+fmtINR(boqAmt)+'</div></div></div><button onclick="jmOpenAdd(\''+item.id+'\','+boqQty+',\''+item.unit+'\')" style="background:#283593;color:white;border:none;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ JM</button></div><div style="padding:4px 14px;font-size:10px;color:var(--text2);background:var(--bg);display:flex;justify-content:space-between;"><span>BOQ: '+boqQty+' '+item.unit+' &#215; &#8377;'+rate+' | JM: '+totalJM+' | Balance: <b style="color:'+(balance<0?'#C62828':'#283593')+'">'+balance.toFixed(3).replace(/\.?0+$/,'')+'</b></span><span>'+pct+'%</span></div><div style="height:4px;background:#E8EAF6;"><div style="height:100%;width:'+pct+'%;background:#283593;"></div></div><div style="padding:8px 14px;">'+(iJMs.length?iJMs.map(function(jm){return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="background:#283593;color:white;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;">JM-'+jm.jm_number+'</span><div style="flex:1;"><div style="font-size:12px;font-weight:700;">'+jm.jm_qty+' '+item.unit+' <span style=\"color:#283593;\">= '+fmtINR((parseFloat(jm.jm_qty)||0)*rate)+'</span></div><div style="font-size:10px;color:var(--text3);">'+jmDate(jm.date)+(jm.reference?' \u00b7 '+jm.reference:'')+'</div></div><button onclick="jmDelete(\''+jm.id+'\')" style="background:none;border:none;color:#C62828;font-size:16px;cursor:pointer;">\u00d7</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No JMs yet</div>')+'</div></div>';
   }).join('');
 }
 function jmProjName(){var projId=(document.getElementById('jm-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -1550,7 +1550,7 @@ function planRender(){
       var total=gItems.reduce(function(s,it){return s+(parseFloat(it.qty)||0)*(parseFloat(it.rate)||0);},0);
       var rows=gItems.map(function(it){
         var boqItem=itemById[it.boq_item_id];
-        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;">'+
+        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">'+
           '<span>'+(boqItem?(boqItem.short_name||boqItem.description):it.boq_item_id)+'</span>'+
           '<span style="font-weight:700;">'+it.qty+' '+(it.unit||'')+' @ \u20b9'+it.rate+'</span>'+
         '</div>';
@@ -1588,9 +1588,9 @@ function planRender(){
   var jmLine=links.length?'<div style="font-size:9px;margin-top:2px;color:#1565C0;">'+
     links.map(function(l){return 'JM-'+(l.jm_number||'?')+': '+l.plan_qty;}).join(' | ')+
     ' | <b>Total: '+jmTotal+'</b>'+(jmBal!==null?' | Bal: '+jmBal.toFixed(2).replace(/\.?0+$/, ''):'')+'</div>':'';
-  return '<div style="padding:5px 10px;background:#F8F9FF;border-radius:8px;margin-top:3px;">'+
+  return '<div style="padding:5px 10px;background:var(--bg);border-radius:8px;margin-top:3px;">'+
     '<div style="display:flex;align-items:center;gap:6px;">'+
-      '<div style="flex:1;font-size:11px;font-weight:600;color:#1E293B;">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+
+      '<div style="flex:1;font-size:11px;font-weight:600;color:var(--text);">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+
         jmLine+
       '</div>'+
       '<div style="text-align:right;flex-shrink:0;">'+
@@ -1610,9 +1610,9 @@ function planRender(){
   var jmTBQ=links.reduce(function(s,l){return s+(parseFloat(l.jm_qty||l.plan_qty)||0);},0);
   var jmBal=jmTBQ>0?Math.max(0,jmTBQ-jmTotal):null;
   var jmLine=links.length?'<div style="font-size:9px;margin-top:2px;color:#1565C0;">'+links.map(function(l){return 'JM-'+(l.jm_number||'?')+': '+l.plan_qty;}).join(' | ')+' | <b>Total: '+jmTotal+'</b>'+(jmBal!==null?' | Bal: '+jmBal.toFixed(2).replace(/\.?0+$/,''):'')+'</div>':'';
-  return '<div style="padding:5px 10px;background:#F8F9FF;border-radius:8px;margin-top:3px;"><div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;font-size:11px;font-weight:600;color:#1E293B;">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+jmLine+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:10px;color:#4A5A8A;">'+r.qty+' '+(r.unit||'')+' @ \u20b9'+r.rate+'</div><div style="font-size:11px;font-weight:800;color:#1565C0;">'+fmtINR((r.qty||0)*(r.rate||0))+'</div></div><button onclick="planEditRes(\''+r.id+'\',\''+r.boq_subitem_id+'\',\''+r.boq_item_id+'\')" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button><button onclick="planDelRes(\''+r.id+'\')" style="background:none;border:none;color:#C62828;font-size:13px;cursor:pointer;">\u00d7</button></div></div>';
+  return '<div style="padding:5px 10px;background:var(--bg);border-radius:8px;margin-top:3px;"><div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;font-size:11px;font-weight:600;color:var(--text);">'+r.party_name+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+r.resource_category+'</span>':'')+jmLine+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:10px;color:#4A5A8A;">'+r.qty+' '+(r.unit||'')+' @ \u20b9'+r.rate+'</div><div style="font-size:11px;font-weight:800;color:#1565C0;">'+fmtINR((r.qty||0)*(r.rate||0))+'</div></div><button onclick="planEditRes(\''+r.id+'\',\''+r.boq_subitem_id+'\',\''+r.boq_item_id+'\')" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button><button onclick="planDelRes(\''+r.id+'\')" style="background:none;border:none;color:#C62828;font-size:13px;cursor:pointer;">\u00d7</button></div></div>';
 })();}).join(''):'';
-    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;justify-content:space-between;"><div><span style="font-size:10px;font-family:monospace;background:#BBDEFB;color:#1565C0;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;color:#0D2137;">'+(item.short_name||item.description)+'</span><div style="font-size:10px;color:#1565C0;margin-top:2px;">BOQ: '+item.boq_qty+' '+item.unit+(isFullyCombined?' <span style="background:#E8F5E9;color:#2E7D32;padding:1px 6px;border-radius:4px;font-weight:800;margin-left:4px;">&#10003; Fully planned via Combined Planning</span>':'')+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+(totalPlan?'<span style="font-size:12px;font-weight:900;color:#1565C0;">'+fmtINR(totalPlan)+'</span>':'')+(isFullyCombined?'':'<button onclick="planAddSub(\''+item.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Activity</button>')+'</div></div><div style="padding:10px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No resources yet</div>')+'</div></div>';
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;justify-content:space-between;"><div><span style="font-size:10px;font-family:monospace;background:#BBDEFB;color:#1565C0;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;color:var(--text);">'+(item.short_name||item.description)+'</span><div style="font-size:10px;color:#1565C0;margin-top:2px;">BOQ: '+item.boq_qty+' '+item.unit+(isFullyCombined?' <span style="background:#E8F5E9;color:#2E7D32;padding:1px 6px;border-radius:4px;font-weight:800;margin-left:4px;">&#10003; Fully planned via Combined Planning</span>':'')+'</div></div><div style="display:flex;align-items:center;gap:6px;">'+(totalPlan?'<span style="font-size:12px;font-weight:900;color:#1565C0;">'+fmtINR(totalPlan)+'</span>':'')+(isFullyCombined?'':'<button onclick="planAddSub(\''+item.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">+ Activity</button>')+'</div></div><div style="padding:10px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No resources yet</div>')+'</div></div>';
   }).join('');
 }
 function planProjName(){var projId=(document.getElementById('plan-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
@@ -1791,8 +1791,8 @@ async function planTurnkeyPrompt(){
       '<td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
       '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
       '<td style="padding:3px 6px;text-align:right;">'+
-        '<input type="number" class="plan-tk-item-qty" data-idx="'+idx+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid #ddd;border-radius:4px;">'+
-        ' <span style="font-size:9.5px;color:var(--text3);">'+(x.item.unit||'')+' <span style="color:#aaa;">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
+        '<input type="number" class="plan-tk-item-qty" data-idx="'+idx+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid var(--border);border-radius:4px;">'+
+        ' <span style="font-size:9.5px;color:var(--text3);">'+(x.item.unit||'')+' <span style="color:var(--text3);">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
       '</td></tr>';
   }).join('');
 
@@ -2660,7 +2660,7 @@ function rrRender(){
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:var(--text);">'+(g.group_name||g.party_name)+'</div>'+
+          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||g.party_name)+'</div>'+
           '<div style="font-size:10px;color:#1565C0;">'+(g.party_name||'Party not yet assigned')+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
           (totalRemaining>0.0001
             ? '<button onclick="rrOpenGroupPrompt(\''+g.id+'\')" style="background:#00838F;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Raise Combined RR</button>'
@@ -3918,7 +3918,7 @@ function execRender(){
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:var(--text);">'+(g.group_name||partyNames.join(', '))+'</div>'+
+          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||partyNames.join(', '))+'</div>'+
           '<div style="font-size:10px;color:#1565C0;">'+(partyNames.join(', ')||'Party not yet assigned')+' \u00b7 '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
           '<button onclick="rrGroupOpenAllotForm(\''+g.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Group</button>'+
         '</div>'+
@@ -5319,7 +5319,7 @@ async function execEditSalesBill(billId){
   var inr=function(n){return '₹'+Number(n||0).toLocaleString('en-IN');};
 
   var itemRows=items.map(function(x){
-    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0F0F0;">'+
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">'+
       '<div style="flex:1;font-size:11px;">'+(x.item_code?'<b>['+x.item_code+']</b> ':'')+x.item_name+'</div>'+
       '<div style="font-size:10px;color:var(--text3);">'+inr(x.rate)+'/'+x.unit+'</div>'+
       '<input type="number" class="finp sbe-qty" data-item-id="'+x.item_id+'" data-rate="'+x.rate+'" value="'+x.billed_qty+'" step="0.01" min="0" style="width:80px;text-align:right;" oninput="sbeUpdateTotal()">'+
@@ -8372,7 +8372,7 @@ function execRenderDailyContent(){
       '<td style="'+td+'">'+fmt(boqQty)+' <span style="font-size:9px;color:var(--text3);">'+unit+'</span></td>'+
       '<td style="'+td+';color:#283593;font-weight:800;">'+fmt(jmQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span> <span style="font-size:9px;color:#283593;">('+jmPct+'%)</span></td>'+
       '<td style="'+td+';color:#E65100;font-weight:800;">'+
-        (doneToday>0?fmt(doneToday)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span>':'<span style="color:#CCC;font-size:11px;">—</span>')+
+        (doneToday>0?fmt(doneToday)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span>':'<span style="color:var(--text3);font-size:11px;">—</span>')+
       '</td>'+
       '<td style="'+td+';color:'+pColor(cumulPct)+';font-weight:800;">'+fmt(doneCumul)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span> <span style="font-size:9px;color:'+pColor(cumulPct)+';">('+cumulPct+'%)</span></td>'+
       '<td style="'+td+';font-weight:800;color:'+(jmBal>0?'#E65100':'#2E7D32')+';">'+fmt(jmBal)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+unit+'</span></td>'+
@@ -8665,8 +8665,8 @@ async function execOpenDailyEntry(itemId){
         (fromStore
           ?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>'
           :'<span style="font-size:9px;font-weight:800;background:#FFE0B2;color:#E65100;padding:1px 6px;border-radius:3px;margin-right:4px;">&#128666; Direct</span>')+
-        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:var(--text3);">&#8594;</span>':'')+
-        ' <span style="font-size:11px;font-weight:700;color:var(--text);">'+a.party_name+'</span>'+
+        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#78909C;">&#8594;</span>':'')+
+        ' <span style="font-size:11px;font-weight:700;color:#1E293B;">'+a.party_name+'</span>'+
         (fromStore?
           '<div style="font-size:9px;font-weight:700;margin-top:2px;">'+
           '<span style="color:#2E7D32;">In Store: '+(inHand!==null?parseFloat(inHand).toFixed(2):'?')+' '+(a.unit||'')+'</span>'+
@@ -8707,7 +8707,7 @@ async function execOpenDailyEntry(itemId){
   var resourceRows = itemAllots.length
     ? (directRows
         // Direct resources (labour/SC/machinery) — always visible, no toggle
-        ? '<div style="font-size:10px;font-weight:800;color:#37474F;margin-bottom:6px;">&#128104;&#8205;&#128267; Resources</div>'+directRows
+        ? '<div style="font-size:10px;font-weight:800;color:var(--text2);margin-bottom:6px;">&#128104;&#8205;&#128267; Resources</div>'+directRows
         : '')+
       (inStoreRows
         // Store material — hidden behind toggle, unchecked by default
@@ -8963,9 +8963,9 @@ async function execEditDailyEntry(entryId, itemId){
       '<div style="flex:1;min-width:0;">'+
         (fromStore?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>':
           '<span style="font-size:9px;font-weight:800;padding:1px 6px;background:'+col+'15;color:'+col+';border-radius:3px;margin-right:4px;">'+(tLbl[a.exec_type]||a.exec_type)+'</span>')+
-        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:var(--text3);">&#8594;</span>':'')+
-        ' <span style="font-size:11px;font-weight:700;color:var(--text);">'+a.party_name+'</span>'+
-        '<div style="font-size:9px;color:var(--text3);">'+
+        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#78909C;">&#8594;</span>':'')+
+        ' <span style="font-size:11px;font-weight:700;color:#1E293B;">'+a.party_name+'</span>'+
+        '<div style="font-size:9px;color:#78909C;">'+
           (fromStore&&inHand!==null?'In Store: <b style="color:#2E7D32;">'+inHand.toFixed(2)+'</b> | ':'')+'Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b>'+
         '</div>'+
       '</div>'+
@@ -8986,7 +8986,7 @@ async function execEditDailyEntry(entryId, itemId){
 
   var resourceRows = itemAllots.length
     ? (directEditRows
-        ? '<div style="font-size:10px;font-weight:800;color:#37474F;margin-bottom:6px;">&#128104;&#8205;&#128267; Resources</div>'+directEditRows
+        ? '<div style="font-size:10px;font-weight:800;color:var(--text2);margin-bottom:6px;">&#128104;&#8205;&#128267; Resources</div>'+directEditRows
         : '')+
       (inStoreE.length
         ? '<div style="margin-top:'+(directEditRows?'10':'0')+'px;margin-bottom:4px;">'+
@@ -11325,7 +11325,7 @@ function caRenderBlock(projId){
   var rows=advs.map(function(adv){
     var adjAmt=parseFloat(adv.adjusted_amount)||0;
     var pending=Math.max(0,(parseFloat(adv.amount)||0)-adjAmt);
-    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F0F0F0;font-size:10px;">'+
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:10px;">'+
       '<div style="flex:1;">'+
         (adv.adv_ref?'<b style="font-family:monospace;color:#4A148C;">'+adv.adv_ref+'</b> · ':'')+
         fmtD(adv.date)+(adv.purpose?' — '+adv.purpose:'')+
@@ -15304,9 +15304,9 @@ function scOpenAddScope(subcontractId, editId){
 
   var itemsHtml=availableItems.map(function(it){
     var checked=editId?!!thisScopeItemIds[it.id]:true;
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F0F0F0;cursor:pointer;">'+
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;">'+
       '<input type="checkbox" class="sc-scope-item-chk" value="'+it.id+'" '+(checked?'checked':'')+' style="width:15px;height:15px;accent-color:#1565C0;">'+
-      '<span style="font-family:monospace;font-size:10px;color:#888;">'+it.item_code+'</span>'+
+      '<span style="font-family:monospace;font-size:10px;color:var(--text3);">'+it.item_code+'</span>'+
       '<span style="font-size:11.5px;flex:1;">'+(it.short_name||it.description)+'</span>'+
     '</label>';
   }).join('');

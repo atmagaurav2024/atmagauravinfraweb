@@ -13228,7 +13228,7 @@ function pfUpdateProvisionTotals(){
 function pfRenderProvisions(){
   var el=document.getElementById('pf-prov-list'); if(!el) return;
   el.innerHTML=PF_PROVISIONS.map(function(pr,i){
-    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#F8FAFC;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;">'+
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:4px;">'+
       '<span style="flex:1;font-size:11px;font-weight:'+(pr.fixed?'700':'600')+';color:'+(pr.fixed?'#1565C0':'var(--text2)')+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(pr.name)+(pr.fixed?' <span style="font-size:9px;color:var(--text3);font-weight:400;">(standard)</span>':'')+'</span>'+
       '<input type="number" step="1" value="'+pr.amount+'" oninput="pfUpdateProvisionAmount('+i+',this.value)" style="width:110px;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-size:11px;">'+
       (pr.fixed?'':'<button onclick="pfRemoveProvision('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>')+
@@ -13256,7 +13256,7 @@ function pfRenderEOT(){
   var el=document.getElementById('pf-eot-list'); if(!el) return;
   if(!PF_EOT.length){ el.innerHTML='<div style="font-size:10px;color:var(--text3);padding:4px 0;">No EOT added yet</div>'; return; }
   el.innerHTML=PF_EOT.map(function(e,i){
-    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#F8FAFC;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px;">'+
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px;">'+
       '<b style="color:#E65100;white-space:nowrap;">EOT '+(i+1)+':</b>'+
       '<span style="white-space:nowrap;">'+e.days+' days</span>'+
       '<span style="flex:1;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(e.reason?' — '+esc(e.reason):'')+'</span>'+
@@ -28705,8 +28705,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260930e"></script>
-<script src="js/employee.js?v=20260930e"></script>
-<script src="js/projects.js?v=20260930e"></script>
-<script src="js/finance.js?v=20260930e"></script>
+<script src="js/registry.js?v=20260930f"></script>
+<script src="js/employee.js?v=20260930f"></script>
+<script src="js/projects.js?v=20260930f"></script>
+<script src="js/finance.js?v=20260930f"></script>
 </html>
