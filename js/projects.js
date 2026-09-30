@@ -1386,7 +1386,7 @@ function jmOpenAdd(itemId,boqQty,unit,editJM){
   if(editJM)usedQty-=parseFloat(editJM.jm_qty)||0;
   var remaining=(boqQty||0)-usedQty;var jmNum=editJM?editJM.jm_number:iJMs.length+1;
   document.getElementById('jm-sheet-title').textContent=editJM?'Edit JM-'+jmNum:'New JM-'+jmNum;
-  document.getElementById('jm-sheet-body').innerHTML='<div style="background:#E8EAF6;border-radius:12px;padding:10px 14px;margin-bottom:12px;"><div style="font-size:11px;font-weight:800;color:#283593;">JM-'+jmNum+'</div><div style="font-size:18px;font-weight:900;color:#283593;">Balance: '+remaining.toFixed(3).replace(/\.?0+$/,'')+' '+unit+'</div></div><div class="g2"><div><label class="flbl">Date *</label><input id="jm-f-date" class="finp" type="date" value="'+(editJM?editJM.date:new Date().toISOString().slice(0,10))+'"></div><div><label class="flbl">Qty *</label><input id="jm-f-qty" class="finp" type="number" step="0.001" value="'+(editJM?editJM.jm_qty:'')+'"></div></div><label class="flbl">Reference</label><input id="jm-f-ref" class="finp" value="'+(editJM&&editJM.reference?editJM.reference:'')+'">';
+  document.getElementById('jm-sheet-body').innerHTML='<div style="background:var(--bg);border-radius:12px;padding:10px 14px;margin-bottom:12px;"><div style="font-size:11px;font-weight:800;color:#283593;">JM-'+jmNum+'</div><div style="font-size:18px;font-weight:900;color:#283593;">Balance: '+remaining.toFixed(3).replace(/\.?0+$/,'')+' '+unit+'</div></div><div class="g2"><div><label class="flbl">Date *</label><input id="jm-f-date" class="finp" type="date" value="'+(editJM?editJM.date:new Date().toISOString().slice(0,10))+'"></div><div><label class="flbl">Qty *</label><input id="jm-f-qty" class="finp" type="number" step="0.001" value="'+(editJM?editJM.jm_qty:'')+'"></div></div><label class="flbl">Reference</label><input id="jm-f-ref" class="finp" value="'+(editJM&&editJM.reference?editJM.reference:'')+'">';
   document.getElementById('jm-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-jm\',\'sh-jm\')">Cancel</button><button class="btn" style="background:#283593;color:white;" onclick="jmSave(\''+itemId+'\','+boqQty+',\''+unit+'\','+(editJM?'\''+editJM.id+'\'':'null')+','+jmNum+')">&#10003; '+(editJM?'Save':'Add')+'</button>';
   openSheet('ov-jm','sh-jm');
 }
@@ -3634,7 +3634,7 @@ function rrOpenForm(itemId, planResId, partyName, partyType, maxQty, unit, projI
 
   shTitle.textContent='Raise Resource Requisition';
   shBody.innerHTML=
-    '<div style="background:#E0F7FA;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:8px;">Resource Details</div>'+
       '<div style="font-size:12px;font-weight:800;">'+partyName+'</div>'+
       '<div style="font-size:10px;color:var(--text3);">Max qty available: '+maxQty+' '+(unit||'')+'</div>'+
@@ -3917,9 +3917,9 @@ function execRender(){
         '</div>';
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-        '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||partyNames.join(', '))+'</div>'+
-          '<div style="font-size:10px;color:#1565C0;">'+(partyNames.join(', ')||'Party not yet assigned')+' \u00b7 '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
+        '<div style="padding:10px 14px;background:var(--bg);display:flex;justify-content:space-between;align-items:center;">'+
+          '<div><div style="font-size:13px;font-weight:800;color:var(--text);">'+(g.group_name||partyNames.join(', '))+'</div>'+
+          '<div style="font-size:10px;color:var(--text2);">'+(partyNames.join(', ')||'Party not yet assigned')+' \u00b7 '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
           '<button onclick="rrGroupOpenAllotForm(\''+g.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Group</button>'+
         '</div>'+
         '<div style="padding:8px 14px;">'+rows+'</div>'+
@@ -3949,7 +3949,7 @@ function execRender(){
     var subsHtml=iSubs.map(function(sub){
       var sRes=iRes.filter(function(r){return r.boq_subitem_id===sub.id;});
       if(!sRes.length) return '';
-      return '<div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:800;color:#1565C0;padding:5px 8px;background:#E3F2FD;border-radius:6px;margin-bottom:4px;">'+sub.name+'</div>'+sRes.map(function(res){return resRow(res,item.unit,tCol,tLbl);}).join('')+'</div>';
+      return '<div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:800;color:var(--text);padding:5px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px;">'+sub.name+'</div>'+sRes.map(function(res){return resRow(res,item.unit,tCol,tLbl);}).join('')+'</div>';
     }).join('');
     var noSubRes=iRes.filter(function(r){return !r.boq_subitem_id;});
     var noSubHtml=noSubRes.map(function(res){return resRow(res,item.unit,tCol,tLbl);}).join('');
@@ -3963,8 +3963,8 @@ function execRender(){
       return rrApproved > totalAllotted;
     });
     return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:10px 14px;background:#FFF3E0;display:flex;align-items:center;justify-content:space-between;">'+
-        '<div><span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;color:#5D3A00;">'+(item.short_name||item.description)+'</span></div>'+
+      '<div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;justify-content:space-between;">'+
+        '<div><span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span><span style="font-size:13px;font-weight:800;margin-left:8px;color:var(--text);">'+(item.short_name||item.description)+'</span></div>'+
         (itemHasUnallotted?'<button class="wa-allot-btn" data-item-id="'+item.id+'" style="background:#E65100;color:white;border:none;border-radius:7px;padding:5px 14px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Work</button>':'')+
       '</div>'+
       '<div style="padding:8px 14px;">'+(subsHtml+noSubHtml||'<div style="font-size:11px;color:var(--text3);">No planned resources</div>')+'</div></div>';
@@ -3972,7 +3972,7 @@ function execRender(){
 
   var orphanHtml=orphanRes.length?
     '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:10px 14px;background:#FFF8E1;"><span style="font-size:11px;font-weight:800;color:#E65100;">&#9888; Uncategorized Resources</span></div>'+
+      '<div style="padding:10px 14px;background:var(--bg);"><span style="font-size:11px;font-weight:800;color:#E65100;">&#9888; Uncategorized Resources</span></div>'+
       '<div style="padding:8px 14px;">'+orphanRes.map(function(r){return resRow(r,'',tCol,tLbl);}).join('')+'</div></div>':'';
 
   // Count total items with unallotted RRs
@@ -4199,7 +4199,7 @@ async function execOpenMultiAllot(){
 
   // ── Party section (same as single-item) ──────────────────────────────
   var partySection=
-    '<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-bottom:14px;">'+
+    '<div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:14px;">'+
       '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Party Details</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
         '<div><label class="flbl">Party Type *</label>'+
@@ -4293,7 +4293,7 @@ async function execOpenMultiAllot(){
     }).join('');
 
     return '<div style="margin-bottom:12px;">'+
-      '<div style="background:#FFF3E0;border-radius:8px 8px 0 0;padding:8px 12px;display:flex;align-items:center;gap:8px;">'+
+      '<div style="background:var(--bg);border-radius:8px 8px 0 0;padding:8px 12px;display:flex;align-items:center;gap:8px;">'+
         '<input type="checkbox" id="wa-item-chk-'+itemId+'" onchange="waToggleItemRows(\''+itemId+'\',this.checked)" style="width:15px;height:15px;accent-color:#E65100;">'+
         '<span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
         '<span style="font-size:12px;font-weight:800;">'+( item.short_name||item.description)+'</span>'+
@@ -4498,7 +4498,7 @@ async function execOpenAllot(itemId){
 
   // ── STEP 1: Party details (shared for all selected resources) ──
   var partySection =
-    '<div style="background:#FFF3E0;border-radius:12px;padding:14px;margin-bottom:14px;">'+
+    '<div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:14px;">'+
       '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Party Details</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
         '<div><label class="flbl">Party Type *</label>'+
@@ -4841,7 +4841,7 @@ async function execEditBatch(batchKey){
 
   document.getElementById('exec-sheet-title').textContent='Edit Batch \u2014 '+items.length+' item'+(items.length!==1?'s':'');
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF3E0;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:11px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:11px;">'+
       '<div style="font-weight:800;color:#E65100;">'+partyNames.join(', ')+'</div>'+
       '<div style="color:var(--text3);">'+items.length+' item'+(items.length!==1?'s':'')+' in this batch \u2014 the values below apply to all of them</div>'+
     '</div>'+
@@ -4901,7 +4901,7 @@ async function execEditAllotted(id){
 
   document.getElementById('exec-sheet-title').textContent='Edit Allotment — '+a.party_name;
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF3E0;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:11px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:11px;">'+
       '<div style="font-weight:800;color:#E65100;">'+a.party_name+'</div>'+
       '<div style="color:var(--text3);">Party type: '+(a.exec_type||'—')+'</div>'+
     '</div>'+
@@ -5230,7 +5230,7 @@ async function execSalesBillPay(billId, billAmt){
   var balDue=Math.max(0,(parseFloat(billAmt)||0)-settledAmt);
   document.getElementById('exec-sheet-title').textContent='Record Payment';
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
       '<div style="font-weight:800;color:#2E7D32;font-size:12px;">Balance Due: ₹'+balDue.toLocaleString('en-IN')+'</div>'+
     '</div>'+
     '<label class="flbl">Payment Date *</label>'+
@@ -5438,11 +5438,11 @@ function execPrintSalesBill(billId){
   document.getElementById('exec-sheet-title').textContent='Sales Bill — Choose Format';
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Choose how the work should be described on the printed GST tax invoice.</div>'+
-    '<div onclick="execGenerateSalesBillInvoice(\''+billId+'\',\'boq\')" style="cursor:pointer;background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;padding:12px;margin-bottom:10px;">'+
+    '<div onclick="execGenerateSalesBillInvoice(\''+billId+'\',\'boq\')" style="cursor:pointer;background:var(--bg);border:1.5px solid #CE93D8;border-radius:10px;padding:12px;margin-bottom:10px;">'+
       '<div style="font-weight:800;font-size:13px;color:#4A148C;">&#128203; Detailed — BOQ Items</div>'+
       '<div style="font-size:11px;color:var(--text2);margin-top:3px;">Each BOQ item listed as a separate line with qty, rate &amp; amount.</div>'+
     '</div>'+
-    '<div style="background:#E3F2FD;border:1.5px solid #90CAF9;border-radius:10px;padding:12px;">'+
+    '<div style="background:var(--bg);border:1.5px solid #90CAF9;border-radius:10px;padding:12px;">'+
       '<div style="font-weight:800;font-size:13px;color:#1565C0;margin-bottom:8px;">&#127959; Consolidated — Civil Work</div>'+
       '<div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Single line item for the whole civil work, with its HSN/SAC code.</div>'+
       '<label class="flbl">Work Description</label>'+
@@ -5881,7 +5881,7 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
       var tdsReceivable=tdsAdvRecv+tdsPaymentsRecv;
 
       taxSummaryHtml=
-        '<div style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:10px;padding:10px 14px;margin:0 4px 10px;">'+
+        '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin:0 4px 10px;">'+
           '<div style="font-size:11.5px;font-weight:800;color:#4A148C;">🧾 GST &amp; TDS — this project</div>'+
           '<div style="font-size:9px;font-weight:800;color:#7B1FA2;text-transform:uppercase;margin-top:8px;">GST</div>'+
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px;">'+
@@ -5918,7 +5918,7 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
       var loanDueTotal=loanRows.reduce(function(s,x){return s+x.due;},0);
       if(loanRows.length){
         loanInterestHtml=
-          '<div style="background:#FFF3E0;border:1px solid #FFCC80;border-radius:10px;padding:10px 14px;margin:0 4px 10px;">'+
+          '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin:0 4px 10px;">'+
             '<div style="font-size:11.5px;font-weight:800;color:#E65100;">🏦 Loan-Allocated Interest (this project\'s share)</div>'+
             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;">'+
               '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Accrued</div><div style="font-size:14px;font-weight:900;color:#E65100;">'+inr(loanTotal)+'</div></div>'+
@@ -6066,7 +6066,7 @@ function execRenderSales(){
     var projInGst=(typeof WA_BILLS!=='undefined'?WA_BILLS:[])
       .filter(function(b){return b.project_id===projId;})
       .reduce(function(s,b){return s+gstOfBill(b);},0);
-    var gstStrip='<div style="background:#F3E5F5;border:1px solid #E1BEE7;border-radius:10px;padding:10px 12px;margin:10px 0;">'+
+    var gstStrip='<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:10px 0;">'+
       '<div style="font-size:11px;font-weight:900;color:#4A148C;margin-bottom:6px;">&#127974; GST on this Project <span style="font-weight:600;color:var(--text3);">(reconciliation only \u2014 not part of project profit)</span></div>'+
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">'+
         '<div><div style="font-size:9.5px;color:var(--text3);">OUTPUT GST BILLED</div><div style="font-size:14px;font-weight:900;color:#E65100;">'+inr(projOutGst)+'</div></div>'+
@@ -6088,7 +6088,7 @@ function execRenderSales(){
       var netBeforeGst=workAmt+addAmt-dedAmt;
       var collapseId='sb-'+b.id;
       return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-        '<div style="padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;background:#F3E5F5;" '+
+        '<div style="padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;background:var(--bg);" '+
           'onclick="var bd=document.getElementById(\''+collapseId+'\');if(bd){var op=bd.style.display!==\'none\';bd.style.display=op?\'none\':\'block\';this.querySelector(\'.sb-arrow\').textContent=op?\'\u25b6\':\'\u25bc\';}">'+
           '<span class="sb-arrow" style="color:#7B1FA2;font-size:11px;">&#9654;</span>'+
           '<div style="flex:1;">'+
@@ -6248,7 +6248,7 @@ function execRenderSales(){
     '<div style="padding:10px;">'+
       caRenderBlock(projId)+
       '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px;">'+
-        '<div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:center;gap:10px;">'+
+        '<div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;gap:10px;">'+
           '<div style="flex:1;">'+
             '<div style="font-size:13px;font-weight:900;color:#4A148C;">Generate Sales Bill</div>'+
             '<div style="font-size:10px;color:#7B1FA2;">Items shown are from DPR progress. Qty = cumulative done \u2212 already billed.</div>'+
@@ -6279,7 +6279,7 @@ function execRenderSales(){
           '</table>'+
         '</div>'+
         // Work sub-total bar
-        '<div style="padding:8px 14px;background:#EDE7F6;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
+        '<div style="padding:8px 14px;background:var(--bg);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
           '<span style="font-size:11px;font-weight:800;color:#4A148C;">Work Sub-Total</span>'+
           '<span style="font-size:13px;font-weight:900;color:#4A148C;" id="sl-work-subtotal">'+inr(0)+'</span>'+
         '</div>'+
@@ -6287,7 +6287,7 @@ function execRenderSales(){
         // Advance Adjustment — client advances with a pending Work Amt/GST
         // balance can be adjusted against this bill (see caBuildAdjDeductions).
         (pendingClientAdvs.length?
-          '<div style="background:#F8F0FD;border-top:1px solid var(--border);padding:10px 14px;">'+
+          '<div style="background:var(--bg);border-top:1px solid var(--border);padding:10px 14px;">'+
             '<div style="font-size:11px;font-weight:800;color:#4A148C;margin-bottom:8px;">&#9315; Advance Adjustment</div>'+
             '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances received from the client to adjust against this bill — capped to what each advance still has available.</div>'+
             pendingClientAdvs.map(function(adv,ai){
@@ -6336,7 +6336,7 @@ function execRenderSales(){
         '</div>'+
 
         // Net before GST
-        '<div style="padding:6px 14px;background:#F3E5F5;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
+        '<div style="padding:6px 14px;background:var(--bg);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
           '<span style="font-size:10px;font-weight:800;color:#7B1FA2;">Net before GST</span>'+
           '<span style="font-size:12px;font-weight:900;color:#7B1FA2;" id="bl-net-before-gst-amt">'+inr(0)+'</span>'+
         '</div>'+
@@ -6352,7 +6352,7 @@ function execRenderSales(){
           '</div>'+
         '</div>'+
 
-        '<div style="padding:10px 14px;border-top:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#F8F0FD;">'+
+        '<div style="padding:10px 14px;border-top:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg);">'+
           '<div style="font-size:13px;font-weight:900;color:#4A148C;">Gross Total: <span id="sl-total">'+inr(0)+'</span></div>'+
           '<button onclick="execSaveSalesBill()" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:800;cursor:pointer;">&#128203; Generate Sales Bill</button>'+
         '</div>'+
@@ -7077,7 +7077,7 @@ function execRenderAllotted(){
 
     // Batch order download row
     var orderRow = hasOrder
-      ? '<div style="padding:6px 14px;background:#E8F5E9;border-top:1px solid #C8E6C9;display:flex;align-items:center;gap:8px;">'+
+      ? '<div style="padding:6px 14px;background:var(--bg);border-top:1px solid #C8E6C9;display:flex;align-items:center;gap:8px;">'+
           '<span style="font-size:11px;color:#2E7D32;font-weight:800;">&#10003; Document issued</span>'+
           batchOrders.filter(function(o,i,arr){return arr.findIndex(function(x){return x.doc_number===o.doc_number&&x.doc_type===o.doc_type;})===i;}).map(function(o){
             return '<span style="font-size:10px;background:#2E7D32;color:white;padding:2px 8px;border-radius:4px;font-weight:700;cursor:pointer;" onclick="execViewOrder(\''+o.id+'\')">'+(o.doc_type||'').toUpperCase()+'-'+o.doc_number+'</span>';
@@ -7104,7 +7104,7 @@ function execRenderAllotted(){
     var inrFmt=function(n){return '\u20b9'+Math.round(Number(n||0)).toLocaleString('en-IN');};
 
     var advRow=batchAdvances.length?
-      '<div style="padding:8px 14px;background:#FFF8E1;border-top:1px solid #FFE0B2;">'+
+      '<div style="padding:8px 14px;background:var(--bg);border-top:1px solid #FFE0B2;">'+
         '<div style="font-size:9px;font-weight:800;color:#F57F17;margin-bottom:4px;">ADVANCES PAID</div>'+
         batchAdvances.map(function(adv){
           return '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:3px 0;border-bottom:1px solid #FFF3E0;">'+
@@ -8533,7 +8533,7 @@ function execRenderDailyContent(){
 
     // Today's entries — shown with orange header
     var todayRowsHtml = todayItemEntries.length
-      ? '<div style="background:#FFF3E0;padding:4px 12px;font-size:9px;font-weight:800;color:#E65100;">'+
+      ? '<div style="background:var(--bg);padding:4px 12px;font-size:9px;font-weight:800;color:#E65100;">'+
           '&#128197; Today ('+selDate.split('-').reverse().join('/')+') — '+fmt(doneToday2)+' '+(item.unit||'')+
         '</div>'+
         todayItemEntries.map(makeEntryRow).join('')
@@ -8549,15 +8549,15 @@ function execRenderDailyContent(){
       : '';
 
     return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
-      '<div style="padding:9px 14px;background:#FFF3E0;border-bottom:1px solid var(--border);">'+
+      '<div style="padding:9px 14px;background:var(--bg);border-bottom:1px solid var(--border);">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'+
           '<div style="flex:1;min-width:0;">'+
             '<span style="font-size:10px;font-family:monospace;background:#FFE0B2;color:#E65100;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
-            '<span style="font-size:12px;font-weight:800;margin-left:8px;color:#5D3A00;">'+(item.short_name||item.description)+'</span>'+
+            '<span style="font-size:12px;font-weight:800;margin-left:8px;color:var(--text);">'+(item.short_name||item.description)+'</span>'+
           '</div>'+
           '<button onclick="execOpenDailyEntry(\''+item.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:4px 11px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">+ Entry</button>'+
         '</div>'+
-        '<div style="font-size:10px;color:#8A6D3B;">'+
+        '<div style="font-size:10px;color:var(--text2);">'+
           'Today: <b style="color:#E65100;">'+(doneToday2>0?fmt(doneToday2)+' '+(item.unit||''):'nil')+'</b>'+
           ' &nbsp;|&nbsp; Cumulative: <b style="color:'+pc+';">'+fmt(doneCumul2)+' '+(item.unit||'')+' ('+pct+'%)</b>'+
           (jmQty?' &nbsp;|&nbsp; JM: <b style="color:#283593;">'+fmt(jmQty)+'</b>':'')+
@@ -8733,7 +8733,7 @@ async function execOpenDailyEntry(itemId){
 
   document.getElementById('exec-sheet-title').textContent='Daily Progress — '+(item.item_code?item.item_code+' ':'')+(item.short_name||item.description||'');
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF3E0;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Quantity Completed</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
         '<div><label class="flbl">Date *</label><input id="dp-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
@@ -9021,7 +9021,7 @@ async function execEditDailyEntry(entryId, itemId){
 
   document.getElementById('exec-sheet-title').textContent='Edit Daily Entry';
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF3E0;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:10px;">&#9312; Progress</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
         '<div><label class="flbl">Date *</label><input id="dp-date" class="finp" type="date" value="'+(d.date||new Date().toISOString().slice(0,10))+'"></div>'+
@@ -10136,7 +10136,7 @@ function advBreakdownHtml(baseDefault){
           '<button type="button" onclick="advAddDeduction(\'TDS\',true)" style="font-size:10px;padding:4px 10px;background:#EDE7F6;color:#4A148C;border:1px solid #B39DDB;border-radius:5px;cursor:pointer;font-weight:700;" title="Withheld for Income Tax — not payable to the party">&#127970; + Add TDS</button>'+
         '</div>'+
       '</div>'+
-      '<div style="padding:6px 14px;background:#F3E5F5;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
+      '<div style="padding:6px 14px;background:var(--bg);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
         '<span style="font-size:10px;font-weight:800;color:#7B1FA2;">Net before GST</span>'+
         '<span style="font-size:12px;font-weight:900;color:#7B1FA2;" id="adv-net-before-gst-amt">₹0</span>'+
       '</div>'+
@@ -10150,7 +10150,7 @@ function advBreakdownHtml(baseDefault){
           '<button type="button" onclick="advAddGst(0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom %</button>'+
         '</div>'+
       '</div>'+
-      '<div style="padding:10px 14px;border-top:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#FFF8E1;">'+
+      '<div style="padding:10px 14px;border-top:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg);">'+
         '<span style="font-size:12px;font-weight:900;color:#F57F17;">Net Advance Payable</span>'+
         '<span style="font-size:15px;font-weight:900;color:#F57F17;" id="adv-net-payable-amt">₹0</span>'+
       '</div>'+
@@ -10718,7 +10718,7 @@ function caBreakdownHtml(baseDefault){
           '<button type="button" onclick="caAddDeduction(\'TDS\',true)" style="font-size:10px;padding:4px 10px;background:#EDE7F6;color:#4A148C;border:1px solid #B39DDB;border-radius:5px;cursor:pointer;font-weight:700;" title="Withheld by the client for Income Tax — claimable by us, not lost">&#127970; + Add TDS</button>'+
         '</div>'+
       '</div>'+
-      '<div style="padding:6px 14px;background:#F3E5F5;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
+      '<div style="padding:6px 14px;background:var(--bg);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'+
         '<span style="font-size:10px;font-weight:800;color:#7B1FA2;">Net before GST</span>'+
         '<span style="font-size:12px;font-weight:900;color:#7B1FA2;" id="ca-net-before-gst-amt">₹0</span>'+
       '</div>'+
@@ -10732,7 +10732,7 @@ function caBreakdownHtml(baseDefault){
           '<button type="button" onclick="caAddGst(0)" style="font-size:10px;padding:4px 10px;background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9;border-radius:5px;cursor:pointer;font-weight:700;">+ Custom %</button>'+
         '</div>'+
       '</div>'+
-      '<div style="padding:10px 14px;border-top:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#F8F0FD;">'+
+      '<div style="padding:10px 14px;border-top:2px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg);">'+
         '<span style="font-size:12px;font-weight:900;color:#4A148C;">Net Advance Receivable</span>'+
         '<span style="font-size:15px;font-weight:900;color:#4A148C;" id="ca-net-payable-amt">₹0</span>'+
       '</div>'+
@@ -11341,7 +11341,7 @@ function caRenderBlock(projId){
     '</div>';
   }).join('');
   return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-    '<div style="padding:8px 14px;background:#F8F0FD;display:flex;align-items:center;justify-content:space-between;">'+
+    '<div style="padding:8px 14px;background:var(--bg);display:flex;align-items:center;justify-content:space-between;">'+
       '<div style="font-size:11px;font-weight:800;color:#4A148C;">&#128176; Advances Received ('+advs.length+' entries) '+
         '<span style="font-size:9px;font-weight:400;color:var(--text3);">Adj: '+inr(totalAdj)+' | Pending: '+inr(totalRecv-totalAdj)+'</span>'+
       '</div>'+
@@ -11372,7 +11372,7 @@ async function execOpenAdvanceBatch(batchKey){
   advResetBreakdown();
   document.getElementById('exec-sheet-title').textContent='Advance Payment — '+items.length+' item'+(items.length!==1?'s':'');
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:6px;">'+partyNames.join(', ')+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;">'+
         '<div><div style="font-size:9px;color:var(--text3);">Items</div><b>'+items.length+'</b></div>'+
@@ -11455,7 +11455,7 @@ async function execOpenAdvanceAllot(allotId){
   advResetBreakdown();
   document.getElementById('exec-sheet-title').textContent='Advance Payment — '+a.party_name;
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
       '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:6px;">'+a.party_name+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;">'+
         '<div><div style="font-size:9px;color:var(--text3);">Resource</div><b>'+( resName||'—')+'</b></div>'+
@@ -11655,7 +11655,7 @@ async function execEditAdvance(advId){
 
   document.getElementById('exec-sheet-title').textContent='Edit Advance — '+(adv.adv_ref||adv.party_name);
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;">'+adv.party_name+'</div>'+
         (adv.adv_ref?'<div style="font-size:11px;font-weight:800;font-family:monospace;color:#F57F17;">'+adv.adv_ref+'</div>':'')+
@@ -11886,7 +11886,7 @@ async function execOpenBill(partyKey,projId){
   document.getElementById('exec-sheet-title').textContent='Generate Bill — '+partyName;
   document.getElementById('exec-sheet-body').innerHTML=
     // Party info
-    '<div style="background:#E3F2FD;border-radius:10px;padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">'+
       '<div style="flex:1;font-size:13px;font-weight:800;color:#1565C0;">'+partyName+'</div>'+
       '<span style="font-size:10px;color:var(--text3);">Bill #'+nextBillNo+'</span>'+
     '</div>'+
@@ -11897,7 +11897,7 @@ async function execOpenBill(partyKey,projId){
     (workRows.length
       ? workSelRows+
         '<div id="bl-work-subtotal" style="display:flex;justify-content:space-between;align-items:center;'+
-          'background:#E3F2FD;border-radius:8px;padding:8px 12px;margin-top:4px;margin-bottom:10px;">'+
+          'background:var(--bg);border-radius:8px;padding:8px 12px;margin-top:4px;margin-bottom:10px;">'+
           '<span style="font-size:11px;font-weight:800;color:#1565C0;">&#10003; Work Sub-Total (selected)</span>'+
           '<span id="bl-work-subtotal-amt" style="font-size:14px;font-weight:900;color:#1565C0;">&#8377;0</span>'+
         '</div>'
@@ -11923,7 +11923,7 @@ async function execOpenBill(partyKey,projId){
       '</div>'+
     '</div>'+
     // Net before GST display
-    '<div style="display:flex;justify-content:space-between;align-items:center;background:#E3F2FD;border-radius:8px;padding:8px 12px;margin-bottom:10px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);border-radius:8px;padding:8px 12px;margin-bottom:10px;">'+
       '<span style="font-size:11px;font-weight:800;color:#1565C0;">Net before GST (Work + Add − Ded)</span>'+
       '<span id="bl-net-before-gst-amt" style="font-size:14px;font-weight:900;color:#1565C0;">₹0</span>'+
     '</div>'+
@@ -11951,7 +11951,7 @@ async function execOpenBill(partyKey,projId){
       if(!partyAdvances.length) return '';
       // Use bl-amount (net after advance) as cap — actual bill value
       var grossBillAmt=workRows.reduce(function(s,w){return s+(w.unbilled||0);},0);
-      return '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
+      return '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#9315; Advance Adjustment</div>'+
         '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Select advances to adjust against this bill — each head (Work Amt/TDS/GST) is adjusted only from its own matching balance in the advance; anything not available under a head is left to be paid in cash/bank.</div>'+
         partyAdvances.map(function(adv,ai){
@@ -11965,7 +11965,7 @@ async function execOpenBill(partyKey,projId){
     // Released deductions info
     // Held deductions — show with Release button inside bill form
     (partyHeldDed.length?
-      '<div style="background:#FFF3E0;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
+      '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:6px;">&#9888; Held Deductions (Release to include in this bill)</div>'+
         partyHeldDed.map(function(d){
           return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid #FFE0B2;">'+
@@ -11979,7 +11979,7 @@ async function execOpenBill(partyKey,projId){
         }).join('')+
       '</div>':'')+ 
     (totalRelDed>0?
-      '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
+      '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:6px;">&#128176; Released Deductions (payable in this bill)</div>'+
         partyRelDed.map(function(d){
           return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid #C8E6C9;">'+
@@ -12740,7 +12740,7 @@ async function execReleaseDeduction(billId,dedId){
   // Show release form with date
   document.getElementById('exec-sheet-title').textContent='Release Deduction';
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#E8F5E9;border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#2E7D32;margin-bottom:4px;">'+ded.head+'</div>'+
       '<div style="font-size:11px;color:var(--text2);">Amount: <b>&#8377;'+Number(ded.amount||0).toLocaleString("en-IN")+'</b></div>'+
       '<div style="font-size:10px;color:var(--text3);">Bill: '+(bill.bill_ref||'Bill #'+bill.bill_number)+' | Bill Date: '+fmtD(bill.bill_date)+'</div>'+
@@ -12829,7 +12829,7 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
     }).join('');
 
     advSection=
-      '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+      '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">&#128181; Adjust Advances Against This Bill</div>'+
         advRows+
         '<div style="display:flex;justify-content:space-between;padding-top:8px;font-size:11px;font-weight:800;color:#F57F17;border-top:1px solid #FFE0B2;margin-top:4px;">'+
@@ -12841,7 +12841,7 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
 
   document.getElementById('exec-sheet-title').textContent='Record Payment';
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
       '<div style="font-weight:800;color:#2E7D32;font-size:12px;">Balance Due: '+inr(Math.max(0,balAmount))+'</div>'+
       '<div id="py-net-display" style="font-size:10px;color:var(--text3);margin-top:3px;"></div>'+
     '</div>'+
@@ -13383,7 +13383,7 @@ async function execOpenAdvance(partyKey,projId){
   document.getElementById('exec-sheet-title').textContent='Record Advance — '+partyName;
   document.getElementById('exec-sheet-body').innerHTML=
     // Party summary
-    '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:12px;">'+
       '<div style="font-weight:800;color:#F57F17;font-size:12px;margin-bottom:6px;">&#128181; Advance Payment</div>'+
       '<div style="display:flex;gap:12px;font-size:11px;">'+
         '<div><span style="color:var(--text3);">Party: </span><b>'+partyName+'</b></div>'+
@@ -13643,14 +13643,14 @@ async function execEditBill(billId){
 
   document.getElementById('exec-sheet-title').textContent='Edit Bill — '+(b.bill_ref||'Bill #'+b.bill_number);
   document.getElementById('exec-sheet-body').innerHTML=
-    '<div style="background:#E3F2FD;border-radius:10px;padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">'+
       '<div style="flex:1;font-size:13px;font-weight:800;color:#1565C0;">'+partyName+'</div>'+
       '<span style="font-size:10px;font-weight:700;background:#FFF8E1;color:#E65100;padding:2px 8px;border-radius:5px;">Editing: '+(b.bill_ref||'Bill #'+b.bill_number)+'</span>'+
     '</div>'+
     '<div style="font-size:11px;font-weight:800;color:var(--text);margin-bottom:8px;">① Work Items</div>'+
     (workRows.length
       ? workSelRows+
-        '<div id="bl-work-subtotal" style="display:flex;justify-content:space-between;align-items:center;background:#E3F2FD;border-radius:8px;padding:8px 12px;margin-top:4px;margin-bottom:10px;">'+
+        '<div id="bl-work-subtotal" style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);border-radius:8px;padding:8px 12px;margin-top:4px;margin-bottom:10px;">'+
           '<span style="font-size:11px;font-weight:800;color:#1565C0;">✓ Work Sub-Total (selected)</span>'+
           '<span id="bl-work-subtotal-amt" style="font-size:14px;font-weight:900;color:#1565C0;">₹0</span>'+
         '</div>'
@@ -13672,7 +13672,7 @@ async function execEditBill(billId){
         '<button onclick="blAddDeduction(\'TDS\',true)" style="font-size:10px;padding:4px 10px;background:#EDE7F6;color:#4A148C;border:1px solid #B39DDB;border-radius:5px;cursor:pointer;font-weight:700;" title="Withheld for Income Tax — not payable to the party">&#127970; + Add TDS</button>'+
       '</div>'+
     '</div>'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;background:#E3F2FD;border-radius:8px;padding:8px 12px;margin-bottom:10px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);border-radius:8px;padding:8px 12px;margin-bottom:10px;">'+
       '<span style="font-size:11px;font-weight:800;color:#1565C0;">Net before GST</span>'+
       '<span id="bl-net-before-gst-amt" style="font-size:14px;font-weight:900;color:#1565C0;">₹0</span>'+
     '</div>'+
@@ -13694,7 +13694,7 @@ async function execEditBill(billId){
       '<div id="bl-gross-display" style="font-size:22px;font-weight:900;color:white;">₹0</div>'+
     '</div>'+
     (partyAdvances.length?
-      '<div style="background:#FFF8E1;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
+      '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#F57F17;margin-bottom:8px;">⑥ Advance Adjustment</div>'+
         '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Each head (Work Amt/TDS/GST) is adjusted only from its own matching balance in the advance; anything not available under a head is left to be paid in cash/bank.</div>'+
         partyAdvances.map(function(adv,ai){
@@ -13705,7 +13705,7 @@ async function execEditBill(billId){
         }).join('')+
       '</div>':'')+
     (totalRelDed>0?
-      '<div style="background:#E8F5E9;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
+      '<div style="background:var(--bg);border-radius:10px;padding:10px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#2E7D32;margin-bottom:6px;">❖ Released Deductions (payable in this bill)</div>'+
         partyRelDed.map(function(d){
           return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:5px 0;border-bottom:1px solid #C8E6C9;">'+
@@ -14327,7 +14327,7 @@ function grnOpenForm(allotId, projId){
 
   shTitle.textContent='Create GRN';
   shBody.innerHTML=
-    '<div style="background:#F1FBF4;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#558B2F;margin-bottom:4px;">Material Details</div>'+
       '<div style="font-size:13px;font-weight:800;">'+resName+'</div>'+
       '<div style="font-size:11px;color:var(--text3);">Supplier: '+allot.party_name+
@@ -14927,7 +14927,7 @@ function storeIssue(itemId){
 
   shTitle.textContent='Issue Material from Store';
   shBody.innerHTML=
-    '<div style="background:#F3E5F5;border-radius:10px;padding:12px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border-radius:10px;padding:12px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#6A1B9A;margin-bottom:4px;">'+item.item_name+'</div>'+
       '<div style="font-size:11px;color:var(--text3);">In Stock: <b style="color:#2E7D32;">'+inHand.toFixed(2)+' '+(item.unit||'')+'</b></div>'+
     '</div>'+
@@ -15234,7 +15234,7 @@ function scOpenAddSubcontract(batchId){
 
   document.getElementById('sc-sheet-title').textContent='Set Up Subcontract';
   document.getElementById('sc-sheet-body').innerHTML=
-    '<div style="background:#EFEBE9;border-radius:8px;padding:10px;margin-bottom:10px;">'+
+    '<div style="background:var(--bg);border-radius:8px;padding:10px;margin-bottom:10px;">'+
       '<div style="font-size:9.5px;color:#5D4037;text-transform:uppercase;font-weight:800;">Subcontractor (from allotment)</div>'+
       '<div style="font-size:14px;font-weight:800;">'+partyName+'</div>'+
     '</div>'+
