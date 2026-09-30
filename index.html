@@ -12683,7 +12683,7 @@ async function empSavePay(){
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#127970; Company Overheads</div>
     <button class="tb-btn" id="oh-add-btn" onclick="ohOpenEntry()" style="font-size:20px;">&#43;</button>
   </div>
-  <div id="oh-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
+  <div id="oh-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:var(--bg);"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
 </div>
 <div class="sh-overlay" id="ov-oh" onclick="closeSheet('ov-oh','sh-oh')"></div>
 <div class="sheet" id="sh-oh"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="oh-sheet-title">New Overhead Expense</div><span class="sh-close" onclick="closeSheet('ov-oh','sh-oh')">&#10005;</span></div><div class="sh-body" id="oh-sheet-body"></div><div class="sh-foot" id="oh-sheet-foot"></div></div>
@@ -22339,7 +22339,7 @@ function ohRender(){
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">THIS MONTH</div><div style="font-size:15px;font-weight:900;color:#4A148C;">'+fmtINR(mtd)+'</div></div>'+
       '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">'+thisYear+'</div><div style="font-size:15px;font-weight:900;color:#4A148C;">'+fmtINR(ytd)+'</div></div>'+
-      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ALL TIME</div><div style="font-size:15px;font-weight:900;color:var(--navy);">'+fmtINR(total)+'</div></div>'+
+      '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">ALL TIME</div><div style="font-size:15px;font-weight:900;color:var(--text);">'+fmtINR(total)+'</div></div>'+
     '</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">'+
       '<div style="font-size:14px;font-weight:800;white-space:nowrap;">Overhead Expenses</div>'+
@@ -22387,12 +22387,12 @@ function ohOpenEntry(){
     '<div class="fgrp"><label class="flbl" style="display:flex;align-items:center;gap:6px;">'+
       '<input id="oh-itc" type="checkbox" checked style="width:auto;margin:0;" onchange="ohRecalc()"> ITC claimable</label>'+
       '<div style="font-size:10px;color:var(--text3);">Untick for blocked credits (e.g. staff welfare, some insurance) \u2014 the GST then becomes part of the expense instead of an input credit.</div></div>'+
-    '<div style="background:#F3E5F5;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;font-weight:800;color:#4A148C;">Total Payable: <span id="oh-total">&#8377;0</span></div>'+
-    '<div class="fgrp" style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:8px;padding:8px 10px;">'+
+    '<div style="background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;font-weight:800;color:#4A148C;">Total Payable: <span id="oh-total">&#8377;0</span></div>'+
+    '<div class="fgrp" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;">'+
       '<label class="flbl" style="display:flex;align-items:center;gap:6px;margin:0;">'+
       '<input id="oh-personal" type="checkbox" style="width:auto;margin:0;" onchange="ohTogglePersonal()"> &#128274; Also include in Personal Sales</label>'+
       '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Records the overhead normally <b>and</b> adds a matching entry to your private Personal Sales tab. GST is never included.</div>'+
-      '<div id="oh-personal-opts" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #B39DDB;">'+
+      '<div id="oh-personal-opts" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">'+
         '<label class="flbl" style="display:flex;align-items:center;gap:6px;margin:0 0 4px;font-size:11px;">'+
           '<input type="radio" name="oh-pmode" id="oh-pmode-full" value="full" checked style="width:auto;margin:0;" onchange="ohTogglePersonal()"> Full taxable amount (<span id="oh-ptax">&#8377;0</span>)</label>'+
         '<label class="flbl" style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;">'+
