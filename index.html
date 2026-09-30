@@ -63,6 +63,9 @@ html,body{height:100%;overflow:hidden;}
 .side-rail-backdrop.on{display:block;}
 body.has-rail .app-screen{left:64px;}
 body.has-rail .app-nav{display:none !important;}
+/* Dashboard "Scan & Pay" button is a phone-camera workflow — hidden once
+   the wider-screen rail layout takes over (see RAIL_BREAKPOINT in JS). */
+body.has-rail #dash-scan-fab{display:none !important;}
 
 /* ═══════════════════════════════════════════
    LOGIN / AUTH CSS
@@ -1767,6 +1770,7 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
     <div id="dash-kra-section"></div>
 
   </div>
+  <button onclick="dashScanAndPay()" id="dash-scan-fab" title="Scan & Pay" style="position:fixed;bottom:28px;left:50%;transform:translateX(-50%);width:62px;height:62px;background:var(--navy);border-radius:50%;border:4px solid #fff;font-size:28px;color:#fff;cursor:pointer;box-shadow:0 6px 28px rgba(13,33,55,.55);z-index:400;line-height:1;display:none;align-items:center;justify-content:center;">&#128247;</button>
 </div>
 
 
@@ -3688,6 +3692,16 @@ window.addEventListener('resize', function(){
 });
 
 function canAccess(m,p){if(!currentUser)return false;if(currentUser.role==='admin')return true;if(!Object.keys(USER_PERMISSIONS).length)return true;var mp=USER_PERMISSIONS[m];return mp?mp[p]!==false:false;}
+// Shows/hides the dashboard's "Scan & Pay" floating button — only for
+// users who can actually record a petty cash expense. Called whenever
+// the dashboard is shown and again once real permissions come back
+// from loadUserPermissions() (which resolves after the dashboard's
+// first paint, so the button may need to be hidden a moment later).
+function dashUpdateScanFab(){
+  var fab=document.getElementById('dash-scan-fab');
+  if(!fab) return;
+  fab.style.display = canAccess('petty-cash','edit') ? 'flex' : 'none';
+}
 // Permissions resolve in two layers: whatever is granted to the user's role
 // applies to everyone holding that role, and anything set against the
 // individual overrides it. Previously only the employee's own rows were
@@ -3711,6 +3725,7 @@ async function loadUserPermissions(){
     apply(await sbFetch('access_permissions',{select:'*',filter:'employee_id=eq.'+currentUser.id}));
     USER_PERMISSIONS=perms;
     console.log('[perm-debug] loadUserPermissions() done. role used for lookup:', JSON.stringify(role), '| USER_PERMISSIONS:', JSON.parse(JSON.stringify(perms)));
+    dashUpdateScanFab();
   }catch(e){ console.warn('loadUserPermissions', e); }
 }
 function initProjects(){if(typeof projModRenderNav==='function'){projModRenderNav();projModLoadTab();}}
@@ -3782,7 +3797,7 @@ function showApp(name){
   applyDrawerPermissions();
   applyPlanLocks();
   if(name==='attendance'){initAttendance();}
-  if(name==='dashboard'){ loadDashboardInsights(); if(!window._coLoaded){window._coLoaded=true;preloadCompanyData();} }
+  if(name==='dashboard'){ loadDashboardInsights(); if(!window._coLoaded){window._coLoaded=true;preloadCompanyData();} dashUpdateScanFab(); }
   if(name==='registry'){initRegistry();startSync();}
   else if(name==='employees'){initEmpMgmt();}
   else if(isProjectTab){ initProjects(); }
@@ -28754,8 +28769,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260930q"></script>
-<script src="js/employee.js?v=20260930q"></script>
-<script src="js/projects.js?v=20260930q"></script>
-<script src="js/finance.js?v=20260930q"></script>
+<script src="js/registry.js?v=20260930r"></script>
+<script src="js/employee.js?v=20260930r"></script>
+<script src="js/projects.js?v=20260930r"></script>
+<script src="js/finance.js?v=20260930r"></script>
 </html>

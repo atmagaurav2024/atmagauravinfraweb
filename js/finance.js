@@ -7,6 +7,18 @@ var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
 var PC_EMP_FILTER='all'; // 'all' or empId
 
+// Holds the in-progress "Scan & Pay" expense (see dashScanAndPay below)
+// between the moment the person is sent to their UPI app and the
+// moment they come back to confirm the UTR — nothing is saved to the
+// database until that confirmation, so a plain JS variable is enough.
+var PC_PENDING_PAY=null;
+var PC_PAYOUT_BADGE={
+  pending:   ['#FEF3C7','#B45309','⏳ Tap to add UTR'],
+  processing:['#DBEAFE','#1D4ED8','⏳ Processing'],
+  success:   ['#D1FAE5','#047857','✓ Paid via UPI'],
+  failed:    ['#FFE4E6','#E11D48','✕ Payout failed']
+};
+
 // Seed list only — live categories come from the Master Registry via
 // pcCats(), so a new head can be added without a code change.
 var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
@@ -186,6 +198,14 @@ function pcRenderList(){
           '<div style="font-size:13px;font-weight:800;color:var(--text);">'+(item.category||item.description||item.purpose||'Entry')+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(pcEmpName(item.emp_id))+((!isIn&&item.project)?' · '+item.project:'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
           (isIn&&item.funded_by?'<div style="font-size:10px;color:#1565C0;font-weight:700;">'+(item.funded_by_type==='transfer_out'?'&#8594; to '+pcEmpName(item.funded_by_emp):'&#8592; from '+item.funded_by)+'</div>':'')+
+          (!isIn&&item.payout_status&&item.payout_status!=='not_applicable'?(function(){
+            var b=PC_PAYOUT_BADGE[item.payout_status]||PC_PAYOUT_BADGE.pending;
+            var clickable=item.payout_status==='pending'||item.payout_status==='failed';
+            return '<div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+
+              '<span '+(clickable?'onclick="pcAddUtr(\''+item.id+'\')"':'')+' style="font-size:9.5px;font-weight:800;background:'+b[0]+';color:'+b[1]+';padding:2px 8px;border-radius:10px;'+(clickable?'cursor:pointer;':'')+'">'+b[2]+'</span>'+
+              (item.payout_utr?'<span style="font-size:9.5px;color:var(--text3);font-weight:700;">UTR '+item.payout_utr+'</span>':'')+
+            '</div>';
+          })():'')+
         '</div>'+
       '</div>'+
       '<div style="text-align:right;">'+
@@ -405,6 +425,148 @@ async function pcSaveExpense(){
         debitCode:ACC_PETTY_CAT_CODES[cat]||'4110', creditCode:'1101', amount:amount,
         narration:'Petty cash — '+cat+' — '+desc, sourceType:'petty_cash_expense', sourceId:res[0].id});
     }
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ── SCAN & PAY (dashboard QR button) ───────────────────────
+// Lets someone scan a vendor's UPI QR straight from the dashboard,
+// pay them from their own phone's UPI app (no RazorpayX account
+// needed — that's the separate automatic-payout flow above), and
+// record the petty cash expense with the UTR once they're back.
+// Opens the normal "Record Expense" sheet, preselects UPI, and swaps
+// its Save button for the pay-then-confirm flow below.
+async function dashScanAndPay(){
+  if(typeof showApp==='function') showApp('petty-cash');
+  try{ await initPettyCash(); }catch(e){}
+  if(typeof pcOpenExpense!=='function') return;
+  pcOpenExpense();
+  var upiRadio=document.querySelector('input[name="pce-paymethod"][value="upi"]');
+  if(upiRadio) upiRadio.checked=true;
+  if(typeof pcTogglePayMethod==='function') pcTogglePayMethod();
+  var foot=document.getElementById('pc-sheet-foot');
+  if(foot) foot.innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-pc\',\'sh-pc\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="pcPayAndSave()">&#128241; Pay &amp; Save</button>';
+  if(typeof pcOpenQRScanner==='function') pcOpenQRScanner();
+}
+
+// Validates the form exactly like pcSaveExpense, then hands off to the
+// person's own UPI app via a upi://pay deep link — a plain URI scheme
+// every UPI app registers with the OS, so this works without any
+// payment-gateway account. Nothing is saved yet; that happens once
+// they're back and the UTR step below is confirmed, so a payment that
+// never happens never creates a stray expense record.
+function pcPayAndSave(){
+  var emp=gv('pce-emp'), cat=gv('pce-cat'), amount=parseFloat(gv('pce-amount')), desc=gv('pce-desc');
+  if(!emp){toast('Select employee','warning');return;}
+  if(!cat){toast('Select category','warning');return;}
+  if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
+  if(!desc){toast('Description required','warning');return;}
+  var allocations=pcComputeAllocations();
+  if(!allocations.length){toast('Select at least one project','warning');return;}
+  var dist=(document.querySelector('input[name="pce-dist"]:checked')||{value:'equal'}).value;
+  var upiId=gv('pce-upi-id');
+  if(!upiId){toast('Scan a QR code or enter a UPI ID / mobile number','warning');return;}
+  var bal=pcEmpBal(emp);
+  if(amount>bal){toast('Insufficient balance. Available: '+pcFmt(bal),'warning');}
+
+  PC_PENDING_PAY={
+    emp:emp, cat:cat, amount:amount, desc:desc, allocations:allocations, method:dist,
+    date:gv('pce-date'), bill:gv('pce-bill'), remarks:gv('pce-remarks'),
+    upiId:upiId, payeeName:gv('pce-upi-name')||''
+  };
+
+  pcLaunchUpiApp(PC_PENDING_PAY);
+  // The tab is about to lose focus to the UPI app; show the
+  // confirm-and-enter-UTR step right away so it's waiting when the
+  // person comes back (a blocked/failed app launch just leaves this
+  // step showing, with a button to try opening the app again).
+  pcShowUtrConfirm();
+}
+
+function pcLaunchUpiApp(p){
+  var uri='upi://pay?pa='+encodeURIComponent(p.upiId)+
+    '&pn='+encodeURIComponent(p.payeeName||'Vendor')+
+    '&am='+encodeURIComponent(p.amount.toFixed(2))+
+    '&cu=INR&tn='+encodeURIComponent((p.desc||'').slice(0,50));
+  window.location.href=uri;
+}
+
+function pcRetryUpiApp(){
+  if(PC_PENDING_PAY) pcLaunchUpiApp(PC_PENDING_PAY);
+}
+
+function pcShowUtrConfirm(){
+  var p=PC_PENDING_PAY; if(!p) return;
+  var title=document.getElementById('pc-sheet-title'); if(title) title.textContent='Confirm Payment';
+  var body=document.getElementById('pc-sheet-body');
+  var foot=document.getElementById('pc-sheet-foot');
+  if(!body||!foot) return;
+  body.innerHTML=
+    '<div style="text-align:center;padding:6px 0 14px;">'+
+      '<div style="font-size:15px;font-weight:800;margin-bottom:4px;">Complete the payment in your UPI app</div>'+
+      '<div style="font-size:12px;color:var(--text3);">Paying '+pcFmt(p.amount)+' to '+(p.payeeName||p.upiId)+'</div>'+
+    '</div>'+
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--text3);">'+
+      'If your UPI app did not open on its own, tap below to try again.'+
+    '</div>'+
+    '<button type="button" onclick="pcRetryUpiApp()" style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:14px;">&#128241; Open UPI App Again</button>'+
+    '<label class="flbl">UTR / Transaction Reference No.</label>'+
+    '<input class="finp" id="pc-pay-utr" placeholder="e.g. 309812345678" autocomplete="off">'+
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">Find this on your UPI app\'s payment success screen or SMS. No UTR yet? Save now and add it later from the list.</div>';
+  foot.innerHTML=
+    '<button class="btn btn-outline" onclick="pcCancelPendingPay()">Cancel</button>'+
+    '<button class="btn btn-green" onclick="pcConfirmUtrAndSave()">&#10003; Confirm &amp; Save</button>';
+}
+
+function pcCancelPendingPay(){
+  PC_PENDING_PAY=null;
+  closeSheet('ov-pc','sh-pc');
+}
+
+async function pcConfirmUtrAndSave(){
+  var p=PC_PENDING_PAY; if(!p) return;
+  var utr=gv('pc-pay-utr');
+  try{
+    var res=await sbInsert('petty_cash_expenses',{
+      emp_id:p.emp,category:p.cat,amount:p.amount,date:p.date,
+      project:p.allocations.map(function(a){return a.name;}).join(', '),
+      project_ids:JSON.stringify(p.allocations.map(function(a){return a.id;})),
+      project_allocations:JSON.stringify(p.allocations),
+      distribution_method:p.allocations.length>1?p.method:null,
+      description:p.desc,bill_no:p.bill,remarks:p.remarks,
+      payout_status: utr ? 'success' : 'pending',
+      payout_utr: utr||null,
+      payee_upi_id:p.upiId, payee_name:p.payeeName||null
+    });
+    PC_PENDING_PAY=null;
+    closeSheet('ov-pc','sh-pc');await initPettyCash();
+    toast(utr ? ('Payment confirmed — expense recorded: '+pcFmt(p.amount)) : ('Expense recorded — add the UTR later from the list once you have it'),'success');
+
+    if(res&&res[0]&&typeof accAutoPost==='function'&&typeof ACC_PETTY_CAT_CODES!=='undefined'){
+      accAutoPost({type:'Payment', date:p.date, partyName:p.desc,
+        debitCode:ACC_PETTY_CAT_CODES[p.cat]||'4110', creditCode:'1101', amount:p.amount,
+        narration:'Petty cash — '+p.cat+' — '+p.desc+(utr?' · UPI UTR '+utr:''), sourceType:'petty_cash_expense', sourceId:res[0].id});
+    }
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// Lets a pending (or failed) UPI expense pick up its UTR after the
+// fact — used both as the follow-up to "save now, add later" above
+// and for entries that came through the automatic RazorpayX payout
+// flow if its webhook never reported back.
+async function pcAddUtr(id){
+  var row=PC_EXP.find(function(e){return e.id===id;});
+  if(!row) return;
+  var utr=prompt('Enter the UTR / transaction reference number for this payment:', row.payout_utr||'');
+  if(utr===null) return;
+  utr=utr.trim();
+  if(!utr){toast('UTR cannot be empty','warning');return;}
+  try{
+    await sbUpdate('petty_cash_expenses', id, {payout_status:'success', payout_utr:utr});
+    row.payout_status='success'; row.payout_utr=utr;
+    pcRenderList();
+    toast('UTR saved','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
