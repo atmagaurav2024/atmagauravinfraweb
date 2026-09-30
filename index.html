@@ -13605,7 +13605,7 @@ function schhRender(){
   var totalPct=mains.reduce(function(s,m){return s+(parseFloat(m.percentage)||0);},0);
   var totalOk=Math.abs(totalPct-100)<0.01;
 
-  var html='<div style="background:white;border-radius:12px;padding:12px;margin-bottom:12px;border-left:3px solid '+(totalOk?'#2E7D32':'#C62828')+';">'+
+  var html='<div style="background:var(--card-bg);border-radius:12px;padding:12px;margin-bottom:12px;border-left:3px solid '+(totalOk?'#2E7D32':'#C62828')+';">'+
     '<div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL ALLOCATED (SHOULD BE 100%)</div>'+
     '<div style="font-size:20px;font-weight:900;color:'+(totalOk?'#2E7D32':'#C62828')+';">'+totalPct.toFixed(2)+'%</div>'+
     (SCHH_CONTRACT_VALUE?'<div style="font-size:11px;color:var(--text3);margin-top:2px;">Contract Price: '+fmtINR(SCHH_CONTRACT_VALUE)+'</div>':'<div style="font-size:11px;color:#B45309;margin-top:2px;">No Contract Price set on this project — showing % only, no \u20b9 amounts</div>')+
@@ -13618,8 +13618,8 @@ function schhRender(){
     var mAmt=SCHH_CONTRACT_VALUE*mPct/100;
     var childMismatch=children.length && Math.abs(childSum-mPct)>0.01;
 
-    return '<div style="background:white;border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:12px 14px;background:#F5F5F4;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">'+
+    return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+      '<div style="padding:12px 14px;background:var(--bg);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">'+
         '<div style="flex:1;"><div style="font-size:14px;font-weight:800;">'+m.component_name+'</div>'+
           '<div style="font-size:11px;color:var(--text3);margin-top:2px;">'+mPct+'% of Contract Price'+(SCHH_CONTRACT_VALUE?' \u00b7 '+fmtINR(mAmt):'')+'</div></div>'+
         '<div style="display:flex;gap:6px;flex-shrink:0;">'+
