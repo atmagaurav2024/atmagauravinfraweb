@@ -5832,6 +5832,72 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
     var list=Array.isArray(r[0])?r[0]:[];
     var total=list.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);
 
+    // GST & TDS summary — this project's share, read straight off the
+    // WA_* arrays already loaded for the currently open project (execLoadItems
+    // fetches work_bills/work_advances/sales_bills/sales_payments/
+    // client_advances filtered by project_id, so nothing here needs its own
+    // fetch). Same exclusion logic accReconcile/accGstTab already apply to
+    // what actually gets posted/reported, so these numbers agree with the
+    // ledger and the company-wide GST tab rather than double-counting
+    // advance-matched GST/TDS.
+    var taxSummaryHtml='';
+    if(type==='tax'){
+      var jsonArr=function(v){try{return v?JSON.parse(v):[];}catch(e){return [];}};
+      var sumAmt=function(arr){return arr.reduce(function(s,x){return s+(parseFloat(x.amount)||0);},0);};
+
+      var outGstBills=(WA_SALES_BILLS||[]).reduce(function(s,b){
+        var adds=jsonArr(b.additions), deds=jsonArr(b.deductions);
+        var gstRaw=adds.filter(function(a){return a.is_gst;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
+        var advGstMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='gst_amt';})
+          .reduce(function(s2,d){return s2+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
+        return s+Math.max(0,gstRaw-advGstMatched);
+      },0);
+      var outGstAdv=(WA_CLIENT_ADVANCES||[]).reduce(function(s,a){return s+sumAmt(jsonArr(a.gst));},0);
+      var outputGst=outGstBills+outGstAdv;
+
+      var inGstBills=(WA_BILLS||[]).reduce(function(s,b){
+        var adds=jsonArr(b.additions), deds=jsonArr(b.deductions);
+        var gstRaw=adds.filter(function(a){return a.is_gst;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
+        var advGstMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='gst_amt';})
+          .reduce(function(s2,d){return s2+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
+        return s+Math.max(0,gstRaw-advGstMatched);
+      },0);
+      var inGstAdv=(WA_ADVANCES||[]).reduce(function(s,a){return s+sumAmt(jsonArr(a.gst));},0);
+      var inputGst=inGstBills+inGstAdv;
+      var netGst=outputGst-inputGst;
+
+      var tdsBills=(WA_BILLS||[]).reduce(function(s,b){
+        var deds=jsonArr(b.deductions);
+        var tdsRaw=deds.filter(function(d){return !d.is_advance_adj&&d.is_tds;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
+        var advTdsMatched=deds.filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='tds_amt';})
+          .reduce(function(s2,d){return s2+(d.advance_details||[]).reduce(function(x,ad){return x+(parseFloat(ad.amount)||0);},0);},0);
+        return s+Math.max(0,tdsRaw-advTdsMatched);
+      },0);
+      var tdsAdvPaid=(WA_ADVANCES||[]).reduce(function(s,a){return s+jsonArr(a.deductions).filter(function(d){return d.is_tds;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);},0);
+      var tdsPayable=tdsBills+tdsAdvPaid;
+
+      var tdsAdvRecv=(WA_CLIENT_ADVANCES||[]).reduce(function(s,a){return s+jsonArr(a.deductions).filter(function(d){return d.is_tds;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);},0);
+      var tdsPaymentsRecv=(WA_SALES_PAYMENTS||[]).reduce(function(s,p){return s+(parseFloat(p.tds_amount)||0);},0);
+      var tdsReceivable=tdsAdvRecv+tdsPaymentsRecv;
+
+      taxSummaryHtml=
+        '<div style="background:#EDE7F6;border:1px solid #D1C4E9;border-radius:10px;padding:10px 14px;margin:0 4px 10px;">'+
+          '<div style="font-size:11.5px;font-weight:800;color:#4A148C;">🧾 GST &amp; TDS — this project</div>'+
+          '<div style="font-size:9px;font-weight:800;color:#7B1FA2;text-transform:uppercase;margin-top:8px;">GST</div>'+
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px;">'+
+            '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Output (on sales)</div><div style="font-size:14px;font-weight:900;color:#4A148C;">'+inr(outputGst)+'</div></div>'+
+            '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Input / ITC (on purchases)</div><div style="font-size:14px;font-weight:900;color:#2E7D32;">'+inr(inputGst)+'</div></div>'+
+            '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Net</div><div style="font-size:14px;font-weight:900;color:'+(netGst>0.5?'#C62828':'#2E7D32')+';">'+inr(Math.abs(netGst))+(netGst>0.5?' payable':(netGst<-0.5?' credit':''))+'</div></div>'+
+          '</div>'+
+          '<div style="font-size:9px;font-weight:800;color:#7B1FA2;text-transform:uppercase;margin-top:10px;">TDS</div>'+
+          '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:4px;">'+
+            '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Payable (deducted from vendors)</div><div style="font-size:14px;font-weight:900;color:#C62828;">'+inr(tdsPayable)+'</div></div>'+
+            '<div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;">Receivable (deducted by client)</div><div style="font-size:14px;font-weight:900;color:#2E7D32;">'+inr(tdsReceivable)+'</div></div>'+
+          '</div>'+
+          '<div style="font-size:9.5px;color:var(--text3);margin-top:8px;">From bills, payments and advances recorded for this project — not a manual entry below, so it isn\'t double-counted in Total. Company-wide GST filing/settlement lives in Accounts → GST; this is this project\'s share only.</div>'+
+        '</div>';
+    }
+
     var loanInterestHtml='';
     if(type==='interest'){
       var allocs=Array.isArray(r[1])?r[1]:[];
@@ -5896,7 +5962,8 @@ async function execRenderOtherExpCategory(type,label,icon,containerId){
         '<button onclick="execOpenAddOtherExpense(\''+type+'\',\''+label.replace(/'/g,"\\'")+'\')" style="background:#4A148C;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Add</button>'+
       '</div>'+
       loanInterestHtml+
-      '<div style="font-size:15px;font-weight:900;color:#C62828;padding:0 4px 10px;">Total'+(type==='interest'?' (manual entries)':'')+': '+inr(total)+'</div>'+
+      taxSummaryHtml+
+      '<div style="font-size:15px;font-weight:900;color:#C62828;padding:0 4px 10px;">Total'+((type==='interest'||type==='tax')?' (manual entries)':'')+': '+inr(total)+'</div>'+
       rowsHtml;
   }catch(e){
     console.error(e);
