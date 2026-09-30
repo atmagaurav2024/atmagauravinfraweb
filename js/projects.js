@@ -10514,6 +10514,16 @@ function advAdjRowHtml(adv, ai, resLabel){
     {key:'tds',label:'TDS',color:'#4A148C',rem:hb.tds},
     {key:'gst',label:'GST',color:'#2E7D32',rem:hb.gst}
   ].filter(function(h){return h.rem>0;});
+  // A head with rem<=0 just gets silently omitted above — but that's two
+  // different situations: this advance never had a GST/TDS bucket to begin
+  // with (gstTotal/tdsTotal, the ORIGINAL breakdown, is 0), vs. it had one
+  // and has since been fully drawn down elsewhere. Only the first is worth
+  // flagging — otherwise it looks like the advance "ran out" of GST/TDS
+  // when really it was never bifurcated out of the base amount at entry.
+  var gstMissing=hb.gstTotal<=0, tdsMissing=hb.tdsTotal<=0;
+  var missingLabel=(gstMissing&&tdsMissing)?'GST and TDS':(gstMissing?'GST':'TDS');
+  var advAdjHintHtml=(!alreadyAdj&&hb.work>0&&(gstMissing||tdsMissing))?
+    '<div style="font-size:9.5px;color:#8E24AA;font-style:italic;padding:2px 0 2px 23px;">Only Work Amt is available to adjust from this advance — if you want to adjust '+missingLabel+' from advance, the same shall be bifurcated in the advance payment record.</div>':'';
   return '<div style="padding:6px 0;border-bottom:1px solid #FFE0B2;">'+
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
       '<input type="checkbox" id="adv-adj-'+ai+'" class="adv-adj-chk" data-adv-id="'+adv.id+'" data-max="'+remaining+'" '+(alreadyAdj?'disabled checked':'checked')+' style="width:15px;height:15px;accent-color:#F57F17;flex-shrink:0;" onchange="blAdvAdjChange(this,'+ai+')">'+
@@ -10534,7 +10544,7 @@ function advAdjRowHtml(adv, ai, resLabel){
             'onchange="blAdvAdjHeadChange(this,'+ai+')">'+
           '<span style="font-size:10px;color:var(--text3);">of ₹'+Number(h.rem).toLocaleString('en-IN')+'</span>'+
         '</div>';
-      }).join('')
+      }).join('')+advAdjHintHtml
       :'')+
   '</div>';
 }
