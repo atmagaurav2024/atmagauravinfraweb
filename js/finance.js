@@ -71,12 +71,12 @@ function pcRefresh(){
 
   var html=
     // Employee filter dropdown
-    '<div style="background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
+    '<div style="background:var(--card-bg);border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
       '<label style="font-size:11px;font-weight:800;color:var(--navy);white-space:nowrap;">&#128101; Employee</label>'+
       '<select onchange="pcSetEmpFilter(this.value)" style="flex:1;border:1.5px solid var(--navy);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:var(--navy);outline:none;cursor:pointer;">'+
         empOpts+
       '</select>'+
-      (PC_EMP_FILTER!=='all'?'<button onclick="pcSetEmpFilter(\'all\')" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">&#10005; Clear</button>':'')+
+      (PC_EMP_FILTER!=='all'?'<button onclick="pcSetEmpFilter(\'all\')" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer;font-weight:700;">&#10005; Clear</button>':'')+
     '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#1B5E20,#2E7D32);border:none;">'+
@@ -101,7 +101,7 @@ function pcRefresh(){
 }
 
 function pcRenderTabs(){
-  return '<div id="pc-tab-bar" style="display:flex;gap:4px;background:white;border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:10px;width:fit-content;">'+
+  return '<div id="pc-tab-bar" style="display:flex;gap:4px;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:10px;width:fit-content;">'+
     pcRenderTabButtons()+
   '</div>';
 }
@@ -128,7 +128,7 @@ function pcRenderSiteTabs(){
   var wrap=document.getElementById('pc-site-tabs');if(!wrap)return;
   var projects=['all'].concat(PC_PROJS.map(function(p){return p.name;}));
   wrap.innerHTML=projects.map(function(p){
-    return '<button onclick="pcFilterSite(\''+p+'\')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:'+(PC_SITE_TAB===p?'var(--navy)':'white')+';color:'+(PC_SITE_TAB===p?'white':'var(--text2)')+';font-family:Nunito;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+p+'</button>';
+    return '<button onclick="pcFilterSite(\''+p+'\')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:'+(PC_SITE_TAB===p?'var(--navy)':'var(--card-bg)')+';color:'+(PC_SITE_TAB===p?'white':'var(--text2)')+';font-family:Nunito;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+p+'</button>';
   }).join('');
 }
 
@@ -179,11 +179,11 @@ function pcRenderList(){
   cont.innerHTML=list.slice(0,50).map(function(item){
     var isIn=item._type==='in'||tab==='cash-in';
     var col=isIn?'#2E7D32':'#C62828';
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
       '<div style="display:flex;align-items:center;gap:10px;">'+
         '<div style="width:36px;height:36px;border-radius:10px;background:'+col+'20;display:flex;align-items:center;justify-content:center;font-size:16px;">'+(isIn?'💰':'🧾')+'</div>'+
         '<div>'+
-          '<div style="font-size:13px;font-weight:800;">'+(item.category||item.description||item.purpose||'Entry')+'</div>'+
+          '<div style="font-size:13px;font-weight:800;color:var(--text);">'+(item.category||item.description||item.purpose||'Entry')+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(pcEmpName(item.emp_id))+((!isIn&&item.project)?' · '+item.project:'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
           (isIn&&item.funded_by?'<div style="font-size:10px;color:#1565C0;font-weight:700;">'+(item.funded_by_type==='transfer_out'?'&#8594; to '+pcEmpName(item.funded_by_emp):'&#8592; from '+item.funded_by)+'</div>':'')+
         '</div>'+
@@ -277,7 +277,7 @@ async function pcSaveCashIn(){
 function pcOpenExpense(){
   openSheet('ov-pc','sh-pc');
   var projChecks=PC_PROJS.map(function(p){
-    return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F0F0F0;font-size:12.5px;font-weight:600;cursor:pointer;">'+
+    return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:600;cursor:pointer;">'+
       '<input type="checkbox" class="pce-proj-chk" value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'" data-contract="'+(parseFloat(p.contract_value)||0)+'" style="width:16px;height:16px;" onchange="pcUpdateAllocPreview()">'+
       (p.name||'Unnamed')+
     '</label>';
@@ -292,9 +292,9 @@ function pcOpenExpense(){
     '<label class="flbl">Date</label><input class="finp" id="pce-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Payment Method</label>'+
     '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
-      '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+      '<label style="flex:1;display:flex;align-items:center;gap:6px;background:var(--bg);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
         '<input type="radio" name="pce-paymethod" value="cash" checked onchange="pcTogglePayMethod()">Cash</label>'+
-      '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+      '<label style="flex:1;display:flex;align-items:center;gap:6px;background:var(--bg);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
         '<input type="radio" name="pce-paymethod" value="upi" onchange="pcTogglePayMethod()">UPI</label>'+
     '</div>'+
     '<div id="pce-upi-wrap" style="display:none;margin-bottom:10px;">'+
@@ -311,12 +311,12 @@ function pcOpenExpense(){
     '<div id="pce-dist-wrap" style="display:none;margin-bottom:10px;">'+
       '<label class="flbl">Distribute Expense Across Projects</label>'+
       '<div style="display:flex;gap:8px;margin-bottom:8px;">'+
-        '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+        '<label style="flex:1;display:flex;align-items:center;gap:6px;background:var(--bg);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
           '<input type="radio" name="pce-dist" value="equal" checked onchange="pcUpdateAllocPreview()">Equal Split</label>'+
-        '<label style="flex:1;display:flex;align-items:center;gap:6px;background:#F8FAFC;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
+        '<label style="flex:1;display:flex;align-items:center;gap:6px;background:var(--bg);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;">'+
           '<input type="radio" name="pce-dist" value="contract" onchange="pcUpdateAllocPreview()">By Contract Value Ratio</label>'+
       '</div>'+
-      '<div id="pce-alloc-preview" style="background:#F3E5F5;border-radius:8px;padding:8px 10px;font-size:11px;"></div>'+
+      '<div id="pce-alloc-preview" style="background:var(--bg);color:var(--text);border-radius:8px;padding:8px 10px;font-size:11px;"></div>'+
     '</div>'+
     '<label class="flbl">Description *</label><input class="finp" id="pce-desc" placeholder="What was purchased?">'+
     '<label class="flbl">Bill/Receipt No</label><input class="finp" id="pce-bill" placeholder="Receipt number">'+
