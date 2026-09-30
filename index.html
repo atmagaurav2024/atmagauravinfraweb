@@ -12736,17 +12736,17 @@ async function empSavePay(){
   <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 12px;">
     <div style="display:flex;gap:8px;margin-bottom:14px;">
       <button id="ac-tab-emp" onclick="acSwitchTab('emp')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:none;font-family:'Nunito',sans-serif;background:var(--navy);color:white;">By Employee</button>
-      <button id="ac-tab-role" onclick="acSwitchTab('role')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);font-family:'Nunito',sans-serif;background:white;color:var(--text2);">By Role</button>
-      <button id="ac-tab-audit" onclick="acSwitchTab('audit')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);font-family:'Nunito',sans-serif;background:white;color:var(--text2);">Audit Log</button>
+      <button id="ac-tab-role" onclick="acSwitchTab('role')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);font-family:'Nunito',sans-serif;background:var(--card-bg);color:var(--text2);">By Role</button>
+      <button id="ac-tab-audit" onclick="acSwitchTab('audit')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;border:1.5px solid var(--border);font-family:'Nunito',sans-serif;background:var(--card-bg);color:var(--text2);">Audit Log</button>
     </div>
     <div id="ac-perms-wrap">
     <div id="ac-selector" style="margin-bottom:14px;"><select id="ac-emp-sel" class="fsel" style="width:100%;" onchange="acLoadPerms()"><option value="">&#9203; Loading employees...</option></select></div>
 
     <!-- Data Access Scope -->
-    <div id="ac-data-access" style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">
-      <div style="padding:10px 14px;background:#F8FAFC;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+    <div id="ac-data-access" style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;">
+      <div style="padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
         <span style="font-size:16px;">&#128202;</span>
-        <span style="font-size:13px;font-weight:800;color:var(--navy);">Employee Data Visibility</span>
+        <span style="font-size:13px;font-weight:800;color:var(--text);">Employee Data Visibility</span>
       </div>
       <div style="padding:10px 14px;">
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">Which employees can this person see?</div>
@@ -12789,7 +12789,7 @@ async function empSavePay(){
       <button id="audit-load-more" onclick="auditLoadMore()" style="display:none;width:100%;padding:10px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--text2);font-weight:700;font-size:12.5px;cursor:pointer;margin-top:8px;">Load more</button>
     </div>
   </div>
-  <div id="ac-save-bar" style="padding:12px 14px;background:white;border-top:1px solid var(--border);flex-shrink:0;padding-bottom:calc(12px + 60px);">
+  <div id="ac-save-bar" style="padding:12px 14px;background:var(--card-bg);border-top:1px solid var(--border);flex-shrink:0;padding-bottom:calc(12px + 60px);">
     <button onclick="acSavePermissions()" style="width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:12px;font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;cursor:pointer;">&#128190; Save Permissions</button>
   </div>
 </div>
@@ -25727,10 +25727,10 @@ function acRenderMods(){
           '<input type="checkbox" '+(chk?'checked':'')+' onchange="acToggle(\''+mod.key+'\',\''+p+'\',this)" style="width:16px;height:16px;accent-color:'+pc+';">'+
           '<span style="font-size:12px;font-weight:700;color:'+(chk?pc:'var(--text3)')+';">'+AC_PLBL[p]+'</span></label>';
       }).join('');
-      return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
-        '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
+      return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
+        '<div style="padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
           '<span style="font-size:16px;">'+mod.icon+'</span>'+
-          '<span style="font-size:13px;font-weight:800;color:var(--navy);">'+mod.label+'</span></div>'+
+          '<span style="font-size:13px;font-weight:800;color:var(--text);">'+mod.label+'</span></div>'+
         '<div style="padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;">'+pBoxes+'</div></div>';
     }).join('');
     return '<div style="margin-bottom:14px;">'+
@@ -25831,7 +25831,7 @@ async function acInitModule(){
   if(!currentUser || !allowed){
     var ml=document.getElementById('ac-modules-list');
     if(ml)ml.innerHTML='<div style="text-align:center;padding:40px;"><div style="font-size:40px;">&#128274;</div>'+
-      '<div style="font-weight:800;color:var(--navy);margin-top:10px;">No Access</div>'+
+      '<div style="font-weight:800;color:var(--text);margin-top:10px;">No Access</div>'+
       '<div style="font-size:11.5px;color:var(--text3);margin-top:6px;">You do not have permission to manage Access Control.</div></div>';
     var sd=document.getElementById('ac-selector');
     if(sd) sd.innerHTML='<div style="font-size:11.5px;color:var(--text3);text-align:center;padding:8px;">\u2014 Not available \u2014</div>';
@@ -25846,7 +25846,7 @@ async function acInitModule(){
   AC_TAB='emp'; AC_TARGET=null; AC_PERMISSIONS={};
   var eb=document.getElementById('ac-tab-emp'),rb=document.getElementById('ac-tab-role');
   if(eb){eb.style.background='var(--navy)';eb.style.color='white';eb.style.border='none';}
-  if(rb){rb.style.background='white';rb.style.color='var(--text2)';rb.style.border='1.5px solid var(--border)';}
+  if(rb){rb.style.background='var(--card-bg)';rb.style.color='var(--text2)';rb.style.border='1.5px solid var(--border)';}
   // Ensure employee selector exists and is in emp mode
   var sd=document.getElementById('ac-selector');
   var sel=document.getElementById('ac-emp-sel');
@@ -25870,7 +25870,7 @@ async function acSwitchTab(tab){
   var sd=document.getElementById('ac-selector');
   var ml=document.getElementById('ac-modules-list');
   var permsWrap=document.getElementById('ac-perms-wrap'), auditWrap=document.getElementById('ac-audit-wrap'), saveBar=document.getElementById('ac-save-bar');
-  [eb,rb,ab].forEach(function(b){ if(b){b.style.background='white';b.style.color='var(--text2)';b.style.border='1.5px solid var(--border)';} });
+  [eb,rb,ab].forEach(function(b){ if(b){b.style.background='var(--card-bg)';b.style.color='var(--text2)';b.style.border='1.5px solid var(--border)';} });
 
   if(tab==='audit'){
     if(ab){ab.style.background='var(--navy)';ab.style.color='white';ab.style.border='none';}
@@ -25968,7 +25968,7 @@ function auditRender(){
     var dt=new Date(r.created_at);
     var dateStr=dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
     var timeStr=dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'+
         '<div style="display:flex;align-items:center;gap:8px;">'+
           '<span style="font-size:9.5px;font-weight:800;background:'+al[1]+'20;color:'+al[1]+';padding:3px 9px;border-radius:10px;white-space:nowrap;">'+al[0]+' '+al[2]+'</span>'+
@@ -25993,11 +25993,11 @@ function acInheritNote(){
   }
   var n=0; Object.keys(AC_INHERITED).forEach(function(m){ n+=Object.keys(AC_INHERITED[m]||{}).filter(function(k){return AC_INHERITED[m][k];}).length; });
   if(AC_TAB==='emp' && AC_ROLE_OF_TARGET){
-    el.innerHTML='<div style="background:#E3F2FD;border:1px solid #BBDEFB;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#0D47A1;">'+
+    el.innerHTML='<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#0D47A1;">'+
       'Role <b>'+AC_ROLE_OF_TARGET+'</b>'+(n?' grants '+n+' permission'+(n!==1?'s':'')+' shown ticked below':' has no permissions set')+
       '. Changing a switch here overrides the role for this employee only.</div>';
   } else if(AC_TAB==='role'){
-    el.innerHTML='<div style="background:#E8F5E9;border:1px solid #C8E6C9;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#1B5E20;">'+
+    el.innerHTML='<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10.5px;color:#1B5E20;">'+
       'Applies to every active employee holding this role, unless overridden for an individual.</div>';
   } else { el.innerHTML=''; }
 }
