@@ -6712,16 +6712,38 @@ async function execSaveSalesBill(){
 }
 
 async function execDelSalesBill(id){
-  if(!confirm('Delete this sales bill?')) return;
-  var delBill=WA_SALES_BILLS.find(function(b){return b.id===id;});
+  // Mirrors execDelBill on the purchase side: itemizes what deleting this
+  // bill will also do (delete its payments, reverse any advance
+  // adjustments) before asking, rather than a plain confirm that silently
+  // leaves payment rows orphaned against a bill_id that no longer exists.
+  var fmtInr=function(n){ return '₹'+Math.round(n||0).toLocaleString('en-IN'); };
+  var bill=WA_SALES_BILLS.find(function(b){return b.id===id;});
+  var relPays=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.sales_bill_id===id;});
+  var hasPaid=relPays.length>0;
+  // "Settled" includes TDS the client withheld, same as everywhere else
+  // that sums what's been paid against a sales bill (settledAmt etc.).
+  var paidTotal=relPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0)+(parseFloat(p.tds_amount)||0);},0);
+  var billAdvDeds=[];try{billAdvDeds=(bill&&bill.deductions?JSON.parse(bill.deductions):[]).filter(function(d){return d.is_advance_adj;});}catch(e){}
+  var hasAdvAdj=billAdvDeds.length>0;
+  var advAdjTotal=billAdvDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
+  var msg=hasPaid
+    ? 'This bill has '+relPays.length+' payment'+(relPays.length>1?'s':'')+' totaling '+fmtInr(paidTotal)+'.\nDeleting this bill will also permanently delete '+(relPays.length>1?'these payments':'this payment')+'.'+(hasAdvAdj?' Advance adjustments of '+fmtInr(advAdjTotal)+' will also be reversed, restoring that balance to the advance(s).':'')+' This cannot be undone.\n\nContinue?'
+    : 'Delete this bill?'+(hasAdvAdj?' Advance adjustments of '+fmtInr(advAdjTotal)+' will also be reversed, restoring that balance to the advance(s).':'')+' This cannot be undone.';
+  if(!confirm(msg)) return;
+  if(hasPaid){
+    for(var i=0;i<relPays.length;i++) try{await sbDelete('sales_payments',relPays[i].id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(relPays[i].id);}catch(e){}
+    WA_SALES_PAYMENTS=(WA_SALES_PAYMENTS||[]).filter(function(p){return p.sales_bill_id!==id;});
+  }
+  if(hasAdvAdj){
+    try{await caReverseAllBillAdjustments(bill);}catch(e){console.warn(e);}
+  }
   WA_SALES_BILLS=WA_SALES_BILLS.filter(function(b){return b.id!==id;});
   execRenderSales();
   try{
-    if(delBill) await caReverseAllBillAdjustments(delBill);
     await sbDelete('sales_bills',id);
     if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);
+    toast('Sales bill deleted'+(hasAdvAdj?' — advance balance restored':''),'success');
   }catch(e){console.error(e);}
-  toast('Sales bill deleted','success');
 }
 
 
