@@ -26279,7 +26279,7 @@ function companyRender(){
 
   var billingHtml =
     sec('&#128179;','Billing &amp; Subscription','#7C3AED')+
-    '<div style="background:#FAFAF9;border:1px solid #E7E5E4;border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;">'+
         '<div><div style="font-size:14px;font-weight:800;">'+(currentPlan?currentPlan.name:'—')+' Plan</div>'+
           (currentPlan?'<div style="font-size:11px;color:var(--text3);">\u20b9'+currentPlan.price_monthly+'/month'+(currentPlan.max_employees?' \u00b7 up to '+currentPlan.max_employees+' employees':'')+(currentPlan.max_projects?' \u00b7 up to '+currentPlan.max_projects+' projects':'')+'</div>':'')+
@@ -26291,23 +26291,23 @@ function companyRender(){
       (COMPANY_BILLING.subscription_status==='lapsed'?
         '<div style="font-size:11px;color:#E11D48;font-weight:700;margin-top:6px;">Your subscription has lapsed — you have read-only access until you subscribe again.</div>':'')+
       (COMPANY_BILLING.subscription_status==='active' && COMPANY_BILLING.razorpay_subscription_id?
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #E7E5E4;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
           '<div style="font-size:11px;color:var(--text3);">&#128257; Autopay active'+(COMPANY_BILLING.next_billing_date?' \u00b7 next charge '+fmtDate(COMPANY_BILLING.next_billing_date):'')+'</div>'+
           '<button onclick="companyCancelAutopay()" style="background:none;border:none;color:#E11D48;font-size:11px;font-weight:700;cursor:pointer;text-decoration:underline;">Cancel autopay</button>'+
         '</div>':'')+
     '</div>'+
     (upgrades.map(function(p){
-      return '<div style="display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,#F5F3FF,#FFFFFF);border:1.5px solid #C4B5FD;border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
+      return '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1.5px solid #C4B5FD;border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
         '<div><div style="font-size:12.5px;font-weight:800;color:#5B21B6;">&#11088; '+p.name+'</div>'+
         '<div style="font-size:11px;color:var(--text3);">\u20b9'+p.price_monthly+'/month'+(p.max_employees?' \u00b7 up to '+p.max_employees+' employees':' \u00b7 unlimited employees')+'</div></div>'+
         '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:var(--accent);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;">Upgrade to '+p.name+'</button>'+
       '</div>';
     }).join(''))+
     (downgrades.map(function(p){
-      return '<div style="display:flex;justify-content:space-between;align-items:center;background:white;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
+      return '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;">'+
         '<div><div style="font-size:12.5px;font-weight:700;">'+p.name+'</div>'+
         '<div style="font-size:11px;color:var(--text3);">\u20b9'+p.price_monthly+'/month'+(p.max_employees?' \u00b7 up to '+p.max_employees+' employees':' \u00b7 unlimited employees')+'</div></div>'+
-        '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:none;color:#44403C;border:1px solid #D6D3D1;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Switch to '+p.name+'</button>'+
+        '<button onclick="companySubscribeToPlan(\''+p.id+'\')" style="background:none;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">Switch to '+p.name+'</button>'+
       '</div>';
     }).join(''))+
     '<div style="text-align:center;margin-top:8px;font-size:11px;color:var(--text3);">'+
@@ -26317,13 +26317,13 @@ function companyRender(){
     '</div>';
 
   var payoutHtml = (currentUser&&currentUser.role==='admin') ?
-    sec('&#128176;','Petty Cash UPI Payouts','#0D2137')+
+    sec('&#128176;','Petty Cash UPI Payouts','#00695C')+
     '<div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.5;">'+
       'Connect your own RazorpayX business account to automatically pay vendors via UPI when recording a petty cash voucher, with the expense confirmed automatically once the payout settles. '+
       (COMPANY_PAYOUT.is_active?'':'This needs a RazorpayX account (separate signup + KYC from regular Razorpay) with a pre-funded balance for payouts.')+
     '</div>'+
     (COMPANY_PAYOUT.is_active?
-      '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">'+
+      '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">'+
         '<div><div style="font-size:12.5px;font-weight:800;color:#166534;">&#10003; Connected</div>'+
         '<div style="font-size:11px;color:var(--text3);">Account: '+(COMPANY_PAYOUT.razorpayx_account_number||'—')+'</div></div>'+
         '<button onclick="coPayoutEdit()" style="background:none;border:1px solid #BBF7D0;color:#166534;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">Edit</button>'+
@@ -26341,7 +26341,7 @@ function companyRender(){
     sec('&#127968;','Company Information','#1565C0')+
     (currentUser&&currentUser.companySlug?
       '<div><label class="flbl">Company Code</label>'+
-        '<input class="finp" type="text" value="'+currentUser.companySlug+'" disabled style="background:#F5F5F4;color:var(--text3);cursor:not-allowed;">'+
+        '<input class="finp" type="text" value="'+currentUser.companySlug+'" disabled style="background:var(--bg);color:var(--text3);cursor:not-allowed;">'+
         '<div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Used to sign in — not editable here.</div>'+
       '</div>'
       :'')+
@@ -26417,7 +26417,7 @@ function coPayoutEdit(){
   if(!f) return;
   f.style.display='block';
   f.innerHTML=
-    '<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#92400E;line-height:1.5;">'+
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#92400E;line-height:1.5;">'+
       'Find these in your RazorpayX Dashboard \u2192 Account &amp; Settings \u2192 API. Requires your RazorpayX KYC to be approved and an account funded for payouts.'+
     '</div>'+
     '<label class="flbl">RazorpayX Account Number</label>'+
