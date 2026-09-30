@@ -656,7 +656,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: var(--text3);
-  background: #F7FAFC;
+  background: var(--bg);
   border-bottom: 2px solid var(--border);
   white-space: nowrap;
 }
@@ -670,7 +670,7 @@ body {
 }
 
 .att-table tr:last-child td { border-bottom: none; }
-.att-table tr:hover td { background: #F7FAFC; }
+.att-table tr:hover td { background: var(--bg); }
 
 /* Employee cell */
 .emp-cell { display: flex; align-items: center; gap: 10px; }
@@ -805,9 +805,9 @@ body {
 
 /* LEAVE TABLE */
 .leave-table { width: 100%; border-collapse: collapse; }
-.leave-table th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); background: #F7FAFC; border-bottom: 2px solid var(--border); }
+.leave-table th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); background: var(--bg); border-bottom: 2px solid var(--border); }
 .leave-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text2); }
-.leave-table tr:hover td { background: #F7FAFC; }
+.leave-table tr:hover td { background: var(--bg); }
 
 /* LEAVE BALANCE */
 .leave-balances {
@@ -1254,7 +1254,7 @@ input,select,textarea{font-size:16px !important;}
 .ln-ledger .ln-btn-danger-ghost{background:none;border:1px solid #FECDD3;color:#A8A29E;cursor:pointer;padding:3px 7px;border-radius:6px;font-size:11px;}
 .ln-ledger .ln-btn-danger-ghost:hover{color:#E11D48;}
 .ln-ledger .ln-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;display:inline-block;}
-.ln-ledger .ln-badge-emerald{background:var(--accent-light);color:var(--text);} .ln-ledger .ln-badge-rose{background:var(--accent-light);color:var(--text);}
+.ln-ledger .ln-badge-emerald{background:var(--bg);color:var(--text);} .ln-ledger .ln-badge-rose{background:var(--bg);color:var(--text);}
 .ln-ledger .ln-badge-amber{background:#FEF3C7;color:#B45309;} .ln-ledger .ln-badge-indigo{background:#E0E7FF;color:#4338CA;}
 .ln-ledger .ln-input{border:1px solid #D6D3D1;border-radius:6px;padding:6px 10px;font-size:12.5px;font-family:'Nunito',sans-serif;color:#1C1917;background:var(--card-bg);width:100%;box-sizing:border-box;}
 .ln-ledger .ln-input:focus{outline:none;border-color:#818CF8;box-shadow:0 0 0 3px rgba(79,70,229,0.12);}
@@ -1288,7 +1288,7 @@ body{--card-bg:#fff;}
    months dropdowns, the multi-project picker modal) still correctly
    inherit these variables through normal CSS inheritance, rather than
    falling outside a narrower container's scope and losing the theme. */
-body.dash-dark{--bg:#1E293B;--card-bg:#1E293B;--border:#334155;--text:#F1F5F9;--text2:#CBD5E1;--text3:#94A3B8;}
+body.dash-dark{--bg:#1E293B;--card-bg:#1E293B;--border:#334155;--text:#F1F5F9;--text2:#CBD5E1;--text3:#94A3B8;--bg2:#1E293B;--bg3:#334155;--border2:#334155;--white:#1E293B;}
 body.dash-dark #app-dashboard{background:#0F172A;}
 body.dash-dark #app-dashboard .dash-top{background:#0F172A;border-bottom-color:#334155;}
 body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
@@ -28705,8 +28705,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260930k"></script>
-<script src="js/employee.js?v=20260930k"></script>
-<script src="js/projects.js?v=20260930k"></script>
-<script src="js/finance.js?v=20260930k"></script>
+<script src="js/registry.js?v=20260930l"></script>
+<script src="js/employee.js?v=20260930l"></script>
+<script src="js/projects.js?v=20260930l"></script>
+<script src="js/finance.js?v=20260930l"></script>
 </html>
