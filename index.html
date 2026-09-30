@@ -335,7 +335,7 @@ body {
 
 /* ── PUNCH HERO ── */
 .punch-hero {
-  background: #fff;
+  background: var(--card-bg);
   border-bottom: 1px solid var(--border);
   padding: 32px 28px;
   position: relative;
@@ -1014,7 +1014,7 @@ body {
 
 
 /* Attendance page wrapper overrides */
-#app-attendance{overflow-y:auto;background:#F0F4F8;padding-bottom:80px;}
+#app-attendance{overflow-y:auto;background:var(--bg);padding-bottom:80px;}
 /* Hide attendance-only fixed elements when attendance is not active */
 .topbar,.bot-nav,.scroll{visibility:hidden;pointer-events:none;}
 body[data-app="attendance"] .topbar,
@@ -1176,7 +1176,7 @@ input,select,textarea{font-size:16px !important;}
 
 /* ── ATTENDANCE MOBILE ── */
 /* Fix clock overlay: ensure punch-hero doesn't overflow */
-#app-attendance{overflow-y:auto;background:#F0F4F8;padding-bottom:80px;}
+#app-attendance{overflow-y:auto;background:var(--bg);padding-bottom:80px;}
 #app-attendance .topbar{position:sticky !important;top:0;z-index:200;height:52px;padding:0 14px;}
 #app-attendance .topbar-project{display:none;}
 #app-attendance .topbar-right .topbar-date{display:none;}
@@ -5208,18 +5208,18 @@ function renderEmployeeSelfView(){
   var hoursStr = todayRec&&todayRec.hours_worked ? Math.floor(todayRec.hours_worked)+'h '+Math.round((todayRec.hours_worked%1)*60)+'m' : '—';
   var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
   sc.innerHTML =
-    '<div style="background:white;border-radius:16px;border:1px solid var(--border);padding:16px;margin-bottom:12px;">'+
+    '<div style="background:var(--card-bg);border-radius:16px;border:1px solid var(--border);padding:16px;margin-bottom:12px;">'+
     '<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">&#128197; My Attendance — '+MONTHS[ATT_VIEW_MONTH]+' '+ATT_VIEW_YEAR+'</div>'+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">'+
-      '<div style="background:#E8F5E9;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#2E7D32;">'+present+'</div><div style="font-size:10px;color:#2E7D32;font-weight:700;">Present</div></div>'+
-      '<div style="background:#FFEBEE;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#C62828;">'+absent+'</div><div style="font-size:10px;color:#C62828;font-weight:700;">Absent</div></div>'+
-      '<div style="background:#FFF8E1;border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#F57F17;">'+leave+'</div><div style="font-size:10px;color:#F57F17;font-weight:700;">Leave</div></div>'+
+      '<div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#2E7D32;">'+present+'</div><div style="font-size:10px;color:#2E7D32;font-weight:700;">Present</div></div>'+
+      '<div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#C62828;">'+absent+'</div><div style="font-size:10px;color:#C62828;font-weight:700;">Absent</div></div>'+
+      '<div style="background:var(--bg);border-radius:12px;padding:12px;text-align:center;"><div style="font-size:22px;font-weight:900;color:#F57F17;">'+leave+'</div><div style="font-size:10px;color:#F57F17;font-weight:700;">Leave</div></div>'+
     '</div>'+
     '<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">&#9203; Today&#39;s Log</div>'+
     '<div style="display:flex;flex-direction:column;gap:6px;">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9193; Punch In</span><span style="font-family:monospace;font-size:13px;color:#2E7D32;font-weight:700;">'+inStr+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9194; Punch Out</span><span style="font-family:monospace;font-size:13px;color:var(--text3);font-weight:700;">'+outStr+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:#F0F4F8;border-radius:10px;"><span style="font-size:13px;font-weight:700;">&#9201; Hours Logged</span><span style="font-family:monospace;font-size:13px;font-weight:700;">'+hoursStr+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg);border-radius:10px;"><span style="font-size:13px;font-weight:700;color:var(--text);">&#9193; Punch In</span><span style="font-family:monospace;font-size:13px;color:#2E7D32;font-weight:700;">'+inStr+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg);border-radius:10px;"><span style="font-size:13px;font-weight:700;color:var(--text);">&#9194; Punch Out</span><span style="font-family:monospace;font-size:13px;color:var(--text3);font-weight:700;">'+outStr+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--bg);border-radius:10px;"><span style="font-size:13px;font-weight:700;color:var(--text);">&#9201; Hours Logged</span><span style="font-family:monospace;font-size:13px;font-weight:700;color:var(--text);">'+hoursStr+'</span></div>'+
     '</div>'+
     '</div>';
 }
@@ -5952,11 +5952,11 @@ async function attRenderSalaryImpact(){
         (unpaidLeaveDays>0?' · '+unpaidLeaveDays+' unpaid leave':'')+
       '</div>'+
       (lopDays>0?
-        '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#FFEBEE;border-radius:8px;margin-bottom:6px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:8px;margin-bottom:6px;">'+
           '<span style="font-size:12px;color:#C62828;font-weight:700;">Estimated Deduction ('+lopDays+' day'+(lopDays!==1?'s':'')+(unpaidLeaveDays>0?' incl. '+unpaidLeaveDays+' unpaid leave':'')+')</span>'+
           '<span style="font-size:13px;font-weight:900;color:#C62828;">-'+inr(deduction)+'</span>'+
         '</div>':'')+
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#E8F5E9;border-radius:8px;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg);border-radius:8px;">'+
         '<span style="font-size:12px;color:#2E7D32;font-weight:800;">Estimated Payable (Gross)</span>'+
         '<span style="font-size:15px;font-weight:900;color:#2E7D32;">'+inr(payable)+'</span>'+
       '</div>'+
@@ -28705,8 +28705,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260930l"></script>
-<script src="js/employee.js?v=20260930l"></script>
-<script src="js/projects.js?v=20260930l"></script>
-<script src="js/finance.js?v=20260930l"></script>
+<script src="js/registry.js?v=20260930m"></script>
+<script src="js/employee.js?v=20260930m"></script>
+<script src="js/projects.js?v=20260930m"></script>
+<script src="js/finance.js?v=20260930m"></script>
 </html>
