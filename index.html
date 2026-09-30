@@ -12711,7 +12711,7 @@ async function empSavePay(){
     <div style="font-size:16px;font-weight:800;color:var(--text);flex:1;">&#128295; Tools, Plant &amp; Machinery</div>
     <button class="tb-btn" id="tpm-add-btn" onclick="tpmOpenForm()" style="font-size:20px;">&#43;</button>
   </div>
-  <div id="tpm-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:#F0F4F8;"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
+  <div id="tpm-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 80px;background:var(--bg);"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>
 
   <div class="sh-overlay" id="ov-tpm" onclick="closeSheet('ov-tpm','sh-tpm')"></div>
   <div class="sheet" id="sh-tpm"><div class="sh-handle"></div><div class="sh-head"><div class="sh-title" id="tpm-sheet-title">New Asset</div><span class="sh-close" onclick="closeSheet('ov-tpm','sh-tpm')">&#10005;</span></div><div class="sh-body" id="tpm-sheet-body"></div><div class="sh-foot" id="tpm-sheet-foot"></div></div>
@@ -22683,16 +22683,16 @@ function tpmRender(){
     '</div>'+
     '<input class="finp" placeholder="&#128269; Search by name, make/model, or reg/serial no." style="margin-bottom:10px;" value="'+TPM_SEARCH.replace(/"/g,'&quot;')+'" oninput="tpmSetSearch(this.value)">'+
     '<div style="display:flex;overflow-x:auto;scrollbar-width:none;gap:6px;margin-bottom:6px;">'+
-      '<button onclick="tpmSetFilter(\'cat\',\'all\')" style="background:'+(TPM_FILTER_CAT==='all'?'#4E342E':'white')+';color:'+(TPM_FILTER_CAT==='all'?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_CAT==='all'?'#4E342E':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">All Categories</button>'+
+      '<button onclick="tpmSetFilter(\'cat\',\'all\')" style="background:'+(TPM_FILTER_CAT==='all'?'#4E342E':'var(--card-bg)')+';color:'+(TPM_FILTER_CAT==='all'?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_CAT==='all'?'#4E342E':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">All Categories</button>'+
       TPM_CATEGORIES.map(function(c){
-        return '<button onclick="tpmSetFilter(\'cat\',\''+c+'\')" style="background:'+(TPM_FILTER_CAT===c?'#4E342E':'white')+';color:'+(TPM_FILTER_CAT===c?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_CAT===c?'#4E342E':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">'+c+'</button>';
+        return '<button onclick="tpmSetFilter(\'cat\',\''+c+'\')" style="background:'+(TPM_FILTER_CAT===c?'#4E342E':'var(--card-bg)')+';color:'+(TPM_FILTER_CAT===c?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_CAT===c?'#4E342E':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">'+c+'</button>';
       }).join('')+
     '</div>'+
     '<div style="display:flex;overflow-x:auto;scrollbar-width:none;gap:6px;margin-bottom:12px;">'+
-      '<button onclick="tpmSetFilter(\'status\',\'all\')" style="background:'+(TPM_FILTER_STATUS==='all'?'#37474F':'white')+';color:'+(TPM_FILTER_STATUS==='all'?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_STATUS==='all'?'#37474F':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">All Status</button>'+
+      '<button onclick="tpmSetFilter(\'status\',\'all\')" style="background:'+(TPM_FILTER_STATUS==='all'?'#37474F':'var(--card-bg)')+';color:'+(TPM_FILTER_STATUS==='all'?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_STATUS==='all'?'#37474F':'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">All Status</button>'+
       Object.keys(TPM_STATUS_DEFS).map(function(s){
         var d=TPM_STATUS_DEFS[s];
-        return '<button onclick="tpmSetFilter(\'status\',\''+s+'\')" style="background:'+(TPM_FILTER_STATUS===s?d.color:'white')+';color:'+(TPM_FILTER_STATUS===s?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_STATUS===s?d.color:'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">'+d.label+'</button>';
+        return '<button onclick="tpmSetFilter(\'status\',\''+s+'\')" style="background:'+(TPM_FILTER_STATUS===s?d.color:'var(--card-bg)')+';color:'+(TPM_FILTER_STATUS===s?'white':'var(--text2)')+';border:1.5px solid '+(TPM_FILTER_STATUS===s?d.color:'var(--border)')+';border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">'+d.label+'</button>';
       }).join('')+
     '</div>'+
     '<div id="tpm-list"></div>';
@@ -22710,10 +22710,10 @@ function tpmRenderList(){
     var sd=TPM_STATUS_DEFS[x.status||'available']||TPM_STATUS_DEFS.available;
     var projName=tpmProjectName(x.current_project_id);
     var docCount=0; try{ var d=x.documents?(typeof x.documents==='string'?JSON.parse(x.documents):x.documents):[]; docCount=(d||[]).length; }catch(e){}
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;">'+
       '<div style="display:flex;justify-content:space-between;gap:8px;">'+
         '<div>'+
-          '<div style="font-size:13.5px;font-weight:800;">'+x.name+'</div>'+
+          '<div style="font-size:13.5px;font-weight:800;color:var(--text);">'+x.name+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(x.category||'Other')+(x.make_model?' \u00b7 '+x.make_model:'')+(x.reg_or_serial_no?' \u00b7 '+x.reg_or_serial_no:'')+'</div>'+
           (x.ownership==='rented_in'?'<div style="font-size:10px;color:#6A1B9A;font-weight:700;margin-top:2px;">&#128257; Rented from '+(x.vendor_name||'vendor')+'</div>':'')+
           '<div style="display:flex;gap:8px;margin-top:3px;">'+
@@ -22724,14 +22724,14 @@ function tpmRenderList(){
         '</div>'+
         '<span style="background:'+sd.bg+';color:'+sd.color+';font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap;height:fit-content;">'+sd.label+'</span>'+
       '</div>'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #F0F0F0;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
         '<div style="font-size:11px;color:var(--text3);">'+
           (projName?'&#128205; <b style="color:var(--text2);">'+projName+'</b>':'<span>Not assigned to a project</span>')+
           (x.purchase_cost?' \u00b7 '+fmtINR(parseFloat(x.purchase_cost)||0):'')+
         '</div>'+
         '<div style="display:flex;gap:6px;flex-shrink:0;">'+
           (tpmCanEdit()?'<button onclick="tpmOpenTransfer(\''+x.id+'\')" style="background:none;border:1px solid #D7CCC8;color:#4E342E;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128257; Assign</button>':'')+
-          (tpmCanEdit()?'<button onclick="tpmOpenForm(\''+x.id+'\')" style="background:none;border:1px solid var(--border);color:var(--navy);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
+          (tpmCanEdit()?'<button onclick="tpmOpenForm(\''+x.id+'\')" style="background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
           (tpmCanDelete()?'<button onclick="tpmDelete(\''+x.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
         '</div>'+
       '</div>'+
@@ -22770,8 +22770,8 @@ function tpmOpenForm(id){
     '</select></div>'+
     '<div id="tpm-loanwrap" class="fgrp" style="display:'+(takenOnLoan?'':'none')+';">'+
       '<div style="display:flex;gap:6px;margin-bottom:8px;">'+
-        '<button type="button" id="tpm-loanmode-link-btn" onclick="tpmSetLoanMode(\'link\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;background:var(--accent);color:#fff;border:1.5px solid #4E342E;">Link Existing Loan</button>'+
-        '<button type="button" id="tpm-loanmode-new-btn" onclick="tpmSetLoanMode(\'new\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;background:#fff;color:#4E342E;border:1.5px solid #4E342E;">Register New Loan</button>'+
+        '<button type="button" id="tpm-loanmode-link-btn" onclick="tpmSetLoanMode(\'link\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;background:#4E342E;color:#fff;border:1.5px solid #4E342E;">Link Existing Loan</button>'+
+        '<button type="button" id="tpm-loanmode-new-btn" onclick="tpmSetLoanMode(\'new\')" style="flex:1;padding:7px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;background:var(--card-bg);color:var(--text);border:1.5px solid var(--border);">Register New Loan</button>'+
       '</div>'+
       '<div id="tpm-loanmode-body"></div>'+
     '</div>'+
@@ -22808,8 +22808,8 @@ function tpmToggleLoanYN(sel){
 function tpmSetLoanMode(mode, ex){
   TPM_LOAN_MODE=mode;
   var linkBtn=document.getElementById('tpm-loanmode-link-btn'), newBtn=document.getElementById('tpm-loanmode-new-btn');
-  if(linkBtn){ linkBtn.textContent='Link Existing Loan'; linkBtn.style.background=mode==='link'?'#4E342E':'#fff'; linkBtn.style.color=mode==='link'?'#fff':'#4E342E'; linkBtn.style.border='1.5px solid #4E342E'; }
-  if(newBtn){ newBtn.textContent='Register New Loan'; newBtn.style.background=mode==='new'?'#4E342E':'#fff'; newBtn.style.color=mode==='new'?'#fff':'#4E342E'; newBtn.style.border='1.5px solid #4E342E'; }
+  if(linkBtn){ linkBtn.textContent='Link Existing Loan'; linkBtn.style.background=mode==='link'?'#4E342E':'var(--card-bg)'; linkBtn.style.color=mode==='link'?'#fff':'var(--text)'; linkBtn.style.border=mode==='link'?'1.5px solid #4E342E':'1.5px solid var(--border)'; }
+  if(newBtn){ newBtn.textContent='Register New Loan'; newBtn.style.background=mode==='new'?'#4E342E':'var(--card-bg)'; newBtn.style.color=mode==='new'?'#fff':'var(--text)'; newBtn.style.border=mode==='new'?'1.5px solid #4E342E':'1.5px solid var(--border)'; }
   var body=document.getElementById('tpm-loanmode-body'); if(!body) return;
   if(mode==='link'){
     body.innerHTML='<label class="flbl">Linked Loan</label><select id="tpm-loanid" class="fsel">'+
@@ -22932,7 +22932,7 @@ function tpmCancelNewLender(){
 }
 
 function tpmNewLoanConfirmHtml(){
-  return '<div style="background:#E8F5E9;border:1px solid #C8E6C9;border-radius:8px;padding:10px;font-size:11.5px;">'+
+  return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11.5px;">'+
     '<div style="font-weight:800;color:#2E7D32;">\u2713 Loan registered and linked</div>'+
     '<div style="margin-top:2px;">'+tpmLoanLabel(TPM_NEW_LOAN_LINK)+'</div>'+
     '<button type="button" onclick="tpmResetNewLoan()" style="background:none;border:none;color:#1565C0;font-size:10.5px;font-weight:700;cursor:pointer;margin-top:6px;padding:0;">Change</button>'+
@@ -22944,7 +22944,7 @@ function tpmRenderDocsList(){
   var el=document.getElementById('tpm-docs-list'); if(!el) return;
   if(!TPM_FORM_DOCS.length){ el.innerHTML='<div style="font-size:11px;color:var(--text3);">No documents uploaded yet.</div>'; return; }
   el.innerHTML=TPM_FORM_DOCS.map(function(d,i){
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:#F5F5F4;border-radius:6px;padding:5px 8px;margin-bottom:4px;font-size:11.5px;">'+
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--bg);border-radius:6px;padding:5px 8px;margin-bottom:4px;font-size:11.5px;">'+
       '<a href="'+d.url+'" target="_blank" style="color:#1565C0;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">&#128206; '+d.name+'</a>'+
       '<button onclick="tpmRemoveDoc('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0;">&times;</button>'+
     '</div>';
