@@ -524,7 +524,7 @@ function pfRenderFiles(){
   el.innerHTML=allFiles.map(function(f,i){
     var icon=f.type&&f.type.includes('pdf')?'&#128196;':f.type&&f.type.includes('image')?'&#128247;':'&#128196;';
     var sz=f.size?(f.size>1024*1024?(f.size/1024/1024).toFixed(1)+'MB':(f.size/1024).toFixed(0)+'KB'):'';
-    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#F8FAFC;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:10px;">'+
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:10px;">'+
       '<span style="font-size:16px;">'+icon+'</span>'+
       '<div style="flex:1;min-width:0;"><b>'+f.name+'</b><div style="color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+(f.file?f.file.name:'')+(sz?' ('+sz+')':'')+'</div></div>'+
       '<button onclick="pfRemoveFile('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
@@ -1429,24 +1429,24 @@ function jmCompleteAllPrompt(){
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#E65100;margin-bottom:6px;">&#9888; Complete All JMs</div>'+
-    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will raise a joint measurement for the <b>full outstanding balance</b> on <b>'+pending.length+' item'+(pending.length!==1?'s':'')+'</b>, bringing every item to 100% of its BOQ quantity.<br><b style="color:#C62828;">This affects billing and cannot be undone in bulk</b> — each JM would have to be deleted individually.</div>'+
+    '<div style="font-size:11.5px;color:var(--text2);line-height:1.6;margin-bottom:10px;">This will raise a joint measurement for the <b>full outstanding balance</b> on <b>'+pending.length+' item'+(pending.length!==1?'s':'')+'</b>, bringing every item to 100% of its BOQ quantity.<br><b style="color:#C62828;">This affects billing and cannot be undone in bulk</b> — each JM would have to be deleted individually.</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
       '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
       '<span onclick="jmCompleteAllToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#F57F17;cursor:pointer;">Deselect all</span>'+
     '</div>'+
-    '<div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
-      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Balance to add</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
-      (pending.length>50?'<div style="padding:6px;font-size:10px;color:#888;text-align:center;">…and '+(pending.length-50)+' more</div>':'')+
+    '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg);"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Balance to add</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+      (pending.length>50?'<div style="padding:6px;font-size:10px;color:var(--text3);text-align:center;">…and '+(pending.length-50)+' more</div>':'')+
     '</div>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Date for these JMs</label>'+
-    '<input type="date" id="jm-cmpl-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Reference (optional)</label>'+
-    '<input type="text" id="jm-cmpl-ref" placeholder="e.g. Final measurement" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Date for these JMs</label>'+
+    '<input type="date" id="jm-cmpl-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Reference (optional)</label>'+
+    '<input type="text" id="jm-cmpl-ref" placeholder="e.g. Final measurement" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<label style="font-size:11px;font-weight:800;color:#C62828;display:block;margin-bottom:4px;">Re-enter your login password to confirm *</label>'+
     '<input type="password" id="jm-cmpl-pass" autocomplete="new-password" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
     '<div id="jm-cmpl-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;"></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
-      '<button onclick="document.getElementById(\'jm-cmpl-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button onclick="document.getElementById(\'jm-cmpl-ov\').remove()" style="background:var(--card-bg);border:1.5px solid var(--border);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;color:var(--text);">Cancel</button>'+
       '<button id="jm-cmpl-go" onclick="jmCompleteAllConfirm()" style="background:#F57F17;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Complete</button>'+
     '</div></div>';
   document.body.appendChild(d);
@@ -1803,21 +1803,21 @@ async function planTurnkeyPrompt(){
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#1565C0;margin-bottom:6px;">&#128737; Combined Planning</div>'+
-    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">This will combine <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> into one named group, at each item\'s own BOQ rate by default. Quantity defaults to the remaining unplanned balance (measured so far minus anything already planned) and can be adjusted per item below. Items with no balance left are skipped. The subcontractor gets assigned later, at Allotment.</div>'+
+    '<div style="font-size:11.5px;color:var(--text2);line-height:1.6;margin-bottom:10px;">This will combine <b>'+eligible.length+' item'+(eligible.length!==1?'s':'')+'</b> into one named group, at each item\'s own BOQ rate by default. Quantity defaults to the remaining unplanned balance (measured so far minus anything already planned) and can be adjusted per item below. Items with no balance left are skipped. The subcontractor gets assigned later, at Allotment.</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
       '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
       '<span onclick="planTurnkeyToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#1565C0;cursor:pointer;">Deselect all</span>'+
     '</div>'+
-    '<div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
-      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to assign</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
-      (eligible.length>50?'<div style="padding:6px;font-size:10px;color:#888;text-align:center;">…and '+(eligible.length-50)+' more</div>':'')+
+    '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg);"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to assign</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+      (eligible.length>50?'<div style="padding:6px;font-size:10px;color:var(--text3);text-align:center;">…and '+(eligible.length-50)+' more</div>':'')+
     '</div>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Group Name *</label>'+
-    '<input type="text" id="plan-tk-groupname" autocomplete="off" placeholder="e.g. Bituminous Concrete Work, Earthwork Package 1..." style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Group Name *</label>'+
+    '<input type="text" id="plan-tk-groupname" autocomplete="off" placeholder="e.g. Bituminous Concrete Work, Earthwork Package 1..." style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;">This name identifies the combined package of work \u2014 shown throughout RR, Allotment, and WO/PO documents.</div>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Resource Category (optional)</label>'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Resource Category (optional)</label>'+
     '<select id="plan-tk-cat" class="fsel" style="margin-bottom:8px;" onchange="if(!catSelectChanged(this,\'resource\'))catRememberValue(this);">'+buildResourceCatOpts('')+'</select>'+
-    '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#333;margin-bottom:10px;cursor:pointer;">'+
+    '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--text);margin-bottom:10px;cursor:pointer;">'+
       '<input type="checkbox" id="plan-tk-custrate" onchange="document.getElementById(\'plan-tk-rate-row\').style.display=this.checked?\'block\':\'none\';"> Use one rate for all items instead of each item\'s own BOQ rate'+
     '</label>'+
     '<div id="plan-tk-rate-row" style="display:none;margin-bottom:8px;">'+
@@ -1828,7 +1828,7 @@ async function planTurnkeyPrompt(){
     '<input type="password" id="plan-tk-pass" autocomplete="new-password" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
     '<div id="plan-tk-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;"></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
-      '<button onclick="document.getElementById(\'plan-turnkey-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button onclick="document.getElementById(\'plan-turnkey-ov\').remove()" style="background:var(--card-bg);border:1.5px solid var(--border);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;color:var(--text);">Cancel</button>'+
       '<button id="plan-tk-go" onclick="planTurnkeyConfirm()" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Assign</button>'+
     '</div></div>';
   document.body.appendChild(d);
@@ -2095,7 +2095,7 @@ async function planAddRes(subId,itemId,unit){
             '</label>'+
           '</div>'+
           '<div id="jm-qty-row-'+j.id+'" style="display:none;padding-top:6px;display:none;">'+
-            '<label id="jm-plan-lbl-'+j.id+'" style="font-size:10px;font-weight:700;color:#555;">Plan Qty for JM-'+j.jm_number+' (max '+balStr+' '+unit+')</label>'+
+            '<label id="jm-plan-lbl-'+j.id+'" style="font-size:10px;font-weight:700;color:var(--text2);">Plan Qty for JM-'+j.jm_number+' (max '+balStr+' '+unit+')</label>'+
             '<input id="jm-qty-'+j.id+'" data-jmbal="'+bal+'" class="finp" type="number" step="0.001" max="'+bal+'" value="'+balStr+'" style="margin-bottom:0;">'+
           '</div>'+
         '</div>';
@@ -2218,7 +2218,7 @@ async function planEditRes(resId, subId, itemId){
             '</label>'+
           '</div>'+
           '<div id="jm-qty-row-'+j.id+'" style="padding-top:6px;'+(isChecked?'':'display:none;')+'">'+
-            '<label id="jm-plan-lbl-'+j.id+'" style="font-size:10px;font-weight:700;color:#555;">Plan Qty for JM-'+j.jm_number+' (max '+balStr+')</label>'+
+            '<label id="jm-plan-lbl-'+j.id+'" style="font-size:10px;font-weight:700;color:var(--text2);">Plan Qty for JM-'+j.jm_number+' (max '+balStr+')</label>'+
             '<input id="jm-qty-'+j.id+'" data-jmbal="'+bal+'" class="finp" type="number" step="0.001" max="'+bal+'" value="'+(myPlanned||balStr)+'" style="margin-bottom:0;">'+
           '</div>'+
         '</div>';
@@ -2653,14 +2653,14 @@ function rrRender(){
       });
       var totalRemaining=lineRows.reduce(function(s,r){return s+r.remaining;},0);
       var itemsHtml=lineRows.map(function(r){
-        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;">'+
+        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">'+
           '<span>'+(r.boqItem?(r.boqItem.short_name||r.boqItem.description):r.it.boq_item_id)+'</span>'+
           '<span style="font-weight:700;">'+(r.remaining>0.0001?r.remaining.toFixed(2).replace(/\.?0+$/,'')+' '+(r.it.unit||'')+' left':'<span style="color:#2E7D32;">Fully raised</span>')+'</span>'+
         '</div>';
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||g.party_name)+'</div>'+
+          '<div><div style="font-size:13px;font-weight:800;color:var(--text);">'+(g.group_name||g.party_name)+'</div>'+
           '<div style="font-size:10px;color:#1565C0;">'+(g.party_name||'Party not yet assigned')+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined-planned</div></div>'+
           (totalRemaining>0.0001
             ? '<button onclick="rrOpenGroupPrompt(\''+g.id+'\')" style="background:#00838F;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Raise Combined RR</button>'
@@ -2721,7 +2721,7 @@ function rrRender(){
       var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
       var col=tCol[res.exec_type]||'#555';
 
-      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid #F5F5F5;">'+
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);">'+
         '<div style="flex:1;">'+
           '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+col+'15;color:'+col+';">'+(tLbl[res.exec_type]||res.exec_type)+'</span>'+
           '<span style="font-size:12px;font-weight:800;margin-left:6px;">'+res.party_name+'</span>'+
@@ -2739,7 +2739,7 @@ function rrRender(){
       ? itemRRs.map(function(r){
           var sc=statusColors[r.status]||'#555';
           var sl=statusLabels[r.status]||r.status;
-          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #F0F0F0;background:#FAFAFA;">'+
+          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg);">'+
             '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+sc+'20;color:'+sc+';">'+sl+'</span>'+
             '<div style="flex:1;font-size:11px;">'+
               '<b>'+r.party_name+'</b> — '+r.qty+' '+(r.unit||'')+
@@ -2926,8 +2926,8 @@ function rrCombinedPrompt(){
         '<td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+x.item.item_code+'</td>'+
         '<td style="padding:3px 6px;font-size:11px;">'+(x.item.short_name||x.item.description||'')+'</td>'+
         '<td style="padding:3px 6px;text-align:right;">'+
-          '<input type="number" class="rr-cmb-item-qty" data-idx="'+idx+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid #ddd;border-radius:4px;">'+
-          ' <span style="font-size:9.5px;color:var(--text3);">'+(x.res.unit||'')+' <span style="color:#aaa;">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
+          '<input type="number" class="rr-cmb-item-qty" data-idx="'+idx+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid var(--border);border-radius:4px;">'+
+          ' <span style="font-size:9.5px;color:var(--text3);">'+(x.res.unit||'')+' <span style="color:var(--text3);">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
         '</td></tr>';
     }).join('');
     var groupHeader='<tr><td colspan="4" style="padding:5px 6px;background:#E0F7FA;font-size:10.5px;font-weight:800;color:#00838F;">'+
@@ -2944,23 +2944,23 @@ function rrCombinedPrompt(){
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#00838F;margin-bottom:6px;">&#128203; Combined RR</div>'+
-    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">Raise requisitions for <b>'+eligible.length+' planned resource'+(eligible.length!==1?'s':'')+'</b> at once. Quantity defaults to the remaining unraised balance and can be adjusted per item below.</div>'+
+    '<div style="font-size:11.5px;color:var(--text2);line-height:1.6;margin-bottom:10px;">Raise requisitions for <b>'+eligible.length+' planned resource'+(eligible.length!==1?'s':'')+'</b> at once. Quantity defaults to the remaining unraised balance and can be adjusted per item below.</div>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'+
       '<span style="font-size:10px;color:var(--text3);font-weight:700;">Select items to include</span>'+
       '<span onclick="rrCombinedToggleAll(this)" data-state="all" style="font-size:10.5px;font-weight:800;color:#00838F;cursor:pointer;">Deselect all</span>'+
     '</div>'+
-    '<div style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
-      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to raise</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+    '<div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg);"><th style="padding:4px 6px;width:24px;"></th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to raise</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
     '</div>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Required Date *</label>'+
-    '<input type="date" id="rr-cmb-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Purpose / Remarks</label>'+
-    '<textarea id="rr-cmb-remarks" rows="2" placeholder="Applies to all requisitions raised" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;"></textarea>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Requested By</label>'+
-    '<input type="text" id="rr-cmb-by" value="'+(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||''):'')+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Required Date *</label>'+
+    '<input type="date" id="rr-cmb-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Purpose / Remarks</label>'+
+    '<textarea id="rr-cmb-remarks" rows="2" placeholder="Applies to all requisitions raised" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;"></textarea>'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Requested By</label>'+
+    '<input type="text" id="rr-cmb-by" value="'+(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||''):'')+'" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
     '<div id="rr-cmb-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;color:#C62828;"></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
-      '<button onclick="document.getElementById(\'rr-combined-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button onclick="document.getElementById(\'rr-combined-ov\').remove()" style="background:var(--card-bg);border:1.5px solid var(--border);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;color:var(--text);">Cancel</button>'+
       '<button id="rr-cmb-go" onclick="rrCombinedConfirm()" style="background:#00838F;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Raise</button>'+
     '</div></div>';
   document.body.appendChild(d);
@@ -3064,8 +3064,8 @@ function rrOpenGroupPrompt(groupId){
     return '<tr><td style="padding:3px 6px;font-family:monospace;font-size:10px;">'+(r.boqItem?r.boqItem.item_code:'')+'</td>'+
       '<td style="padding:3px 6px;font-size:11px;">'+(r.boqItem?(r.boqItem.short_name||r.boqItem.description):'')+'</td>'+
       '<td style="padding:3px 6px;text-align:right;">'+
-        '<input type="number" class="rr-grp-item-qty" data-idx="'+idx+'" data-plan-item-id="'+r.planItem.id+'" data-boq-item-id="'+r.planItem.boq_item_id+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid #ddd;border-radius:4px;">'+
-        ' <span style="font-size:9.5px;color:var(--text3);">'+(r.planItem.unit||'')+' <span style="color:#aaa;">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
+        '<input type="number" class="rr-grp-item-qty" data-idx="'+idx+'" data-plan-item-id="'+r.planItem.id+'" data-boq-item-id="'+r.planItem.boq_item_id+'" data-max="'+maxQty+'" step="0.001" min="0" max="'+maxQty+'" value="'+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'" style="width:64px;padding:2px 4px;font-size:11px;font-weight:700;text-align:right;border:1px solid var(--border);border-radius:4px;">'+
+        ' <span style="font-size:9.5px;color:var(--text3);">'+(r.planItem.unit||'')+' <span style="color:var(--text3);">/ '+String(maxQty.toFixed(3)).replace(/\.?0+$/,'')+'</span></span>'+
       '</td></tr>';
   }).join('');
 
@@ -3076,19 +3076,19 @@ function rrOpenGroupPrompt(groupId){
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   d.innerHTML='<div style="background:var(--card-bg);border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;padding:18px;font-family:Nunito,sans-serif;">'+
     '<div style="font-size:15px;font-weight:900;color:#00838F;margin-bottom:6px;">&#128203; Raise Combined RR</div>'+
-    '<div style="font-size:11.5px;color:#555;line-height:1.6;margin-bottom:10px;">For <b>'+group.party_name+'</b> \u2014 covers <b>'+rows.length+' item'+(rows.length!==1?'s':'')+'</b> from this combined planning group in one requisition.</div>'+
-    '<div style="max-height:200px;overflow-y:auto;border:1px solid #eee;border-radius:8px;margin-bottom:10px;">'+
-      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#F5F5F5;"><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to raise</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
+    '<div style="font-size:11.5px;color:var(--text2);line-height:1.6;margin-bottom:10px;">For <b>'+group.party_name+'</b> \u2014 covers <b>'+rows.length+' item'+(rows.length!==1?'s':'')+'</b> from this combined planning group in one requisition.</div>'+
+    '<div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg);"><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Code</th><th style="padding:4px 6px;text-align:left;font-size:9.5px;">Item</th><th style="padding:4px 6px;text-align:right;font-size:9.5px;">Qty to raise</th></tr></thead><tbody>'+listHtml+'</tbody></table>'+
     '</div>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Required Date *</label>'+
-    '<input type="date" id="rr-grp-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Purpose / Remarks</label>'+
-    '<textarea id="rr-grp-remarks" rows="2" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;"></textarea>'+
-    '<label style="font-size:11px;font-weight:800;color:#333;display:block;margin-bottom:4px;">Requested By</label>'+
-    '<input type="text" id="rr-grp-by" value="'+(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||''):'')+'" style="width:100%;padding:8px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Required Date *</label>'+
+    '<input type="date" id="rr-grp-date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;">'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Purpose / Remarks</label>'+
+    '<textarea id="rr-grp-remarks" rows="2" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:8px;font-family:Nunito,sans-serif;"></textarea>'+
+    '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Requested By</label>'+
+    '<input type="text" id="rr-grp-by" value="'+(typeof currentUser!=='undefined'&&currentUser?(currentUser.name||''):'')+'" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
     '<div id="rr-grp-msg" style="font-size:11px;font-weight:700;margin-bottom:8px;color:#C62828;"></div>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
-      '<button onclick="document.getElementById(\'rr-group-ov\').remove()" style="background:var(--card-bg);border:1.5px solid #ddd;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Cancel</button>'+
+      '<button onclick="document.getElementById(\'rr-group-ov\').remove()" style="background:var(--card-bg);border:1.5px solid var(--border);border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;color:var(--text);">Cancel</button>'+
       '<button id="rr-grp-go" onclick="rrGroupConfirm(\''+groupId+'\')" style="background:#00838F;color:white;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Confirm &amp; Raise</button>'+
     '</div></div>';
   document.body.appendChild(d);
@@ -3248,10 +3248,10 @@ async function rrGroupOpenAllotForm(groupId){
     var boqItem=itemById[ri.boq_item_id];
     var planItem=ri.plan_item_id?planItemById[ri.plan_item_id]:null;
     var plannedRate=planItem?(parseFloat(planItem.rate)||0):0;
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;gap:6px;">'+
-      '<span style="flex:1;">'+(boqItem?(boqItem.short_name||boqItem.description):ri.boq_item_id)+' <span style="color:#888;">('+ri.party_name+')</span><br><span style="color:#666;">'+ri.qty+' '+(ri.unit||'')+'</span></span>'+
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;gap:6px;">'+
+      '<span style="flex:1;">'+(boqItem?(boqItem.short_name||boqItem.description):ri.boq_item_id)+' <span style="color:var(--text3);">('+ri.party_name+')</span><br><span style="color:var(--text2);">'+ri.qty+' '+(ri.unit||'')+'</span></span>'+
       '<div style="text-align:center;">'+
-        '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Rate (\u20b9) <span style="color:#aaa;">(planned: '+plannedRate+')</span></div>'+
+        '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Rate (\u20b9) <span style="color:var(--text3);">(planned: '+plannedRate+')</span></div>'+
         '<input class="rr-grp-item-rate finp" data-ri-id="'+ri.id+'" data-planned-rate="'+plannedRate+'" type="number" step="0.01" placeholder="Enter rate" style="width:100px;padding:4px 6px;font-size:11px;text-align:center;">'+
       '</div>'+
     '</div>';
@@ -3261,7 +3261,7 @@ async function rrGroupOpenAllotForm(groupId){
   // still a normal input afterward, so any one of them can be typed over
   // by hand without affecting the others.
   var pctFillHtml=giItems.length>1?
-    '<div style="display:flex;align-items:flex-end;gap:8px;padding:8px 10px;margin-bottom:8px;background:#FFF;border-radius:8px;border:1px solid #B2EBF2;">'+
+    '<div style="display:flex;align-items:flex-end;gap:8px;padding:8px 10px;margin-bottom:8px;background:var(--card-bg);border-radius:8px;border:1px solid #B2EBF2;">'+
       '<div style="flex:1;">'+
         '<label class="flbl" style="margin-bottom:2px;">Quick-fill: % above/below planned rate</label>'+
         '<input id="rr-grp-pct-fill" class="finp" type="number" step="0.01" placeholder="e.g. 5 = +5%, -5 = \u22125%" style="margin:0;">'+
@@ -3287,9 +3287,9 @@ async function rrGroupOpenAllotForm(groupId){
         '<label class="flbl">Lumpsum Amount (\u20b9) *</label>'+
         '<input id="rr-grp-lumpsum-amt" class="finp" type="number" step="0.01" placeholder="Total for all '+giItems.length+' items">'+
         '<div style="font-size:10px;color:var(--text3);margin-top:4px;margin-bottom:12px;">Split across items in proportion to their planned value \u2014 each item still gets its own rate stored for billing/execution tracking.</div>'+
-        '<div style="background:#FFF;border-radius:10px;padding:10px;border:1px solid #B2EBF2;">'+
+        '<div style="background:var(--card-bg);border-radius:10px;padding:10px;border:1px solid #B2EBF2;">'+
           '<div style="font-size:11px;font-weight:800;color:#00838F;margin-bottom:2px;">Scope Breakdown *</div>'+
-          '<div style="font-size:9.5px;color:#666;margin-bottom:8px;">Break the lumpsum into billable milestones \u2014 e.g. "Footing", qty 8 Nos, 20% of lumpsum. Progress against each is logged later in Daily Progress \u2192 Scope Completed for billing.</div>'+
+          '<div style="font-size:9.5px;color:var(--text2);margin-bottom:8px;">Break the lumpsum into billable milestones \u2014 e.g. "Footing", qty 8 Nos, 20% of lumpsum. Progress against each is logged later in Daily Progress \u2192 Scope Completed for billing.</div>'+
           '<div id="rr-grp-scope-rows"></div>'+
           '<button type="button" onclick="rrGroupAddScopeLine()" style="background:#E0F7FA;border:none;color:#00838F;font-size:11px;font-weight:800;border-radius:6px;padding:6px 10px;cursor:pointer;margin-top:4px;">+ Add Scope Line</button>'+
           '<div id="rr-grp-scope-total" style="font-size:11px;font-weight:800;margin-top:8px;text-align:right;"></div>'+
@@ -3333,7 +3333,7 @@ async function rrGroupOpenAllotForm(groupId){
           '<div style="font-size:10px;font-weight:800;">Purchase Order</div>'+
         '</label>'+
         '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
-          '<input type="radio" name="rr-grp-doc-type" value="none" checked style="accent-color:#555;">'+
+          '<input type="radio" name="rr-grp-doc-type" value="none" checked style="accent-color:var(--text2);">'+
           '<div style="font-size:10px;font-weight:800;">None</div>'+
         '</label>'+
       '</div>'+
@@ -3911,14 +3911,14 @@ function execRender(){
       var partyNames=Array.from(new Set(giItems.map(function(it){return it.party_name;})));
       var rows=remainingItems.map(function(ri){
         var boqItem=itemByIdWA[ri.boq_item_id];
-        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:11px;">'+
+        return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">'+
           '<span>'+(boqItem?(boqItem.short_name||boqItem.description):ri.boq_item_id)+'</span>'+
           '<span style="font-weight:700;">'+ri.qty+' '+(ri.unit||'')+'</span>'+
         '</div>';
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:#E3F2FD;display:flex;justify-content:space-between;align-items:center;">'+
-          '<div><div style="font-size:13px;font-weight:800;color:#0D2137;">'+(g.group_name||partyNames.join(', '))+'</div>'+
+          '<div><div style="font-size:13px;font-weight:800;color:var(--text);">'+(g.group_name||partyNames.join(', '))+'</div>'+
           '<div style="font-size:10px;color:#1565C0;">'+(partyNames.join(', ')||'Party not yet assigned')+' \u00b7 '+g.rr_number+' \u00b7 '+remainingItems.length+' item'+(remainingItems.length!==1?'s':'')+' to allot</div></div>'+
           '<button onclick="rrGroupOpenAllotForm(\''+g.id+'\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">+ Allot Group</button>'+
         '</div>'+
@@ -4001,7 +4001,7 @@ function execRender(){
     var bal=Math.max(0,(parseFloat(res.qty)||0)-totalAllotted);
     return (
       '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:6px;overflow:hidden;">'+
-        '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#FAFAFA;">'+
+        '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);">'+
           '<div style="flex:1;">'+
             '<div style="font-size:12px;font-weight:800;">'+res.party_name+'</div>'+
             '<div style="font-size:10px;color:var(--text3);">'+
@@ -4023,7 +4023,7 @@ function execRender(){
           '<div style="padding:4px 12px 8px;">'+
             rAllot.map(function(a){
               var col=tCol[a.exec_type]||'#37474F';var lbl=tLbl[a.exec_type]||a.exec_type;
-              return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #F5F5F5;">'+'<span style="font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;background:'+col+'20;color:'+col+';">'+lbl+'</span>'+
+              return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);">'+'<span style="font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;background:'+col+'20;color:'+col+';">'+lbl+'</span>'+
                 '<div style="flex:1;font-size:11px;font-weight:700;">'+a.party_name+'</div>'+
                 '<div style="font-size:10px;color:var(--text3);">'+a.qty+' '+(a.unit||'')+(a.rate?' @ ₹'+a.rate:'')+'</div>'+
                 '<button data-edit-allot-id="'+a.id+'" title="Edit" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button>'+
@@ -4234,7 +4234,7 @@ async function execOpenMultiAllot(){
             '<div><div style="font-size:10px;font-weight:800;">Purchase Order</div></div>'+
           '</label>'+
           '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
-            '<input type="radio" name="wa-doc-type" value="none" checked style="accent-color:#555;">'+
+            '<input type="radio" name="wa-doc-type" value="none" checked style="accent-color:var(--text2);">'+
             '<div><div style="font-size:10px;font-weight:800;">None</div></div>'+
           '</label>'+
         '</div>'+
@@ -4256,7 +4256,7 @@ async function execOpenMultiAllot(){
       var res=x.res; var rr=x.rr; var bal=x.rrBalance;
       var uomOpts=buildUomOpts(res.unit||item.unit||'');
       return '<div class="wa-res-row" data-res-id="'+res.id+'" style="border:1px solid var(--border);border-radius:10px;margin-bottom:6px;overflow:hidden;">'+
-        '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#FAFAFA;">'+
+        '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg);">'+
           '<input type="checkbox" class="wa-res-chk" data-res-id="'+res.id+'" data-rr-id="'+rr.id+'" data-rr-max="'+bal+'" data-item-id="'+item.id+'" style="width:16px;height:16px;accent-color:#E65100;flex-shrink:0;">'+
           '<div style="flex:1;">'+
             '<div style="font-size:12px;font-weight:800;">'+res.party_name+'</div>'+
@@ -4285,7 +4285,7 @@ async function execOpenMultiAllot(){
             '</div>'+
           '</div>'+
         '</div>'+
-        '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid #F0F0F0;background:var(--card-bg);">'+
+        '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid var(--border);background:var(--card-bg);">'+
           '<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:4px;">Specification for this resource</label>'+
           '<textarea class="wa-spec-inp ftxt" data-res-id="'+res.id+'" rows="2"></textarea>'+
         '</div>'+
@@ -4533,7 +4533,7 @@ async function execOpenAllot(itemId){
             '<div><div style="font-size:10px;font-weight:800;">Purchase Order</div><div style="font-size:9px;color:var(--text3);">Vendor</div></div>'+
           '</label>'+
           '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
-            '<input type="radio" name="wa-doc-type" value="none" checked style="accent-color:#555;">'+
+            '<input type="radio" name="wa-doc-type" value="none" checked style="accent-color:var(--text2);">'+
             '<div><div style="font-size:10px;font-weight:800;">None</div><div style="font-size:9px;color:var(--text3);">Save only</div></div>'+
           '</label>'+
         '</div>'+
@@ -4550,7 +4550,7 @@ async function execOpenAllot(itemId){
     var rrNums = rr.rr_number;
     var uomOpts = buildUomOpts(res.unit||item.unit||'');
     return '<div class="wa-res-row" data-res-id="'+res.id+'" style="border:1px solid var(--border);border-radius:10px;margin-bottom:6px;overflow:hidden;">'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#FAFAFA;">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg);">'+
         '<input type="checkbox" class="wa-res-chk" data-res-id="'+res.id+'" data-rr-id="'+rr.id+'" data-rr-max="'+bal+'" style="width:16px;height:16px;accent-color:#E65100;flex-shrink:0;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:12px;font-weight:800;">'+res.party_name+'</div>'+
@@ -4581,7 +4581,7 @@ async function execOpenAllot(itemId){
         '</div>'+
       '</div>'+
       // Specification — shown when checkbox is checked
-      '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid #F0F0F0;background:var(--card-bg);">'+
+      '<div class="wa-res-spec-row" style="display:none;padding:6px 12px 8px;border-top:1px solid var(--border);background:var(--card-bg);">'+
         '<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:4px;">Specification / Description for this item</label>'+
         '<textarea class="wa-spec-inp ftxt" data-res-id="'+res.id+'" rows="2" placeholder="Material grade, size, brand, make, model or any specific requirement..."></textarea>'+
       '</div>'+
@@ -5440,11 +5440,11 @@ function execPrintSalesBill(billId){
     '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Choose how the work should be described on the printed GST tax invoice.</div>'+
     '<div onclick="execGenerateSalesBillInvoice(\''+billId+'\',\'boq\')" style="cursor:pointer;background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;padding:12px;margin-bottom:10px;">'+
       '<div style="font-weight:800;font-size:13px;color:#4A148C;">&#128203; Detailed — BOQ Items</div>'+
-      '<div style="font-size:11px;color:#666;margin-top:3px;">Each BOQ item listed as a separate line with qty, rate &amp; amount.</div>'+
+      '<div style="font-size:11px;color:var(--text2);margin-top:3px;">Each BOQ item listed as a separate line with qty, rate &amp; amount.</div>'+
     '</div>'+
     '<div style="background:#E3F2FD;border:1.5px solid #90CAF9;border-radius:10px;padding:12px;">'+
       '<div style="font-weight:800;font-size:13px;color:#1565C0;margin-bottom:8px;">&#127959; Consolidated — Civil Work</div>'+
-      '<div style="font-size:11px;color:#666;margin-bottom:8px;">Single line item for the whole civil work, with its HSN/SAC code.</div>'+
+      '<div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Single line item for the whole civil work, with its HSN/SAC code.</div>'+
       '<label class="flbl">Work Description</label>'+
       '<input id="sb-civil-desc" class="finp" value="'+defDesc.replace(/"/g,'&quot;')+'">'+
       '<label class="flbl">HSN / SAC Code</label>'+
@@ -6107,9 +6107,9 @@ function execRenderSales(){
         '</div>'+
         '<div id="'+collapseId+'" style="display:none;">'+
           '<table style="width:100%;border-collapse:collapse;font-size:10px;">'+
-            '<tr style="background:#F8FAFC;"><th style="padding:5px 10px;text-align:left;">Item</th><th style="padding:5px 10px;text-align:right;">BOQ Qty</th><th style="padding:5px 10px;text-align:right;">Billed Qty</th><th style="padding:5px 10px;text-align:right;">Rate</th><th style="padding:5px 10px;text-align:right;">Amount</th></tr>'+
+            '<tr style="background:var(--bg);"><th style="padding:5px 10px;text-align:left;">Item</th><th style="padding:5px 10px;text-align:right;">BOQ Qty</th><th style="padding:5px 10px;text-align:right;">Billed Qty</th><th style="padding:5px 10px;text-align:right;">Rate</th><th style="padding:5px 10px;text-align:right;">Amount</th></tr>'+
             items.map(function(x){
-              return '<tr style="border-bottom:1px solid #F0F0F0;">'+
+              return '<tr style="border-bottom:1px solid var(--border);">'+
                 '<td style="padding:5px 10px;">'+(x.item_code?'<span style="font-size:9px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:1px 4px;border-radius:3px;margin-right:4px;">'+x.item_code+'</span>':'')+x.item_name+'</td>'+
                 '<td style="padding:5px 10px;text-align:right;color:var(--text3);">'+(x.boq_qty||0)+' '+(x.unit||'')+'</td>'+
                 '<td style="padding:5px 10px;text-align:right;font-weight:700;">'+x.billed_qty+' '+(x.unit||'')+'</td>'+
@@ -6122,14 +6122,14 @@ function execRenderSales(){
               '<tr style="background:#EDE7F6;"><td colspan="4" style="padding:5px 10px;font-weight:800;color:#7B1FA2;">Work Sub-Total</td><td style="padding:5px 10px;text-align:right;font-weight:900;color:#4A148C;">'+inr(workAmt)+'</td></tr>':'') +
             // Non-GST additions
             nonGstAdds.map(function(a){
-              return '<tr style="background:#F9FFF9;border-bottom:1px solid #EEE;">'+
+              return '<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
                 '<td style="padding:5px 10px;"><span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:4px;">ADD</span>'+a.head+(a.type==='pct'?' ('+a.pct+'%)':'')+'</td>'+
                 '<td colspan="3"></td><td style="padding:5px 10px;text-align:right;font-weight:800;color:#2E7D32;">+'+inr(a.amount)+'</td>'+
               '</tr>';
             }).join('')+
             // Deductions
             deds.map(function(d){
-              return '<tr style="background:#FFF8F8;border-bottom:1px solid #EEE;">'+
+              return '<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
                 '<td style="padding:5px 10px;"><span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:4px;">DED</span>'+d.head+'</td>'+
                 '<td colspan="3"></td><td style="padding:5px 10px;text-align:right;font-weight:800;color:#E65100;">-'+inr(d.amount)+'</td>'+
               '</tr>';
@@ -6139,7 +6139,7 @@ function execRenderSales(){
               '<tr style="background:#E8F5E9;border-bottom:1px solid #C8E6C9;"><td colspan="4" style="padding:5px 10px;font-weight:800;color:#1B5E20;">Net before GST</td><td style="padding:5px 10px;text-align:right;font-weight:900;color:#1B5E20;">'+inr(netBeforeGst)+'</td></tr>':'') +
             // GST rows
             gstAdds.map(function(a){
-              return '<tr style="background:#F9FFF9;border-bottom:1px solid #EEE;">'+
+              return '<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
                 '<td style="padding:5px 10px;"><span style="background:#E8F5E9;color:#1B5E20;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:4px;">GST</span>'+a.head+(a.pct?' ('+a.pct+'%)':'')+'</td>'+
                 '<td colspan="3"></td><td style="padding:5px 10px;text-align:right;font-weight:800;color:#1B5E20;">+'+inr(a.amount)+'</td>'+
               '</tr>';
@@ -6153,9 +6153,9 @@ function execRenderSales(){
             if(!bPays.length) return '';
             var paidAmt=bPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0)+(parseFloat(p.tds_amount)||0);},0);
             var balDue=b.bill_amount-paidAmt;
-            return '<div style="padding:8px 14px;border-top:1px solid var(--border);background:#F8FAFC;">'+
+            return '<div style="padding:8px 14px;border-top:1px solid var(--border);background:var(--bg);">'+
               '<div style="font-size:10px;font-weight:800;color:#2E7D32;margin-bottom:4px;">&#128176; PAYMENTS</div>'+
-              bPays.map(function(p){return '<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid #F0F0F0;">'+
+              bPays.map(function(p){return '<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid var(--border);">'+
                 '<span>'+p.payment_date+(p.payment_mode?' · '+p.payment_mode:'')+(p.reference?' · '+p.reference:'')+(parseFloat(p.tds_amount)>0?' · TDS: '+inr(p.tds_amount):'')+'</span>'+
                 '<div style="display:flex;align-items:center;gap:6px;">'+
                   '<span style="font-weight:800;color:#2E7D32;">'+inr((parseFloat(p.amount)||0)+(parseFloat(p.tds_amount)||0))+'</span>'+
@@ -6205,7 +6205,7 @@ function execRenderSales(){
     var amt=Math.round(unbilledQty*rate);
     var pct=boqQty>0?Math.min(100,Math.round(doneQty/boqQty*100)):0;
     var pctCol=pct>=100?'#2E7D32':pct>=50?'#1565C0':'#E65100';
-    return '<tr style="border-bottom:1px solid #F0F0F0;" id="sr-'+item.id+'">'+
+    return '<tr style="border-bottom:1px solid var(--border);" id="sr-'+item.id+'">'+
       '<td style="padding:8px 10px;vertical-align:middle;">'+
         '<div style="display:flex;align-items:center;gap:6px;">'+
           '<input type="checkbox" class="sl-item-chk" data-item-id="'+item.id+'" data-rate="'+rate+'" '+
@@ -6266,7 +6266,7 @@ function execRenderSales(){
         '</div>'+
         '<div style="overflow-x:auto;">'+
           '<table style="width:100%;border-collapse:collapse;min-width:560px;">'+
-            '<thead><tr style="background:#F8FAFC;border-bottom:2px solid var(--border);">'+
+            '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);">'+
               '<th style="padding:7px 10px;font-size:9px;text-align:left;color:var(--text3);">BOQ ITEM</th>'+
               '<th style="padding:7px 10px;font-size:9px;text-align:right;color:var(--text3);">BOQ QTY</th>'+
               '<th style="padding:7px 10px;font-size:9px;text-align:right;color:var(--text3);">DONE (DPR)</th>'+
@@ -7039,7 +7039,7 @@ function execRenderAllotted(){
         linkedScopes.map(function(sc){
           var pct=parseFloat(sc.percentage)||0;
           var amt=Math.round(pct/100*lumpsumTotal);
-          return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
+          return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);">'+
             '<div style="flex:1;min-width:0;">'+
               '<div style="font-size:12px;font-weight:800;">'+sc.scope_name+'</div>'+
               '<div style="font-size:10px;color:var(--text3);">'+sc.scope_qty+' '+(sc.scope_unit||'')+'</div>'+
@@ -7057,12 +7057,12 @@ function execRenderAllotted(){
       var itemOrders = WA_ORDERS.filter(function(o){return o.allot_id===a.id;});
       var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
       var boqItem = WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
-      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);">'+
         '<div style="flex:1;min-width:0;">'+
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">'+
             '<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;background:'+aCol+'20;color:'+aCol+';">'+( tLbl[a.exec_type]||a.exec_type)+'</span>'+
             (planRes.party_name||planRes.resource_category?'<span style="font-size:12px;font-weight:800;color:#1B5E20;">'+( planRes.party_name||planRes.resource_category)+'</span>':'')+
-            '<span style="font-size:11px;font-weight:600;color:#555;margin-left:3px;">&#8594; '+a.party_name+'</span>'+
+            '<span style="font-size:11px;font-weight:600;color:var(--text2);margin-left:3px;">&#8594; '+a.party_name+'</span>'+
           '</div>'+
           (boqItem.item_code?'<div style="font-size:9px;color:var(--text3);">BOQ: '+boqItem.item_code+' '+(boqItem.short_name||boqItem.description||'')+'</div>':'')+
           '<div style="font-size:10px;color:var(--text3);">'+a.qty+' '+(a.unit||'')+(a.rate?' @ '+inr(a.rate):'')+(a.scope?' | '+a.scope:'')+'</div>'+
@@ -7088,7 +7088,7 @@ function execRenderAllotted(){
     // Download footer — always shown when doc_type was selected (WO or PO)
     // After order issued: shows as re-download; before: shows as generate
     var downloadRow = (hasWO||hasPO)
-      ? '<div style="padding:10px 14px;background:#FAFAFA;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">'+
+      ? '<div style="padding:10px 14px;background:var(--bg);border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;">'+
           '<div style="flex:1;font-size:10px;color:var(--text3);">'+(hasOrder?'Re-download document':'Generate document for this allotment')+'</div>'+
           (hasOrder?'<button onclick="execEditBatchDocTerms(\''+batchKey+'\',\''+docType+'\')" style="background:none;color:'+(docType==='po'?'#1565C0':'#E65100')+';border:1.5px solid '+(docType==='po'?'#1565C0':'#E65100')+';border-radius:7px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit Terms</button>':'')+
           (hasWO?'<button onclick="execGenBatchDoc(\''+batchKey+'\',\'wo\')" style="background:#E65100;color:white;border:none;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#11015; Work Order</button>':'')+
@@ -7112,7 +7112,7 @@ function execRenderAllotted(){
             '<span style="color:var(--text3);">'+adv.date+'</span>'+
             '<span style="flex:1;font-weight:700;">'+inrFmt(adv.amount)+'</span>'+
             '<span style="color:var(--text3);">'+(adv.payment_mode||'')+(adv.reference?' · '+adv.reference:'')+'</span>'+
-            '<span style="color:#555;font-size:9px;">'+( adv.purpose||'')+'</span>'+
+            '<span style="color:var(--text2);font-size:9px;">'+( adv.purpose||'')+'</span>'+
             '<button onclick="execAdvanceReceipt(\''+adv.id+'\',\'\',0)" style="background:#F57F17;color:white;border:none;border-radius:4px;padding:2px 6px;font-size:9px;cursor:pointer;font-weight:700;">PDF</button>'+
             '<button onclick="execEditAdvance(\''+adv.id+'\')" style="font-size:9px;background:#FFF8E1;color:#1565C0;border:1px solid #BBDEFB;border-radius:3px;padding:1px 5px;cursor:pointer;">&#9998;</button>'+
             '<button onclick="execDelAdvance(\''+adv.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;">&#215;</button>'+
@@ -7841,7 +7841,7 @@ async function execRenderDaily(){
         'style="border:1.5px solid #1565C0;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:#1565C0;outline:none;cursor:pointer;" '+
         'onchange="execDailyDateChange()">'+
       '<button onclick="WA_DAILY_DATE=new Date().toISOString().slice(0,10);document.getElementById(\'dp-view-date\').value=WA_DAILY_DATE;execRenderDailyContent();" '+
-        'style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:#F8FAFC;cursor:pointer;font-weight:700;">Today</button>'+
+        'style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer;font-weight:700;">Today</button>'+
       '<div style="flex:1;"></div>'+
       '<button onclick="execDailyDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button>'+
       '<button onclick="execDailyDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>'+
@@ -8286,7 +8286,7 @@ function execRenderExecutedWork(){
     var itemRateArrived=s.totalQtyDone>0?(s.itemTotalAmount/s.totalQtyDone):0;
     var resRows=s.resources.map(function(r){
       var rateArrived=r.totalQty>0?(r.totalAmount/r.totalQty):0;
-      return '<tr style="border-bottom:1px solid #F5F5F5;">'+
+      return '<tr style="border-bottom:1px solid var(--border);">'+
         '<td style="padding:6px 8px;font-size:11px;">'+r.type+': '+r.party+'</td>'+
         '<td style="padding:6px 8px;font-size:11px;text-align:right;">'+r.totalQty+' '+r.unit+'</td>'+
         '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#2E7D32;">'+inr(r.totalAmount)+'</td>'+
@@ -8302,7 +8302,7 @@ function execRenderExecutedWork(){
         '<div style="font-size:11px;font-weight:800;color:#E65100;">Total Qty Executed: '+s.totalQtyDone+' '+s.unit+'</div>'+
       '</div>'+
       (resRows?'<table style="width:100%;border-collapse:collapse;">'+
-        '<thead><tr style="background:#FAFAFA;">'+
+        '<thead><tr style="background:var(--bg);">'+
           '<th style="padding:5px 8px;font-size:9px;font-weight:800;text-align:left;color:var(--text3);">RESOURCE</th>'+
           '<th style="padding:5px 8px;font-size:9px;font-weight:800;text-align:right;color:var(--text3);">QTY UTILISED</th>'+
           '<th style="padding:5px 8px;font-size:9px;font-weight:800;text-align:right;color:var(--text3);">AMOUNT</th>'+
@@ -8366,7 +8366,7 @@ function execRenderDailyContent(){
     var jmBal    = Math.max(0,jmQty-doneCumul);
     var unit     = item.unit||'';
     var td='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;vertical-align:middle;';
-    return '<tr style="border-bottom:1px solid #F0F0F0;">'+
+    return '<tr style="border-bottom:1px solid var(--border);">'+
       '<td style="'+td+';font-family:monospace;color:#E65100;font-weight:800;">'+item.item_code+'</td>'+
       '<td style="padding:7px 10px;font-size:11px;font-weight:700;vertical-align:middle;">'+( item.short_name||item.description)+'</td>'+
       '<td style="'+td+'">'+fmt(boqQty)+' <span style="font-size:9px;color:var(--text3);">'+unit+'</span></td>'+
@@ -8435,21 +8435,21 @@ function execRenderDailyContent(){
     var g=resGroups[key];
     var allotQty=g.allotQty, usedQty=g.usedQty;
     var pct=allotQty>0?Math.round(usedQty/allotQty*100):0;
-    var col=tCol[g.execType]||'#555';
+    var col=tCol[g.execType]||'var(--text2)';
     var bal=Math.max(0,allotQty-usedQty);
     var overused=usedQty>allotQty;
     var td2='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;';
-    return '<tr style="border-bottom:1px solid #F0F0F0;">'+
+    return '<tr style="border-bottom:1px solid var(--border);">'+
       '<td style="padding:7px 10px;">'+
         '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+col+'15;color:'+col+';">'+( tLbl[g.execType]||g.execType)+'</span>'+
       '</td>'+
       '<td style="padding:7px 10px;font-size:11px;">'+
         (g.resName?'<div style="font-weight:800;color:#1B5E20;">'+g.resName+'</div>':'')+
-        '<div style="font-weight:700;color:#333;'+(g.resName?'font-size:10px;':'font-size:11px;font-weight:800;')+'">'+g.partyName+'</div>'+
+        '<div style="font-weight:700;color:var(--text);'+(g.resName?'font-size:10px;':'font-size:11px;font-weight:800;')+'">'+g.partyName+'</div>'+
       '</td>'+
       '<td style="'+td2+'">'+fmt(allotQty)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
       '<td style="'+td2+';color:'+(overused?'#C62828':col)+';font-weight:800;">'+fmt(usedQty)+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+g.unit+'</span><span style="font-size:9px;color:'+(overused?'#C62828':col)+';"> ('+pct+'%)</span></td>'+
-      '<td style="'+td2+';font-weight:800;color:'+(overused?'#C62828':bal<0.01?'#2E7D32':'#555')+';">'+
+      '<td style="'+td2+';font-weight:800;color:'+(overused?'#C62828':bal<0.01?'#2E7D32':'var(--text2)')+';">'+
         (overused?'+'+fmt(usedQty-allotQty)+' over':fmt(bal))+' <span style="font-size:9px;font-weight:400;color:var(--text3);">'+g.unit+'</span>'+
       '</td>'+
     '</tr>';
@@ -8506,7 +8506,7 @@ function execRenderDailyContent(){
 
     function makeEntryRow(d){
       var resources=[];try{resources=d.resources_used?JSON.parse(d.resources_used):[];}catch(ex){}
-      return '<div style="padding:7px 12px;border-bottom:1px solid #F5F5F5;">'+
+      return '<div style="padding:7px 12px;border-bottom:1px solid var(--border);">'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(resources.length?'5':'0')+'px;">'+
           '<span style="font-size:10px;color:var(--text3);flex-shrink:0;">&#128197; '+(d.date?d.date.split('-').reverse().join('/'):'-')+'</span>'+
           '<span style="font-size:12px;font-weight:800;color:#E65100;">'+d.qty_done+' '+(d.unit||item.unit||'')+'</span>'+
@@ -8665,8 +8665,8 @@ async function execOpenDailyEntry(itemId){
         (fromStore
           ?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>'
           :'<span style="font-size:9px;font-weight:800;background:#FFE0B2;color:#E65100;padding:1px 6px;border-radius:3px;margin-right:4px;">&#128666; Direct</span>')+
-        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#888;">&#8594;</span>':'')+
-        ' <span style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</span>'+
+        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:var(--text3);">&#8594;</span>':'')+
+        ' <span style="font-size:11px;font-weight:700;color:var(--text);">'+a.party_name+'</span>'+
         (fromStore?
           '<div style="font-size:9px;font-weight:700;margin-top:2px;">'+
           '<span style="color:#2E7D32;">In Store: '+(inHand!==null?parseFloat(inHand).toFixed(2):'?')+' '+(a.unit||'')+'</span>'+
@@ -8681,7 +8681,7 @@ async function execOpenDailyEntry(itemId){
         '<div><div style="font-size:9px;color:#E65100;font-weight:700;margin-bottom:2px;">Qty Used *</div>'+
           '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" '+
             (maxQty?'max="'+maxQty+'" placeholder="max '+maxQty+'"':'placeholder="qty"')+
-            ' style="width:80px;padding:4px 6px;font-size:12px;text-align:center;'+(fromStore&&maxQty<=0?'background:#F5F5F5;color:#CCC;':'')+'"'+
+            ' style="width:80px;padding:4px 6px;font-size:12px;text-align:center;'+(fromStore&&maxQty<=0?'background:var(--bg);color:var(--text3);':'')+'"'+
             (fromStore&&maxQty<=0?' disabled':'')+'>'+
         '</div>'+
         '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
@@ -8963,8 +8963,8 @@ async function execEditDailyEntry(entryId, itemId){
       '<div style="flex:1;min-width:0;">'+
         (fromStore?'<span style="font-size:9px;font-weight:800;background:#C8E6C9;color:#1B5E20;padding:1px 6px;border-radius:3px;margin-right:4px;">&#127981; Store</span>':
           '<span style="font-size:9px;font-weight:800;padding:1px 6px;background:'+col+'15;color:'+col+';border-radius:3px;margin-right:4px;">'+(tLbl[a.exec_type]||a.exec_type)+'</span>')+
-        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#888;">&#8594;</span>':'')+
-        ' <span style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</span>'+
+        (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:var(--text3);">&#8594;</span>':'')+
+        ' <span style="font-size:11px;font-weight:700;color:var(--text);">'+a.party_name+'</span>'+
         '<div style="font-size:9px;color:var(--text3);">'+
           (fromStore&&inHand!==null?'In Store: <b style="color:#2E7D32;">'+inHand.toFixed(2)+'</b> | ':'')+'Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b>'+
         '</div>'+
@@ -9155,7 +9155,7 @@ function execRenderBills(){
       var active=BILL_SUBTAB===t.id;
       return '<button onclick="billsSubTab(\''+t.id+'\')" style="'+
         'padding:10px 18px;font-size:11px;font-weight:800;border:none;cursor:pointer;'+
-        'background:'+(active?'white':'#F8FAFC')+';'+
+        'background:'+(active?'var(--card-bg)':'var(--bg)')+';'+
         'color:'+(active?'#1565C0':'#94A3B8')+';'+
         'border-bottom:'+(active?'2px solid #1565C0':'2px solid transparent')+';'+
         'margin-bottom:-2px;">'+t.label+'</button>';
@@ -9203,19 +9203,19 @@ function execRenderBills(){
       return '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:'+col+'10;display:flex;align-items:center;gap:8px;">'+
           '<span style="background:'+col+'20;color:'+col+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;">'+(tLblS[p.type]||p.type)+'</span>'+
-          '<span style="font-size:12px;font-weight:800;color:#1E293B;">'+p.name+'</span>'+
+          '<span style="font-size:12px;font-weight:800;color:var(--text);">'+p.name+'</span>'+
         '</div>'+
-        '<div style="padding:10px 14px;background:#EFF6FF;text-align:right;border-left:1px solid var(--border);">'+
+        '<div style="padding:10px 14px;background:var(--bg);text-align:right;border-left:1px solid var(--border);">'+
           '<div style="font-size:9px;color:#5B7FA6;font-weight:700;">GROSS BILLED</div>'+
           '<div style="font-size:13px;font-weight:900;color:#1A237E;">'+inr(grossBilled)+'</div>'+
-          (totalDedHeld>0?'<div style="font-size:9px;color:#E65100;margin-top:2px;">Net: '+inr(netPayable)+'</div>':'')+ 
+          (totalDedHeld>0?'<div style="font-size:9px;color:#E65100;margin-top:2px;">Net: '+inr(netPayable)+'</div>':'')+
         '</div>'+
-        '<div style="padding:10px 14px;background:#E8F5E9;text-align:right;border-left:1px solid var(--border);">'+
+        '<div style="padding:10px 14px;background:var(--bg);text-align:right;border-left:1px solid var(--border);">'+
           '<div style="font-size:9px;color:#4C8C5C;font-weight:700;">PAID + ADV ADJ</div>'+
           '<div style="font-size:13px;font-weight:900;color:#2E7D32;">'+inr(totalPaid)+'</div>'+
           (advPending>0?'<div style="font-size:9px;color:#F57F17;margin-top:2px;">+'+inr(advPending)+' adv pending</div>':'')+ 
         '</div>'+
-        '<div style="padding:10px 14px;background:'+(balDue>0?'#FFF3E0':'#F1F8E9')+';text-align:right;border-left:1px solid var(--border);">'+
+        '<div style="padding:10px 14px;background:var(--bg);text-align:right;border-left:1px solid var(--border);">'+
           '<div style="font-size:9px;color:'+(balDue>0?'#B08050':'#5B8C5C')+';font-weight:700;">BALANCE DUE</div>'+
           '<div style="font-size:13px;font-weight:900;color:'+balColor+';">'+inr(Math.abs(balDue))+(balDue<0?' Cr':'')+'</div>'+
         '</div>'+
@@ -9323,9 +9323,9 @@ function execRenderBills(){
       var indivRows=hasMultiple?g.items.map(function(x){
         var aPct=x.allotQty>0?Math.min(100,Math.round(x.doneQty/x.allotQty*100)):0;
         var aPctCol=aPct>=100?'#2E7D32':aPct>=50?'#1565C0':'#E65100';
-        return '<tr id="'+grpId+'-rows" style="display:none;background:#F8FAFC;border-bottom:1px solid #F0F0F0;">'+
-          '<td style="padding:5px 10px 5px 24px;font-size:10px;color:#555;">'+
-            (x.boqItem.item_code?'<span style="font-size:9px;font-family:monospace;background:#EEE;padding:1px 4px;border-radius:3px;margin-right:4px;">['+x.boqItem.item_code+']</span>':'')+
+        return '<tr id="'+grpId+'-rows" style="display:none;background:var(--bg);border-bottom:1px solid var(--border);">'+
+          '<td style="padding:5px 10px 5px 24px;font-size:10px;color:var(--text2);">'+
+            (x.boqItem.item_code?'<span style="font-size:9px;font-family:monospace;background:var(--border);padding:1px 4px;border-radius:3px;margin-right:4px;">['+x.boqItem.item_code+']</span>':'')+
             (x.boqItem.short_name||x.boqItem.description||x.resName||'—')+
           '</td>'+
           '<td style="padding:5px 10px;font-size:10px;text-align:right;">'+x.allotQty.toFixed(2)+'</td>'+
@@ -9335,12 +9335,12 @@ function execRenderBills(){
         '</tr>';
       }).join(''):'';
 
-      var trStyle='border-bottom:1px solid #F5F5F5;'+(hasMultiple?'cursor:pointer;':'');
+      var trStyle='border-bottom:1px solid var(--border);'+(hasMultiple?'cursor:pointer;':'');
       var trClick=hasMultiple?' onclick="billsToggleGroup(\'' + grpId + '\')"':'';
       return '<tr style="'+trStyle+'"'+trClick+'>'+
         '<td style="padding:7px 10px;font-size:11px;">'+
           (g.resName?'<div style="font-weight:800;color:#1B5E20;">'+g.resName+(hasMultiple?' <span style="font-size:9px;background:#E3F2FD;color:#1565C0;border-radius:3px;padding:1px 5px;font-weight:700;">'+g.items.length+' items &#9660;</span>':'')+'</div>':'')+
-          '<div style="font-size:10px;color:#555;">'+g.partyName+'</div>'+
+          '<div style="font-size:10px;color:var(--text2);">'+g.partyName+'</div>'+
         '</td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+g.allotQty.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
         '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+inr(g.allotAmt)+'</td>'+
@@ -9374,10 +9374,10 @@ function execRenderBills(){
           return s+si.filter(function(x){return x.scope_id===sc.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
         },0);
         totDoneAmt+=scDoneAmt; totBilledAmt+=scBilled;
-        scopeRowsHtml+='<tr style="border-bottom:1px solid #F5F5F5;background:#FAFCFF;">'+
+        scopeRowsHtml+='<tr style="border-bottom:1px solid var(--border);background:var(--bg);">'+
           '<td style="padding:7px 10px;font-size:11px;">'+
             '<div style="font-weight:800;color:#1B5E20;">'+sc.scope_name+' <span style="font-size:9px;background:#E3F2FD;color:#1565C0;border-radius:3px;padding:1px 5px;font-weight:700;">SCOPE</span></div>'+
-            '<div style="font-size:10px;color:#555;">'+p.name+'</div>'+
+            '<div style="font-size:10px;color:var(--text2);">'+p.name+'</div>'+
           '</td>'+
           '<td style="padding:7px 10px;font-size:11px;text-align:right;">'+(parseFloat(sc.scope_qty)||0).toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+(sc.scope_unit||'')+'</span></td>'+
           '<td style="padding:7px 10px;font-size:11px;text-align:right;">—</td>'+
@@ -9395,7 +9395,7 @@ function execRenderBills(){
       var adds=[];try{adds=b.additions?JSON.parse(b.additions):[];}catch(e){}
       adds.forEach(function(a){
         totalAddAmt+=parseFloat(a.amount)||0;
-        partyAddRows+='<tr style="background:#F9FFF9;border-bottom:1px solid #EEE;">'+
+        partyAddRows+='<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
           '<td colspan="4" style="padding:5px 10px;font-size:10px;">'+
             '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">ADD</span>'+
             a.head+(a.type==='pct'?' ('+a.pct+'%)':'')+
@@ -9415,7 +9415,7 @@ function execRenderBills(){
         totalDedHeld+=parseFloat(d.amount)||0;
         var isTds=!!d.is_tds;
         var dPan=d.pan||execPanFor(p.type,p.name);
-        partyDedRows+='<tr style="background:'+(isTds?'#F5F3FB':'#FFF8F8')+';border-bottom:1px solid #EEE;">'+
+        partyDedRows+='<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
           '<td colspan="4" style="padding:5px 10px;font-size:10px;">'+
             (isTds
               ?'<span style="background:#EDE7F6;color:#4A148C;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">TDS</span>'
@@ -9436,7 +9436,7 @@ function execRenderBills(){
       return s+ded.filter(function(d){return d.is_advance_adj;}).reduce(function(s2,d){return s2+(parseFloat(d.amount)||0);},0);
     },0);
     if(pAdvances.length){
-      partyAdvRows+='<tr style="background:#FFF8E1;border-bottom:1px solid #EEE;">'+
+      partyAdvRows+='<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
         '<td colspan="4" style="padding:6px 10px;font-size:10px;font-weight:800;color:#F57F17;">'+
           '&#128181; Advances Paid ('+pAdvances.length+' entries)'+
           ' <span style="font-size:9px;font-weight:400;color:var(--text3);">Adj: '+inr(totalAdvAdj)+' | Pending: '+inr(totalAdvPaid-totalAdvAdj)+'</span>'+
@@ -9446,7 +9446,7 @@ function execRenderBills(){
       pAdvances.forEach(function(adv){
         var adjAmt=parseFloat(adv.adjusted_amount)||0;
         var pending=Math.max(0,(parseFloat(adv.amount)||0)-adjAmt);
-        partyAdvRows+='<tr style="background:#FFFDE7;border-bottom:1px solid #FFF3CD;">'+
+        partyAdvRows+='<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
           '<td colspan="4" style="padding:4px 10px 4px 22px;font-size:10px;">'+
             (adv.adv_ref?'<b style="font-family:monospace;color:#F57F17;">'+adv.adv_ref+'</b> · ':'')+
             fmtD(adv.date)+(adv.purpose?' — '+adv.purpose:'')+
@@ -9532,7 +9532,7 @@ function execRenderBills(){
       var advAdjTotal=advAdjDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var tdsTotal=tdsDeds.reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
 
-      return '<div style="background:#F8FAFC;border:1px solid #E8EAF6;border-radius:10px;padding:10px 12px;margin-bottom:8px;">'+
+      return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;">'+
         // Bill header
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
           '<span style="background:#E3F2FD;color:#1565C0;font-weight:800;padding:2px 8px;border-radius:4px;font-size:10px;">'+(b.bill_ref||'Bill #'+b.bill_number)+'</span>'+
@@ -9556,7 +9556,7 @@ function execRenderBills(){
           '<tbody>'+
 
           // Work sub-total row
-          '<tr style="border-bottom:1px solid #EEE;">'+
+          '<tr style="border-bottom:1px solid var(--border);">'+
             '<td style="padding:6px 8px;font-weight:700;">Work Done</td>'+
             '<td style="padding:6px 8px;text-align:right;font-weight:800;color:#1565C0;">'+inr(workSubTotal)+'</td>'+
           '</tr>'+
@@ -9564,7 +9564,7 @@ function execRenderBills(){
           // Additions
           adds.map(function(a){
             var isRel=a.is_released_ded?true:false;
-            return '<tr style="border-bottom:1px solid #EEE;background:'+(isRel?'#F0FFF4':'#F9FFF9')+';">'+
+            return '<tr style="border-bottom:1px solid var(--border);background:var(--bg);">'+
               '<td style="padding:5px 8px;">'+
                 '<span style="background:'+(isRel?'#E8F5E9':'#E8F5E9')+';color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">'+(isRel?'REL':'ADD')+'</span>'+
                 a.head+((!isRel&&a.type==='pct')?' ('+a.pct+'%)':'')+
@@ -9582,7 +9582,7 @@ function execRenderBills(){
 
           // Regular deductions
           regularDeds.map(function(d){
-            return '<tr style="border-bottom:1px solid #EEE;background:#FFF8F8;">'+
+            return '<tr style="border-bottom:1px solid var(--border);background:var(--bg);">'+
               '<td style="padding:5px 8px;">'+
                 '<span style="background:#FFF3E0;color:#E65100;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">DED</span>'+
                 d.head+
@@ -9595,7 +9595,7 @@ function execRenderBills(){
 
           // TDS — withheld for Income Tax, never released to the party
           tdsDeds.map(function(d){
-            return '<tr style="border-bottom:1px solid #EEE;background:#F5F3FB;">'+
+            return '<tr style="border-bottom:1px solid var(--border);background:var(--bg);">'+
               '<td style="padding:5px 8px;">'+
                 '<span style="background:#EDE7F6;color:#4A148C;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">TDS</span>'+
                 d.head+' <span style="font-size:9px;color:#4A148C;">(payable to Income Tax'+((d.pan||execPanFor(b.party_type,b.party_name))?', PAN: '+(d.pan||execPanFor(b.party_type,b.party_name)):'')+')</span>'+
@@ -9616,7 +9616,7 @@ function execRenderBills(){
 
           // Released deductions — with undo release option
           relDed.map(function(d){
-            return '<tr style="border-bottom:1px solid #EEE;background:#F9FFF9;">'+
+            return '<tr style="border-bottom:1px solid var(--border);background:var(--bg);">'+
               '<td style="padding:5px 8px;">'+
                 '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">REL</span>'+
                 d.head+' <span style="font-size:9px;color:#2E7D32;">(Released: '+fmtD(d.released_date)+')</span>'+
@@ -9641,7 +9641,7 @@ function execRenderBills(){
             // "Advance Adjusted ₹0", which would look like a bug.
             var isNonCash=d.non_cash;
             var shownAmt=isNonCash?(parseFloat(d.display_amount)||0):d.amount;
-            return '<tr style="border-bottom:1px solid #EEE;background:'+(isNonCash?'#F3E5F5':'#FFF8E1')+';">'+
+            return '<tr style="border-bottom:1px solid var(--border);background:var(--bg);">'+
               '<td style="padding:5px 8px;">'+
                 '<span style="background:'+(isNonCash?'#F3E5F5':'#FFF8E1')+';color:'+(isNonCash?'#4A148C':'#F57F17')+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">'+(isNonCash?'NON-CASH':'PAYMENT')+'</span>'+
                 (isNonCash?'TDS Matched to Advance':'Advance Adjusted')+
@@ -9653,7 +9653,7 @@ function execRenderBills(){
           }).join('')+
 
           // Cash payments — shown in Payments tab; here just show total
-          (bPaidAmt>0?'<tr style="background:#F0FFF4;border-bottom:1px solid #EEE;">'+
+          (bPaidAmt>0?'<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
             '<td style="padding:5px 8px;">'+
               '<span style="background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px;">PAYMENT</span>'+
               bPaid.length+' payment(s) — see Payments tab for details'+
@@ -9662,7 +9662,7 @@ function execRenderBills(){
           '</tr>':'')+
 
           // Balance due
-          '<tr style="background:'+(bBal>0?'#FFF3F3':'#F0FFF4')+'">'+
+          '<tr style="background:var(--bg);">'+
             '<td style="padding:7px 8px;font-weight:900;color:'+(bBal>0?'#C62828':'#2E7D32')+';">'+
               (bBal>0?'Balance Due':'Paid / Excess')+
             '</td>'+
@@ -9676,7 +9676,7 @@ function execRenderBills(){
     }).join(''):'';
 
     var tableHtml='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:500px;">'+
-        '<thead><tr style="background:#F8FAFC;border-bottom:2px solid var(--border);">'+
+        '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);">'+
           '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text3);">RESOURCE / WORK</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED QTY</th>'+
           '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text3);">ALLOTTED AMT</th>'+
@@ -9730,7 +9730,7 @@ function execRenderBills(){
         '>'+
         '<span class="abs-arrow" style="color:'+col+';font-size:11px;">&#9654;</span>'+
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:13px;font-weight:800;color:#1E293B;">'+p.name+'</div>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;color:var(--text);">'+p.name+'</div>'+
         '<button onclick="event.stopPropagation();execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
       '</div>';
       bodyHtml='<div id="'+absCollapseId+'" style="display:none;">'+tableHtml+'</div>';
@@ -9741,7 +9741,7 @@ function execRenderBills(){
         '>'+
         '<span class="gb-arrow" style="color:'+col+';font-size:11px;">&#9654;</span>'+
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:13px;font-weight:800;color:#1E293B;">'+p.name+'</div>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;color:var(--text);">'+p.name+'</div>'+
         '<button onclick="event.stopPropagation();execOpenBill(\''+key+'\',\''+projId+'\')" style="background:'+col+';color:white;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128203; Generate Bill</button>'+
       '</div>';
       var gbInner=billsList
@@ -9752,7 +9752,7 @@ function execRenderBills(){
       // Fallback
       partyHeader='<div style="padding:10px 14px;background:'+col+'10;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
         '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:'+col+'20;color:'+col+';">'+(tLbl[p.type]||p.type)+'</span>'+
-        '<div style="flex:1;font-size:13px;font-weight:800;color:#1E293B;">'+p.name+'</div>'+
+        '<div style="flex:1;font-size:13px;font-weight:800;color:var(--text);">'+p.name+'</div>'+
       '</div>';
       bodyHtml=billsList
         ? '<div style="padding:10px 12px;">'+billsList+'</div>'
@@ -10026,7 +10026,7 @@ function execRenderPaymentsCore(el, projId){
           '<tr style="background:#E8F5E9;"><th style="padding:4px 8px;text-align:left;">Date</th><th style="padding:4px 8px;text-align:left;">Bill Ref</th><th style="padding:4px 8px;text-align:left;">Mode</th><th style="padding:4px 8px;text-align:left;">Ref/UTR</th><th style="padding:4px 8px;text-align:left;">Remarks</th><th style="padding:4px 8px;text-align:right;">Amount</th><th style="padding:4px 8px;"></th></tr>'+
           g.payments.map(function(p){
             var bill=WA_BILLS.find(function(b){return b.id===p.bill_id;})||{};
-            return '<tr style="border-bottom:1px solid #F0F0F0;">'+
+            return '<tr style="border-bottom:1px solid var(--border);">'+
               '<td style="padding:4px 8px;">'+fmtD(p.payment_date)+'</td>'+
               '<td style="padding:4px 8px;font-size:9px;color:var(--text3);">'+(bill.bill_ref||'Bill #'+(bill.bill_number||'?'))+'</td>'+
               '<td style="padding:4px 8px;color:var(--text3);">'+(p.payment_mode||'\u2014')+'</td>'+
@@ -10067,7 +10067,7 @@ function execRenderPaymentsCore(el, projId){
 
     var payCollapseId='pay-party-'+key.replace(/[^a-z0-9]/gi,'-');
 
-    return '<div style="background:#F8FAFC;border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;">'+
+    return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden;">'+
       '<div style="background:'+col+';padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;" '+
         'onclick="var b=document.getElementById(\''+payCollapseId+'\');if(b){var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';this.querySelector(\'.pay-arrow\').textContent=open?\'\u25b6\':\'\u25bc\';}"'+
         '>'+
@@ -11828,13 +11828,13 @@ async function execOpenBill(partyKey,projId){
   // Work selection rows
   var workSelRows=workRows.map(function(w,i){
     var chkId='bl-work-'+i;
-    return '<div class="bl-work-row" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#FAFAFA;">'+
+    return '<div class="bl-work-row" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:var(--bg);">'+
       '<div style="display:flex;align-items:flex-start;gap:8px;">'+
         '<input type="checkbox" id="'+chkId+'" class="bl-work-chk" data-idx="'+i+'" '+(w.unbilled>0?'checked':'')+
           ' style="width:15px;height:15px;accent-color:#1565C0;flex-shrink:0;margin-top:3px;" onchange="blUpdateTotal()">'+
         '<div style="flex:1;">'+
           '<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+w.resName+'</div>'+
-          '<div style="font-size:10px;color:#555;">'+(w.unit||'')+(w.allotIds&&w.allotIds.length>1?' | '+w.allotIds.length+' allotments combined':'')+'</div>'+
+          '<div style="font-size:10px;color:var(--text2);">'+(w.unit||'')+(w.allotIds&&w.allotIds.length>1?' | '+w.allotIds.length+' allotments combined':'')+'</div>'+
           '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:5px;font-size:10px;">'+
             '<div><div style="color:var(--text3);">Allotted</div><b>'+w.allotQty.toFixed(2)+'</b></div>'+
             '<div><div style="color:var(--text3);">Done</div><b style="color:#1565C0;">'+w.doneQty.toFixed(2)+'</b></div>'+
@@ -11891,7 +11891,7 @@ async function execOpenBill(partyKey,projId){
       '<span style="font-size:10px;color:var(--text3);">Bill #'+nextBillNo+'</span>'+
     '</div>'+
     // Work selection
-    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text);margin-bottom:8px;">'+
       '&#9312; Select Works to Include in this Bill'+
     '</div>'+
     (workRows.length
@@ -11993,7 +11993,7 @@ async function execOpenBill(partyKey,projId){
           '<span>Total Released (added to net payable)</span><span>+₹'+Number(totalRelDed).toLocaleString('en-IN')+'</span>'+
         '</div>'+
       '</div>':'')+ 
-    '<div style="font-size:11px;font-weight:800;color:#333;margin:12px 0 8px;">&#9316; Bill Details</div>'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text);margin:12px 0 8px;">&#9316; Bill Details</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
       '<div><label class="flbl">Bill Date *</label><input id="bl-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
       '<div><label class="flbl">Bill Number</label><input id="bl-no" class="finp" value="'+nextBillNo+'"></div>'+
@@ -12742,7 +12742,7 @@ async function execReleaseDeduction(billId,dedId){
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="background:#E8F5E9;border-radius:10px;padding:12px 14px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#2E7D32;margin-bottom:4px;">'+ded.head+'</div>'+
-      '<div style="font-size:11px;color:#555;">Amount: <b>&#8377;'+Number(ded.amount||0).toLocaleString("en-IN")+'</b></div>'+
+      '<div style="font-size:11px;color:var(--text2);">Amount: <b>&#8377;'+Number(ded.amount||0).toLocaleString("en-IN")+'</b></div>'+
       '<div style="font-size:10px;color:var(--text3);">Bill: '+(bill.bill_ref||'Bill #'+bill.bill_number)+' | Bill Date: '+fmtD(bill.bill_date)+'</div>'+
     '</div>'+
     '<label class="flbl">Release Date *</label>'+
@@ -12846,7 +12846,7 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
       '<div id="py-net-display" style="font-size:10px;color:var(--text3);margin-top:3px;"></div>'+
     '</div>'+
     advSection+
-    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">Cash / Bank Payment</div>'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text);margin-bottom:8px;">Cash / Bank Payment</div>'+
     '<div class="g2">'+
       '<div><label class="flbl">Payment Date *</label><input id="py-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
       '<div><label class="flbl">Cash/Bank Amount (₹)</label><input id="py-amount" class="finp" type="number" value="'+Math.max(0,balAmount)+'"></div>'+
@@ -13592,13 +13592,13 @@ async function execEditBill(billId){
     },0);
     var displayAmt=billedAmt>0?billedAmt:w.unbilled;
     var isChecked=billedAmt>0||w.unbilled>0;
-    return '<div class="bl-work-row" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#FAFAFA;">'+
+    return '<div class="bl-work-row" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:var(--bg);">'+
       '<div style="display:flex;align-items:flex-start;gap:8px;">'+
         '<input type="checkbox" id="bl-work-'+i+'" class="bl-work-chk" data-idx="'+i+'" '+(isChecked?'checked':'')+
           ' style="width:15px;height:15px;accent-color:#1565C0;flex-shrink:0;margin-top:3px;" onchange="blUpdateTotal()">'+
         '<div style="flex:1;">'+
           '<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+w.resName+'</div>'+
-          '<div style="font-size:10px;color:#555;">'+(w.unit||'')+(w.allotIds&&w.allotIds.length>1?' | '+w.allotIds.length+' allotments combined':'')+'</div>'+
+          '<div style="font-size:10px;color:var(--text2);">'+(w.unit||'')+(w.allotIds&&w.allotIds.length>1?' | '+w.allotIds.length+' allotments combined':'')+'</div>'+
           '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:5px;font-size:10px;">'+
             '<div><div style="color:var(--text3);">Allotted</div><b>'+w.allotQty.toFixed(2)+'</b></div>'+
             '<div><div style="color:var(--text3);">Done</div><b style="color:#1565C0;">'+w.doneQty.toFixed(2)+'</b></div>'+
@@ -13647,7 +13647,7 @@ async function execEditBill(billId){
       '<div style="flex:1;font-size:13px;font-weight:800;color:#1565C0;">'+partyName+'</div>'+
       '<span style="font-size:10px;font-weight:700;background:#FFF8E1;color:#E65100;padding:2px 8px;border-radius:5px;">Editing: '+(b.bill_ref||'Bill #'+b.bill_number)+'</span>'+
     '</div>'+
-    '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:8px;">① Work Items</div>'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text);margin-bottom:8px;">① Work Items</div>'+
     (workRows.length
       ? workSelRows+
         '<div id="bl-work-subtotal" style="display:flex;justify-content:space-between;align-items:center;background:#E3F2FD;border-radius:8px;padding:8px 12px;margin-top:4px;margin-bottom:10px;">'+
@@ -13715,7 +13715,7 @@ async function execEditBill(billId){
             '<input type="hidden" class="bl-rel-ded-amt" data-head="'+d.head+' (Released: '+(d.bill_ref||'Bill #'+d.bill_no)+')" value="'+Number(d.amount||0)+'">';
         }).join('')+
       '</div>':'')+
-    '<div style="font-size:11px;font-weight:800;color:#333;margin:12px 0 8px;">⑦ Bill Details</div>'+
+    '<div style="font-size:11px;font-weight:800;color:var(--text);margin:12px 0 8px;">⑦ Bill Details</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
       '<div><label class="flbl">Bill Date *</label><input id="bl-date" class="finp" type="date" value="'+(b.bill_date||new Date().toISOString().slice(0,10))+'"></div>'+
       '<div><label class="flbl">Bill Number</label><input id="bl-no" class="finp" value="'+(b.bill_number||'')+'"></div>'+
@@ -14093,10 +14093,10 @@ function grnRender(){
       var boqItem=WA_ITEMS.find(function(i){return i.id===a.boq_item_id;})||{};
       var planRes=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;})||{};
       var resName=planRes.party_name||planRes.resource_category||'';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #F5F5F5;background:var(--card-bg);">'+
+      return '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--card-bg);">'+
         '<div style="flex:1;">'+
           (resName?'<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+''+
-          '<div style="font-size:11px;font-weight:700;color:#333;">'+a.party_name+'</div>'+
+          '<div style="font-size:11px;font-weight:700;color:var(--text);">'+a.party_name+'</div>'+
           '<div style="font-size:10px;color:var(--text3);">'+(boqItem.item_code?'['+boqItem.item_code+'] ':'')+
             'Ordered: '+a.qty+' '+(a.unit||'')+' | Received: '+accepted.toFixed(2)+' | <b style="color:#E65100;">Pending: '+bal.toFixed(2)+'</b></div>'+
         '</div>'+
@@ -14107,7 +14107,7 @@ function grnRender(){
 
     pendingSection=
       '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;margin-bottom:12px;">'+
-        '<div style="padding:10px 14px;background:#F1FBF4;border-bottom:2px solid #C8E6C9;">'+
+        '<div style="padding:10px 14px;background:var(--bg);border-bottom:2px solid var(--border);">'+
           '<div style="font-size:12px;font-weight:800;color:#558B2F;">&#128230; Pending Material Receipt</div>'+
           '<div style="font-size:10px;color:#5C8A5C;">Materials ordered but GRN not yet created</div>'+
         '</div>'+
@@ -14119,12 +14119,12 @@ function grnRender(){
   var grnList='';
   if(GRN_ITEMS.length){
     var grnRows=GRN_ITEMS.map(function(g){
-      var stCol={accepted:'#2E7D32',rejected:'#C62828',partial:'#F57F17'}[g.status]||'#555';
+      var stCol={accepted:'#2E7D32',rejected:'#C62828',partial:'#F57F17'}[g.status]||'var(--text2)';
       var stLbl={accepted:'Accepted',rejected:'Rejected',partial:'Partial'}[g.status]||g.status;
       var allot=GRN_ALLOTS.find(function(a){return a.id===g.allot_id;})||{};
       var planRes=WA_PLANNED.find(function(p){return p.id===allot.boq_exec_resource_id;})||{};
       var resName=planRes.party_name||planRes.resource_category||allot.party_name||'';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #F5F5F5;">'+
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);">'+
         '<div style="flex:1;">'+
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">'+
             '<span style="font-size:10px;font-weight:700;">'+g.grn_number+'</span>'+
@@ -14134,7 +14134,7 @@ function grnRender(){
               : '<span style="font-size:9px;background:#FFF3E0;color:#E65100;padding:1px 6px;border-radius:4px;font-weight:700;">&#9203; Pending Approval</span>')+
           '</div>'+
           (resName?'<div style="font-size:12px;font-weight:800;color:#1B5E20;">'+resName+'</div>':'')+''+
-          '<div style="font-size:11px;font-weight:700;color:#333;">'+allot.party_name+'</div>'+
+          '<div style="font-size:11px;font-weight:700;color:var(--text);">'+allot.party_name+'</div>'+
           '<div style="font-size:10px;color:var(--text3);">'+
             'Ordered: '+(allot.qty||'?')+' '+(allot.unit||'')+' | '+
             'Ordered: '+(allot.qty||'?')+' '+(allot.unit||'')+' | '+
@@ -14162,8 +14162,8 @@ function grnRender(){
 
     grnList=
       '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;">'+
-        '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:2px solid #DDD;">'+
-          '<div style="font-size:12px;font-weight:800;color:#333;">&#128196; GRN Records</div>'+
+        '<div style="padding:10px 14px;background:var(--bg);border-bottom:2px solid var(--border);">'+
+          '<div style="font-size:12px;font-weight:800;color:var(--text);">&#128196; GRN Records</div>'+
         '</div>'+grnRows+
       '</div>';
   }
@@ -14696,7 +14696,7 @@ function storeRender(){
     var isLow=inHand<=g.min_qty&&g.min_qty>0;
     // Use first id for issue/delete (covers single item); for grouped use all ids
     var firstId=g.ids[0];
-    return '<tr style="border-bottom:1px solid #F0F0F0;'+(i%2===0?'':'background:#FAFAFA;')+'">'+
+    return '<tr style="border-bottom:1px solid var(--border);'+(i%2===0?'':'background:var(--bg);')+'">'+
       '<td style="padding:9px 10px;font-size:12px;font-weight:800;">'+g.item_name+
         (isLow?'<span style="font-size:9px;background:#FFEBEE;color:#C62828;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:5px;">Low Stock</span>':'')+
         (g.ids.length>1?'<span style="font-size:9px;background:#E8F5E9;color:#2E7D32;padding:1px 5px;border-radius:3px;margin-left:4px;">'+g.ids.length+' entries</span>':'')+
@@ -14743,7 +14743,7 @@ function storeRender(){
       var projLogs=STORE_ISSUE_LOG.filter(function(l){return l.project_id===(STORE_PROJ_ID||'');});
       if(!projLogs.length) return '';
       return '<div style="background:var(--card-bg);border-radius:14px;margin-top:12px;overflow:hidden;">'+
-        '<div style="padding:10px 14px;font-size:12px;font-weight:800;color:#6A1B9A;border-bottom:1px solid #F0F0F0;">&#128221; Issue Log</div>'+
+        '<div style="padding:10px 14px;font-size:12px;font-weight:800;color:#6A1B9A;border-bottom:1px solid var(--border);">&#128221; Issue Log</div>'+
         '<div style="overflow-x:auto;">'+
         '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
           '<thead><tr style="background:#F3E5F5;">'+
