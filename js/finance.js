@@ -473,16 +473,7 @@ function pcPayAndSave(){
   PC_PENDING_PAY={
     emp:emp, cat:cat, amount:amount, desc:desc, allocations:allocations, method:dist,
     date:gv('pce-date'), bill:gv('pce-bill'), remarks:gv('pce-remarks'),
-    upiId:upiId, payeeName:gv('pce-upi-name')||'',
-    // A unique transaction reference — UPI apps' own fraud checks treat
-    // an intent missing "tr" as more likely to be an unsolicited/scripted
-    // payment request and can silently decline it ("declined for
-    // security reasons... try using a mobile number, UPI ID, or QR
-    // code"), so every NPCI-compliant UPI link is expected to carry one.
-    // Generated once per pending payment so retrying with the same or a
-    // different app reuses the same reference rather than looking like a
-    // fresh transaction each time.
-    tr:'RDX'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase()
+    upiId:upiId, payeeName:gv('pce-upi-name')||''
   };
 
   // Ask which UPI app to pay with, rather than jumping straight to the
@@ -538,12 +529,20 @@ function pcOpenChosenUpiApp(i){
   pcShowUtrConfirm();
 }
 
+// Deliberately omits "am" (amount) and "tr" (transaction reference).
+// UPI apps' fraud filters treat a pre-filled-amount request to a
+// personal/non-merchant VPA, launched from a website, as the exact
+// shape of a fake-invoice scam — that's what was triggering "declined
+// for security reasons" even with a valid tr, per Google's own
+// developer docs (a raw upi://pay link isn't the sanctioned way to
+// collect payment from a website without being a verified NPCI
+// merchant). Opening with just who to pay, and letting the amount be
+// typed inside the app, reads as an ordinary person-initiated payment
+// instead and isn't blocked the same way.
 function pcLaunchUpiApp(p){
   var uri=(p.upiScheme||'upi://pay')+'?pa='+encodeURIComponent(p.upiId)+
     '&pn='+encodeURIComponent(p.payeeName||'Vendor')+
-    '&am='+encodeURIComponent(p.amount.toFixed(2))+
-    '&cu=INR&tn='+encodeURIComponent((p.desc||'').slice(0,50))+
-    '&tr='+encodeURIComponent(p.tr||('RDX'+Date.now()));
+    '&cu=INR&tn='+encodeURIComponent((p.desc||'').slice(0,50));
   window.location.href=uri;
 }
 
@@ -560,20 +559,21 @@ function pcShowUtrConfirm(){
   body.innerHTML=
     '<div style="text-align:center;padding:6px 0 14px;">'+
       '<div style="font-size:15px;font-weight:800;margin-bottom:4px;">Complete the payment in your UPI app</div>'+
-      '<div style="font-size:12px;color:var(--text3);">Paying '+pcFmt(p.amount)+' to '+(p.payeeName||p.upiId)+'</div>'+
+      '<div style="font-size:12px;color:var(--text3);">Your UPI app opens to '+(p.payeeName||p.upiId)+' — enter the amount yourself and pay</div>'+
     '</div>'+
-    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--text3);">'+
-      'If your UPI app did not open on its own, tap below to try again.'+
-    '</div>'+
-    '<button type="button" onclick="pcRetryUpiApp()" style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128241; Open UPI App Again</button>'+
-    '<button type="button" onclick="pcShowUpiAppChooser()" style="width:100%;background:none;color:var(--navy);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:12px;">Try a Different App</button>'+
-    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;">'+
-      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:6px;">If the app itself declines the request ("security reasons" / "use a UPI ID or QR code"), open it yourself and pay this UPI ID manually:</div>'+
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;">'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:8px;">The amount isn\'t pre-filled — UPI apps block pre-filled-amount requests coming from a website as a fraud check, so enter these yourself inside the app:</div>'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">'+
+        '<div style="font-size:12.5px;"><span style="color:var(--text3);">Amount</span> <b style="font-size:14px;">'+pcFmt(p.amount)+'</b></div>'+
+        '<button type="button" onclick="pcCopyAmount()" style="flex-shrink:0;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:700;cursor:pointer;color:var(--text);">Copy</button>'+
+      '</div>'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
-        '<div style="font-size:12.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+p.upiId+'</div>'+
+        '<div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="color:var(--text3);">UPI ID</span> <b>'+p.upiId+'</b></div>'+
         '<button type="button" onclick="pcCopyUpiId()" style="flex-shrink:0;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:700;cursor:pointer;color:var(--text);">Copy</button>'+
       '</div>'+
     '</div>'+
+    '<button type="button" onclick="pcRetryUpiApp()" style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128241; Open UPI App Again</button>'+
+    '<button type="button" onclick="pcShowUpiAppChooser()" style="width:100%;background:none;color:var(--navy);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:14px;">Try a Different App</button>'+
     '<label class="flbl">UTR / Transaction Reference No.</label>'+
     '<input class="finp" id="pc-pay-utr" placeholder="e.g. 309812345678" autocomplete="off">'+
     '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">Find this on your UPI app\'s payment success screen or SMS. No UTR yet? Save now and add it later from the list.</div>';
@@ -590,6 +590,18 @@ function pcCopyUpiId(){
       .catch(function(){ toast('Could not copy — the UPI ID is '+p.upiId,'warning'); });
   } else {
     toast('Could not copy — the UPI ID is '+p.upiId,'warning');
+  }
+}
+
+function pcCopyAmount(){
+  var p=PC_PENDING_PAY; if(!p) return;
+  var val=p.amount.toFixed(2);
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(val)
+      .then(function(){ toast('Amount copied','success'); })
+      .catch(function(){ toast('Could not copy — the amount is '+pcFmt(p.amount),'warning'); });
+  } else {
+    toast('Could not copy — the amount is '+pcFmt(p.amount),'warning');
   }
 }
 
