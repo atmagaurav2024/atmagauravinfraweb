@@ -348,7 +348,7 @@ function openDetail(type,id){
   var rows=fields.map(function(f){
     var v=item[f.k];
     if(v===undefined||v===null||v==='') return '';
-    return '<div style="display:flex;padding:8px 0;border-bottom:1px solid #F5F5F5;">'+
+    return '<div style="display:flex;padding:8px 0;border-bottom:1px solid var(--border);">'+
       '<div style="font-size:10px;color:var(--text3);font-weight:700;width:110px;flex-shrink:0;">'+f.l+'</div>'+
       '<div style="font-size:12px;font-weight:700;flex:1;word-break:break-word;">'+v+'</div></div>';
   }).join('');
@@ -358,8 +358,8 @@ function openDetail(type,id){
   document.getElementById('det-body').innerHTML='<div style="padding:10px 14px;">'+rows+'</div>';
   document.getElementById('det-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button> '+
-    '<button class="btn" style="background:#E3F2FD;color:#1565C0;font-weight:800;" onclick="openEditForm(\''+type+'\',\''+safeId+'\')">✎ Edit</button> '+
-    '<button class="btn" style="background:#FFEBEE;color:#C62828;font-weight:800;" onclick="confirmDelete(\''+type+'\',\''+safeId+'\',\''+safeName+'\')">&times; Delete</button>';
+    '<button class="btn" style="background:var(--bg);color:#1565C0;font-weight:800;" onclick="openEditForm(\''+type+'\',\''+safeId+'\')">✎ Edit</button> '+
+    '<button class="btn" style="background:var(--bg);color:#C62828;font-weight:800;" onclick="confirmDelete(\''+type+'\',\''+safeId+'\',\''+safeName+'\')">&times; Delete</button>';
   openSheet('ov-det','sh-det');
 }
 
