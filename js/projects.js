@@ -6293,6 +6293,16 @@ function execRenderSales(){
             pendingClientAdvs.map(function(adv,ai){
               var hb=caRemainingByHead(adv);
               var remaining=hb.work+hb.gst;
+              // The advance's own original breakdown (not what's left after
+              // adjustment) decides whether GST/TDS were ever bifurcated out
+              // of the base amount at the time the advance was recorded —
+              // only that decides whether there's a GST bucket to offer here
+              // at all (Work Amt can still be adjusted on its own either way).
+              var bd=caParseBreakdown(adv);
+              var gstMissing=bd.gst<=0, tdsMissing=bd.tds<=0;
+              var missingLabel=(gstMissing&&tdsMissing)?'GST and TDS':(gstMissing?'GST':'TDS');
+              var hintHtml=(hb.work>0&&(gstMissing||tdsMissing))?
+                '<div style="font-size:9.5px;color:#8E24AA;font-style:italic;padding:2px 0 5px 23px;">Only Work Amt ('+inr(hb.work)+') is available to adjust from this advance — if you want to adjust '+missingLabel+' from advance, the same shall be bifurcated in the advance payment record.</div>':'';
               return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #E1BEE7;">'+
                 '<input type="checkbox" id="ca-adj-'+ai+'" class="ca-adj-chk" data-adv-id="'+adv.id+'" data-max="'+remaining+'" checked style="width:15px;height:15px;accent-color:#4A148C;flex-shrink:0;" onchange="caAdjToggle('+ai+')">'+
                 '<div style="flex:1;font-size:11px;">'+
@@ -6302,7 +6312,8 @@ function execRenderSales(){
                 '<input id="ca-adj-amt-'+ai+'" type="number" class="ca-adj-amt-inp" data-adv-idx="'+ai+'" data-hmax="'+remaining+'" value="'+remaining+'" min="0" max="'+remaining+'" '+
                   'style="width:110px;padding:3px 8px;border:1px solid #E1BEE7;border-radius:5px;font-size:12px;font-weight:800;color:#4A148C;text-align:right;" onchange="caAdjAmtChange(this)">'+
                 '<span style="font-size:10px;color:var(--text3);">of '+inr(remaining)+'</span>'+
-              '</div>';
+              '</div>'+
+              hintHtml;
             }).join('')+
           '</div>':'')+
 
