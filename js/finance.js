@@ -476,8 +476,53 @@ function pcPayAndSave(){
     upiId:upiId, payeeName:gv('pce-upi-name')||''
   };
 
-  pcLaunchUpiApp(PC_PENDING_PAY);
-  // The tab is about to lose focus to the UPI app; show the
+  // Ask which UPI app to pay with, rather than jumping straight to the
+  // generic upi://pay link — that relies on the phone's OS to show an
+  // app picker, and it often doesn't: Android skips the picker once a
+  // default has been set for that link type, and iOS has no picker for
+  // custom URL schemes at all, so it silently opens just one app.
+  // Launching the chosen app's own scheme directly sidesteps both.
+  pcShowUpiAppChooser();
+}
+
+// Scheme prefixes for each app's own UPI deep link, each followed by
+// the same ?pa=&pn=&am=&cu=INR&tn= query string built in pcLaunchUpiApp.
+// "Other UPI App" falls back to the generic upi://pay scheme, which
+// still works standalone (e.g. for apps not listed here) and is where
+// the OS's own picker — if the phone shows one — takes over.
+var PC_UPI_APPS=[
+  {label:'Google Pay', icon:'Ⓘ', scheme:'gpay://upi/pay'},
+  {label:'PhonePe',    icon:'📱', scheme:'phonepe://pay'},
+  {label:'Paytm',      icon:'💠', scheme:'paytmmp://pay'},
+  {label:'BHIM',       icon:'🇮🇳', scheme:'bhim://pay'},
+  {label:'Other UPI App', icon:'🏦', scheme:'upi://pay'}
+];
+
+function pcShowUpiAppChooser(){
+  var p=PC_PENDING_PAY; if(!p) return;
+  var title=document.getElementById('pc-sheet-title'); if(title) title.textContent='Choose Payment App';
+  var body=document.getElementById('pc-sheet-body');
+  var foot=document.getElementById('pc-sheet-foot');
+  if(!body||!foot) return;
+  body.innerHTML=
+    '<div style="text-align:center;padding:4px 0 14px;">'+
+      '<div style="font-size:15px;font-weight:800;margin-bottom:4px;">Pay '+pcFmt(p.amount)+' to '+(p.payeeName||p.upiId)+'</div>'+
+      '<div style="font-size:12px;color:var(--text3);">Choose which UPI app to pay with</div>'+
+    '</div>'+
+    PC_UPI_APPS.map(function(a,i){
+      return '<button type="button" onclick="pcOpenChosenUpiApp('+i+')" style="width:100%;display:flex;align-items:center;gap:10px;background:var(--bg);color:var(--text);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">'+
+        '<span style="font-size:18px;">'+a.icon+'</span>'+a.label+
+      '</button>';
+    }).join('');
+  foot.innerHTML='<button class="btn btn-outline" onclick="pcCancelPendingPay()">Cancel</button>';
+}
+
+function pcOpenChosenUpiApp(i){
+  var p=PC_PENDING_PAY; if(!p) return;
+  var app=PC_UPI_APPS[i]; if(!app) return;
+  p.upiScheme=app.scheme;
+  pcLaunchUpiApp(p);
+  // The tab is about to lose focus to the chosen app; show the
   // confirm-and-enter-UTR step right away so it's waiting when the
   // person comes back (a blocked/failed app launch just leaves this
   // step showing, with a button to try opening the app again).
@@ -485,7 +530,7 @@ function pcPayAndSave(){
 }
 
 function pcLaunchUpiApp(p){
-  var uri='upi://pay?pa='+encodeURIComponent(p.upiId)+
+  var uri=(p.upiScheme||'upi://pay')+'?pa='+encodeURIComponent(p.upiId)+
     '&pn='+encodeURIComponent(p.payeeName||'Vendor')+
     '&am='+encodeURIComponent(p.amount.toFixed(2))+
     '&cu=INR&tn='+encodeURIComponent((p.desc||'').slice(0,50));
@@ -510,7 +555,8 @@ function pcShowUtrConfirm(){
     '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--text3);">'+
       'If your UPI app did not open on its own, tap below to try again.'+
     '</div>'+
-    '<button type="button" onclick="pcRetryUpiApp()" style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:14px;">&#128241; Open UPI App Again</button>'+
+    '<button type="button" onclick="pcRetryUpiApp()" style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128241; Open UPI App Again</button>'+
+    '<button type="button" onclick="pcShowUpiAppChooser()" style="width:100%;background:none;color:var(--navy);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:14px;">Try a Different App</button>'+
     '<label class="flbl">UTR / Transaction Reference No.</label>'+
     '<input class="finp" id="pc-pay-utr" placeholder="e.g. 309812345678" autocomplete="off">'+
     '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">Find this on your UPI app\'s payment success screen or SMS. No UTR yet? Save now and add it later from the list.</div>';
