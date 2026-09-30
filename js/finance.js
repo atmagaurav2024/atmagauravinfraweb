@@ -473,7 +473,16 @@ function pcPayAndSave(){
   PC_PENDING_PAY={
     emp:emp, cat:cat, amount:amount, desc:desc, allocations:allocations, method:dist,
     date:gv('pce-date'), bill:gv('pce-bill'), remarks:gv('pce-remarks'),
-    upiId:upiId, payeeName:gv('pce-upi-name')||''
+    upiId:upiId, payeeName:gv('pce-upi-name')||'',
+    // A unique transaction reference — UPI apps' own fraud checks treat
+    // an intent missing "tr" as more likely to be an unsolicited/scripted
+    // payment request and can silently decline it ("declined for
+    // security reasons... try using a mobile number, UPI ID, or QR
+    // code"), so every NPCI-compliant UPI link is expected to carry one.
+    // Generated once per pending payment so retrying with the same or a
+    // different app reuses the same reference rather than looking like a
+    // fresh transaction each time.
+    tr:'RDX'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase()
   };
 
   // Ask which UPI app to pay with, rather than jumping straight to the
@@ -533,7 +542,8 @@ function pcLaunchUpiApp(p){
   var uri=(p.upiScheme||'upi://pay')+'?pa='+encodeURIComponent(p.upiId)+
     '&pn='+encodeURIComponent(p.payeeName||'Vendor')+
     '&am='+encodeURIComponent(p.amount.toFixed(2))+
-    '&cu=INR&tn='+encodeURIComponent((p.desc||'').slice(0,50));
+    '&cu=INR&tn='+encodeURIComponent((p.desc||'').slice(0,50))+
+    '&tr='+encodeURIComponent(p.tr||('RDX'+Date.now()));
   window.location.href=uri;
 }
 
@@ -556,13 +566,31 @@ function pcShowUtrConfirm(){
       'If your UPI app did not open on its own, tap below to try again.'+
     '</div>'+
     '<button type="button" onclick="pcRetryUpiApp()" style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128241; Open UPI App Again</button>'+
-    '<button type="button" onclick="pcShowUpiAppChooser()" style="width:100%;background:none;color:var(--navy);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:14px;">Try a Different App</button>'+
+    '<button type="button" onclick="pcShowUpiAppChooser()" style="width:100%;background:none;color:var(--navy);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:12px;">Try a Different App</button>'+
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;">'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:6px;">If the app itself declines the request ("security reasons" / "use a UPI ID or QR code"), open it yourself and pay this UPI ID manually:</div>'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+        '<div style="font-size:12.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+p.upiId+'</div>'+
+        '<button type="button" onclick="pcCopyUpiId()" style="flex-shrink:0;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:700;cursor:pointer;color:var(--text);">Copy</button>'+
+      '</div>'+
+    '</div>'+
     '<label class="flbl">UTR / Transaction Reference No.</label>'+
     '<input class="finp" id="pc-pay-utr" placeholder="e.g. 309812345678" autocomplete="off">'+
     '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">Find this on your UPI app\'s payment success screen or SMS. No UTR yet? Save now and add it later from the list.</div>';
   foot.innerHTML=
     '<button class="btn btn-outline" onclick="pcCancelPendingPay()">Cancel</button>'+
     '<button class="btn btn-green" onclick="pcConfirmUtrAndSave()">&#10003; Confirm &amp; Save</button>';
+}
+
+function pcCopyUpiId(){
+  var p=PC_PENDING_PAY; if(!p) return;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(p.upiId)
+      .then(function(){ toast('UPI ID copied','success'); })
+      .catch(function(){ toast('Could not copy — the UPI ID is '+p.upiId,'warning'); });
+  } else {
+    toast('Could not copy — the UPI ID is '+p.upiId,'warning');
+  }
 }
 
 function pcCancelPendingPay(){
