@@ -21,7 +21,7 @@
 html,body{height:100%;overflow:hidden;}
 
 /* App-level screens */
-.app-screen{position:fixed;inset:0;display:none;flex-direction:column;overflow:hidden;z-index:100;background:#F0F4F8;}
+.app-screen{position:fixed;inset:0;display:none;flex-direction:column;overflow:hidden;z-index:100;background:var(--bg);}
 /* Sheets/overlays are nested inside .app-screen, and position:fixed always
    starts a new stacking context — so a sheet's own z-index (600) only wins
    against things OUTSIDE its screen if the screen itself is raised while
