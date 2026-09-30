@@ -170,7 +170,7 @@ function empAdvancesHTML(){
           '<td style="text-align:right;font-weight:800;color:'+(done?'#2E7D32':'#C62828')+';">'+(done?'CLEARED':fmtINR(bal))+'</td>'+
           '<td>'+(canEdit?'<button class="btn btn-sm btn-red" onclick="advDelete(\''+a.id+'\')" title="Delete this advance">&#128465;</button>':'')+'</td></tr>';
       }).join('')+
-      '<tr style="background:#E8EAF6;font-weight:900;"><td colspan="4">TOTAL</td>'+
+      '<tr style="background:var(--bg);font-weight:900;"><td colspan="4">TOTAL</td>'+
         '<td style="text-align:right;">'+fmtINR(totAdv)+'</td>'+
         '<td style="text-align:right;">'+fmtINR(totRec)+'</td>'+
         '<td style="text-align:right;">'+fmtINR(totBal)+'</td><td></td></tr>'+
@@ -191,7 +191,7 @@ function advOpenNew(){
     '<label class="flbl">Paid By *</label><select class="fsel" id="adv-mode"><option>Bank</option><option>Cash</option></select>'+
     '<label class="flbl">Reference / Cheque / UTR</label><input class="finp" id="adv-ref">'+
     '<label class="flbl">Remarks</label><input class="finp" id="adv-remarks" placeholder="Reason for advance">'+
-    '<div style="background:#E8EAF6;border-radius:8px;padding:10px;margin:10px 0;">'+
+    '<div style="background:var(--bg);border-radius:8px;padding:10px;margin:10px 0;">'+
       '<div style="font-size:11px;font-weight:900;color:var(--navy);margin-bottom:6px;">RECOVERY</div>'+
       '<label class="flbl" style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:0 0 4px;">'+
         '<input type="radio" name="adv-rt" id="adv-rt-emi" value="emi" checked style="width:auto;margin:0;" onchange="advCalcEmi()"> Split into monthly instalments</label>'+
@@ -1026,7 +1026,7 @@ function empSalaryHTML(){
         '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" id="sal-row-'+e.id+'">'+
 
           // ── Header row with checkbox + collapse toggle ────────────────
-          '<div style="padding:10px 14px;background:#F8FAFC;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="salToggleRow(\''+e.id+'\',event)">'+
+          '<div style="padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="salToggleRow(\''+e.id+'\',event)">'+
             '<input type="checkbox" id="sal-sel-'+e.id+'" checked style="width:18px;height:18px;accent-color:#1B5E20;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation()">'+
             '<div style="flex:1;">'+
               '<div style="font-size:13px;font-weight:800;">'+name+'</div>'+
@@ -1730,7 +1730,7 @@ function empIncrementHTML(){
     }
 
     return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:10px 14px;background:#E3F2FD;display:flex;align-items:center;gap:10px;">'+
+      '<div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;gap:10px;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:13px;font-weight:800;">'+name+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(e.employee_code||e.emp_id||'—')+' &bull; '+
@@ -1747,7 +1747,7 @@ function empIncrementHTML(){
 function empOpenIncrement(empId, empName, curBasic){
   document.getElementById('emp-sheet-title').textContent = 'Increment — '+empName;
   document.getElementById('emp-sheet-body').innerHTML =
-    '<div style="background:#E3F2FD;border-radius:12px;padding:12px 14px;margin-bottom:14px;">'+
+    '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:14px;">'+
       '<div style="font-size:12px;color:var(--text3);">Current Basic</div>'+
       '<div style="font-size:22px;font-weight:900;color:#1565C0;">₹'+Number(curBasic).toLocaleString('en-IN')+'</div>'+
     '</div>'+
@@ -2020,7 +2020,7 @@ function empTransferHTML(){
       '</div>';
     }
     return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:10px 14px;background:#F3E5F5;display:flex;align-items:center;gap:8px;">'+
+      '<div style="padding:10px 14px;background:var(--bg);display:flex;align-items:center;gap:8px;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:13px;font-weight:800;">'+name+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(e.designation||e.role||'—')+' · '+(e.department||'—')+'</div>'+
@@ -2113,7 +2113,7 @@ async function empSaveTransfer(){
     var _det = {date:date,newDept:dept,newProject:proj,remarks:reason};
     document.getElementById('emp-sheet-title').textContent='Transfer Recorded';
     document.getElementById('emp-sheet-body').innerHTML=
-      '<div style="background:#F3E5F5;border-radius:14px;padding:20px;text-align:center;">'+
+      '<div style="background:var(--bg);border-radius:14px;padding:20px;text-align:center;">'+
         '<div style="font-size:36px;margin-bottom:10px;">&#128260;</div>'+
         '<div style="font-size:16px;font-weight:900;color:#6A1B9A;">Transfer Recorded</div>'+
         (dept?'<div style="font-size:13px;color:var(--text3);margin-top:6px;">New Dept: <b>'+dept+'</b></div>':'')+
@@ -2197,7 +2197,7 @@ async function empSavePromotion(){
     toast('Promotion recorded!','success');
     document.getElementById('emp-sheet-title').textContent='Promotion Recorded';
     document.getElementById('emp-sheet-body').innerHTML=
-      '<div style="background:#E3F2FD;border-radius:14px;padding:20px;text-align:center;">'+
+      '<div style="background:var(--bg);border-radius:14px;padding:20px;text-align:center;">'+
         '<div style="font-size:36px;margin-bottom:10px;">&#11014;</div>'+
         '<div style="font-size:16px;font-weight:900;color:#1565C0;">Promotion Recorded</div>'+
         (role?'<div style="font-size:13px;color:var(--text3);margin-top:6px;">New Role: <b>'+role+'</b></div>':'')+
@@ -2301,7 +2301,7 @@ function hrPayLogForEmp(empId){
 function empOpenResignation(empId, empName){
   document.getElementById('emp-sheet-title').textContent = 'Resignation — '+empName;
   document.getElementById('emp-sheet-body').innerHTML =
-    '<div style="background:#FFEBEE;border-radius:12px;padding:12px 14px;margin-bottom:14px;">'+
+    '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:14px;">'+
       '<div style="font-size:13px;font-weight:800;color:#C62828;">&#9888; This will mark '+empName+' as Resigned</div>'+
       '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Employee will be moved to the Resigned tab. All records will be preserved.</div>'+
     '</div>'+
@@ -2441,7 +2441,7 @@ function empViewDetail(id){
         docLink(e.pan_doc_url,'PAN Card')+
       '</div>':'')+
     (e.rejection_reason?
-      '<div style="background:#FFF3E0;border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
+      '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
         '<div style="font-size:11px;font-weight:800;color:#E65100;margin-bottom:4px;">Notes</div>'+
         '<div style="font-size:12px;color:var(--text);">'+e.rejection_reason+'</div>'+
       '</div>':'')+
@@ -2649,7 +2649,7 @@ function empPayHTML(){
             '<div style="font-size:18px;font-weight:900;color:white;">&#8377;'+Number(latest.net_salary||0).toLocaleString('en-IN')+'</div>'+
           '</div>'+
           // Footer: date + delete
-          '<div style="padding:8px 10px;background:#F8FAFC;display:flex;justify-content:space-between;align-items:center;">'+
+          '<div style="padding:8px 10px;background:var(--bg);display:flex;justify-content:space-between;align-items:center;">'+
             '<div style="font-size:10px;color:var(--text3);">w.e.f. '+latest.effective_date+(latest.remarks?' &bull; '+latest.remarks.replace('Increment: ',''):'')+'</div>'+
             '<button data-pay-del-id="'+latest.id+'" data-pay-del-name="'+safeN(name)+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:800;cursor:pointer;">&#128465; Delete</button>'+
           '</div>'+
@@ -2659,7 +2659,7 @@ function empPayHTML(){
     }
 
     return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
-      '<div style="padding:12px 14px;background:#F8FAFC;display:flex;align-items:center;gap:8px;">'+
+      '<div style="padding:12px 14px;background:var(--bg);display:flex;align-items:center;gap:8px;">'+
         '<div style="flex:1;">'+
           '<div style="font-size:14px;font-weight:800;">'+name+'</div>'+
           '<div style="font-size:11px;color:var(--text3);">'+(e.employee_code||e.emp_id||'—')+' &bull; '+(e.designation||e.role||'—')+' &bull; '+(e.department||'—')+'</div>'+
@@ -3321,7 +3321,7 @@ function empOpenPay(empId, empName){
           // Dynamic earnings
           '<div id="pay-earnings-list"></div>'+
           // Gross
-          '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:#E8F5E9;border-radius:7px;margin-top:6px;">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:var(--bg);border-radius:7px;margin-top:6px;">'+
             '<span style="font-size:11px;font-weight:800;color:#2E7D32;">Gross</span>'+
             '<span id="pf-gross-display" style="font-size:14px;font-weight:900;color:#2E7D32;">₹0</span>'+
           '</div>'+
@@ -3346,7 +3346,7 @@ function empOpenPay(empId, empName){
             '</div>'+
             '<div id="pf-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
               '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Emp (12%)</div><input id="pf-pfe" type="number" step="1" value="'+(v.pf_employee||0)+'" oninput="payCalc()" style="width:100%;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;box-sizing:border-box;"></div>'+
-              '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Empr (12%)</div><input id="pf-pfr" type="number" step="1" value="'+(v.pf_employer||0)+'" readonly style="width:100%;text-align:right;border:1px solid #eee;border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;opacity:.6;box-sizing:border-box;background:#F8F8F8;"></div>'+
+              '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Empr (12%)</div><input id="pf-pfr" type="number" step="1" value="'+(v.pf_employer||0)+'" readonly style="width:100%;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;opacity:.6;box-sizing:border-box;background:var(--bg);color:var(--text);"></div>'+
             '</div>'+
           '</div>'+
 
@@ -3360,7 +3360,7 @@ function empOpenPay(empId, empName){
             '</div>'+
             '<div id="esic-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">'+
               '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Emp (0.75%)</div><input id="pf-esice" type="number" step="1" value="'+(v.esic_employee||0)+'" oninput="payCalc()" style="width:100%;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;box-sizing:border-box;"></div>'+
-              '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Empr (3.25%)</div><input id="pf-esicr" type="number" step="1" value="'+(v.esic_employer||0)+'" readonly style="width:100%;text-align:right;border:1px solid #eee;border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;opacity:.6;box-sizing:border-box;background:#F8F8F8;"></div>'+
+              '<div><div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Empr (3.25%)</div><input id="pf-esicr" type="number" step="1" value="'+(v.esic_employer||0)+'" readonly style="width:100%;text-align:right;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;font-family:Nunito,sans-serif;outline:none;opacity:.6;box-sizing:border-box;background:var(--bg);color:var(--text);"></div>'+
             '</div>'+
           '</div>'+
 
@@ -3380,7 +3380,7 @@ function empOpenPay(empId, empName){
           '<div id="pay-deductions-list"></div>'+
 
           // Total deductions
-          '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:#FFEBEE;border-radius:7px;margin-top:6px;">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 8px;background:var(--bg);border-radius:7px;margin-top:6px;">'+
             '<span style="font-size:11px;font-weight:800;color:#C62828;">Total Ded.</span>'+
             '<span id="pf-ded-display" style="font-size:14px;font-weight:900;color:#C62828;">₹0</span>'+
           '</div>'+
@@ -3399,7 +3399,7 @@ function empOpenPay(empId, empName){
 
     // ── Pay History Log with editable effective dates ──────────────────────
     (existing.length?
-      '<div style="background:#F8FAFC;border-radius:10px;border:1px solid var(--border);padding:10px 12px;margin-top:10px;">'+
+      '<div style="background:var(--bg);border-radius:10px;border:1px solid var(--border);padding:10px 12px;margin-top:10px;">'+
         '<div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Pay History — tap date to edit</div>'+
         existing.sort(function(a,b){return a.effective_date.localeCompare(b.effective_date);}).map(function(p,i){
           var typeLabel={initial:'Initial Fixation',increment:'Increment',revision:'Revision'}[p.pay_type]||'Pay Record';

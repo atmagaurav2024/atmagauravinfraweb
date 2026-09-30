@@ -27156,7 +27156,7 @@ function empDownloadHTML(){
     var name = ((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim();
     var statusCol = e.status==='resigned' ? '#C62828' : '#2E7D32';
     var initials  = name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();
-    return '<div style="background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
+    return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
       '<div onclick="empToggleDocList(\'doc-'+e.id+'\')" style="padding:11px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;">'+
         '<div style="width:38px;height:38px;border-radius:10px;background:'+statusCol+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:white;flex-shrink:0;overflow:hidden;">'+
           (e.profile_photo||e.photo_url
@@ -27182,7 +27182,7 @@ function empDownloadHTML(){
   }
 
   var html =
-    '<div style="background:white;border-radius:14px;padding:12px 14px;margin-bottom:12px;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;padding:12px 14px;margin-bottom:12px;">'+
       '<div style="font-size:12px;font-weight:800;color:#1565C0;margin-bottom:4px;">&#128196; Document Downloads</div>'+
       '<div style="font-size:11px;color:var(--text3);">Click any employee to view and download all HR letters and orders.</div>'+
     '</div>';
@@ -27383,7 +27383,7 @@ function empDocList(e){
   }
 
   // Month/Year selector for any month
-  html += '<div style="background:#F8FAFC;border-radius:10px;padding:10px 12px;margin-bottom:4px;">'+
+  html += '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:4px;">'+
     '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:end;">'+
       '<div><label style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:3px;">Month</label>'+
         '<select id="slip-month-'+empId+'" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:11px;font-family:Nunito,sans-serif;">'+monthOpts+'</select></div>'+
@@ -27974,7 +27974,7 @@ async function salDeleteEmpRecord(recordId, empName, monthLabel){
 function salBuildLogSection(logMap, logKeys){
   if(!logKeys.length) return '';
 
-  return '<div style="background:white;border-radius:14px;padding:12px 14px;margin-top:16px;">'+
+  return '<div style="background:var(--card-bg);border-radius:14px;padding:12px 14px;margin-top:16px;">'+
     '<div style="font-size:12px;font-weight:800;color:#1565C0;margin-bottom:10px;">&#128196; Finalised Salary Log</div>'+
     logKeys.map(function(key){
       var g = logMap[key];
@@ -27987,7 +27987,7 @@ function salBuildLogSection(logMap, logKeys){
       return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;">'+
 
         // Month header row
-        '<div onclick="salToggleLog(\'sal-log-'+key+'\')" style="padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;background:#F8FAFC;">'+
+        '<div onclick="salToggleLog(\'sal-log-'+key+'\')" style="padding:10px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--bg);">'+
           '<div style="flex:1;min-width:0;">'+
             '<div style="font-size:13px;font-weight:800;">'+g.label+'</div>'+
             '<div style="font-size:11px;color:var(--text3);">'+
@@ -28015,12 +28015,12 @@ function salBuildLogSection(logMap, logKeys){
 
           // Payment summary bar
           (paid.length||unpaid.length?
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #F0F4F8;">'+
-              '<div style="padding:8px 12px;background:#E8F5E9;border-right:1px solid #F0F4F8;text-align:center;">'+
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--border);">'+
+              '<div style="padding:8px 12px;background:var(--bg);border-right:1px solid var(--border);text-align:center;">'+
                 '<div style="font-size:10px;font-weight:800;color:#1B5E20;">&#10003; Paid ('+paid.length+')</div>'+
                 '<div style="font-size:13px;font-weight:900;color:#1B5E20;">&#8377;'+Number(paidTotal).toLocaleString('en-IN')+'</div>'+
               '</div>'+
-              '<div style="padding:8px 12px;background:#FFF3E0;text-align:center;">'+
+              '<div style="padding:8px 12px;background:var(--bg);text-align:center;">'+
                 '<div style="font-size:10px;font-weight:800;color:#E65100;">&#9679; Pending ('+unpaid.length+')</div>'+
                 '<div style="font-size:13px;font-weight:900;color:#E65100;">&#8377;'+Number(unpaidTotal).toLocaleString('en-IN')+'</div>'+
               '</div>'+
@@ -28030,7 +28030,7 @@ function salBuildLogSection(logMap, logKeys){
           // Employee table
           '<div style="overflow-x:auto;">'+
           '<table style="width:100%;border-collapse:collapse;font-size:11px;">'+
-            '<thead><tr style="background:#F8FFF8;border-bottom:1px solid #E0E0E0;">'+
+            '<thead><tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
               '<th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--text3);text-transform:uppercase;white-space:nowrap;">Employee</th>'+
               '<th style="padding:6px 8px;text-align:center;font-size:10px;color:var(--text3);">Days</th>'+
               '<th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text3);">Net Pay</th>'+
@@ -28040,7 +28040,7 @@ function salBuildLogSection(logMap, logKeys){
             '<tbody>'+
               g.records.map(function(r){
                 var isPaid = !!r.payment_date;
-                return '<tr style="border-bottom:1px solid #F5F5F5;background:'+(isPaid?'#FAFFFE':'white')+';">'+
+                return '<tr style="border-bottom:1px solid var(--border);background:'+(isPaid?'var(--bg)':'var(--card-bg)')+';">'+
                   '<td style="padding:7px 8px;font-weight:700;">'+r.employee_name+
                     '<div style="font-size:10px;color:var(--text3);">'+r.employee_code+'</div>'+
                   '</td>'+
@@ -28068,7 +28068,7 @@ function salBuildLogSection(logMap, logKeys){
                   '</td>'+
                 '</tr>';
               }).join('')+
-              '<tr style="border-top:2px solid #1B5E20;background:#F8FFF8;">'+
+              '<tr style="border-top:2px solid #1B5E20;background:var(--bg);">'+
                 '<td colspan="2" style="padding:8px;font-size:11px;font-weight:800;color:#1B5E20;">Total</td>'+
                 '<td style="padding:8px;text-align:right;font-size:13px;font-weight:900;color:#1B5E20;">&#8377;'+Number(g.total).toLocaleString('en-IN')+'</td>'+
                 '<td colspan="2" style="padding:8px;font-size:10px;color:'+(allPaid?'#1B5E20':'#E65100')+';font-weight:700;text-align:center;">'+
@@ -28112,7 +28112,7 @@ async function empAnnualHTMLAsync(){
     : '<option value="">— No salary records found —</option>';
 
   var html =
-    '<div style="background:white;border-radius:14px;padding:14px;margin-bottom:12px;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;padding:14px;margin-bottom:12px;">'+
     '<div style="font-size:12px;font-weight:800;color:#1565C0;margin-bottom:10px;">&#128200; Annual Salary Statement</div>'+
     '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:10px;">'+
       '<div>'+
@@ -28195,7 +28195,7 @@ function annBuildStatement(records, periodLabel){
   if(!el) return;
 
   if(!records.length){
-    el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);background:white;border-radius:12px;">No salary records found for this period.</div>';
+    el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);background:var(--card-bg);border-radius:12px;">No salary records found for this period.</div>';
     return;
   }
 
@@ -28303,19 +28303,19 @@ function annBuildStatement(records, periodLabel){
       var pf=Number(r.pf_employee||0), esic=Number(r.esic_employee||0);
       var tds=Number(r.tds||0), pt=Number(r.profession_tax||0), adv=Number(r.advance_deduct||0);
       var ded=pf+esic+tds+pt+adv;
-      return '<tr style="background:#FFFDE7;border-bottom:1px solid #FFF9C4;">'+
+      return '<tr style="background:var(--bg);border-bottom:1px solid var(--border);">'+
         '<td colspan="2" style="padding:5px 8px 5px 24px;font-size:10px;color:#F57F17;font-weight:700;">'+
           (MONTHS[r.month]||r.month)+' '+r.year+
         '</td>'+
         '<td style="padding:5px 8px;font-size:10px;text-align:center;">'+
           (r.payment_date
             ? '<div style="font-weight:800;color:#1B5E20;font-size:10px;">'+r.payment_date.split('-').reverse().join('/')+'</div>'+
-              (r.payment_ref?'<div style="font-size:9px;color:#555;">'+r.payment_ref+'</div>':'')
+              (r.payment_ref?'<div style="font-size:9px;color:var(--text3);">'+r.payment_ref+'</div>':'')
             : '<span style="font-size:9px;color:#E65100;font-weight:700;">Unpaid</span>')+
         '</td>'+
-        '<td style="padding:5px 8px;font-size:10px;text-align:right;color:#555;">'+inr(basic)+'</td>'+
-        compKeys.map(function(k){return '<td style="padding:5px 8px;font-size:10px;text-align:right;color:#555;">'+inr(rowExtra[k]||0)+'</td>';}).join('')+
-        (hasOT?'<td style="padding:5px 8px;font-size:10px;text-align:right;color:#555;">'+inr(Number(r.ot_pay||0))+'</td>':'')+
+        '<td style="padding:5px 8px;font-size:10px;text-align:right;color:var(--text2);">'+inr(basic)+'</td>'+
+        compKeys.map(function(k){return '<td style="padding:5px 8px;font-size:10px;text-align:right;color:var(--text2);">'+inr(rowExtra[k]||0)+'</td>';}).join('')+
+        (hasOT?'<td style="padding:5px 8px;font-size:10px;text-align:right;color:var(--text2);">'+inr(Number(r.ot_pay||0))+'</td>':'')+
         '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:700;color:#2E7D32;">'+inr(Number(r.gross||0))+'</td>'+
         '<td style="padding:5px 8px;font-size:10px;text-align:right;color:#C62828;">'+inr(pf)+'</td>'+
         '<td style="padding:5px 8px;font-size:10px;text-align:right;color:#C62828;">'+inr(esic)+'</td>'+
@@ -28347,11 +28347,11 @@ function annBuildStatement(records, periodLabel){
         if(p.other_allowance)   subTotExtra['Other Allowance']  =(subTotExtra['Other Allowance']||0)  +Math.round((p.other_allowance||0)*ratio);
       }
     });
-    rows += '<tr style="background:#FFF8E1;border-bottom:2px solid #FFD54F;">'+
+    rows += '<tr style="background:var(--bg);border-bottom:2px solid #FFD54F;">'+
       '<td colspan="3" style="padding:5px 8px 5px 24px;font-size:10px;font-weight:800;color:#F57F17;">'+e.months+' months total</td>'+
-      '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;">'+inr(e.basic)+'</td>'+
-      compKeys.map(function(k){return '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;">'+inr(subTotExtra[k]||0)+'</td>';}).join('')+
-      (hasOT?'<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;">'+inr(e.ot_pay)+'</td>':'')+
+      '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;color:var(--text);">'+inr(e.basic)+'</td>'+
+      compKeys.map(function(k){return '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;color:var(--text);">'+inr(subTotExtra[k]||0)+'</td>';}).join('')+
+      (hasOT?'<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;color:var(--text);">'+inr(e.ot_pay)+'</td>':'')+
       '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;color:#2E7D32;">'+inr(e.gross)+'</td>'+
       '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;color:#C62828;">'+inr(e.pf)+'</td>'+
       '<td style="padding:5px 8px;font-size:10px;text-align:right;font-weight:800;color:#C62828;">'+inr(e.esic)+'</td>'+
@@ -28395,7 +28395,7 @@ function annBuildStatement(records, periodLabel){
   var colCount=5+compKeys.length+(hasOT?1:0)+7; // for colspan
   var tbody=empList.map(function(e,i){
     var uid='ann-detail-'+i;
-    var empRow='<tr style="border-bottom:1px solid #E8F5E9;cursor:pointer;'+(i%2===0?'background:white;':'background:#FAFAFA;')+'"'+
+    var empRow='<tr style="border-bottom:1px solid var(--border);cursor:pointer;'+(i%2===0?'background:var(--card-bg);':'background:var(--bg);')+'"'+
       ' onclick="annToggleDetail(\''+uid+'\')" title="Click to expand month-wise detail">'+
       '<td style="padding:8px;font-size:11px;color:#1565C0;font-weight:900;text-align:center;width:28px;">'+
         '<span id="'+uid+'-arr" style="display:inline-block;transition:transform .2s;">&#9654;</span>'+
@@ -28409,10 +28409,10 @@ function annBuildStatement(records, periodLabel){
       td(e.basic)+
       compKeys.map(function(k){return td(e.extra[k]||0);}).join('')+
       (hasOT?td(e.ot_pay):'')+
-      '<td style="padding:8px;font-size:11px;text-align:right;font-weight:800;color:#2E7D32;background:#F1FBF4;">'+inr(e.gross)+'</td>'+
+      '<td style="padding:8px;font-size:11px;text-align:right;font-weight:800;color:#2E7D32;background:var(--bg);">'+inr(e.gross)+'</td>'+
       td(e.pf,'#C62828')+td(e.esic,'#C62828')+td(e.tds,'#E65100')+td(e.pt,'#880E4F')+td(e.adv,'#C62828')+
-      '<td style="padding:8px;font-size:11px;text-align:right;font-weight:800;color:#C62828;background:#FFF5F5;">'+inr(e.total_ded)+'</td>'+
-      '<td style="padding:8px;font-size:12px;text-align:right;font-weight:900;color:#1B5E20;background:#F1FBF4;">'+inr(e.net)+'</td>'+
+      '<td style="padding:8px;font-size:11px;text-align:right;font-weight:800;color:#C62828;background:var(--bg);">'+inr(e.total_ded)+'</td>'+
+      '<td style="padding:8px;font-size:12px;text-align:right;font-weight:900;color:#1B5E20;background:var(--bg);">'+inr(e.net)+'</td>'+
     '</tr>';
     // Hidden detail rows
     var detailRows='<tr id="'+uid+'" style="display:none;">'+
@@ -28427,24 +28427,24 @@ function annBuildStatement(records, periodLabel){
   }).join('');
 
   // ── Footer totals ──────────────────────────────────────────────────────
-  var tfoot='<tr style="border-top:3px solid #1B5E20;background:#E8F5E9;font-weight:900;">'+
+  var tfoot='<tr style="border-top:3px solid #1B5E20;background:var(--bg);font-weight:900;">'+
     '<td colspan="2" style="padding:9px 8px;font-size:11px;font-weight:800;color:#1B5E20;">TOTAL &mdash; '+empList.length+' employees</td>'+
     '<td style="padding:9px 8px;text-align:center;font-size:11px;color:#1B5E20;">&mdash;</td>'+
-    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.basic)+'</td>'+
-    compKeys.map(function(k){return '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.extra[k]||0)+'</td>';}).join('')+
-    (hasOT?'<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.ot_pay)+'</td>':'')+
-    '<td style="padding:9px 8px;text-align:right;font-size:12px;font-weight:900;color:#2E7D32;background:#C8E6C9;">'+inr(totals.gross)+'</td>'+
-    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.pf)+'</td>'+
-    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.esic)+'</td>'+
-    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.tds)+'</td>'+
-    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.pt)+'</td>'+
-    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;">'+inr(totals.adv)+'</td>'+
-    '<td style="padding:9px 8px;text-align:right;font-size:12px;font-weight:900;color:#C62828;background:#FFCDD2;">'+inr(totals.total_ded)+'</td>'+
-    '<td style="padding:9px 8px;text-align:right;font-size:13px;font-weight:900;color:#1B5E20;background:#C8E6C9;">'+inr(totals.net)+'</td>'+
+    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;color:var(--text);">'+inr(totals.basic)+'</td>'+
+    compKeys.map(function(k){return '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;color:var(--text);">'+inr(totals.extra[k]||0)+'</td>';}).join('')+
+    (hasOT?'<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;color:var(--text);">'+inr(totals.ot_pay)+'</td>':'')+
+    '<td style="padding:9px 8px;text-align:right;font-size:12px;font-weight:900;color:#2E7D32;background:var(--bg);">'+inr(totals.gross)+'</td>'+
+    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;color:var(--text);">'+inr(totals.pf)+'</td>'+
+    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;color:var(--text);">'+inr(totals.esic)+'</td>'+
+    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;color:var(--text);">'+inr(totals.tds)+'</td>'+
+    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;color:var(--text);">'+inr(totals.pt)+'</td>'+
+    '<td style="padding:9px 8px;text-align:right;font-size:11px;font-weight:900;color:var(--text);">'+inr(totals.adv)+'</td>'+
+    '<td style="padding:9px 8px;text-align:right;font-size:12px;font-weight:900;color:#C62828;background:var(--bg);">'+inr(totals.total_ded)+'</td>'+
+    '<td style="padding:9px 8px;text-align:right;font-size:13px;font-weight:900;color:#1B5E20;background:var(--bg);">'+inr(totals.net)+'</td>'+
   '</tr>';
 
   el.innerHTML=
-    '<div style="background:white;border-radius:14px;overflow:hidden;">'+
+    '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;">'+
       '<div style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);">'+
         '<div>'+
           '<div style="font-size:13px;font-weight:800;">Annual Statement &mdash; '+periodLabel+'</div>'+
@@ -28705,8 +28705,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260930j"></script>
-<script src="js/employee.js?v=20260930j"></script>
-<script src="js/projects.js?v=20260930j"></script>
-<script src="js/finance.js?v=20260930j"></script>
+<script src="js/registry.js?v=20260930k"></script>
+<script src="js/employee.js?v=20260930k"></script>
+<script src="js/projects.js?v=20260930k"></script>
+<script src="js/finance.js?v=20260930k"></script>
 </html>
