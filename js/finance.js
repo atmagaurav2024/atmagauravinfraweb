@@ -450,12 +450,10 @@ async function dashScanAndPay(){
   if(typeof pcOpenQRScanner==='function') pcOpenQRScanner();
 }
 
-// Validates the form exactly like pcSaveExpense, then hands off to the
-// person's own UPI app via a upi://pay deep link — a plain URI scheme
-// every UPI app registers with the OS, so this works without any
-// payment-gateway account. Nothing is saved yet; that happens once
-// they're back and the UTR step below is confirmed, so a payment that
-// never happens never creates a stray expense record.
+// Validates the form exactly like pcSaveExpense, then shows the
+// pay-manually-and-confirm screen (see pcShowUtrConfirm). Nothing is
+// saved yet; that happens once the UTR step is confirmed, so a payment
+// that never happens never creates a stray expense record.
 function pcPayAndSave(){
   var emp=gv('pce-emp'), cat=gv('pce-cat'), amount=parseFloat(gv('pce-amount')), desc=gv('pce-desc');
   if(!emp){toast('Select employee','warning');return;}
@@ -476,13 +474,19 @@ function pcPayAndSave(){
     upiId:upiId, payeeName:gv('pce-upi-name')||''
   };
 
-  // Ask which UPI app to pay with, rather than jumping straight to the
-  // generic upi://pay link — that relies on the phone's OS to show an
-  // app picker, and it often doesn't: Android skips the picker once a
-  // default has been set for that link type, and iOS has no picker for
-  // custom URL schemes at all, so it silently opens just one app.
-  // Launching the chosen app's own scheme directly sidesteps both.
-  pcShowUpiAppChooser();
+  // Goes straight to the manual pay-and-confirm screen rather than
+  // trying a upi://pay deep link first. That was tried three ways
+  // (full prefill, with a transaction reference, amount left for the
+  // person to type themselves) and every version got the same "declined
+  // for security reasons" response from the UPI app — strong evidence
+  // this isn't about which parameters the link carries at all, but that
+  // UPI apps don't treat a browser-triggered payment intent as a
+  // trusted source in the first place (matches Google's own UPI-for-web
+  // docs: a plain upi://pay link isn't the sanctioned integration route
+  // without being a verified NPCI merchant). Opening a specific app is
+  // still offered from the confirm screen as a secondary "worth a try"
+  // option, since it may still work in less strict apps.
+  pcShowUtrConfirm();
 }
 
 // Scheme prefixes for each app's own UPI deep link, each followed by
@@ -500,21 +504,21 @@ var PC_UPI_APPS=[
 
 function pcShowUpiAppChooser(){
   var p=PC_PENDING_PAY; if(!p) return;
-  var title=document.getElementById('pc-sheet-title'); if(title) title.textContent='Choose Payment App';
+  var title=document.getElementById('pc-sheet-title'); if(title) title.textContent='Try a UPI App';
   var body=document.getElementById('pc-sheet-body');
   var foot=document.getElementById('pc-sheet-foot');
   if(!body||!foot) return;
   body.innerHTML=
     '<div style="text-align:center;padding:4px 0 14px;">'+
       '<div style="font-size:15px;font-weight:800;margin-bottom:4px;">Pay '+pcFmt(p.amount)+' to '+(p.payeeName||p.upiId)+'</div>'+
-      '<div style="font-size:12px;color:var(--text3);">Choose which UPI app to pay with</div>'+
+      '<div style="font-size:12px;color:var(--text3);">These often get blocked (see previous screen) but are worth a try — pick an app</div>'+
     '</div>'+
     PC_UPI_APPS.map(function(a,i){
       return '<button type="button" onclick="pcOpenChosenUpiApp('+i+')" style="width:100%;display:flex;align-items:center;gap:10px;background:var(--bg);color:var(--text);border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">'+
         '<span style="font-size:18px;">'+a.icon+'</span>'+a.label+
       '</button>';
     }).join('');
-  foot.innerHTML='<button class="btn btn-outline" onclick="pcCancelPendingPay()">Cancel</button>';
+  foot.innerHTML='<button class="btn btn-outline" onclick="pcShowUtrConfirm()">Back</button>';
 }
 
 function pcOpenChosenUpiApp(i){
@@ -546,23 +550,18 @@ function pcLaunchUpiApp(p){
   window.location.href=uri;
 }
 
-function pcRetryUpiApp(){
-  if(PC_PENDING_PAY) pcLaunchUpiApp(PC_PENDING_PAY);
-}
-
 function pcShowUtrConfirm(){
   var p=PC_PENDING_PAY; if(!p) return;
-  var title=document.getElementById('pc-sheet-title'); if(title) title.textContent='Confirm Payment';
+  var title=document.getElementById('pc-sheet-title'); if(title) title.textContent='Pay & Confirm';
   var body=document.getElementById('pc-sheet-body');
   var foot=document.getElementById('pc-sheet-foot');
   if(!body||!foot) return;
   body.innerHTML=
     '<div style="text-align:center;padding:6px 0 14px;">'+
-      '<div style="font-size:15px;font-weight:800;margin-bottom:4px;">Complete the payment in your UPI app</div>'+
-      '<div style="font-size:12px;color:var(--text3);">Your UPI app opens to '+(p.payeeName||p.upiId)+' — enter the amount yourself and pay</div>'+
+      '<div style="font-size:15px;font-weight:800;margin-bottom:4px;">Pay '+pcFmt(p.amount)+' to '+(p.payeeName||p.upiId)+'</div>'+
+      '<div style="font-size:12px;color:var(--text3);">UPI apps block payment links coming from a website, so open your own UPI app and pay using these details</div>'+
     '</div>'+
-    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;">'+
-      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:8px;">The amount isn\'t pre-filled — UPI apps block pre-filled-amount requests coming from a website as a fraud check, so enter these yourself inside the app:</div>'+
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">'+
         '<div style="font-size:12.5px;"><span style="color:var(--text3);">Amount</span> <b style="font-size:14px;">'+pcFmt(p.amount)+'</b></div>'+
         '<button type="button" onclick="pcCopyAmount()" style="flex-shrink:0;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:700;cursor:pointer;color:var(--text);">Copy</button>'+
@@ -572,11 +571,10 @@ function pcShowUtrConfirm(){
         '<button type="button" onclick="pcCopyUpiId()" style="flex-shrink:0;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:10.5px;font-weight:700;cursor:pointer;color:var(--text);">Copy</button>'+
       '</div>'+
     '</div>'+
-    '<button type="button" onclick="pcRetryUpiApp()" style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;">&#128241; Open UPI App Again</button>'+
-    '<button type="button" onclick="pcShowUpiAppChooser()" style="width:100%;background:none;color:var(--navy);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:14px;">Try a Different App</button>'+
+    '<button type="button" onclick="pcShowUpiAppChooser()" style="width:100%;background:none;color:var(--navy);border:1px solid var(--border);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:14px;">&#128241; Try Opening a UPI App (may not work)</button>'+
     '<label class="flbl">UTR / Transaction Reference No.</label>'+
     '<input class="finp" id="pc-pay-utr" placeholder="e.g. 309812345678" autocomplete="off">'+
-    '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">Find this on your UPI app\'s payment success screen or SMS. No UTR yet? Save now and add it later from the list.</div>';
+    '<div style="font-size:10.5px;color:var(--text3);margin-top:4px;">Find this on your UPI app\'s payment success screen or SMS, after you\'ve paid. No UTR yet? Save now and add it later from the list.</div>';
   foot.innerHTML=
     '<button class="btn btn-outline" onclick="pcCancelPendingPay()">Cancel</button>'+
     '<button class="btn btn-green" onclick="pcConfirmUtrAndSave()">&#10003; Confirm &amp; Save</button>';
