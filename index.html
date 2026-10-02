@@ -3737,6 +3737,18 @@ async function loadUserPermissions(){
     USER_PERMISSIONS=perms;
     console.log('[perm-debug] loadUserPermissions() done. role used for lookup:', JSON.stringify(role), '| USER_PERMISSIONS:', JSON.parse(JSON.stringify(perms)));
     dashUpdateScanFab();
+    // applyDrawerPermissions() also runs on every showApp() nav, but
+    // login calls showApp('dashboard') BEFORE this function resolves
+    // (it's async — two network round-trips), so that first run always
+    // sees USER_PERMISSIONS still empty and, by its own early-return
+    // guard, leaves every rail/drawer item showing. Nothing re-ran it
+    // afterward, so a restricted employee kept seeing every module icon
+    // until they happened to navigate again — which is why it looked
+    // intermittent ("sometimes shows all modules, sometimes correct").
+    // Re-running both here, now that real permissions are in, fixes the
+    // very first paint instead of waiting on the next click.
+    if(typeof applyDrawerPermissions==='function') applyDrawerPermissions();
+    if(typeof applyPlanLocks==='function') applyPlanLocks();
   }catch(e){ console.warn('loadUserPermissions', e); }
 }
 function initProjects(){if(typeof projModRenderNav==='function'){projModRenderNav();projModLoadTab();}}
@@ -28839,8 +28851,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261002g"></script>
-<script src="js/employee.js?v=20261002g"></script>
-<script src="js/projects.js?v=20261002g"></script>
-<script src="js/finance.js?v=20261002g"></script>
+<script src="js/registry.js?v=20261002h"></script>
+<script src="js/employee.js?v=20261002h"></script>
+<script src="js/projects.js?v=20261002h"></script>
+<script src="js/finance.js?v=20261002h"></script>
 </html>
