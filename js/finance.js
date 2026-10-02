@@ -5,7 +5,11 @@
 // ── PETTY CASH ────────────────────────────────────────────
 var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
-var PC_EMP_FILTER='all'; // 'all' or empId
+// null = not yet defaulted this session; 'all' or a specific empId once
+// set. initPettyCash() defaults this to the logged-in user's own record
+// the first time the screen loads, without re-defaulting on every
+// refresh after a save (see initPettyCash for why).
+var PC_EMP_FILTER=null;
 
 // Holds the in-progress "Scan & Pay" expense (see dashScanAndPay below)
 // between the moment the person is sent to their UPI app and the
@@ -64,6 +68,18 @@ async function initPettyCash(){
       PC_EMPS=PC_EMPS.filter(function(e){ return pcAllowedIds[e.id]||pcAllowedIds[e.empId]; });
       PC_IN=PC_IN.filter(function(i){ return pcAllowedIds[i.emp_id]; });
       PC_EXP=PC_EXP.filter(function(e){ return pcAllowedIds[e.emp_id]; });
+    }
+    // Default the employee filter to "myself" the first time this screen
+    // loads in a session — not on every re-fetch after a save (initPettyCash
+    // runs again after funding/recording/confirming an entry), which would
+    // otherwise snap an admin's manual "All Employees"/someone-else filter
+    // back to their own name after every entry they add. Falls back to
+    // 'all' for a pure admin login with no employees row of their own
+    // (doLoginInner's "could be admin" fallback) — there's no "myself" to
+    // default to in that case.
+    if(PC_EMP_FILTER===null){
+      var myPcRec=PC_EMPS.find(function(e){ return currentUser && (e.id===currentUser.id || (currentUser.empId && e.empId===currentUser.empId)); });
+      PC_EMP_FILTER = myPcRec ? myPcRec.empId : 'all';
     }
     pcRefresh();
   }catch(e){console.error('initPettyCash:',e);if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading petty cash data</div>';}
