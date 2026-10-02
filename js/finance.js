@@ -78,12 +78,23 @@ async function initPettyCash(){
     // (doLoginInner's "could be admin" fallback) — there's no "myself" to
     // default to in that case.
     if(PC_EMP_FILTER===null){
-      var myPcRec=PC_EMPS.find(function(e){ return currentUser && (e.id===currentUser.id || (currentUser.empId && e.empId===currentUser.empId)); });
+      var myPcRec=pcMyEmpRec();
       PC_EMP_FILTER = myPcRec ? myPcRec.empId : 'all';
     }
     pcRefresh();
   }catch(e){console.error('initPettyCash:',e);if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading petty cash data</div>';}
 }
+
+// The logged-in user's own row in PC_EMPS, if they have one — used to
+// default the employee filter (initPettyCash) and the "Employee" picker
+// on the Fund/Record forms (pcOpenCashIn/pcOpenExpense) to themselves,
+// since that's who's filling the form in the overwhelming majority of
+// cases. Returns undefined for a pure admin login with no employees row
+// of its own (doLoginInner's "could be admin" fallback).
+function pcMyEmpRec(){
+  return PC_EMPS.find(function(e){ return currentUser && (e.id===currentUser.id || (currentUser.empId && e.empId===currentUser.empId)); });
+}
+function pcMyEmpId(){ var e=pcMyEmpRec(); return e?e.empId:''; }
 
 function pcEmpName(empId){var e=PC_EMPS.find(function(x){return x.empId===empId||x.id===empId;});return e?e.name:empId||'—';}
 function pcEmpBal(empId){
@@ -282,7 +293,7 @@ function pcOpenCashIn(){
   document.getElementById('pc-sheet-body').innerHTML=
     '<div style="font-size:15px;font-weight:800;margin-bottom:14px;">Fund Employee</div>'+
     '<label class="flbl">Employee *</label><select class="fsel" id="pci-emp"><option value="">Select employee...</option>'+
-      PC_EMPS.map(function(e){return '<option value="'+e.empId+'">'+e.name+(e.dept?' ('+e.dept+')':'')+'</option>';}).join('')+'</select>'+
+      PC_EMPS.map(function(e){return '<option value="'+e.empId+'"'+(e.empId===pcMyEmpId()?' selected':'')+'>'+e.name+(e.dept?' ('+e.dept+')':'')+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pci-amount" type="number" placeholder="0">'+
     '<label class="flbl">Funded By *</label><select class="fsel" id="pci-src" onchange="pcToggleSrcEmp()">'+
       '<option value="bank">Company — Bank</option>'+
@@ -360,7 +371,7 @@ function pcOpenExpense(){
   document.getElementById('pc-sheet-body').innerHTML=
     '<div style="font-size:15px;font-weight:800;margin-bottom:14px;">Record Expense</div>'+
     '<label class="flbl">Employee *</label><select class="fsel" id="pce-emp"><option value="">Select employee...</option>'+
-      PC_EMPS.map(function(e){return '<option value="'+e.empId+'">'+e.name+'</option>';}).join('')+'</select>'+
+      PC_EMPS.map(function(e){return '<option value="'+e.empId+'"'+(e.empId===pcMyEmpId()?' selected':'')+'>'+e.name+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Category *</label><select class="fsel" id="pce-cat"><option value="">Select...</option>'+
       pcCats().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0" oninput="pcUpdateAllocPreview()">'+
