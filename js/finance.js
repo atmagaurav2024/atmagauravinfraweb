@@ -122,9 +122,15 @@ function pcRefresh(){
   var totalOut=pcExpF.reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);
   var balance=totalIn-totalOut;
 
-  // Employee dropdown options
+  // Employee dropdown options — anyone with at least one transaction, PLUS
+  // the logged-in viewer themselves even with zero transactions yet
+  // (otherwise their own name never appears at all until their first
+  // funding/expense entry, even though the filter already defaults to
+  // them and the Fund/Record forms already default to them too).
+  var pcMyId=pcMyEmpId();
   var pcPickable=PC_EMPS.filter(function(e){
-    return PC_IN.some(function(i){return i.emp_id===e.empId||i.emp_id===e.id;})||
+    return (pcMyId && e.empId===pcMyId) ||
+           PC_IN.some(function(i){return i.emp_id===e.empId||i.emp_id===e.id;})||
            PC_EXP.some(function(x){return x.emp_id===e.empId||x.emp_id===e.id;});
   });
   var allOptLabel=pcScope==='all'?'All Employees':'All (My Department)';
