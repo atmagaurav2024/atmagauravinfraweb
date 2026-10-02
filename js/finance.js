@@ -460,6 +460,9 @@ function pcOpenExpense(){
     '</div>'+
     '<label class="flbl">Project(s) *</label>'+
     '<div style="font-size:10.5px;color:var(--text3);margin-bottom:4px;">Select one or more projects this expense should be recorded against.</div>'+
+    '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid #1565C0;border-radius:8px;background:#E3F2FD;font-size:12.5px;font-weight:800;color:#1565C0;cursor:pointer;margin-bottom:6px;">'+
+      '<input type="checkbox" id="pce-proj-all" style="width:16px;height:16px;" onchange="pcToggleAllProjects(this.checked)">All Projects (select every site in one click)'+
+    '</label>'+
     '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin-bottom:10px;">'+projChecks+'</div>'+
     '<div id="pce-dist-wrap" style="display:none;margin-bottom:10px;">'+
       '<label class="flbl">Distribute Expense Across Projects</label>'+
@@ -500,7 +503,23 @@ function pcComputeAllocations(){
   return chosen.map(function(p){return {id:p.id,name:p.name,amount:share};});
 }
 
+// Checks/unchecks every individual project box in one click — "on top of
+// the project list" per the request, so recording an expense that really
+// does span the whole company doesn't mean tapping each site one by one.
+function pcToggleAllProjects(checked){
+  document.querySelectorAll('.pce-proj-chk').forEach(function(chk){ chk.checked=checked; });
+  pcUpdateAllocPreview();
+}
+// Keeps the "All Projects" box honest when someone ticks/unticks sites one
+// at a time instead — checked only once every individual box is checked,
+// not a stale leftover from the last time "All Projects" was clicked.
+function pcSyncAllProjectsBox(){
+  var all=document.querySelectorAll('.pce-proj-chk');
+  var allBox=document.getElementById('pce-proj-all');
+  if(allBox) allBox.checked = all.length>0 && document.querySelectorAll('.pce-proj-chk:checked').length===all.length;
+}
 function pcUpdateAllocPreview(){
+  pcSyncAllProjectsBox();
   var chosenCount=document.querySelectorAll('.pce-proj-chk:checked').length;
   var wrap=document.getElementById('pce-dist-wrap');
   if(!wrap) return;
