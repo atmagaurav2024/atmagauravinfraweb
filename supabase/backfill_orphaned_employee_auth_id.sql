@@ -30,7 +30,7 @@ declare
   match_id uuid;
 begin
   for r in
-    select e.id, e.name, e.phone, e.company_id, c.slug
+    select e.id, trim(coalesce(e.first_name,'') || ' ' || coalesce(e.last_name,'')) as full_name, e.phone, e.company_id, c.slug
     from employees e
     join companies c on c.id = e.company_id
     where e.phone is not null and e.phone <> ''
@@ -49,10 +49,10 @@ begin
     then
       update employees set auth_id = match_id where id = r.id;
       fixed_count := fixed_count + 1;
-      raise notice 'Linked: % (phone %) -> auth user %', r.name, r.phone, match_id;
+      raise notice 'Linked: % (phone %) -> auth user %', r.full_name, r.phone, match_id;
     else
       skipped_count := skipped_count + 1;
-      raise notice 'No match found, left as-is: % (phone %, company %) — this employee likely never had Reset Password / a login account set up at all', r.name, r.phone, r.slug;
+      raise notice 'No match found, left as-is: % (phone %, company %) — this employee likely never had Reset Password / a login account set up at all', r.full_name, r.phone, r.slug;
     end if;
   end loop;
 
@@ -63,7 +63,7 @@ end $$;
 -- account is relinked. Any remaining rows are employees who need a
 -- fresh password set via the app's "Reset Password" (now fixed to link
 -- correctly going forward).
-select e.id, e.name, e.phone, c.slug
+select e.id, trim(coalesce(e.first_name,'') || ' ' || coalesce(e.last_name,'')) as full_name, e.phone, c.slug
 from employees e
 join companies c on c.id = e.company_id
 where e.phone is not null and e.phone <> ''
