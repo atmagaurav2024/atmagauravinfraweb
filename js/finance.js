@@ -258,7 +258,19 @@ function pcRenderList(){
   var pcExpSrc = PC_EMP_FILTER==='all'?PC_EXP:PC_EXP.filter(function(e){return e.emp_id===PC_EMP_FILTER;});
   var list=tab==='cash-in'?pcInSrc:tab==='expenses'?pcExpSrc:[...pcInSrc.map(function(i){return Object.assign({},i,{_type:'in'});}),...pcExpSrc.map(function(e){return Object.assign({},e,{_type:'exp'});})];
   list=list.sort(function(a,b){return new Date(b.created_at||b.date||0)-new Date(a.created_at||a.date||0);});
-  if(PC_SITE_TAB!=='all')list=list.filter(function(i){return (i.project||'').toLowerCase().includes(PC_SITE_TAB.toLowerCase());});
+  if(PC_SITE_TAB!=='all')list=list.filter(function(i){
+    // Cash In (funding) entries are deliberately not tied to one project —
+    // "money handed to an employee can be spent across any site" (see
+    // pcSaveCashIn) — so they're always saved with project:'All Projects'.
+    // That never matches a specific Site tab, so a funding entry would
+    // silently vanish from the All/Cash In tabs whenever any site other
+    // than "All" was selected, even though By Employee (which never
+    // applied this filter) still showed it — exactly what was reported.
+    // Only expenses are actually scoped to a real project, so only filter
+    // those by site; always keep funding entries regardless of site tab.
+    if(i._type==='in'||tab==='cash-in') return true;
+    return (i.project||'').toLowerCase().includes(PC_SITE_TAB.toLowerCase());
+  });
   if(!list.length){cont.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">No records</div>';return;}
   cont.innerHTML=list.slice(0,50).map(function(item){
     var isIn=item._type==='in'||tab==='cash-in';
