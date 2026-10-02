@@ -438,7 +438,7 @@ function pcOpenExpense(){
   // real site, not the office) and from the Site filter tab's project
   // list, while still behaving like any other checkbox for allocation
   // and saving purposes (pcComputeAllocations doesn't distinguish it).
-  var officeCheck='<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:800;color:#4A148C;cursor:pointer;">'+
+  var officeCheck='<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:800;color:var(--text);cursor:pointer;">'+
       '<input type="checkbox" class="pce-proj-chk" value="office" data-name="Office" data-contract="0" data-office="1" style="width:16px;height:16px;" onchange="pcUpdateAllocPreview()">'+
       '&#127970; Office'+
     '</label>';
