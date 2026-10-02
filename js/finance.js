@@ -96,6 +96,34 @@ function pcMyEmpRec(){
 }
 function pcMyEmpId(){ var e=pcMyEmpRec(); return e?e.empId:''; }
 
+// ── 5-MINUTE SELF-EDIT WINDOW ────────────────────────────────────────
+// Lets someone who doesn't hold full Petty Cash edit/delete rights still
+// fix an entry they JUST made, for a short window afterwards — granted
+// per employee/role in Access Control as "Edit/Delete Own (5 min)"
+// (petty-cash.self_5min), on top of (not instead of) the existing full
+// edit/delete permissions. Expires on its own: past 5 minutes since
+// created_at, this returns false and the Edit/Delete controls simply
+// stop being rendered for that one entry next time the list re-renders
+// (tab switch, save, reopening the screen) — there's no live countdown
+// ticking the button away mid-view.
+function pcWithinSelfWindow(item){
+  if(!item || !item.emp_id || !item.created_at) return false;
+  var myId=pcMyEmpId();
+  if(!myId || item.emp_id!==myId) return false;
+  var age=Date.now()-new Date(item.created_at).getTime();
+  return age>=0 && age<=5*60*1000;
+}
+function pcCanEditEntry(item){
+  if(typeof canAccess!=='function') return true;
+  if(canAccess('petty-cash','edit')) return true;
+  return !!(canAccess('petty-cash','self_5min') && pcWithinSelfWindow(item));
+}
+function pcCanDeleteEntry(item){
+  if(typeof canAccess!=='function') return true;
+  if(canAccess('petty-cash','delete')) return true;
+  return !!(canAccess('petty-cash','self_5min') && pcWithinSelfWindow(item));
+}
+
 function pcEmpName(empId){var e=PC_EMPS.find(function(x){return x.empId===empId||x.id===empId;});return e?e.name:empId||'—';}
 function pcEmpBal(empId){
   var funded=PC_IN.filter(function(i){return i.emp_id===empId;}).reduce(function(s,i){return s+(i.amount||0);},0);
@@ -301,7 +329,9 @@ function pcRenderList(){
       '</div>'+
       '<div style="text-align:right;">'+
         '<div style="font-size:15px;font-weight:900;color:'+col+';">'+(isIn?'+':'-')+pcFmt(item.amount)+'</div>'+
-        ((typeof canAccess!=='function' || canAccess('petty-cash','delete')) ?
+        (pcCanEditEntry(item) ?
+        '<button onclick="pcOpenEditEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:none;border:none;color:var(--navy);cursor:pointer;font-size:15px;padding:0 4px;" title="Edit">&#9998;</button>' : '')+
+        (pcCanDeleteEntry(item) ?
         '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;" title="Delete">&#215;</button>' : '')+
       '</div>'+
     '</div>';
@@ -752,14 +782,15 @@ async function pcAddUtr(id){
 
 async function pcDeleteEntry(id,type){
   // Belt-and-braces alongside the delete button itself being hidden in
-  // pcRenderList() when canAccess('petty-cash','delete') is false — this
-  // was previously missing entirely (button AND function), so unchecking
-  // Delete for an employee in Access Control had no effect at all: they
-  // could still see and use the delete button on every entry.
-  if(typeof canAccess==='function' && !canAccess('petty-cash','delete')){toast('You do not have permission to delete entries','error');return;}
+  // pcRenderList() when pcCanDeleteEntry() is false — this was previously
+  // missing entirely (button AND function), so unchecking Delete for an
+  // employee in Access Control had no effect at all: they could still
+  // see and use the delete button on every entry. pcCanDeleteEntry also
+  // covers the "Edit/Delete Own (5 min)" self-window exception.
+  var row=(type==='in'?PC_IN:PC_EXP).find(function(x){return x.id===id;});
+  if(!pcCanDeleteEntry(row||{})){toast('You do not have permission to delete this entry','error');return;}
   // Warn if this funding came from a loan — deleting it here leaves the
   // loan itself in place, so the two records would disagree.
-  var row=(type==='in'?PC_IN:PC_EXP).find(function(x){return x.id===id;});
   if(row&&row.funded_by_type==='loan'){
     if(!confirm('This funding entry was created automatically from a loan.\n\nDeleting it here removes the petty cash credit but keeps the loan record. To remove both, delete the loan in the Loans module instead.\n\nDelete anyway?'))return;
   } else {
@@ -772,6 +803,127 @@ async function pcDeleteEntry(id,type){
     if(type==='in')PC_IN=PC_IN.filter(function(i){return i.id!==id;});
     else PC_EXP=PC_EXP.filter(function(e){return e.id!==id;});
     pcRefresh();toast('Deleted','success');
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ── EDIT ENTRY (within the 5-minute self-window, or full edit rights) ──
+// Deliberately its own small form rather than reopening the full
+// Fund/Record sheets — those also drive a one-time employee-to-employee
+// transfer leg, a multi-project split and the UPI payout flow, which are
+// safe to run once on create but risky to blindly rerun against an entry
+// that may already have downstream state (the transfer's other leg, a
+// payout in flight). So this covers the common "wrong employee, amount
+// or category — fix it" case, and declines — pointing at delete-and-redo
+// instead — for entries too entangled to safely patch in place.
+var PC_EDITING=null; // {id, type} of the entry currently open for edit
+
+function pcOpenEditEntry(id,type){
+  var row=(type==='in'?PC_IN:PC_EXP).find(function(x){return x.id===id;});
+  if(!row){toast('Entry not found','error');return;}
+  if(!pcCanEditEntry(row)){toast('You do not have permission to edit this entry','error');return;}
+
+  if(type==='in'){
+    if(row.funded_by_type==='emp'||row.funded_by_type==='transfer_out'||row.funded_by_type==='loan'){
+      toast('This funding entry is linked to a '+(row.funded_by_type==='loan'?'loan':'transfer')+' and can’t be edited here — delete it and record it again instead.','warning');
+      return;
+    }
+  } else {
+    var allocs=[]; try{ allocs=row.project_allocations?JSON.parse(row.project_allocations):[]; }catch(e){}
+    if(allocs.length>1){toast('This expense is split across multiple projects and can’t be edited here — delete it and record it again instead.','warning');return;}
+    if(row.payout_status==='success'||row.payout_status==='processing'){toast('This expense’s UPI payout is already '+(row.payout_status==='success'?'completed':'in progress')+' — it can’t be edited here.','warning');return;}
+  }
+
+  PC_EDITING={id:id,type:type};
+  openSheet('ov-pc','sh-pc');
+  var title=document.getElementById('pc-sheet-title'); if(title) title.textContent = type==='in'?'Edit Funding':'Edit Expense';
+  var esc=function(s){return (s||'').replace(/"/g,'&quot;');};
+
+  if(type==='in'){
+    document.getElementById('pc-sheet-body').innerHTML=
+      '<label class="flbl">Employee *</label><select class="fsel" id="pce-ed-emp"><option value="">Select employee...</option>'+
+        PC_EMPS.map(function(e){return '<option value="'+e.empId+'"'+(e.empId===row.emp_id?' selected':'')+'>'+e.name+(e.dept?' ('+e.dept+')':'')+'</option>';}).join('')+'</select>'+
+      '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-ed-amount" type="number" value="'+(row.amount||'')+'">'+
+      '<label class="flbl">Funded By</label><select class="fsel" id="pce-ed-src">'+
+        '<option value="bank"'+(row.funded_by_type==='bank'?' selected':'')+'>Company — Bank</option>'+
+        '<option value="cash"'+(row.funded_by_type!=='bank'?' selected':'')+'>Company — Cash in Hand</option>'+
+      '</select>'+
+      '<label class="flbl">Date</label><input class="finp" id="pce-ed-date" type="date" value="'+(row.date||'')+'">'+
+      '<label class="flbl">Purpose</label><input class="finp" id="pce-ed-purpose" value="'+esc(row.purpose)+'">'+
+      '<label class="flbl">Remarks</label><input class="finp" id="pce-ed-remarks" value="'+esc(row.remarks)+'">';
+  } else {
+    document.getElementById('pc-sheet-body').innerHTML=
+      '<label class="flbl">Employee *</label><select class="fsel" id="pce-ed-emp"><option value="">Select employee...</option>'+
+        PC_EMPS.map(function(e){return '<option value="'+e.empId+'"'+(e.empId===row.emp_id?' selected':'')+'>'+e.name+'</option>';}).join('')+'</select>'+
+      '<label class="flbl">Category *</label><select class="fsel" id="pce-ed-cat"><option value="">Select...</option>'+
+        pcCats().map(function(c){return '<option value="'+esc(c)+'"'+(c===row.category?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'+
+      '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-ed-amount" type="number" value="'+(row.amount||'')+'">'+
+      '<label class="flbl">Date</label><input class="finp" id="pce-ed-date" type="date" value="'+(row.date||'')+'">'+
+      '<label class="flbl">Description *</label><input class="finp" id="pce-ed-desc" value="'+esc(row.description)+'">'+
+      '<label class="flbl">Bill/Receipt No</label><input class="finp" id="pce-ed-bill" value="'+esc(row.bill_no)+'">'+
+      '<label class="flbl">Remarks</label><input class="finp" id="pce-ed-remarks" value="'+esc(row.remarks)+'">'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Project and payment method aren’t editable here — delete and re-enter if those need to change.</div>';
+  }
+  document.getElementById('pc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="closeSheet(\'ov-pc\',\'sh-pc\')">Cancel</button>'+
+    '<button class="btn btn-navy" onclick="pcSaveEditEntry()">✎ Save Changes</button>';
+}
+
+async function pcSaveEditEntry(){
+  var ed=PC_EDITING; if(!ed){toast('Nothing to save','error');return;}
+  var row=(ed.type==='in'?PC_IN:PC_EXP).find(function(x){return x.id===ed.id;});
+  if(!row){toast('Entry not found','error');return;}
+  // Re-checked here, not just when the sheet was opened — the 5-minute
+  // window can lapse while the form is sitting open.
+  if(!pcCanEditEntry(row)){toast('The 5-minute edit window for this entry has passed','error');return;}
+
+  var emp=gv('pce-ed-emp'), amount=parseFloat(gv('pce-ed-amount'));
+  if(!emp){toast('Select employee','warning');return;}
+  if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
+  var date=gv('pce-ed-date')||row.date;
+
+  try{
+    var updates, narration, debitCode, creditCode, voucherType, partyName;
+    if(ed.type==='in'){
+      var src=gv('pce-ed-src')||'bank';
+      var srcLabel = src==='bank' ? 'Company — Bank' : 'Company — Cash in Hand';
+      updates={emp_id:emp, amount:amount, date:date,
+        purpose:gv('pce-ed-purpose'), remarks:gv('pce-ed-remarks'),
+        funded_by:srcLabel, funded_by_type:src};
+      await sbUpdate('petty_cash_in', ed.id, updates);
+      voucherType='Contra'; debitCode='1101'; creditCode=(src==='cash'?'1001':'1002');
+      partyName=pcEmpName(emp);
+      narration='Petty cash funded to '+partyName+' from '+srcLabel+(updates.purpose?' — '+updates.purpose:'')+' (edited)';
+    } else {
+      var cat=gv('pce-ed-cat'), desc=gv('pce-ed-desc');
+      if(!cat){toast('Select category','warning');return;}
+      if(!desc){toast('Description required','warning');return;}
+      updates={emp_id:emp, category:cat, amount:amount, date:date,
+        description:desc, bill_no:gv('pce-ed-bill'), remarks:gv('pce-ed-remarks')};
+      await sbUpdate('petty_cash_expenses', ed.id, updates);
+      voucherType='Payment';
+      debitCode=(typeof ACC_PETTY_CAT_CODES!=='undefined'&&ACC_PETTY_CAT_CODES[cat])||'4110';
+      creditCode='1101'; partyName=desc;
+      narration='Petty cash — '+cat+' — '+desc+' (edited)';
+    }
+
+    // Keep the GL in sync with the corrected figures: drop the voucher(s)
+    // this entry originally posted and re-post fresh ones from the
+    // updated amount/employee/category. accCleanupVouchersForSource
+    // matches by source_id, which stays this same entry's id throughout
+    // (only its contents changed, not its identity), so this is the same
+    // cleanup-then-repost pattern pcDeleteEntry already relies on, not
+    // new voucher-patching logic.
+    if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(ed.id);
+    if(typeof accAutoPost==='function'){
+      await accAutoPost({type:voucherType, date:date, partyName:partyName,
+        debitCode:debitCode, creditCode:creditCode, amount:amount,
+        narration:narration, sourceType:(ed.type==='in'?'petty_cash_in':'petty_cash_expense'), sourceId:ed.id});
+    }
+
+    PC_EDITING=null;
+    closeSheet('ov-pc','sh-pc');
+    await initPettyCash();
+    toast('Entry updated','success');
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
