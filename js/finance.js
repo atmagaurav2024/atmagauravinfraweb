@@ -245,7 +245,9 @@ function pcRenderTabButtons(){
 
 function pcRenderSiteTabs(){
   var wrap=document.getElementById('pc-site-tabs');if(!wrap)return;
-  var projects=['all'].concat(PC_PROJS.map(function(p){return p.name;}));
+  // "Office" alongside the real sites so expenses recorded against it
+  // (see pcOpenExpense) can be filtered the same way any site can.
+  var projects=['all','Office'].concat(PC_PROJS.map(function(p){return p.name;}));
   wrap.innerHTML=projects.map(function(p){
     return '<button onclick="pcFilterSite(\''+p+'\')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:'+(PC_SITE_TAB===p?'var(--navy)':'var(--card-bg)')+';color:'+(PC_SITE_TAB===p?'white':'var(--text2)')+';font-family:Nunito;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+p+'</button>';
   }).join('');
@@ -429,12 +431,24 @@ async function pcSaveCashIn(){
 
 function pcOpenExpense(){
   openSheet('ov-pc','sh-pc');
-  var projChecks=PC_PROJS.map(function(p){
+  // "Office" is a standing synthetic entry, not a row from the projects
+  // table — for expenses that aren't tied to any construction site (rent,
+  // stationery, office supplies, etc). Marked data-office so it's
+  // excluded from the "All Projects" one-click selector (that means every
+  // real site, not the office) and from the Site filter tab's project
+  // list, while still behaving like any other checkbox for allocation
+  // and saving purposes (pcComputeAllocations doesn't distinguish it).
+  var officeCheck='<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:800;color:#4A148C;cursor:pointer;">'+
+      '<input type="checkbox" class="pce-proj-chk" value="office" data-name="Office" data-contract="0" data-office="1" style="width:16px;height:16px;" onchange="pcUpdateAllocPreview()">'+
+      '&#127970; Office'+
+    '</label>';
+  var realProjChecks=PC_PROJS.map(function(p){
     return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:600;cursor:pointer;">'+
       '<input type="checkbox" class="pce-proj-chk" value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'" data-contract="'+(parseFloat(p.contract_value)||0)+'" style="width:16px;height:16px;" onchange="pcUpdateAllocPreview()">'+
       (p.name||'Unnamed')+
     '</label>';
   }).join('')||'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No projects found</div>';
+  var projChecks=officeCheck+realProjChecks;
   document.getElementById('pc-sheet-body').innerHTML=
     '<div style="font-size:15px;font-weight:800;margin-bottom:14px;">Record Expense</div>'+
     '<label class="flbl">Employee *</label><select class="fsel" id="pce-emp"><option value="">Select employee...</option>'+
@@ -507,16 +521,19 @@ function pcComputeAllocations(){
 // the project list" per the request, so recording an expense that really
 // does span the whole company doesn't mean tapping each site one by one.
 function pcToggleAllProjects(checked){
-  document.querySelectorAll('.pce-proj-chk').forEach(function(chk){ chk.checked=checked; });
+  // :not([data-office]) — "All Projects" means every real site, not the
+  // synthetic Office entry, which stays exactly as the user left it.
+  document.querySelectorAll('.pce-proj-chk:not([data-office])').forEach(function(chk){ chk.checked=checked; });
   pcUpdateAllocPreview();
 }
 // Keeps the "All Projects" box honest when someone ticks/unticks sites one
-// at a time instead — checked only once every individual box is checked,
-// not a stale leftover from the last time "All Projects" was clicked.
+// at a time instead — checked only once every individual real-project box
+// is checked (Office doesn't count either way), not a stale leftover from
+// the last time "All Projects" was clicked.
 function pcSyncAllProjectsBox(){
-  var all=document.querySelectorAll('.pce-proj-chk');
+  var all=document.querySelectorAll('.pce-proj-chk:not([data-office])');
   var allBox=document.getElementById('pce-proj-all');
-  if(allBox) allBox.checked = all.length>0 && document.querySelectorAll('.pce-proj-chk:checked').length===all.length;
+  if(allBox) allBox.checked = all.length>0 && document.querySelectorAll('.pce-proj-chk:not([data-office]):checked').length===all.length;
 }
 function pcUpdateAllocPreview(){
   pcSyncAllProjectsBox();
