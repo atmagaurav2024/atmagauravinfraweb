@@ -173,10 +173,17 @@ function pcRefresh(){
         '<div style="font-size:9.5px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Balance</div>'+
         '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:'+(balance>=0?'#81C784':'#EF9A9A')+';margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(balance)+'</div></div>'+
     '</div>'+
+    // Petty Cash has its own view/edit/delete permissions in Access
+    // Control (same as every other module's canAccess checks), but this
+    // screen never actually read them — view gated navigating here at
+    // all, but funding, recording and deleting entries were all available
+    // to anyone who could merely view the screen. Gate Fund/Record by
+    // 'edit' here; delete is gated per-row further down.
+    ((typeof canAccess!=='function' || canAccess('petty-cash','edit')) ?
     '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
       '<button class="btn btn-green" onclick="pcOpenCashIn()">+ Fund Employee</button>'+
       '<button class="btn btn-navy" onclick="pcOpenExpense()">− Record Expense</button>'+
-    '</div>'+
+    '</div>' : '')+
     pcRenderTabs()+
     '<div id="pc-list"></div>';
   cont.innerHTML=html;
@@ -294,7 +301,8 @@ function pcRenderList(){
       '</div>'+
       '<div style="text-align:right;">'+
         '<div style="font-size:15px;font-weight:900;color:'+col+';">'+(isIn?'+':'-')+pcFmt(item.amount)+'</div>'+
-        '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;" title="Delete">&#215;</button>'+
+        ((typeof canAccess!=='function' || canAccess('petty-cash','delete')) ?
+        '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;" title="Delete">&#215;</button>' : '')+
       '</div>'+
     '</div>';
   }).join('');
@@ -332,6 +340,7 @@ function pcOpenCashIn(){
 }
 
 async function pcSaveCashIn(){
+  if(typeof canAccess==='function' && !canAccess('petty-cash','edit')){toast('You do not have permission to fund employees','error');return;}
   var emp=gv('pci-emp'), amount=parseFloat(gv('pci-amount'));
   if(!emp){toast('Select employee','warning');return;}
   if(!amount||amount<=0){toast('Enter valid amount','warning');return;}
@@ -466,6 +475,7 @@ function pcUpdateAllocPreview(){
 }
 
 async function pcSaveExpense(){
+  if(typeof canAccess==='function' && !canAccess('petty-cash','edit')){toast('You do not have permission to record expenses','error');return;}
   var emp=gv('pce-emp'), cat=gv('pce-cat'), amount=parseFloat(gv('pce-amount')), desc=gv('pce-desc');
   if(!emp){toast('Select employee','warning');return;}
   if(!cat){toast('Select category','warning');return;}
@@ -539,6 +549,7 @@ async function dashScanAndPay(){
 // saved yet; that happens once the UTR step is confirmed, so a payment
 // that never happens never creates a stray expense record.
 function pcPayAndSave(){
+  if(typeof canAccess==='function' && !canAccess('petty-cash','edit')){toast('You do not have permission to record expenses','error');return;}
   var emp=gv('pce-emp'), cat=gv('pce-cat'), amount=parseFloat(gv('pce-amount')), desc=gv('pce-desc');
   if(!emp){toast('Select employee','warning');return;}
   if(!cat){toast('Select category','warning');return;}
@@ -724,6 +735,7 @@ async function pcConfirmUtrAndSave(){
 // and for entries that came through the automatic RazorpayX payout
 // flow if its webhook never reported back.
 async function pcAddUtr(id){
+  if(typeof canAccess==='function' && !canAccess('petty-cash','edit')){toast('You do not have permission to edit this entry','error');return;}
   var row=PC_EXP.find(function(e){return e.id===id;});
   if(!row) return;
   var utr=prompt('Enter the UTR / transaction reference number for this payment:', row.payout_utr||'');
@@ -739,6 +751,12 @@ async function pcAddUtr(id){
 }
 
 async function pcDeleteEntry(id,type){
+  // Belt-and-braces alongside the delete button itself being hidden in
+  // pcRenderList() when canAccess('petty-cash','delete') is false — this
+  // was previously missing entirely (button AND function), so unchecking
+  // Delete for an employee in Access Control had no effect at all: they
+  // could still see and use the delete button on every entry.
+  if(typeof canAccess==='function' && !canAccess('petty-cash','delete')){toast('You do not have permission to delete entries','error');return;}
   // Warn if this funding came from a loan — deleting it here leaves the
   // loan itself in place, so the two records would disagree.
   var row=(type==='in'?PC_IN:PC_EXP).find(function(x){return x.id===id;});
