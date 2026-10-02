@@ -90,16 +90,24 @@ function pcRefresh(){
       '</select>'+
       (PC_EMP_FILTER!=='all'?'<button onclick="pcSetEmpFilter(\'all\')" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer;font-weight:700;">&#10005; Clear</button>':'')+
     '</div>'+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">'+
-      '<div class="card" style="text-align:center;background:linear-gradient(135deg,#1B5E20,#2E7D32);border:none;">'+
-        '<div style="font-size:11px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.5px;">Total Funded</div>'+
-        '<div style="font-size:20px;font-weight:900;color:white;margin-top:4px;">'+pcFmt(totalIn)+'</div></div>'+
-      '<div class="card" style="text-align:center;background:linear-gradient(135deg,#B71C1C,#C62828);border:none;">'+
-        '<div style="font-size:11px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.5px;">Total Spent</div>'+
-        '<div style="font-size:20px;font-weight:900;color:white;margin-top:4px;">'+pcFmt(totalOut)+'</div></div>'+
-      '<div class="card" style="text-align:center;background:linear-gradient(135deg,#0D2137,#1A3A5C);border:none;">'+
-        '<div style="font-size:11px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.5px;">Balance</div>'+
-        '<div style="font-size:20px;font-weight:900;color:'+(balance>=0?'#81C784':'#EF9A9A')+';margin-top:4px;">'+pcFmt(balance)+'</div></div>'+
+    // grid-template-columns:repeat(3,1fr) alone isn't enough on narrow
+    // phone widths: a grid item's default min-width is auto (its content's
+    // min-content size), so a wide amount string like pcFmt() can force a
+    // column past its 1fr share and push the row wider than the screen
+    // instead of shrinking to fit. min-width:0 on each card lets it shrink,
+    // and the amount/label get overflow:hidden + ellipsis as a backstop
+    // plus smaller, screen-scaled font sizes so three cards reliably sit
+    // in one row on a phone.
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:16px;">'+
+      '<div class="card" style="text-align:center;background:linear-gradient(135deg,#1B5E20,#2E7D32);border:none;min-width:0;padding:10px 6px;">'+
+        '<div style="font-size:9.5px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Funded</div>'+
+        '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(totalIn)+'</div></div>'+
+      '<div class="card" style="text-align:center;background:linear-gradient(135deg,#B71C1C,#C62828);border:none;min-width:0;padding:10px 6px;">'+
+        '<div style="font-size:9.5px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Spent</div>'+
+        '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(totalOut)+'</div></div>'+
+      '<div class="card" style="text-align:center;background:linear-gradient(135deg,#0D2137,#1A3A5C);border:none;min-width:0;padding:10px 6px;">'+
+        '<div style="font-size:9.5px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Balance</div>'+
+        '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:'+(balance>=0?'#81C784':'#EF9A9A')+';margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(balance)+'</div></div>'+
     '</div>'+
     '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
       '<button class="btn btn-green" onclick="pcOpenCashIn()">+ Fund Employee</button>'+
