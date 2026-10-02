@@ -42,13 +42,28 @@ async function initPettyCash(){
     ]);
     PC_IN=Array.isArray(cashIn)?cashIn:[];
     PC_EXP=Array.isArray(expenses)?expenses:[];
-    PC_EMPS=Array.isArray(emps)?emps.map(function(e){return {id:e.id,empId:e.emp_id,name:((e.first_name||'')+' '+(e.last_name||'')).trim(),dept:e.department||''};}):[]; 
+    PC_EMPS=Array.isArray(emps)?emps.map(function(e){return {id:e.id,empId:e.emp_id,name:((e.first_name||'')+' '+(e.last_name||'')).trim(),dept:e.department||''};}):[];
     PC_PROJS=Array.isArray(projs)?projs:[];
     // Petty cash follows the same project scope as everything else — both
     // the site list and the expense rows, so totals match what is listed.
     if(typeof scopeProjects==='function') PC_PROJS=scopeProjects(PC_PROJS);
     if(typeof scopeRows==='function' && typeof userProjectIds==='function' && userProjectIds()){
       PC_EXP=scopeRows(PC_EXP,{nameField:'project'});
+    }
+    // Employee Data Visibility ("Self"/"Department"/"All", set per
+    // employee or role in Access Control) previously had no effect here —
+    // Site Cash Manager fetched and showed every active employee's name
+    // and funding/expense records regardless of that setting. Scope the
+    // employee list driving the picker/"By Employee" view AND the
+    // underlying cash-in/expense rows together, the same way Salary and
+    // Attendance already do via empScoped/salScoped, so a "Self Only"
+    // employee only ever sees their own petty cash records here.
+    if(typeof empScoped==='function' && Array.isArray(emps)){
+      var pcAllowedIds={};
+      empScoped(emps).forEach(function(e){ pcAllowedIds[e.id]=1; if(e.emp_id) pcAllowedIds[e.emp_id]=1; });
+      PC_EMPS=PC_EMPS.filter(function(e){ return pcAllowedIds[e.id]||pcAllowedIds[e.empId]; });
+      PC_IN=PC_IN.filter(function(i){ return pcAllowedIds[i.emp_id]; });
+      PC_EXP=PC_EXP.filter(function(e){ return pcAllowedIds[e.emp_id]; });
     }
     pcRefresh();
   }catch(e){console.error('initPettyCash:',e);if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading petty cash data</div>';}

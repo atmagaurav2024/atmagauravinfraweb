@@ -5155,6 +5155,18 @@ async function attLoadAll(){
   ]);
   var activeEmps=r[0]||[], todayRecords=r[1]||[], monthRecords=r[2]||[], todayPunches=r[3]||[], leaves=r[4]||[], allEmpsMonthRecords=r[5]||[];
 
+  // Employee Data Visibility ("Self"/"Department"/"All") — renderAttTable()
+  // and attExportCSV() already scope the Daily Entry table via
+  // empScoped(employees), but `leaves` (-> leaveData -> renderLeave())
+  // had no scoping at all, so the Leave tab showed every employee's leave
+  // type, dates and reason regardless of this setting. Scope it here
+  // using the same visible-employee-id set the Daily Entry table uses.
+  if(typeof empScoped==='function'){
+    var attVisibleIds={};
+    empScoped(activeEmps).forEach(function(e){ attVisibleIds[e.id]=1; });
+    leaves = leaves.filter(function(l){ return attVisibleIds[l.emp_id]; });
+  }
+
   // Build "This Month" attendance totals per employee for the Daily Entry
   // table — Present = 1 day, Half-day = 0.5 day. Uses the real current
   // calendar month, independent of whatever month Monthly View might be
@@ -28823,8 +28835,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20260930y"></script>
-<script src="js/employee.js?v=20260930y"></script>
-<script src="js/projects.js?v=20260930y"></script>
-<script src="js/finance.js?v=20260930y"></script>
+<script src="js/registry.js?v=20260930z"></script>
+<script src="js/employee.js?v=20260930z"></script>
+<script src="js/projects.js?v=20260930z"></script>
+<script src="js/finance.js?v=20260930z"></script>
 </html>

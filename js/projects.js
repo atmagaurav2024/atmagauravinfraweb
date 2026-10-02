@@ -5678,6 +5678,18 @@ async function execRenderPettyExpenses(containerId){
     ]);
     var list=Array.isArray(r[0])?r[0]:[];
     var empList=Array.isArray(r[1])?r[1]:[];
+    // Employee Data Visibility ("Self"/"Department"/"All") previously had
+    // no effect here — this fetched and showed every active employee's
+    // petty cash expenses for the project regardless of that setting.
+    // Same fix and rationale as Site Cash Manager's initPettyCash() in
+    // js/finance.js: scope both the employee list and the expense rows
+    // together so a "Self Only" employee only sees their own entries.
+    if(typeof empScoped==='function'){
+      var pxAllowedIds={};
+      empScoped(empList).forEach(function(e){ pxAllowedIds[e.id]=1; if(e.emp_id) pxAllowedIds[e.emp_id]=1; });
+      empList=empList.filter(function(e){ return pxAllowedIds[e.id]; });
+      list=list.filter(function(x){ return pxAllowedIds[x.emp_id]; });
+    }
     function empName(empId){
       var e=empList.find(function(x){return x.emp_id===empId||x.id===empId;});
       return e?((e.first_name||'')+' '+(e.last_name||'')).trim()||empId:(empId||'—');

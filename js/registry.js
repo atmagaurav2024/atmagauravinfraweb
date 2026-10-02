@@ -157,7 +157,14 @@ async function loadAllData(){
     MATERIALS      = Array.isArray(results[1]) ? results[1].map(mapMaterial)  : [];
     SUBCONTRACTORS = Array.isArray(results[2]) ? results[2].map(mapSC)        : [];
     LABOURERS      = Array.isArray(results[3]) ? results[3].map(mapLabour)    : [];
-    USERS          = Array.isArray(results[4]) ? results[4].map(mapEmployee)  : [];
+    // Employee Data Visibility ("Self"/"Department"/"All") previously had
+    // no effect on the Registry's Users tab — it listed every employee
+    // regardless of that setting, the same gap fixed in Site Cash Manager
+    // (js/finance.js) and the Petty Expenses project tab (js/projects.js).
+    // Scope the raw rows before mapping so a "Self Only" employee only
+    // ever sees their own entry here.
+    var usersRaw = (typeof empScoped==='function' && Array.isArray(results[4])) ? empScoped(results[4]) : results[4];
+    USERS          = Array.isArray(usersRaw) ? usersRaw.map(mapEmployee)  : [];
     PROJECTS       = Array.isArray(results[5]) ? results[5]                   : [];
     renderVendors(); renderMaterials(); renderSC(); renderLabour(); renderUsers();
     updateAllStats();
