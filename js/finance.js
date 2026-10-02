@@ -329,10 +329,20 @@ function pcRenderList(){
       '</div>'+
       '<div style="text-align:right;">'+
         '<div style="font-size:15px;font-weight:900;color:'+col+';">'+(isIn?'+':'-')+pcFmt(item.amount)+'</div>'+
+        '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;">'+
         (pcCanEditEntry(item) ?
-        '<button onclick="pcOpenEditEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:none;border:none;color:var(--navy);cursor:pointer;font-size:15px;padding:0 4px;" title="Edit">&#9998;</button>' : '')+
+        // Styled as a visible chip (background+color), same pattern as the
+        // Edit buttons in Execution/Loans — not transparent-on-transparent
+        // like before, which made the pencil glyph effectively invisible
+        // on devices/fonts that don't render the ✎ dingbat (U+270E isn't
+        // in every font's Latin-only fallback chain, unlike Delete's ×,
+        // which is a basic Latin-1 character and always renders). This way
+        // the button is still visibly there and tappable even if the icon
+        // glyph itself fails to draw.
+        '<button onclick="pcOpenEditEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:#E3F2FD;border:none;color:#1565C0;cursor:pointer;font-size:12px;font-weight:800;border-radius:6px;padding:4px 9px;" title="Edit">&#9998; Edit</button>' : '')+
         (pcCanDeleteEntry(item) ?
-        '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;" title="Delete">&#215;</button>' : '')+
+        '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:#FFEBEE;border:none;color:#C62828;cursor:pointer;font-size:12px;font-weight:800;border-radius:6px;padding:4px 9px;" title="Delete">&#215; Delete</button>' : '')+
+        '</div>'+
       '</div>'+
     '</div>';
   }).join('');
