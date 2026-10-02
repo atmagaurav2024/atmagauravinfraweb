@@ -3136,6 +3136,18 @@ async function empResetPassword(empId, empName, phone){
           toast('Auth error: '+msg,'warning');
         }
       } else {
+        // authSignUp just created a brand-new Supabase Auth account (this
+        // branch only runs when one didn't already exist — "already
+        // registered" goes through the error branch above instead). Login
+        // looks employees up by auth_id, so unless that new id is saved
+        // back onto this employee's row, the very next login finds no
+        // matching employee and silently falls through to the "could be
+        // admin" branch, showing "Admin" instead of this employee.
+        var newAuthId = authResult && (authResult.user ? authResult.user.id : authResult.id);
+        if(newAuthId && empId){
+          try{ await sbUpdate('employees', empId, {auth_id:newAuthId}); }
+          catch(linkErr){ console.warn('Failed to link new auth account to employee record:', linkErr); toast('Password set, but linking the login account failed — try reset again.','warning'); }
+        }
         toast(empName+"'s password updated successfully!",'success');
         closeEmpSheet();
       }
@@ -3228,6 +3240,14 @@ async function empFormSave(){
             // User exists in auth — we cannot reset via anon key, inform admin
             toast(name+' updated. To reset login password, use Supabase Auth dashboard or ask employee to use Forgot Password.','info');
           } else {
+            // Same gap as empResetPassword: a brand-new auth account's id
+            // must be saved onto employees.auth_id or this employee can
+            // never be found by the login lookup again.
+            var newAuthId2 = authRes && (authRes.user ? authRes.user.id : authRes.id);
+            if(newAuthId2){
+              try{ await sbUpdate('employees', editId, {auth_id:newAuthId2}); }
+              catch(linkErr){ console.warn('Failed to link new auth account to employee record:', linkErr); }
+            }
             toast(name+' updated and password reset!','success');
           }
         }catch(authErr){
