@@ -3089,6 +3089,9 @@ async function empResetPassword(empId, empName, phone){
     '<div style="background:#FFF3E0;border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#E65100;">'+
       '&#8505; Login username is the mobile number: <b>'+phone+'</b>'+
     '</div>'+
+    '<label class="flbl">Company Code *</label>'+
+    '<input id="reset-pw-co" class="finp" placeholder="Your company login code" value="'+((currentUser&&currentUser.companySlug)||'')+'" style="text-transform:lowercase;">'+
+    '<div style="font-size:10.5px;color:var(--text3);margin:-6px 0 10px;">The same code used on the login screen — pre-filled from your own session when available.</div>'+
     '<label class="flbl">New Password *</label>'+
     '<div class="inp-wrap">'+
       '<input id="reset-pw1" class="finp" type="password" placeholder="Min 6 characters" style="margin-bottom:0;padding-right:44px;">'+
@@ -3102,16 +3105,29 @@ async function empResetPassword(empId, empName, phone){
   document.getElementById('emp-sheet-foot').innerHTML =
     '<button class="btn btn-outline" onclick="closeEmpSheet()">Cancel</button>'+
     '<button class="btn" style="background:#1B5E20;color:white;" id="reset-pw-btn">\uD83D\uDD10 Set Password</button>';
+  // If the session doesn't already have the company code (see
+  // ensureCompanySlug, defined in index.html), try to resolve it from
+  // currentUser.companyId in the background and fill the field in once
+  // it's back, rather than leaving the admin to track it down themselves.
+  if(!(currentUser && currentUser.companySlug) && typeof ensureCompanySlug==='function'){
+    ensureCompanySlug().then(function(slug){
+      var el=document.getElementById('reset-pw-co');
+      if(slug && el && !el.value) el.value=slug;
+    });
+  }
   var btn = document.getElementById('reset-pw-btn');
   if(btn) btn.addEventListener('click', async function(){
     var pw1 = (document.getElementById('reset-pw1')||{}).value||'';
     var pw2 = (document.getElementById('reset-pw2')||{}).value||'';
+    var co = (document.getElementById('reset-pw-co')||{}).value||'';
+    co = co.trim().toLowerCase() || (typeof ensureCompanySlug==='function' ? await ensureCompanySlug() : '');
+    if(!co){toast('Enter the company code','warning');return;}
     if(!pw1){toast('Enter new password','warning');return;}
     if(pw1.length<6){toast('Min 6 characters','warning');return;}
     if(pw1!==pw2){toast('Passwords do not match','warning');return;}
     try{
       toast('Updating password...','info');
-      var authResult = await authSignUp(phone, pw1);
+      var authResult = await authSignUp(phone, pw1, co);
       if(authResult && authResult.error){
         var msg = authResult.error.message||'';
         if(msg.toLowerCase().includes('already')){
@@ -3207,7 +3223,7 @@ async function empFormSave(){
         try{
           toast('Updating login password...','info');
           var empPhone = phone||gv('f-uphone');
-          var authRes = await authSignUp(empPhone, pw1);
+          var authRes = await authSignUp(empPhone, pw1, typeof ensureCompanySlug==='function' ? await ensureCompanySlug() : currentUser.companySlug);
           if(authRes && authRes.error && authRes.error.message && authRes.error.message.toLowerCase().includes('already')){
             // User exists in auth — we cannot reset via anon key, inform admin
             toast(name+' updated. To reset login password, use Supabase Auth dashboard or ask employee to use Forgot Password.','info');
@@ -3231,7 +3247,7 @@ async function empFormSave(){
       if(pw && phone){
         try{
           toast('Creating login account...','info');
-          var authResult = await authSignUp(phone, pw);
+          var authResult = await authSignUp(phone, pw, typeof ensureCompanySlug==='function' ? await ensureCompanySlug() : currentUser.companySlug);
           if(authResult && !authResult.error && (authResult.user||authResult.id)){
             data.auth_id = authResult.user ? authResult.user.id : authResult.id;
           } else if(authResult && authResult.error){
