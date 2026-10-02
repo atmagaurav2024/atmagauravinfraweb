@@ -79,6 +79,14 @@ function pcFmt(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFract
 
 function pcRefresh(){
   var cont=document.getElementById('pc-main');if(!cont)return;
+  // Who is allowed a blanket "see everyone" choice at all — the SAME
+  // Employee Data Visibility control Access Control already exposes
+  // (emp-data-scope: All/Department/Self). Self/Department-scoped
+  // PC_EMPS/PC_IN/PC_EXP only ever hold what that viewer is allowed to
+  // see to begin with (initPettyCash already scoped them), so offering a
+  // literal "All Employees" choice to them was misleading even though it
+  // could never actually surface anyone else's records.
+  var pcScope=(typeof getEmpDataScope==='function')?getEmpDataScope():'all';
 
   // Filter data by selected employee
   var pcInF  = PC_EMP_FILTER==='all' ? PC_IN  : PC_IN.filter(function(i){return i.emp_id===PC_EMP_FILTER;});
@@ -88,23 +96,31 @@ function pcRefresh(){
   var balance=totalIn-totalOut;
 
   // Employee dropdown options
-  var empOpts='<option value="all">All Employees</option>'+
-    PC_EMPS.filter(function(e){
-      return PC_IN.some(function(i){return i.emp_id===e.empId||i.emp_id===e.id;})||
-             PC_EXP.some(function(x){return x.emp_id===e.empId||x.emp_id===e.id;});
-    }).map(function(e){
+  var pcPickable=PC_EMPS.filter(function(e){
+    return PC_IN.some(function(i){return i.emp_id===e.empId||i.emp_id===e.id;})||
+           PC_EXP.some(function(x){return x.emp_id===e.empId||x.emp_id===e.id;});
+  });
+  var allOptLabel=pcScope==='all'?'All Employees':'All (My Department)';
+  var empOpts=(pcScope==='all'||pcPickable.length>1?'<option value="all">'+allOptLabel+'</option>':'')+
+    pcPickable.map(function(e){
       return '<option value="'+e.empId+'"'+(PC_EMP_FILTER===e.empId?' selected':'')+'>'+e.name+'</option>';
     }).join('');
+  // Nothing to pick between when a Self-scoped viewer can only ever see
+  // their own single record — the whole filter bar is just noise then.
+  var showEmpFilterBar = pcScope!=='self' && (pcScope==='all' || pcPickable.length>1);
 
   var html=
-    // Employee filter dropdown
+    // Employee filter dropdown — admins/"All"-scoped viewers only; see
+    // pcScope above. Access Control's Employee Data Visibility setting
+    // (per employee or per role) is what grants this.
+    (!showEmpFilterBar ? '' :
     '<div style="background:var(--card-bg);border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
       '<label style="font-size:11px;font-weight:800;color:var(--navy);white-space:nowrap;">&#128101; Employee</label>'+
       '<select onchange="pcSetEmpFilter(this.value)" style="flex:1;border:1.5px solid var(--navy);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:var(--navy);outline:none;cursor:pointer;">'+
         empOpts+
       '</select>'+
       (PC_EMP_FILTER!=='all'?'<button onclick="pcSetEmpFilter(\'all\')" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer;font-weight:700;">&#10005; Clear</button>':'')+
-    '</div>'+
+    '</div>')+
     // grid-template-columns:repeat(3,1fr) alone isn't enough on narrow
     // phone widths: a grid item's default min-width is auto (its content's
     // min-content size), so a wide amount string like pcFmt() can force a
