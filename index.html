@@ -3700,7 +3700,23 @@ window.addEventListener('resize', function(){
   window._dashFitResizeT = setTimeout(fitDashboardToScreen, 150);
 });
 
-function canAccess(m,p){if(!currentUser)return false;if(currentUser.role==='admin')return true;if(!Object.keys(USER_PERMISSIONS).length)return true;var mp=USER_PERMISSIONS[m];return mp?mp[p]!==false:false;}
+// A module with NO permissions ever saved for this user (mp missing
+// entirely) stays permissive — that's the "never configured in Access
+// Control at all" case, unchanged from before. But once a module HAS
+// been configured (mp exists), a param that's simply absent from it
+// is now treated as NOT granted (mp[p]===true), matching exactly what
+// Access Control's own checkbox shows (acRenderMods renders a checkbox
+// checked only when mp[p]===true — see AC_MODS). Previously this used
+// mp[p]!==false, which defaulted an absent param to GRANTED instead:
+// harmless while every param a module could ever have was already
+// explicitly saved, but the moment a new param is added to an existing
+// module (e.g. petty-cash's self_5min), every employee/role configured
+// before that still has no row for it — so it silently defaulted to
+// allowed despite the checkbox showing unchecked, until the admin
+// happened to re-save that employee. Defaulting an unconfigured param
+// to denied (not granted) is the safe reading and keeps runtime access
+// in sync with what Access Control visibly shows.
+function canAccess(m,p){if(!currentUser)return false;if(currentUser.role==='admin')return true;if(!Object.keys(USER_PERMISSIONS).length)return true;var mp=USER_PERMISSIONS[m];return mp?mp[p]===true:false;}
 // Shows/hides the dashboard's "Scan & Pay" floating button — now that
 // it lives outside #app-dashboard (see the comment by its markup), it
 // no longer gets hidden automatically when another screen is shown, so
@@ -28851,8 +28867,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261002h"></script>
-<script src="js/employee.js?v=20261002h"></script>
-<script src="js/projects.js?v=20261002h"></script>
-<script src="js/finance.js?v=20261002h"></script>
+<script src="js/registry.js?v=20261002i"></script>
+<script src="js/employee.js?v=20261002i"></script>
+<script src="js/projects.js?v=20261002i"></script>
+<script src="js/finance.js?v=20261002i"></script>
 </html>
