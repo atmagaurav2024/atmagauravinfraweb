@@ -39,6 +39,12 @@ html,body{height:100%;overflow:hidden;}
 .an-ic{font-size:22px;line-height:1;}
 .an-lb{font-size:10px;font-weight:700;color:#94A3B8;font-family:'Nunito',sans-serif;}
 .an-item.on .an-lb{color:#1565C0;}
+/* The middle "Scan & Pay" nav item — same flex:1 share of the row as
+   the other 4 (so spacing stays equal at any width), but its icon
+   pulls up above the bar via a negative margin instead of sitting
+   inline like a plain emoji, for the usual "elevated" scan-button look. */
+.an-item.an-scan{justify-content:flex-end;padding-bottom:9px;}
+.an-scan-ic{width:50px;height:50px;margin-top:-28px;border-radius:50%;background:var(--navy);border:3px solid var(--card-bg);display:flex;align-items:center;justify-content:center;font-size:21px;color:#fff;box-shadow:0 4px 14px rgba(13,33,55,.45);}
 
 /* Left icon rail (desktop/tablet only — see JS updateNavLayout) */
 .side-rail{display:none;position:fixed;top:0;left:0;bottom:0;width:64px;background:#0D2137;z-index:250;
@@ -2602,26 +2608,26 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
   </div>
 </div>
 
-<!-- BOTTOM NAV (shown when in app) -->
+<!-- BOTTOM NAV (shown when in app) — 5 equal-width items, with "Scan
+     & Pay" as a real flex child in the middle (not a separately
+     floating/centered element) so it keeps equal spacing from every
+     other item at any screen width, instead of overlapping neighbors'
+     labels the way an independently-centered overlay did. Its icon
+     still visually "pokes up" above the bar via a negative margin on
+     .an-scan-ic, but its horizontal position and the row's spacing
+     are entirely normal flexbox, same as the other 4. Visibility
+     (permission-gated) is managed by dashUpdateScanFab(), called from
+     showApp() on every navigation. -->
 <nav class="app-nav" id="app-nav" style="display:none;">
   <button class="an-item on" id="an-home" onclick="showApp('dashboard')"><div class="an-ic">&#127968;</div><div class="an-lb">Home</div></button>
   <button class="an-item" id="an-attendance" onclick="showApp('attendance')"><div class="an-ic">&#128101;</div><div class="an-lb">Attendance</div></button>
+  <button class="an-item an-scan" id="dash-scan-fab" onclick="dashScanAndPay()" title="Scan & Pay" style="display:none;">
+    <span class="an-scan-ic">&#128247;</span>
+    <div class="an-lb">Scan</div>
+  </button>
   <button class="an-item" id="an-registry" onclick="showApp('registry')"><div class="an-ic">&#128218;</div><div class="an-lb">Registry</div></button>
   <button class="an-item" id="an-profile" onclick="showProfile()"><div class="an-ic">&#128100;</div><div class="an-lb">Profile</div></button>
 </nav>
-
-<!-- Dashboard "Scan & Pay" button lives at the top level, as a sibling
-     of .app-nav rather than nested inside #app-dashboard: each
-     .app-screen has its own z-index:100 and establishes its own
-     stacking context, so a button nested inside one — however high
-     its own z-index — can never paint above .app-nav's z-index:200.
-     Visibility is managed entirely by dashUpdateScanFab() (called from
-     showApp() on every navigation), not by the parent .app-screen's
-     on/off class. -->
-<button onclick="dashScanAndPay()" id="dash-scan-fab" title="Scan & Pay" style="position:fixed;bottom:6px;left:50%;transform:translateX(-50%);width:76px;height:82px;background:transparent;border:none;cursor:pointer;z-index:400;padding:0;display:none;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;">
-  <span style="width:56px;height:56px;border-radius:50%;background:var(--navy);border:3px solid var(--card-bg);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;box-shadow:0 4px 16px rgba(13,33,55,.45);">&#128247;</span>
-  <span style="font-size:10px;font-weight:700;color:#94A3B8;font-family:'Nunito',sans-serif;">Scan &amp; Pay</span>
-</button>
 
 <div class="toast-wrap" id="toast-wrap"></div>
 
@@ -3726,17 +3732,17 @@ window.addEventListener('resize', function(){
 // to denied (not granted) is the safe reading and keeps runtime access
 // in sync with what Access Control visibly shows.
 function canAccess(m,p){if(!currentUser)return false;if(currentUser.role==='admin')return true;if(!Object.keys(USER_PERMISSIONS).length)return true;var mp=USER_PERMISSIONS[m];return mp?mp[p]===true:false;}
-// Shows/hides the dashboard's "Scan & Pay" floating button — now that
-// it lives outside #app-dashboard (see the comment by its markup), it
-// no longer gets hidden automatically when another screen is shown, so
-// this checks currentApp itself. Called from showApp() on every
-// navigation (not just into the dashboard) and again once real
-// permissions come back from loadUserPermissions(), which resolves
-// after the dashboard's first paint.
+// Shows/hides the "Scan & Pay" bottom-nav item — a real 5th member of
+// #app-nav (see the comment by its markup) rather than a dashboard-only
+// floating button, so it's available from any screen the same as
+// Home/Attendance/Registry/Profile are, gated only by whether this
+// person is allowed to record petty cash entries at all. Called from
+// showApp() on every navigation and again once real permissions come
+// back from loadUserPermissions(), which resolves after the first paint.
 function dashUpdateScanFab(){
   var fab=document.getElementById('dash-scan-fab');
   if(!fab) return;
-  fab.style.display = (currentApp==='dashboard' && canAccess('petty-cash','edit')) ? 'flex' : 'none';
+  fab.style.display = canAccess('petty-cash','edit') ? 'flex' : 'none';
 }
 // Permissions resolve in two layers: whatever is granted to the user's role
 // applies to everyone holding that role, and anything set against the
@@ -28929,8 +28935,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003m"></script>
-<script src="js/employee.js?v=20261003m"></script>
-<script src="js/projects.js?v=20261003m"></script>
-<script src="js/finance.js?v=20261003m"></script>
+<script src="js/registry.js?v=20261003n"></script>
+<script src="js/employee.js?v=20261003n"></script>
+<script src="js/projects.js?v=20261003n"></script>
+<script src="js/finance.js?v=20261003n"></script>
 </html>
