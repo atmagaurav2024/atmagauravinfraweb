@@ -108,6 +108,7 @@ serve(async (req) => {
     const beneAlreadyExists = !beneRes.ok &&
       JSON.stringify(bene).toLowerCase().includes("already exist");
     if (!beneRes.ok && !beneAlreadyExists) {
+      console.error("Cashfree beneficiary error, full response:", JSON.stringify(bene));
       throw new Error(bene.message || "Failed to add Cashfree beneficiary — check the UPI ID");
     }
 
@@ -125,7 +126,10 @@ serve(async (req) => {
       }),
     });
     const transfer = await transferRes.json();
-    if (!transferRes.ok) throw new Error(transfer.message || "Payout failed");
+    if (!transferRes.ok) {
+      console.error("Cashfree transfer error, full response:", JSON.stringify(transfer));
+      throw new Error(transfer.message || "Payout failed");
+    }
 
     // Cashfree's synchronous response status is typically one of
     // RECEIVED / PENDING / APPROVAL_PENDING / SUCCESS / FAILED / REJECTED
@@ -149,6 +153,9 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    // Logged so the actual reason shows up in Supabase's Logs tab for this
+    // function, not just in the app's own (fast-disappearing) toast.
+    console.error("initiate-cashfree-payout error:", error.message);
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
