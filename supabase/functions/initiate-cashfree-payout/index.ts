@@ -134,7 +134,11 @@ serve(async (req) => {
         headers: cfHeaders,
         body: JSON.stringify({
           beneficiary_id: beneficiaryId,
-          beneficiary_name: (expense.payee_name || "Vendor").slice(0, 100),
+          // Cashfree only allows letters and spaces in beneficiary_name
+          // — no numbers or punctuation (e.g. "R.K. Traders" or "Shop
+          // No. 5" would otherwise be rejected the same way
+          // transfer_remarks was).
+          beneficiary_name: ((expense.payee_name || "Vendor").replace(/[^a-zA-Z ]/g, " ").replace(/\s+/g, " ").trim() || "Vendor").slice(0, 100),
           beneficiary_instrument_details: { vpa: expense.payee_upi_id },
         }),
         ...fetchOpts,
@@ -157,7 +161,14 @@ serve(async (req) => {
           transfer_currency: "INR",
           transfer_mode: "upi",
           beneficiary_details: { beneficiary_id: beneficiaryId },
-          transfer_remarks: ("Petty cash: " + (expense.description || expense.category || "")).slice(0, 70),
+          // Cashfree only allows letters, numbers and spaces in
+          // transfer_remarks — no colons, hyphens or other punctuation
+          // (confirmed by a real "transfer_remarks_invalid" rejection).
+          transfer_remarks: ("Petty cash " + (expense.description || expense.category || ""))
+            .replace(/[^a-zA-Z0-9 ]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 70),
         }),
         ...fetchOpts,
       });
