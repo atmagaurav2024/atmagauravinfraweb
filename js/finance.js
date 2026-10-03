@@ -860,14 +860,21 @@ async function dashScanAndPay(){
   var foot=document.getElementById('pc-sheet-foot');
   if(foot) foot.innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-pc\',\'sh-pc\')">Cancel</button>'+
-    '<button class="btn btn-navy" onclick="pcPayAndSave()">&#128241; Pay &amp; Save</button>';
+    '<button class="btn btn-navy" onclick="pcSaveExpense()">&#128241; Pay &amp; Save</button>';
+  // Pay & Save now records the expense and triggers the automatic
+  // Cashfree UPI payout exactly like the regular Save button does
+  // (pcSaveExpense handles both) — no more browser-triggered upi://pay
+  // deep link, which UPI apps' anti-fraud rules reliably declined. If
+  // the payout isn't configured yet or fails, the expense is still
+  // recorded (payout_status='pending'/'failed') and can be settled
+  // manually with the per-row "Add UTR" button once paid by hand.
   if(typeof pcOpenQRScanner==='function') pcOpenQRScanner();
 }
 
-// Validates the form exactly like pcSaveExpense, then shows the
-// pay-manually-and-confirm screen (see pcShowUtrConfirm). Nothing is
-// saved yet; that happens once the UTR step is confirmed, so a payment
-// that never happens never creates a stray expense record.
+// Kept for reference / as a fallback manual flow (e.g. if a company
+// hasn't set up Cashfree payouts and would rather pay via a UPI app
+// deep link than wait and add the UTR later) — no longer wired to the
+// "Pay & Save" button by default; see dashScanAndPay above.
 function pcPayAndSave(){
   if(typeof canAccess==='function' && !canAccess('petty-cash','edit')){toast('You do not have permission to record expenses','error');return;}
   var emp=gv('pce-emp'), cat=gv('pce-cat'), amount=parseFloat(gv('pce-amount')), desc=gv('pce-desc');

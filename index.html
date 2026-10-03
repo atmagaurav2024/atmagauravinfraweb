@@ -19558,14 +19558,15 @@ async function pcSaveExpense(){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
-// Calls the RazorpayX payout Edge Function — see
-// supabase/functions/initiate-upi-payout/. Until that's deployed
-// (needs your RazorpayX account/credentials), this fails gracefully:
+// Calls the Cashfree payout Edge Function — see
+// supabase/functions/initiate-cashfree-payout/. Until that's deployed
+// (needs your Cashfree account/credentials), this fails gracefully:
 // the expense is already recorded either way, just left at
-// payout_status='pending' for you to action manually in the meantime.
+// payout_status='pending' for you to action manually in the meantime
+// (the per-row "Add UTR" button once you've paid the vendor yourself).
 async function pcInitiateUpiPayout(expenseId){
   try{
-    var res = await fetch(SUPABASE_URL+'/functions/v1/initiate-upi-payout',{
+    var res = await fetch(SUPABASE_URL+'/functions/v1/initiate-cashfree-payout',{
       method:'POST',
       headers:{'Authorization':'Bearer '+(currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
       body:JSON.stringify({expense_id:expenseId})
@@ -26528,17 +26529,17 @@ function companyRender(){
   var payoutHtml = (currentUser&&currentUser.role==='admin') ?
     sec('&#128176;','Petty Cash UPI Payouts','#00695C')+
     '<div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.5;">'+
-      'Connect your own RazorpayX business account to automatically pay vendors via UPI when recording a petty cash voucher, with the expense confirmed automatically once the payout settles. '+
-      (COMPANY_PAYOUT.is_active?'':'This needs a RazorpayX account (separate signup + KYC from regular Razorpay) with a pre-funded balance for payouts.')+
+      'Connect your own Cashfree Payouts account to automatically pay vendors via UPI when recording a petty cash voucher, with the expense confirmed automatically once the payout settles. '+
+      (COMPANY_PAYOUT.is_active?'':'This needs a Cashfree account with online KYC completed and a pre-funded balance for payouts.')+
     '</div>'+
     (COMPANY_PAYOUT.is_active?
       '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">'+
         '<div><div style="font-size:12.5px;font-weight:800;color:#166534;">&#10003; Connected</div>'+
-        '<div style="font-size:11px;color:var(--text3);">Account: '+(COMPANY_PAYOUT.razorpayx_account_number||'—')+'</div></div>'+
+        '<div style="font-size:11px;color:var(--text3);">Mode: '+(COMPANY_PAYOUT.cashfree_env==='production'?'Production (live payouts)':'Sandbox (test mode)')+'</div></div>'+
         '<button onclick="coPayoutEdit()" style="background:none;border:1px solid #BBF7D0;color:#166534;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">Edit</button>'+
       '</div>'
       :
-      '<button onclick="coPayoutEdit()" style="width:100%;background:var(--navy);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect RazorpayX</button>'
+      '<button onclick="coPayoutEdit()" style="width:100%;background:var(--navy);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect Cashfree</button>'
     )+
     '<div id="co-payout-form" style="display:none;margin-top:12px;"></div>'
   : '';
@@ -26614,48 +26615,53 @@ function companyRender(){
     docBox('cheque_doc','Cancelled Cheque',d.cheque_doc_url,'Upload Cancelled Cheque');
 }
 
-// ── PAYOUT SETTINGS: RazorpayX credentials for petty cash UPI ──────
+// ── PAYOUT SETTINGS: Cashfree Payouts credentials for petty cash UPI ──
 // Deliberately per-company (not a shared secret like the subscription
 // Razorpay keys) - each company's petty cash pays out from THEIR own
-// RazorpayX account, not Rydax's. The key_secret is stored in the
+// Cashfree account, not Rydax's. The client_secret is stored in the
 // database rather than an edge function env var for that reason, but
 // is only ever read server-side (via service role, inside the payout
 // edge function) - never re-displayed in this UI once saved.
+// (Previously RazorpayX — those razorpayx_* columns are left in place,
+// unused, in case a company ever needs to roll back.)
 function coPayoutEdit(){
   var f=document.getElementById('co-payout-form');
   if(!f) return;
   f.style.display='block';
   f.innerHTML=
     '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#92400E;line-height:1.5;">'+
-      'Find these in your RazorpayX Dashboard \u2192 Account &amp; Settings \u2192 API. Requires your RazorpayX KYC to be approved and an account funded for payouts.'+
+      'Find these in your Cashfree Dashboard \u2192 Developers \u2192 API Keys (Payouts). Requires your Cashfree KYC to be approved and an account funded for payouts.'+
     '</div>'+
-    '<label class="flbl">RazorpayX Account Number</label>'+
-    '<input class="finp" id="co-px-acct" placeholder="e.g. 2323230012345678" value="'+(COMPANY_PAYOUT.razorpayx_account_number||'')+'">'+
-    '<label class="flbl">Key ID</label>'+
-    '<input class="finp" id="co-px-keyid" placeholder="rzp_live_..." value="'+(COMPANY_PAYOUT.razorpayx_key_id||'')+'">'+
-    '<label class="flbl">Key Secret</label>'+
-    '<input class="finp" id="co-px-secret" type="password" placeholder="'+(COMPANY_PAYOUT.razorpayx_key_id?'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (leave blank to keep existing)':'')+'">'+
+    '<label class="flbl">Environment</label>'+
+    '<select class="finp" id="co-px-env">'+
+      '<option value="sandbox"'+(COMPANY_PAYOUT.cashfree_env!=='production'?' selected':'')+'>Sandbox (test mode)</option>'+
+      '<option value="production"'+(COMPANY_PAYOUT.cashfree_env==='production'?' selected':'')+'>Production (live payouts)</option>'+
+    '</select>'+
+    '<label class="flbl">Client ID</label>'+
+    '<input class="finp" id="co-px-keyid" placeholder="e.g. CF1234567890abcdef" value="'+(COMPANY_PAYOUT.cashfree_client_id||'')+'">'+
+    '<label class="flbl">Client Secret</label>'+
+    '<input class="finp" id="co-px-secret" type="password" placeholder="'+(COMPANY_PAYOUT.cashfree_client_id?'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (leave blank to keep existing)':'')+'">'+
     '<div style="display:flex;gap:8px;margin-top:10px;">'+
       '<button class="btn btn-outline" style="flex:1;" onclick="document.getElementById(\'co-payout-form\').style.display=\'none\';">Cancel</button>'+
       '<button class="btn" style="flex:1;background:var(--accent);color:white;" onclick="coPayoutSave()">&#10003; Save &amp; Activate</button>'+
     '</div>';
 }
 async function coPayoutSave(){
-  var acct=gv('co-px-acct'), keyId=gv('co-px-keyid'), secret=gv('co-px-secret');
-  if(!acct||!keyId){toast('Enter both the account number and Key ID','warning');return;}
-  if(!secret && !COMPANY_PAYOUT.razorpayx_key_id){toast('Enter the Key Secret','warning');return;}
+  var env=gv('co-px-env')||'sandbox', clientId=gv('co-px-keyid'), secret=gv('co-px-secret');
+  if(!clientId){toast('Enter the Client ID','warning');return;}
+  if(!secret && !COMPANY_PAYOUT.cashfree_client_id){toast('Enter the Client Secret','warning');return;}
   var data={
     company_id: currentUser.companyId,
-    razorpayx_account_number: acct,
-    razorpayx_key_id: keyId,
+    cashfree_client_id: clientId,
+    cashfree_env: env,
     is_active: true
   };
-  if(secret) data.razorpayx_key_secret = secret; // only overwrite if a new one was typed
+  if(secret) data.cashfree_client_secret = secret; // only overwrite if a new one was typed
   try{
     toast('Saving...','info');
     if(COMPANY_PAYOUT.id) await sbUpdate('company_payout_settings', COMPANY_PAYOUT.id, data);
     else await sbInsert('company_payout_settings', data);
-    toast('RazorpayX connected — petty cash UPI payouts are now active','success');
+    toast('Cashfree connected — petty cash UPI payouts are now active','success');
     initCompany();
   }catch(e){toast('Error: '+e.message,'error');}
 }
@@ -28914,8 +28920,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003i"></script>
-<script src="js/employee.js?v=20261003i"></script>
-<script src="js/projects.js?v=20261003i"></script>
-<script src="js/finance.js?v=20261003i"></script>
+<script src="js/registry.js?v=20261003j"></script>
+<script src="js/employee.js?v=20261003j"></script>
+<script src="js/projects.js?v=20261003j"></script>
+<script src="js/finance.js?v=20261003j"></script>
 </html>
