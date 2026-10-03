@@ -3765,6 +3765,20 @@ async function loadUserPermissions(){
     // very first paint instead of waiting on the next click.
     if(typeof applyDrawerPermissions==='function') applyDrawerPermissions();
     if(typeof applyPlanLocks==='function') applyPlanLocks();
+    // Same race, different symptom: if the user is ALREADY sitting on a
+    // screen that bakes a permission check into its own buttons at
+    // render time (Petty Cash's "+ Fund Employee"/"− Record Expense",
+    // gated on petty-cash.edit), that screen's first paint ran during
+    // this same permissive window and never gets redrawn — so those
+    // buttons stay visible forever even once real permissions say they
+    // shouldn't be, while the per-row Edit/Delete icons (re-rendered
+    // later by tab/date-filter clicks, via pcRenderList) correctly pick
+    // up the real permission and disappear. That mismatch is exactly
+    // "I can enter new entries but can't edit existing ones" even
+    // though both are meant to be controlled by the same 'edit' permission.
+    // Re-running pcRefresh() here (if Petty Cash is the open screen)
+    // rebuilds those buttons against the real permissions too.
+    if(currentApp==='petty-cash' && typeof pcRefresh==='function') pcRefresh();
   }catch(e){ console.warn('loadUserPermissions', e); }
 }
 function initProjects(){if(typeof projModRenderNav==='function'){projModRenderNav();projModLoadTab();}}
@@ -28874,8 +28888,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003d"></script>
-<script src="js/employee.js?v=20261003d"></script>
-<script src="js/projects.js?v=20261003d"></script>
-<script src="js/finance.js?v=20261003d"></script>
+<script src="js/registry.js?v=20261003e"></script>
+<script src="js/employee.js?v=20261003e"></script>
+<script src="js/projects.js?v=20261003e"></script>
+<script src="js/finance.js?v=20261003e"></script>
 </html>
