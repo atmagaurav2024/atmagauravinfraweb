@@ -25861,6 +25861,16 @@ var AC_INHERITED={}, AC_ROLE_OF_TARGET='', AC_EMP_CACHE=[];
 var AC_TAB='emp',AC_TARGET=null,AC_PERMISSIONS={};
 var AC_PCOL={view:'#1565C0',add:'#2E7D32',edit:'#E65100',delete:'#C62828',cash_in:'#2E7D32',expense:'#E07820',mark:'#00838F',approve_leave:'#00838F',self_5min:'#6A1B9A',edit_entry:'#00838F'};
 var AC_PLBL={view:'View',add:'Add',edit:'Edit',delete:'Delete',cash_in:'Cash In',expense:'Expense',mark:'Mark Att.',approve_leave:'Approve Leave',self_5min:'Edit/Delete Own (5 min)',edit_entry:'Edit Entry (Any Time)'};
+// Per-module label override, keyed 'module.param' — lets one module show
+// a different checkbox label for a param than every other module using
+// that same key, without touching the underlying permission key itself
+// (still just 'edit' in the data/canAccess calls — only the Access
+// Control UI text changes). Petty Cash's 'edit' now only governs
+// creating NEW entries (see pcCanEditEntry in js/finance.js — plain
+// 'edit' doesn't unlock editing an existing one anymore, 'edit_entry'
+// does), so "Edit" was a confusing label for it; every other module's
+// 'edit' checkbox is untouched.
+var AC_PLBL_OVERRIDE={'petty-cash.edit':'Record Entry'};
 
 var AC_MODS=[
   // Dashboard — view only
@@ -25921,9 +25931,10 @@ function acRenderMods(){
       var mp=AC_PERMISSIONS[mod.key]||{};
       var pBoxes=mod.params.map(function(p){
         var chk=mp[p]===true;var pc=AC_PCOL[p]||'#37474F';
+        var plbl=AC_PLBL_OVERRIDE[mod.key+'.'+p]||AC_PLBL[p];
         return '<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;cursor:pointer;border:1.5px solid '+(chk?pc:'var(--border)')+';background:'+(chk?pc+'15':'transparent')+';margin-bottom:4px;">'+
           '<input type="checkbox" '+(chk?'checked':'')+' onchange="acToggle(\''+mod.key+'\',\''+p+'\',this)" style="width:16px;height:16px;accent-color:'+pc+';">'+
-          '<span style="font-size:12px;font-weight:700;color:'+(chk?pc:'var(--text3)')+';">'+AC_PLBL[p]+'</span></label>';
+          '<span style="font-size:12px;font-weight:700;color:'+(chk?pc:'var(--text3)')+';">'+plbl+'</span></label>';
       }).join('');
       return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
@@ -28903,8 +28914,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003h"></script>
-<script src="js/employee.js?v=20261003h"></script>
-<script src="js/projects.js?v=20261003h"></script>
-<script src="js/finance.js?v=20261003h"></script>
+<script src="js/registry.js?v=20261003i"></script>
+<script src="js/employee.js?v=20261003i"></script>
+<script src="js/projects.js?v=20261003i"></script>
+<script src="js/finance.js?v=20261003i"></script>
 </html>
