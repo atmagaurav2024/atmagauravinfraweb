@@ -1411,38 +1411,49 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
   .att-monthly-grid{grid-template-columns:1fr;}
 }
 
-/* Dashboard 2-column panel rows (e.g. Revenue/Cost Billed Breakdown) — responsive */
-.dash-2col-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+/* Dashboard 2-column panel rows (e.g. Revenue/Cost Billed Breakdown) — responsive.
+   minmax(0,1fr) + min-width:0 on children — plain 1fr tracks let a
+   child's own content force the column (and the whole row) wider than
+   its container on some WebKit builds; see the note on
+   .dash-biz-overview-grid below for the real-world case that surfaced this. */
+.dash-2col-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;}
+.dash-2col-grid>*{min-width:0;}
 @media (max-width:640px){
-  .dash-2col-grid{grid-template-columns:1fr;}
+  .dash-2col-grid{grid-template-columns:minmax(0,1fr);}
 }
 /* Billing chart + Procurement + Workforce row — 3 columns on desktop
    (the primary target for this dashboard), collapsing in stages so it
    never gets cramped as the viewport narrows. */
-.dash-3col-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;}
+.dash-3col-grid{display:grid;grid-template-columns:2fr minmax(0,1fr) minmax(0,1fr);gap:12px;}
+.dash-3col-grid>*{min-width:0;}
 @media (max-width:900px){
-  .dash-3col-grid{grid-template-columns:1fr 1fr;}
+  .dash-3col-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
 }
 @media (max-width:640px){
-  .dash-3col-grid{grid-template-columns:1fr;}
+  .dash-3col-grid{grid-template-columns:minmax(0,1fr);}
 }
-/* Business Overview's 5 cards — 5 across on desktop, collapsing in
-   stages on narrower screens so cards stay readable rather than
-   getting squeezed narrow enough to visually cut off. */
-.dash-biz-overview-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;flex:1;}
-@media (max-width:820px){
-  .dash-biz-overview-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
-}
+/* Business Overview's 5 cards — auto-fit/minmax lets the browser pick
+   however many columns actually fit the REAL available width (5 across
+   on desktop, naturally fewer as the container narrows), the same
+   mechanism already used (and confirmed working on real phones) for the
+   Action Required cards above. A fixed-breakpoint repeat(N,1fr) version
+   of this was tried first but still overflowed on an actual iPhone
+   despite minmax(0,1fr) — nested flex-in-grid intrinsic sizing is a
+   known flaky spot in WebKit, so auto-fit (which doesn't depend on that
+   calculation at all) is the more reliable fix. min-width:0 is also set
+   on every ancestor in the flex/grid chain down to this grid as a
+   belt-and-suspenders measure. */
+.dash-biz-overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;flex:1;min-width:0;}
 @media (max-width:480px){
-  .dash-biz-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .dash-swipe-hint{display:block!important;}
 }
 /* Business Overview + Project Health row — side by side on desktop,
    matching the mockup's roughly 65/35 split, stacking on narrower
    screens same as the other dashboard grids. */
-.dash-overview-health-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch;}
+.dash-overview-health-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:stretch;}
+.dash-overview-health-grid>*{min-width:0;}
 @media (max-width:900px){
-  .dash-overview-health-grid{grid-template-columns:1fr;}
+  .dash-overview-health-grid{grid-template-columns:minmax(0,1fr);}
 }
 </style>
 </head>
@@ -28942,8 +28953,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003r"></script>
-<script src="js/employee.js?v=20261003r"></script>
-<script src="js/projects.js?v=20261003r"></script>
-<script src="js/finance.js?v=20261003r"></script>
+<script src="js/registry.js?v=20261003s"></script>
+<script src="js/employee.js?v=20261003s"></script>
+<script src="js/projects.js?v=20261003s"></script>
+<script src="js/finance.js?v=20261003s"></script>
 </html>
