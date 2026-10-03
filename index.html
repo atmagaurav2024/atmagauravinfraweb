@@ -25859,8 +25859,8 @@ var ACC_PARTY_CACHE={};
 // ════ ACCESS CONTROL ════════════════════════════════════
 var AC_INHERITED={}, AC_ROLE_OF_TARGET='', AC_EMP_CACHE=[];
 var AC_TAB='emp',AC_TARGET=null,AC_PERMISSIONS={};
-var AC_PCOL={view:'#1565C0',add:'#2E7D32',edit:'#E65100',delete:'#C62828',cash_in:'#2E7D32',expense:'#E07820',mark:'#00838F',approve_leave:'#00838F',self_5min:'#6A1B9A'};
-var AC_PLBL={view:'View',add:'Add',edit:'Edit',delete:'Delete',cash_in:'Cash In',expense:'Expense',mark:'Mark Att.',approve_leave:'Approve Leave',self_5min:'Edit/Delete Own (5 min)'};
+var AC_PCOL={view:'#1565C0',add:'#2E7D32',edit:'#E65100',delete:'#C62828',cash_in:'#2E7D32',expense:'#E07820',mark:'#00838F',approve_leave:'#00838F',self_5min:'#6A1B9A',edit_entry:'#00838F'};
+var AC_PLBL={view:'View',add:'Add',edit:'Edit',delete:'Delete',cash_in:'Cash In',expense:'Expense',mark:'Mark Att.',approve_leave:'Approve Leave',self_5min:'Edit/Delete Own (5 min)',edit_entry:'Edit Entry (Any Time)'};
 
 var AC_MODS=[
   // Dashboard — view only
@@ -25895,7 +25895,7 @@ var AC_MODS=[
   // entry they personally created, but only within 5 minutes of making
   // it — see pcCanEditEntry/pcCanDeleteEntry/pcWithinSelfWindow in
   // js/finance.js for the enforcement.
-  {key:'petty-cash',       label:'Petty Cash',         icon:'&#128181;',group:'Accounting',    params:['view','edit','delete','self_5min']},
+  {key:'petty-cash',       label:'Petty Cash',         icon:'&#128181;',group:'Accounting',    params:['view','edit','delete','self_5min','edit_entry']},
   {key:'overheads',        label:'Company Overheads',  icon:'&#127970;',group:'Accounting',    params:['view','edit','delete']},
   {key:'loans',            label:'Loans',              icon:'&#127974;',group:'Accounting',    params:['view','edit','delete']},
   {key:'tpm',              label:'Tools, Plant & Machinery', icon:'&#128295;',group:'Accounting', params:['view','edit','delete']},
@@ -28903,8 +28903,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003f"></script>
-<script src="js/employee.js?v=20261003f"></script>
-<script src="js/projects.js?v=20261003f"></script>
-<script src="js/finance.js?v=20261003f"></script>
+<script src="js/registry.js?v=20261003g"></script>
+<script src="js/employee.js?v=20261003g"></script>
+<script src="js/projects.js?v=20261003g"></script>
+<script src="js/finance.js?v=20261003g"></script>
 </html>

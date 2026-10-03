@@ -124,6 +124,13 @@ function pcWithinSelfWindow(item){
 function pcCanEditEntry(item){
   if(typeof canAccess!=='function') return true;
   if(canAccess('petty-cash','edit')) return true;
+  // "Edit Entry (Any Time)" (petty-cash.edit_entry) — a separate grant
+  // from plain 'edit' (which also controls the Fund Employee/Record
+  // Expense buttons, i.e. creating NEW entries). This one only matters
+  // for entries that already exist: it unlocks editing any of them,
+  // without the 5-minute self-window restriction below, for someone who
+  // shouldn't necessarily get the broader 'edit' grant.
+  if(canAccess('petty-cash','edit_entry')) return true;
   return !!(canAccess('petty-cash','self_5min') && pcWithinSelfWindow(item));
 }
 function pcCanDeleteEntry(item){
