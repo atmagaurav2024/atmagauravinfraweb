@@ -5,6 +5,14 @@
 // ── PETTY CASH ────────────────────────────────────────────
 var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
+// Date-range filter for the entry list — 'all'|'today'|'week'|'month'|
+// 'year'|'custom'. PC_DATE_FROM/TO (plain 'YYYY-MM-DD' strings) only
+// matter when PC_DATE_FILTER==='custom'. Only applied to the All/Cash
+// In/Expenses entry list (pcRenderList), same as PC_SITE_TAB — By
+// Employee shows a running balance, which a date-filtered partial net
+// would misrepresent as "the balance", so it's left unfiltered there
+// too (matching the existing Site tab precedent).
+var PC_DATE_FILTER='all', PC_DATE_FROM=null, PC_DATE_TO=null;
 // null = not yet defaulted this session; 'all' or a specific empId once
 // set. initPettyCash() defaults this to the logged-in user's own record
 // the first time the screen loads, without re-defaulting on every
@@ -217,6 +225,7 @@ function pcRefresh(){
   cont.innerHTML=html;
   pcRenderList();
   pcRenderSiteTabs();
+  pcRenderDateFilter();
 }
 
 function pcRenderTabs(){
@@ -254,6 +263,70 @@ function pcRenderSiteTabs(){
 }
 
 function pcFilterSite(proj){PC_SITE_TAB=proj;pcRenderSiteTabs();pcRenderList();}
+
+// ── DATE RANGE FILTER ───────────────────────────────────────────────
+// 'YYYY-MM-DD' in LOCAL time (not toISOString, which is UTC and can
+// land on the wrong calendar day near midnight IST). Dates are compared
+// as plain strings throughout — ISO 'YYYY-MM-DD' sorts lexicographically
+// the same as chronologically, which sidesteps every timezone-parsing
+// pitfall new Date('YYYY-MM-DD') has (it's parsed as UTC midnight).
+function pcDateStr(d){
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+}
+function pcDateRangeFor(mode){
+  var now=new Date();
+  if(mode==='today'){ var s=pcDateStr(now); return [s,s]; }
+  if(mode==='week'){
+    // Monday as the start of the week.
+    var day=now.getDay(), diff=(day===0?6:day-1);
+    var start=new Date(now); start.setDate(now.getDate()-diff);
+    return [pcDateStr(start), pcDateStr(now)];
+  }
+  if(mode==='month'){
+    var start=new Date(now.getFullYear(), now.getMonth(), 1);
+    return [pcDateStr(start), pcDateStr(now)];
+  }
+  if(mode==='year'){
+    var start=new Date(now.getFullYear(), 0, 1);
+    return [pcDateStr(start), pcDateStr(now)];
+  }
+  if(mode==='custom'){
+    if(!PC_DATE_FROM||!PC_DATE_TO) return null;
+    return PC_DATE_FROM<=PC_DATE_TO ? [PC_DATE_FROM,PC_DATE_TO] : [PC_DATE_TO,PC_DATE_FROM];
+  }
+  return null; // 'all' — no filtering
+}
+function pcRenderDateFilter(){
+  var wrap=document.getElementById('pc-date-filter');if(!wrap)return;
+  var modes=[['all','All'],['today','Today'],['week','This Week'],['month','This Month'],['year','This Year'],['custom','Custom']];
+  var html=modes.map(function(m){
+    var active=PC_DATE_FILTER===m[0];
+    return '<button onclick="pcSetDateFilter(\''+m[0]+'\')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:'+(active?'var(--navy)':'var(--card-bg)')+';color:'+(active?'white':'var(--text2)')+';font-family:Nunito;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">'+m[1]+'</button>';
+  }).join('');
+  if(PC_DATE_FILTER==='custom'){
+    html+='<input type="date" id="pc-date-from" value="'+(PC_DATE_FROM||'')+'" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:Nunito,sans-serif;background:var(--card-bg);color:var(--text);flex-shrink:0;">'+
+      '<span style="color:var(--text3);font-size:11px;flex-shrink:0;">to</span>'+
+      '<input type="date" id="pc-date-to" value="'+(PC_DATE_TO||'')+'" style="font-size:11px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:Nunito,sans-serif;background:var(--card-bg);color:var(--text);flex-shrink:0;">'+
+      '<button onclick="pcApplyCustomDate()" style="padding:6px 12px;border-radius:6px;border:none;background:var(--green);color:white;font-family:Nunito;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">Apply</button>';
+  }
+  wrap.innerHTML=html;
+}
+function pcSetDateFilter(mode){
+  PC_DATE_FILTER=mode;
+  if(mode==='custom' && !PC_DATE_FROM){
+    var t=pcDateStr(new Date());
+    PC_DATE_FROM=t; PC_DATE_TO=t;
+  }
+  pcRenderDateFilter();
+  pcRenderList();
+}
+function pcApplyCustomDate(){
+  var f=(document.getElementById('pc-date-from')||{}).value;
+  var t=(document.getElementById('pc-date-to')||{}).value;
+  if(!f||!t){toast('Pick both a from and to date','warning');return;}
+  PC_DATE_FROM=f; PC_DATE_TO=t;
+  pcRenderList();
+}
 
 function pcSetEmpFilter(empId){PC_EMP_FILTER=empId;pcRefresh();}
 
@@ -308,7 +381,12 @@ function pcRenderList(){
     if(i._type==='in'||tab==='cash-in') return true;
     return (i.project||'').toLowerCase().includes(PC_SITE_TAB.toLowerCase());
   });
-  if(!list.length){cont.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">No records</div>';return;}
+  var pcDateRange=pcDateRangeFor(PC_DATE_FILTER);
+  if(pcDateRange)list=list.filter(function(i){
+    var ds=i.date||(i.created_at||'').slice(0,10);
+    return ds>=pcDateRange[0] && ds<=pcDateRange[1];
+  });
+  if(!list.length){cont.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">No records'+(pcDateRange?' for this period':'')+'.</div>';return;}
   cont.innerHTML=list.slice(0,50).map(function(item){
     var isIn=item._type==='in'||tab==='cash-in';
     var col=isIn?'#2E7D32':'#C62828';
