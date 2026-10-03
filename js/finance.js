@@ -571,17 +571,14 @@ function pcRenderList(){
         '<div style="font-size:15px;font-weight:900;color:'+col+';">'+(isIn?'+':'-')+pcFmt(item.amount)+'</div>'+
         '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;">'+
         (pcCanEditEntry(item) ?
-        // Styled as a visible chip (background+color), same pattern as the
-        // Edit buttons in Execution/Loans — not transparent-on-transparent
-        // like before, which made the pencil glyph effectively invisible
-        // on devices/fonts that don't render the ✎ dingbat (U+270E isn't
-        // in every font's Latin-only fallback chain, unlike Delete's ×,
-        // which is a basic Latin-1 character and always renders). This way
-        // the button is still visibly there and tappable even if the icon
-        // glyph itself fails to draw.
-        '<button onclick="pcOpenEditEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:#E3F2FD;border:none;color:#1565C0;cursor:pointer;font-size:12px;font-weight:800;border-radius:6px;padding:4px 9px;" title="Edit">&#9998; Edit</button>' : '')+
+        // Small round icon-only button (visible chip background so it's
+        // still tappable/findable, same fix as before for the ✎ glyph
+        // not rendering in every font) — just the icon now, no "Edit"
+        // text label, since the full chip read as too large/heavy in
+        // the list.
+        '<button onclick="pcOpenEditEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:#E3F2FD;border:none;color:#1565C0;cursor:pointer;font-size:13px;font-weight:900;border-radius:50%;width:24px;height:24px;line-height:1;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;" title="Edit">&#9998;</button>' : '')+
         (pcCanDeleteEntry(item) ?
-        '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:#FFEBEE;border:none;color:#C62828;cursor:pointer;font-size:12px;font-weight:800;border-radius:6px;padding:4px 9px;" title="Delete">&#215; Delete</button>' : '')+
+        '<button onclick="pcDeleteEntry(\''+item.id+'\',\''+(isIn?'in':'exp')+'\')" style="background:#FFEBEE;border:none;color:#C62828;cursor:pointer;font-size:15px;font-weight:900;border-radius:50%;width:24px;height:24px;line-height:1;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;" title="Delete">&#215;</button>' : '')+
         '</div>'+
       '</div>'+
     '</div>';
