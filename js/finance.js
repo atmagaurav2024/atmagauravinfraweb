@@ -399,6 +399,11 @@ function pcDetailStatementData(list){
   });
   var totFunded=0, totSpent=0;
   list.forEach(function(i){ var a=parseFloat(i.amount)||0; if(i._type==='in') totFunded+=a; else totSpent+=a; });
+  // Balance is computed walking oldest→newest (above) so each row's
+  // running balance is correct, but the report itself should read
+  // latest-first — reverse the data rows for display and keep TOTAL
+  // pinned at the very end (bottom of the table) either way.
+  rows.reverse();
   rows.push(['TOTAL','','','','','',Math.round(totFunded),Math.round(totSpent),Math.round(bal)]);
   return {header:header, rows:rows};
 }
@@ -419,6 +424,10 @@ function pcDayAbstractData(list){
     bal+=net; totFunded+=d.funded; totSpent+=d.spent;
     return [fmtDate(ds), Math.round(d.funded), Math.round(d.spent), Math.round(net), Math.round(bal)];
   });
+  // Closing balance is walked oldest→newest (above), then the rows are
+  // reversed so the report itself reads latest-day-first; TOTAL stays
+  // pinned at the bottom.
+  rows.reverse();
   rows.push(['TOTAL', Math.round(totFunded), Math.round(totSpent), Math.round(totFunded-totSpent), Math.round(bal)]);
   return {header:header, rows:rows};
 }

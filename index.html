@@ -24396,7 +24396,13 @@ function accExportPDF(title, tableHeaders, tableRows, extraNoteHtml){
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
-  var thead='<tr style="background:var(--accent);color:white;">'+tableHeaders.map(function(h,i){
+  // NOTE: this document is written into a brand-new blank window/tab via
+  // openPDF() (window.open('','_blank')+document.write) — it does NOT
+  // inherit the app's :root CSS variables, so var(--accent) here used to
+  // resolve to nothing, leaving the header row with no background and
+  // invisible white-on-white text. Use a literal color instead (same navy
+  // the app's own --accent/--navy resolve to in light mode).
+  var thead='<tr style="background:#0D2137;color:white;">'+tableHeaders.map(function(h,i){
     return '<th style="padding:6px 8px;font-size:9.5px;font-weight:800;text-align:'+(i===0?'left':'right')+';white-space:nowrap;">'+h+'</th>';
   }).join('')+'</tr>';
   var tbody=tableRows.map(function(row){
@@ -24410,7 +24416,7 @@ function accExportPDF(title, tableHeaders, tableRows, extraNoteHtml){
     'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
     '@media print{button{display:none;}@page{size:A4;margin:12mm;}}'+
     '</style></head><body>'+
-    '<button onclick="window.print()" style="background:var(--accent);color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:14px;font-size:13px;">&#128438; Print / Save PDF</button>'+
+    '<button onclick="window.print()" style="background:#0D2137;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:14px;font-size:13px;">&#128438; Print / Save PDF</button>'+
     '<div style="border-bottom:3px solid #1A237E;padding-bottom:10px;">'+
       '<div style="font-size:17px;font-weight:900;color:#1A237E;">'+compName+'</div>'+
       (compAddr?'<div style="font-size:10px;color:#666;">'+compAddr+'</div>':'')+
@@ -28868,8 +28874,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003b"></script>
-<script src="js/employee.js?v=20261003b"></script>
-<script src="js/projects.js?v=20261003b"></script>
-<script src="js/finance.js?v=20261003b"></script>
+<script src="js/registry.js?v=20261003c"></script>
+<script src="js/employee.js?v=20261003c"></script>
+<script src="js/projects.js?v=20261003c"></script>
+<script src="js/finance.js?v=20261003c"></script>
 </html>
