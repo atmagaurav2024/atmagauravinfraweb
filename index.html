@@ -3743,7 +3743,22 @@ async function loadUserPermissions(){
         perms[row.module][row.permission]=row.granted;
       });
     };
-    var role=(currentUser.role||currentUser.designation||'').trim();
+    // Access Control's "Role" tab (acRoleLoad) and its per-employee merge
+    // (acLoadPerms, via emp.designation||emp.role) both key role-level
+    // grants off the employee's DESIGNATION — a free-text/custom job title
+    // ("Site Supervisor"), not the generic system role mapEmployee() sets
+    // on currentUser.role (admin/pm/engineer/qhse/finance/viewer, always
+    // truthy — defaults to 'viewer'). This used currentUser.role first and
+    // currentUser.designation as a fallback that can never fire (mapEmployee
+    // never sets a .designation field at all — it only sets .access, exactly
+    // as e.designation||e.role), so the role-level fetch below was almost
+    // always querying under the wrong role string and silently finding
+    // nothing. A role-level grant (e.g. "Site Supervisor" has petty-cash
+    // edit=true) would then never reach this employee at runtime, even
+    // though Access Control's own admin screen — reading the correct field —
+    // showed it as checked. Use .access (designation-preferred, same as the
+    // admin merge) to match.
+    var role=(currentUser.access||currentUser.role||'').trim();
     if(role){
       try{ apply(await sbFetch('access_permissions',{select:'*',filter:'role=eq.'+encodeURIComponent(role)})); }
       catch(e){ console.warn('role permissions not loaded', e); }
@@ -28888,8 +28903,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003e"></script>
-<script src="js/employee.js?v=20261003e"></script>
-<script src="js/projects.js?v=20261003e"></script>
-<script src="js/finance.js?v=20261003e"></script>
+<script src="js/registry.js?v=20261003f"></script>
+<script src="js/employee.js?v=20261003f"></script>
+<script src="js/projects.js?v=20261003f"></script>
+<script src="js/finance.js?v=20261003f"></script>
 </html>
