@@ -13,10 +13,11 @@ from employees e
 join companies c on c.id = e.company_id
 order by c.slug, full_name;
 
--- Your projects: name and id, so site names from the old Excel file can
--- be matched to the exact project record instead of a name guess.
-select p.id as project_uuid, p.name as project_name, p.company_id, c.slug as company_slug,
-       p.contract_value, p.address
+-- Your projects: every column, so site names from the old Excel file
+-- can be matched to the exact project record instead of a name guess.
+-- (select * rather than naming columns — the last attempt guessed a
+-- p.address column that doesn't actually exist on this table.)
+select p.*, c.slug as company_slug
 from projects p
 join companies c on c.id = p.company_id
-order by c.slug, project_name;
+order by c.slug, p.name;
