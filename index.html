@@ -1309,6 +1309,12 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
   .dt-kpis-6{grid-template-columns:repeat(3,1fr);}
   .dt-name{font-size:15px!important;line-height:1.25!important;word-break:break-word;}
   .dt-badges{width:100%;order:10;justify-content:flex-end;margin-top:8px;}
+  /* The "Here's what's happening..." subtitle has to share its row
+     with the profile photo/name on a phone-width screen, so it wraps
+     and crowds the header. Dropping it there keeps just the short
+     "Good evening" greeting, which fits on one line next to the
+     avatar without wrapping. */
+  #dash-subtitle{display:none;}
 }
 .dash-body{padding:10px 14px;flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;}
 .sec-title{font-size:14px;font-weight:800;margin-bottom:10px;font-family:'Nunito',sans-serif;}
@@ -28923,8 +28929,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003l"></script>
-<script src="js/employee.js?v=20261003l"></script>
-<script src="js/projects.js?v=20261003l"></script>
-<script src="js/finance.js?v=20261003l"></script>
+<script src="js/registry.js?v=20261003m"></script>
+<script src="js/employee.js?v=20261003m"></script>
+<script src="js/projects.js?v=20261003m"></script>
+<script src="js/finance.js?v=20261003m"></script>
 </html>
