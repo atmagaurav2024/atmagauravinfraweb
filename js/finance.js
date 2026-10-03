@@ -105,15 +105,16 @@ function pcMyEmpRec(){
 function pcMyEmpId(){ var e=pcMyEmpRec(); return e?e.empId:''; }
 
 // ── 5-MINUTE SELF-EDIT WINDOW ────────────────────────────────────────
-// Lets someone who doesn't hold full Petty Cash edit/delete rights still
-// fix an entry they JUST made, for a short window afterwards — granted
-// per employee/role in Access Control as "Edit/Delete Own (5 min)"
-// (petty-cash.self_5min), on top of (not instead of) the existing full
-// edit/delete permissions. Expires on its own: past 5 minutes since
-// created_at, this returns false and the Edit/Delete controls simply
-// stop being rendered for that one entry next time the list re-renders
-// (tab switch, save, reopening the screen) — there's no live countdown
-// ticking the button away mid-view.
+// Lets someone who doesn't hold full Petty Cash delete rights, or the
+// unconditional "Edit Entry (Any Time)" edit grant, still fix/remove an
+// entry they JUST made, for a short window afterwards — granted per
+// employee/role in Access Control as "Edit/Delete Own (5 min)"
+// (petty-cash.self_5min), on top of (not instead of) the existing
+// edit_entry/delete permissions. Expires on its own: past 5 minutes
+// since created_at, this returns false and the Edit/Delete controls
+// simply stop being rendered for that one entry next time the list
+// re-renders (tab switch, save, reopening the screen) — there's no live
+// countdown ticking the button away mid-view.
 function pcWithinSelfWindow(item){
   if(!item || !item.emp_id || !item.created_at) return false;
   var myId=pcMyEmpId();
@@ -123,13 +124,14 @@ function pcWithinSelfWindow(item){
 }
 function pcCanEditEntry(item){
   if(typeof canAccess!=='function') return true;
-  if(canAccess('petty-cash','edit')) return true;
-  // "Edit Entry (Any Time)" (petty-cash.edit_entry) — a separate grant
-  // from plain 'edit' (which also controls the Fund Employee/Record
-  // Expense buttons, i.e. creating NEW entries). This one only matters
-  // for entries that already exist: it unlocks editing any of them,
-  // without the 5-minute self-window restriction below, for someone who
-  // shouldn't necessarily get the broader 'edit' grant.
+  // Plain 'edit' only controls whether NEW entries can be entered (the
+  // Fund Employee/Record Expense buttons, gated separately where those
+  // are rendered) — it does NOT by itself unlock editing an entry that
+  // already exists. That's "Edit Entry (Any Time)" (petty-cash.edit_entry)
+  // below, a deliberately separate grant, so an admin can let someone
+  // record entries without also giving them free rein to alter anything
+  // already saved, and vice versa. Without edit_entry, the only way to
+  // edit an existing entry is the 5-minute self-window beneath it.
   if(canAccess('petty-cash','edit_entry')) return true;
   return !!(canAccess('petty-cash','self_5min') && pcWithinSelfWindow(item));
 }
