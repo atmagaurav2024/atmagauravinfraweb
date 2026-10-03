@@ -122,14 +122,23 @@ serve(async (req) => {
       return new Response("ok", { status: 200 });
     }
 
-    await supabaseAdmin
+    console.log("Cashfree webhook: signature verified for transferId", transferId, "-> setting status", status);
+
+    const { data: updated, error: updateError } = await supabaseAdmin
       .from("petty_cash_expenses")
       .update({
         payout_status: status,
         payout_utr: fields["utr"] || null,
         payout_failure_reason: failureReason,
       })
-      .eq("payout_ref", transferId);
+      .eq("payout_ref", transferId)
+      .select("id, payout_status");
+
+    if (updateError) {
+      console.error("Cashfree webhook: DB update failed for transferId", transferId, updateError.message);
+    } else {
+      console.log("Cashfree webhook: DB update result", JSON.stringify(updated));
+    }
 
     return new Response("ok", { status: 200 });
   } catch (error) {
