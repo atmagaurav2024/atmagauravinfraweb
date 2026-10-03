@@ -2621,7 +2621,15 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
   <button class="an-item on" id="an-home" onclick="showApp('dashboard')"><div class="an-ic">&#127968;</div><div class="an-lb">Home</div></button>
   <button class="an-item" id="an-attendance" onclick="showApp('attendance')"><div class="an-ic">&#128101;</div><div class="an-lb">Attendance</div></button>
   <button class="an-item an-scan" id="dash-scan-fab" onclick="dashScanAndPay()" title="Scan & Pay" style="display:none;">
-    <span class="an-scan-ic">&#128247;</span>
+    <span class="an-scan-ic">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff">
+        <rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="5" y="5" width="3" height="3" fill="var(--navy)"/>
+        <rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="16" y="5" width="3" height="3" fill="var(--navy)"/>
+        <rect x="3" y="14" width="7" height="7" rx="1.2"/><rect x="5" y="16" width="3" height="3" fill="var(--navy)"/>
+        <rect x="14" y="14" width="3" height="3"/><rect x="18" y="14" width="3" height="3"/>
+        <rect x="14" y="18" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/>
+      </svg>
+    </span>
     <div class="an-lb">Pay</div>
   </button>
   <button class="an-item" id="an-registry" onclick="showApp('registry')"><div class="an-ic">&#128218;</div><div class="an-lb">Registry</div></button>
@@ -28934,8 +28942,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003o"></script>
-<script src="js/employee.js?v=20261003o"></script>
-<script src="js/projects.js?v=20261003o"></script>
-<script src="js/finance.js?v=20261003o"></script>
+<script src="js/registry.js?v=20261003p"></script>
+<script src="js/employee.js?v=20261003p"></script>
+<script src="js/projects.js?v=20261003p"></script>
+<script src="js/finance.js?v=20261003p"></script>
 </html>
