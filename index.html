@@ -1272,7 +1272,7 @@ input,select,textarea{font-size:16px !important;}
 /* ═══════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════ */
-#app-dashboard{background:#F8FAFC;overflow-y:auto;overflow-x:hidden;padding-bottom:80px;font-family:'Inter',sans-serif;}
+#app-dashboard{background:#F8FAFC;overflow-y:auto;overflow-x:hidden;padding-bottom:110px;font-family:'Inter',sans-serif;}
 #app-dashboard *{font-family:'Inter',sans-serif;}
 #app-dashboard.on{display:block;}
 #app-dashboard .dash-top{background:var(--card-bg);border-bottom:1px solid var(--border);padding:8px 16px;padding-top:max(8px,env(safe-area-inset-top));}
@@ -2612,7 +2612,10 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
      Visibility is managed entirely by dashUpdateScanFab() (called from
      showApp() on every navigation), not by the parent .app-screen's
      on/off class. -->
-<button onclick="dashScanAndPay()" id="dash-scan-fab" title="Scan & Pay" style="position:fixed;bottom:28px;left:50%;transform:translateX(-50%);width:62px;height:62px;background:var(--navy);border-radius:50%;border:4px solid #fff;font-size:28px;color:#fff;cursor:pointer;box-shadow:0 6px 28px rgba(13,33,55,.55);z-index:400;line-height:1;display:none;align-items:center;justify-content:center;">&#128247;</button>
+<button onclick="dashScanAndPay()" id="dash-scan-fab" title="Scan & Pay" style="position:fixed;bottom:6px;left:50%;transform:translateX(-50%);width:76px;height:82px;background:transparent;border:none;cursor:pointer;z-index:400;padding:0;display:none;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;">
+  <span style="width:56px;height:56px;border-radius:50%;background:var(--navy);border:3px solid var(--card-bg);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;box-shadow:0 4px 16px rgba(13,33,55,.45);">&#128247;</span>
+  <span style="font-size:10px;font-weight:700;color:#94A3B8;font-family:'Nunito',sans-serif;">Scan &amp; Pay</span>
+</button>
 
 <div class="toast-wrap" id="toast-wrap"></div>
 
@@ -28920,8 +28923,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003k"></script>
-<script src="js/employee.js?v=20261003k"></script>
-<script src="js/projects.js?v=20261003k"></script>
-<script src="js/finance.js?v=20261003k"></script>
+<script src="js/registry.js?v=20261003l"></script>
+<script src="js/employee.js?v=20261003l"></script>
+<script src="js/projects.js?v=20261003l"></script>
+<script src="js/finance.js?v=20261003l"></script>
 </html>
