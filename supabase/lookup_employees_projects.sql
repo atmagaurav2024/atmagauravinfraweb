@@ -1,31 +1,35 @@
--- Read-only lookup — run this in the Supabase SQL editor and share the
--- results back. It's used to build the real Petty Cash import script
--- with exact IDs instead of guessing employee/project names via ILIKE.
--- Nothing is changed by this script — both queries are plain SELECTs.
+-- Read-only lookup — changes nothing, only SELECTs.
 --
--- Each query below returns a SINGLE ROW with a SINGLE CELL containing
--- the whole result as one JSON array of text — so instead of a grid
--- you have to copy row by row, there's exactly one cell to click and
--- copy, with everything in it. Paste that whole cell's text back.
+-- IMPORTANT: run each numbered block BY ITSELF (highlight just that
+-- block's text and run it, or run one, clear the editor, paste the
+-- next). Supabase's SQL editor only shows the result of the LAST
+-- statement it ran — if you run this whole file in one go, you'll
+-- only ever see block 4's result, never 1-3, which is almost
+-- certainly why nothing seemed to show up last time.
 
--- Your active employees: name, employee code, and which company they
--- belong to (useful if your account has more than one company).
-select json_agg(row_to_json(t)) as employees_json
+-- ── BLOCK 1: sanity check — how many rows actually exist? ──────────
+-- If either number is 0, that's the real problem (empty table, or
+-- you're on a different company than you expect), and blocks 3/4
+-- will correctly come back empty too — not a bug in the query.
+select
+  (select count(*) from employees) as employee_count,
+  (select count(*) from projects) as project_count;
+
+-- ── BLOCK 2: which company/companies is this data under? ───────────
+select id as company_id, name, slug from companies order by name;
+
+-- ── BLOCK 3: all employees, as one copyable JSON cell ───────────────
+select coalesce(json_agg(row_to_json(t)), '[]'::json) as employees_json
 from (
   select e.id as employee_uuid, e.emp_id as employee_code,
          trim(coalesce(e.first_name,'')||' '||coalesce(e.middle_name,'')||' '||coalesce(e.last_name,'')) as full_name,
-         e.designation, e.role, e.status, e.company_id, c.slug as company_slug
+         e.designation, e.role, e.status, e.company_id
   from employees e
-  join companies c on c.id = e.company_id
-  order by c.slug, full_name
+  order by full_name
 ) t;
 
--- Your projects: every column, so site names from the old Excel file
--- can be matched to the exact project record instead of a name guess.
-select json_agg(row_to_json(t)) as projects_json
+-- ── BLOCK 4: all projects, as one copyable JSON cell ─────────────────
+select coalesce(json_agg(row_to_json(t)), '[]'::json) as projects_json
 from (
-  select p.*, c.slug as company_slug
-  from projects p
-  join companies c on c.id = p.company_id
-  order by c.slug, p.name
+  select p.* from projects p order by p.name
 ) t;
