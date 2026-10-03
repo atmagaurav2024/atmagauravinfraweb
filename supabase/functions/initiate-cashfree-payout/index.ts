@@ -11,6 +11,20 @@
 // a company that configured RazorpayX previously.
 //
 // Deploy: supabase functions deploy initiate-cashfree-payout
+//
+// Cashfree's Payouts API only accepts calls from IP addresses you've
+// whitelisted in advance in their Dashboard (Developers -> Payouts ->
+// Two-Factor Authentication -> IP Whitelist) — including in sandbox.
+// Supabase Edge Functions don't run from one fixed outbound IP, so
+// there's nothing stable to whitelist there directly. Instead, every
+// call to Cashfree below is routed through a small fixed-IP proxy
+// (e.g. a free Webshare.io datacenter proxy); it's that proxy's IP
+// which actually gets whitelisted in Cashfree, not this function's own.
+//
+// Set this function's proxy with:
+//   supabase secrets set CASHFREE_PROXY_URL=http://USERNAME:PASSWORD@HOST:PORT
+// (leave CASHFREE_PROXY_URL unset to call Cashfree directly, with no
+// proxy — only useful once/if Cashfree ever drops the IP requirement).
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -27,6 +41,22 @@ const corsHeaders = {
 // non-empty and doesn't start with a digit-only collision risk.
 function safeId(prefix: string, raw: string): string {
   return (prefix + raw.replace(/[^a-zA-Z0-9]/g, "")).slice(0, 40);
+}
+
+// Builds a Deno HTTP client that routes through CASHFREE_PROXY_URL, if
+// set. Returns undefined (meaning: call Cashfree directly) when the
+// secret isn't set, so this is a no-op until a proxy is actually
+// configured.
+function buildProxyClient(): Deno.HttpClient | undefined {
+  const proxyUrl = Deno.env.get("CASHFREE_PROXY_URL");
+  if (!proxyUrl) return undefined;
+  const p = new URL(proxyUrl);
+  return Deno.createHttpClient({
+    proxy: {
+      url: p.protocol + "//" + p.hostname + ":" + p.port,
+      basicAuth: p.username ? { username: p.username, password: p.password } : undefined,
+    },
+  });
 }
 
 serve(async (req) => {
@@ -93,42 +123,51 @@ serve(async (req) => {
     const beneficiaryId = safeId("PCB", expense.id);
     const transferId = safeId("PCT", expense.id);
 
-    // 1) Beneficiary — create (or reuse, if this is a retry after a
-    // transient failure and the beneficiary already exists).
-    const beneRes = await fetch(base + "/beneficiary", {
-      method: "POST",
-      headers: cfHeaders,
-      body: JSON.stringify({
-        beneficiary_id: beneficiaryId,
-        beneficiary_name: (expense.payee_name || "Vendor").slice(0, 100),
-        beneficiary_instrument_details: { vpa: expense.payee_upi_id },
-      }),
-    });
-    const bene = await beneRes.json();
-    const beneAlreadyExists = !beneRes.ok &&
-      JSON.stringify(bene).toLowerCase().includes("already exist");
-    if (!beneRes.ok && !beneAlreadyExists) {
-      console.error("Cashfree beneficiary error, full response:", JSON.stringify(bene));
-      throw new Error(bene.message || "Failed to add Cashfree beneficiary — check the UPI ID");
-    }
+    var proxyClient = buildProxyClient();
+    var fetchOpts = proxyClient ? { client: proxyClient } : {};
+    var bene: any, transfer: any;
+    try {
+      // 1) Beneficiary — create (or reuse, if this is a retry after a
+      // transient failure and the beneficiary already exists).
+      const beneRes = await fetch(base + "/beneficiary", {
+        method: "POST",
+        headers: cfHeaders,
+        body: JSON.stringify({
+          beneficiary_id: beneficiaryId,
+          beneficiary_name: (expense.payee_name || "Vendor").slice(0, 100),
+          beneficiary_instrument_details: { vpa: expense.payee_upi_id },
+        }),
+        ...fetchOpts,
+      });
+      bene = await beneRes.json();
+      const beneAlreadyExists = !beneRes.ok &&
+        JSON.stringify(bene).toLowerCase().includes("already exist");
+      if (!beneRes.ok && !beneAlreadyExists) {
+        console.error("Cashfree beneficiary error, full response:", JSON.stringify(bene));
+        throw new Error(bene.message || "Failed to add Cashfree beneficiary — check the UPI ID");
+      }
 
-    // 2) Transfer
-    const transferRes = await fetch(base + "/transfers", {
-      method: "POST",
-      headers: cfHeaders,
-      body: JSON.stringify({
-        transfer_id: transferId,
-        transfer_amount: parseFloat(expense.amount),
-        transfer_currency: "INR",
-        transfer_mode: "upi",
-        beneficiary_details: { beneficiary_id: beneficiaryId },
-        transfer_remarks: ("Petty cash: " + (expense.description || expense.category || "")).slice(0, 70),
-      }),
-    });
-    const transfer = await transferRes.json();
-    if (!transferRes.ok) {
-      console.error("Cashfree transfer error, full response:", JSON.stringify(transfer));
-      throw new Error(transfer.message || "Payout failed");
+      // 2) Transfer
+      const transferRes = await fetch(base + "/transfers", {
+        method: "POST",
+        headers: cfHeaders,
+        body: JSON.stringify({
+          transfer_id: transferId,
+          transfer_amount: parseFloat(expense.amount),
+          transfer_currency: "INR",
+          transfer_mode: "upi",
+          beneficiary_details: { beneficiary_id: beneficiaryId },
+          transfer_remarks: ("Petty cash: " + (expense.description || expense.category || "")).slice(0, 70),
+        }),
+        ...fetchOpts,
+      });
+      transfer = await transferRes.json();
+      if (!transferRes.ok) {
+        console.error("Cashfree transfer error, full response:", JSON.stringify(transfer));
+        throw new Error(transfer.message || "Payout failed");
+      }
+    } finally {
+      if (proxyClient) proxyClient.close();
     }
 
     // Cashfree's synchronous response status is typically one of
