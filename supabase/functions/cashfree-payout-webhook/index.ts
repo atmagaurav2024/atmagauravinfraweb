@@ -4,45 +4,38 @@
 // is often just "RECEIVED"/"PENDING" — this is what actually confirms
 // success or failure). Verifies the webhook signature before trusting
 // anything in the body, then updates the matching petty_cash_expenses
-// row by its payout_ref (the transfer_id *we* generated and sent to
+// row by its payout_ref (the transferId *we* generated and sent to
 // Cashfree, echoed back in the event).
 //
-// Confirmed payload shape (Cashfree's Payouts V2 webhook docs):
-//   {
-//     "data": {
-//       "transfer_id": "...", "cf_transfer_id": "...", "status": "SUCCESS",
-//       "status_code": "COMPLETED", "status_description": "...",
-//       "transfer_utr": "...", ...
-//     },
-//     "event_time": "...", "type": "TRANSFER_ACKNOWLEDGED" (or similar)
-//   }
-// Headers: x-webhook-signature (base64 HMAC-SHA256), x-webhook-timestamp.
+// CONFIRMED FROM A REAL DELIVERY (the "Test & Add Webhook" button in
+// Cashfree's dashboard) — this account's webhook is the older
+// Payouts V1 format, NOT the V2 JSON format a previous version of
+// this file assumed. The body is application/x-www-form-urlencoded,
+// not JSON, e.g.:
+//   event=TRANSFER_SUCCESS&transferId=...&referenceId=...&acknowledged=1&eventTime=...&utr=...&signature=...
+// (TRANSFER_FAILED carries event/transferId/referenceId/reason/signature
+// instead of acknowledged/eventTime/utr.)
 //
-// IMPORTANT — unlike RazorpayX, Cashfree does NOT use a separately
-// configured webhook secret. Per their docs, the signature is
-// HMAC-SHA256(client_secret, timestamp + rawBody), base64-encoded,
-// where client_secret is "the oldest active" Cashfree API client
-// secret on the account — i.e. the same Client Secret stored in
-// company_payout_settings.cashfree_client_secret (unless that secret
-// has since been rotated/regenerated in Cashfree's dashboard, in
-// which case Cashfree keeps signing with the OLDER one until it's
-// deactivated — if signatures ever start failing after rotating keys,
-// that's almost certainly why).
-//
-// Because the payload carries no company_id, this function looks up
-// the expense (and its company) by payout_ref FIRST, then verifies
-// the signature using THAT company's own client_secret — not a single
-// shared secret — since this app is multi-tenant and every company
-// has its own Cashfree account/keys.
+// Signature verification (per Cashfree's Payouts V1 docs) is NOT the
+// header-based x-webhook-signature scheme V2 uses. Instead:
+//   1. Take every POST field except "signature".
+//   2. Sort those fields by key name.
+//   3. Concatenate just their VALUES, in that sorted order, no separator.
+//   4. HMAC-SHA256 that string using the merchant's own Cashfree
+//      Client Secret as the key (the OLDEST active one if keys have
+//      ever been regenerated — Cashfree keeps signing with the old one
+//      until it's deactivated), then base64-encode the result.
+//   5. Compare to the "signature" field.
+// There is no separately configured webhook secret — same per-tenant
+// lookup as before: find the expense (and its company) by transferId
+// first, then verify using THAT company's own client_secret.
 //
 // When registering this in Cashfree (Payouts Dashboard -> Developers
-// -> Webhook -> Add Webhook URL), there is no secret field to fill in
-// — just the URL. Cashfree sends a LOW_BALANCE_ALERT test event on
-// "Test & Add Webhook"; that event carries its own signature/timestamp
-// INSIDE the payload rather than in headers, which this function does
-// not specially handle (it only reads the headers) — expect that one
-// test call to log a signature-mismatch warning and be ignored, which
-// is harmless; real transfer events use the header-based scheme above.
+// -> Webhook -> Add Webhook URL), there's no secret field to fill in
+// — just the URL. Clicking "Test & Add Webhook" sends a LOW_BALANCE_ALERT
+// test event with no transferId, which this function just acknowledges
+// without verifying (nothing to look up a company by) — that's expected,
+// not an error.
 //
 // Deploy: supabase functions deploy cashfree-payout-webhook --no-verify-jwt
 // (--no-verify-jwt because Cashfree calls this directly, not through a
@@ -63,20 +56,20 @@ async function hmacBase64(secret: string, message: string): Promise<string> {
 serve(async (req) => {
   try {
     const rawBody = await req.text();
-    const signature = req.headers.get("x-webhook-signature") || "";
-    const timestamp = req.headers.get("x-webhook-timestamp") || "";
+    console.log("Cashfree payout webhook received (raw):", rawBody);
 
-    const event = JSON.parse(rawBody);
-    console.log("Cashfree payout webhook received:", JSON.stringify(event));
+    // Form-urlencoded, e.g. "event=TRANSFER_SUCCESS&transferId=PCT...&..."
+    const params = new URLSearchParams(rawBody);
+    const fields: Record<string, string> = {};
+    for (const [k, v] of params.entries()) fields[k] = v;
 
-    const data = event.data || event;
-    const transferId: string | undefined = data.transfer_id || data.transferId;
-    const rawStatus: string = (data.status || data.transfer_status || "").toUpperCase();
-    const utr: string | null = data.transfer_utr || data.utr || null;
+    const eventName = fields["event"] || "";
+    const transferId = fields["transferId"];
+    const receivedSig = fields["signature"] || "";
 
     if (!transferId) {
-      console.error("Cashfree webhook: no transfer_id found in payload — likely the LOW_BALANCE_ALERT test event, ignoring.");
-      return new Response("ok", { status: 200 }); // ack anyway, nothing to act on
+      console.log("Cashfree webhook: no transferId (likely the LOW_BALANCE_ALERT test event) — acknowledging without verifying.");
+      return new Response("ok", { status: 200 });
     }
 
     const supabaseAdmin = createClient(
@@ -85,15 +78,14 @@ serve(async (req) => {
     );
 
     // Look up which company this transfer belongs to BEFORE trusting
-    // anything else in the payload, so we know whose client_secret to
-    // verify the signature against.
+    // anything else, so we know whose client_secret to verify against.
     const { data: expense } = await supabaseAdmin
       .from("petty_cash_expenses")
       .select("id, company_id")
       .eq("payout_ref", transferId)
       .single();
     if (!expense) {
-      console.error("Cashfree webhook: no expense found for transfer_id", transferId);
+      console.error("Cashfree webhook: no expense found for transferId", transferId);
       return new Response("ok", { status: 200 }); // ack — nothing we can do with an unknown transfer
     }
 
@@ -104,29 +96,37 @@ serve(async (req) => {
       .single();
     const clientSecret = payoutSettings?.cashfree_client_secret || "";
 
-    const expectedSig = await hmacBase64(clientSecret, timestamp + rawBody);
-    if (!signature || !clientSecret || expectedSig !== signature) {
-      console.error("Cashfree webhook: signature mismatch for transfer_id", transferId);
+    // Sort every field except "signature" by key, concatenate just the
+    // values (no separator), HMAC-SHA256 with the client secret, base64.
+    const postData = Object.keys(fields)
+      .filter((k) => k !== "signature")
+      .sort()
+      .map((k) => fields[k])
+      .join("");
+    const expectedSig = await hmacBase64(clientSecret, postData);
+
+    if (!receivedSig || !clientSecret || expectedSig !== receivedSig) {
+      console.error("Cashfree webhook: signature mismatch for transferId", transferId);
       return new Response("Invalid signature", { status: 400 });
     }
 
-    let status = "processing";
+    let status: string | null = null;
     let failureReason: string | null = null;
-    if (rawStatus === "SUCCESS") {
+    if (eventName === "TRANSFER_SUCCESS") {
       status = "success";
-    } else if (rawStatus === "FAILED" || rawStatus === "REJECTED" || rawStatus === "MANUALLY_REJECTED") {
+    } else if (eventName === "TRANSFER_FAILED" || eventName === "TRANSFER_REVERSED") {
       status = "failed";
-      failureReason = data.status_description || data.failure_reason || "Payout failed";
-    } else if (rawStatus === "REVERSED") {
-      status = "failed";
-      failureReason = "Payout reversed by bank";
+      failureReason = fields["reason"] || "Payout failed";
+    } else {
+      console.log("Cashfree webhook: unhandled event type", eventName, "— acknowledging, no status change.");
+      return new Response("ok", { status: 200 });
     }
 
     await supabaseAdmin
       .from("petty_cash_expenses")
       .update({
         payout_status: status,
-        payout_utr: utr,
+        payout_utr: fields["utr"] || null,
         payout_failure_reason: failureReason,
       })
       .eq("payout_ref", transferId);
