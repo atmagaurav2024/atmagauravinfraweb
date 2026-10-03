@@ -220,6 +220,9 @@ function pcRefresh(){
       '<button class="btn btn-green" onclick="pcOpenCashIn()">+ Fund Employee</button>'+
       '<button class="btn btn-navy" onclick="pcOpenExpense()">− Record Expense</button>'+
     '</div>' : '')+
+    '<div style="margin-bottom:12px;">'+
+      '<button class="btn btn-outline" style="width:100%;" onclick="pcOpenReports()">📊 Download Report (Excel / PDF)</button>'+
+    '</div>'+
     pcRenderTabs()+
     '<div id="pc-list"></div>';
   cont.innerHTML=html;
@@ -329,6 +332,154 @@ function pcApplyCustomDate(){
 }
 
 function pcSetEmpFilter(empId){PC_EMP_FILTER=empId;pcRefresh();}
+
+// ---------- Reports (Detail Statement / Day-wise Abstract) ----------
+// Reuses the house accExportCSV/accExportPDF primitives (same ones every
+// other module — Overheads, Loans, Salary Advances — uses) so these come
+// out looking and behaving like every other export in the app. Reports
+// respect whatever the user is currently looking at: the employee filter
+// (PC_EMP_FILTER), the site/project tab (PC_SITE_TAB) and the date range
+// (PC_DATE_FILTER), exactly like pcRenderList itself.
+
+function pcCurrentFilterLabel(){
+  var empLabel = PC_EMP_FILTER==='all' ? 'All Employees' : pcEmpName(PC_EMP_FILTER);
+  var dateLabel = {all:'All Time',today:'Today',week:'This Week',month:'This Month',year:'This Year'}[PC_DATE_FILTER];
+  if(!dateLabel) dateLabel = (PC_DATE_FILTER==='custom' && PC_DATE_FROM && PC_DATE_TO) ? (fmtDate(PC_DATE_FROM)+' to '+fmtDate(PC_DATE_TO)) : 'All Time';
+  var siteLabel = PC_SITE_TAB!=='all' ? (' · '+PC_SITE_TAB) : '';
+  return empLabel+' — '+dateLabel+siteLabel;
+}
+
+// Same filter logic as pcRenderList's All/Cash-In/Expenses branch, but
+// always pulls both Cash-In and Expense entries together (a report needs
+// both sides to show a running balance) and sorts oldest→newest so a
+// running balance reads top-to-bottom the way a bank statement does.
+function pcFilteredEntriesForReport(){
+  var pcInSrc  = PC_EMP_FILTER==='all' ? PC_IN  : PC_IN.filter(function(i){return i.emp_id===PC_EMP_FILTER;});
+  var pcExpSrc = PC_EMP_FILTER==='all' ? PC_EXP : PC_EXP.filter(function(e){return e.emp_id===PC_EMP_FILTER;});
+  var list=[].concat(
+    pcInSrc.map(function(i){var c={};for(var k in i)c[k]=i[k];c._type='in';return c;}),
+    pcExpSrc.map(function(e){var c={};for(var k in e)c[k]=e[k];c._type='exp';return c;})
+  );
+  if(PC_SITE_TAB!=='all') list=list.filter(function(i){
+    if(i._type==='in') return true; // funding is never site-specific — same exemption pcRenderList gives it
+    return (i.project||'').toLowerCase().indexOf(PC_SITE_TAB.toLowerCase())!==-1;
+  });
+  var range=pcDateRangeFor(PC_DATE_FILTER);
+  if(range) list=list.filter(function(i){
+    var ds=i.date||(i.created_at||'').slice(0,10);
+    return ds>=range[0] && ds<=range[1];
+  });
+  list.sort(function(a,b){
+    var da=a.date||(a.created_at||'').slice(0,10);
+    var db=b.date||(b.created_at||'').slice(0,10);
+    if(da!==db) return da<db?-1:1;
+    return new Date(a.created_at||0)-new Date(b.created_at||0);
+  });
+  return list;
+}
+
+function pcDetailStatementData(list){
+  var header=['Date','Employee','Type','Project / Site','Category','Description','Funded','Spent','Balance'];
+  var bal=0;
+  var rows=list.map(function(item){
+    var isIn=item._type==='in';
+    var amt=parseFloat(item.amount)||0;
+    bal += isIn?amt:-amt;
+    return [
+      fmtDate(item.date||(item.created_at||'').slice(0,10)),
+      pcEmpName(item.emp_id),
+      isIn?'Funded':'Spent',
+      isIn?'All Projects':(item.project||'—'),
+      isIn?(item.funded_by_type==='emp'?'Transfer':'Company'):(item.category||'—'),
+      isIn?(item.purpose||'—'):(item.description||'—'),
+      isIn?Math.round(amt):'',
+      isIn?'':Math.round(amt),
+      Math.round(bal)
+    ];
+  });
+  var totFunded=0, totSpent=0;
+  list.forEach(function(i){ var a=parseFloat(i.amount)||0; if(i._type==='in') totFunded+=a; else totSpent+=a; });
+  rows.push(['TOTAL','','','','','',Math.round(totFunded),Math.round(totSpent),Math.round(bal)]);
+  return {header:header, rows:rows};
+}
+
+function pcDayAbstractData(list){
+  var byDay={}, order=[];
+  list.forEach(function(item){
+    var ds=item.date||(item.created_at||'').slice(0,10);
+    if(!byDay[ds]){byDay[ds]={funded:0,spent:0}; order.push(ds);}
+    var amt=parseFloat(item.amount)||0;
+    if(item._type==='in') byDay[ds].funded+=amt; else byDay[ds].spent+=amt;
+  });
+  order.sort();
+  var header=['Date','Funded','Spent','Net','Closing Balance'];
+  var bal=0, totFunded=0, totSpent=0;
+  var rows=order.map(function(ds){
+    var d=byDay[ds], net=d.funded-d.spent;
+    bal+=net; totFunded+=d.funded; totSpent+=d.spent;
+    return [fmtDate(ds), Math.round(d.funded), Math.round(d.spent), Math.round(net), Math.round(bal)];
+  });
+  rows.push(['TOTAL', Math.round(totFunded), Math.round(totSpent), Math.round(totFunded-totSpent), Math.round(bal)]);
+  return {header:header, rows:rows};
+}
+
+function pcExportDetailExcel(){
+  var list=pcFilteredEntriesForReport();
+  if(!list.length){toast('No records for the current filters','warning');return;}
+  var d=pcDetailStatementData(list);
+  accExportCSV('Petty_Cash_Detail_Statement_'+new Date().toISOString().slice(0,10)+'.csv',
+    [['Petty Cash — Detail Statement'],[pcCurrentFilterLabel()],['']].concat([d.header]).concat(d.rows));
+}
+function pcExportDetailPDF(){
+  var list=pcFilteredEntriesForReport();
+  if(!list.length){toast('No records for the current filters','warning');return;}
+  var d=pcDetailStatementData(list);
+  var rows=d.rows.map(function(r){
+    return [r[0],r[1],r[2],r[3],r[4],r[5], r[6]===''?'':fmtINR(r[6]), r[7]===''?'':fmtINR(r[7]), fmtINR(r[8])];
+  });
+  ACC_RPT_LABEL=pcCurrentFilterLabel();
+  accExportPDF('Petty Cash — Detail Statement', d.header, rows);
+}
+function pcExportAbstractExcel(){
+  var list=pcFilteredEntriesForReport();
+  if(!list.length){toast('No records for the current filters','warning');return;}
+  var d=pcDayAbstractData(list);
+  accExportCSV('Petty_Cash_Day_Abstract_'+new Date().toISOString().slice(0,10)+'.csv',
+    [['Petty Cash — Day-wise Abstract'],[pcCurrentFilterLabel()],['']].concat([d.header]).concat(d.rows));
+}
+function pcExportAbstractPDF(){
+  var list=pcFilteredEntriesForReport();
+  if(!list.length){toast('No records for the current filters','warning');return;}
+  var d=pcDayAbstractData(list);
+  var rows=d.rows.map(function(r){ return [r[0], fmtINR(r[1]), fmtINR(r[2]), fmtINR(r[3]), fmtINR(r[4])]; });
+  ACC_RPT_LABEL=pcCurrentFilterLabel();
+  accExportPDF('Petty Cash — Day-wise Abstract', d.header, rows);
+}
+
+function pcOpenReports(){
+  openSheet('ov-pc','sh-pc');
+  document.getElementById('pc-sheet-body').innerHTML=
+    '<div style="font-size:15px;font-weight:800;margin-bottom:6px;">Download Report</div>'+
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:14px;">Using current filters: <b>'+pcCurrentFilterLabel()+'</b></div>'+
+    '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">'+
+      '<div style="font-weight:800;font-size:13px;margin-bottom:4px;">Detail Statement</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Every funding and expense entry, in date order, with a running balance.</div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button class="btn btn-green" style="flex:1;" onclick="pcExportDetailExcel()">⬇ Excel</button>'+
+        '<button class="btn btn-navy" style="flex:1;" onclick="pcExportDetailPDF()">⬇ PDF</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:14px;">'+
+      '<div style="font-weight:800;font-size:13px;margin-bottom:4px;">Day-wise Abstract</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">One row per day — funded, spent, net and closing balance.</div>'+
+      '<div style="display:flex;gap:8px;">'+
+        '<button class="btn btn-green" style="flex:1;" onclick="pcExportAbstractExcel()">⬇ Excel</button>'+
+        '<button class="btn btn-navy" style="flex:1;" onclick="pcExportAbstractPDF()">⬇ PDF</button>'+
+      '</div>'+
+    '</div>';
+  document.getElementById('pc-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" style="width:100%;" onclick="closeSheet(\'ov-pc\',\'sh-pc\')">Close</button>';
+}
 
 function pcRenderList(){
   var cont=document.getElementById('pc-list');if(!cont)return;
