@@ -31,6 +31,41 @@ var PC_PAYOUT_BADGE={
   failed:    ['#FFE4E6','#E11D48','✕ Payout failed']
 };
 
+// A UPI payout's final status (success/failed) only arrives later, out
+// of band, via the Cashfree webhook updating the database directly —
+// nothing on screen tells this tab that happened. Rather than make
+// someone hard-refresh to see it, poll the handful of still-settling
+// entries every few seconds and patch just the list when one changes.
+// Starts itself (pcStartPayoutPoll) whenever there's something to
+// watch, and stops itself once nothing is left pending/processing or
+// the person has navigated away from Petty Cash — so it never runs
+// unnecessarily in the background on other screens.
+var PC_POLL_TIMER=null;
+function pcStartPayoutPoll(){
+  if(PC_POLL_TIMER) return;
+  PC_POLL_TIMER=setInterval(async function(){
+    if(typeof currentApp!=='undefined' && currentApp!=='petty-cash'){
+      clearInterval(PC_POLL_TIMER);PC_POLL_TIMER=null;return;
+    }
+    var watching=PC_EXP.filter(function(e){return e.payout_status==='pending'||e.payout_status==='processing';});
+    if(!watching.length){clearInterval(PC_POLL_TIMER);PC_POLL_TIMER=null;return;}
+    try{
+      var ids=watching.map(function(e){return e.id;});
+      var fresh=await sbFetch('petty_cash_expenses',{select:'id,payout_status,payout_utr,payout_failure_reason',filter:'id=in.('+ids.join(',')+')'});
+      if(!Array.isArray(fresh))return;
+      var changed=false;
+      fresh.forEach(function(f){
+        var row=PC_EXP.find(function(e){return e.id===f.id;});
+        if(row && row.payout_status!==f.payout_status){
+          row.payout_status=f.payout_status;row.payout_utr=f.payout_utr;row.payout_failure_reason=f.payout_failure_reason;
+          changed=true;
+        }
+      });
+      if(changed && typeof pcRenderList==='function') pcRenderList();
+    }catch(e){/* silent — next tick just retries */}
+  },5000);
+}
+
 // Seed list only — live categories come from the Master Registry via
 // pcCats(), so a new head can be added without a code change.
 var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
@@ -90,6 +125,7 @@ async function initPettyCash(){
       PC_EMP_FILTER = myPcRec ? myPcRec.empId : 'all';
     }
     pcRefresh();
+    pcStartPayoutPoll();
   }catch(e){console.error('initPettyCash:',e);if(cont)cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading petty cash data</div>';}
 }
 
