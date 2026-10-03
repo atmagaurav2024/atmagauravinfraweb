@@ -28,8 +28,23 @@ from (
   order by full_name
 ) t;
 
--- ── BLOCK 4: all projects, as one copyable JSON cell ─────────────────
+-- ── BLOCK 4 (try this first): simplest possible version — no JSON, no
+-- aggregation, nothing fancy. If even this "doesn't work", the problem
+-- isn't the query shape, it's something else (worth telling me exactly
+-- what you see: a red error banner? a spinner that never finishes? an
+-- empty grid with "0 rows"? each means something different).
+select id, name from projects order by name;
+
+-- ── BLOCK 4b: same thing as one copyable JSON cell. Only specific,
+-- known-safe columns (id/name/contract_value — exactly what the app's
+-- own code reads from this table), not "select *": a project row may
+-- carry a large field (an attached document, etc.) that "select *"
+-- would try to pull in and serialize too, same as the Excel file's
+-- Photo column earlier — worth ruling out as the actual cause of
+-- block 4's original version going nowhere.
 select coalesce(json_agg(row_to_json(t)), '[]'::json) as projects_json
 from (
-  select p.* from projects p order by p.name
+  select p.id as project_uuid, p.name as project_name, p.contract_value
+  from projects p
+  order by p.name
 ) t;
