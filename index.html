@@ -8937,11 +8937,14 @@ function kycStatusBlockHtml(recordType, id, data){
   };
   var sc = statusMap[status] || statusMap.pending;
   return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:4px;">'+
-    '<div>'+
-      '<span style="background:'+sc[1]+';color:'+sc[2]+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;">'+sc[0]+'</span>'+
-      (status==='verified'&&d.kyc_verified_by?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">by '+d.kyc_verified_by+(d.kyc_verified_at?' · '+fmtDate((d.kyc_verified_at||'').slice(0,10)):'')+'</div>':'')+
-      (status==='rejected'&&d.kyc_remarks?'<div style="font-size:10px;color:#E11D48;margin-top:4px;max-width:260px;">'+d.kyc_remarks+'</div>':'')+
-      (d.kyc_digilocker_name?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">DigiLocker returned: <b>'+d.kyc_digilocker_name+'</b>'+(d.kyc_digilocker_dob?' · DOB '+d.kyc_digilocker_dob:'')+'</div>':'')+
+    '<div style="display:flex;align-items:flex-start;gap:8px;">'+
+      (d.kyc_photo_url?'<img src="'+d.kyc_photo_url+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);" alt="Aadhaar photo">':'')+
+      '<div>'+
+        '<span style="background:'+sc[1]+';color:'+sc[2]+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;">'+sc[0]+'</span>'+
+        (status==='verified'&&d.kyc_verified_by?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">by '+d.kyc_verified_by+(d.kyc_verified_at?' · '+fmtDate((d.kyc_verified_at||'').slice(0,10)):'')+'</div>':'')+
+        (status==='rejected'&&d.kyc_remarks?'<div style="font-size:10px;color:#E11D48;margin-top:4px;max-width:260px;">'+d.kyc_remarks+'</div>':'')+
+        (d.kyc_digilocker_name?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">DigiLocker returned: <b>'+d.kyc_digilocker_name+'</b>'+(d.kyc_digilocker_dob?' · DOB '+d.kyc_digilocker_dob:'')+'</div>':'')+
+      '</div>'+
     '</div>'+
     '<div style="display:flex;gap:6px;">'+
       '<button type="button" onclick="kycMarkStatus(\''+recordType+'\',\''+id+'\',\'verified\')" style="background:#D1FAE5;color:#047857;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Mark Verified</button>'+
@@ -9108,6 +9111,8 @@ function kycApplyInstantResult(recordType, id, finalStatus, result){
   };
   if(result.aadhar_doc_url) updates.aadhar_doc_url=result.aadhar_doc_url;
   if(result.pan_doc_url) updates.pan_doc_url=result.pan_doc_url;
+  if(result.kyc_photo_url) updates.kyc_photo_url=result.kyc_photo_url;
+  if(result.profile_photo) updates.profile_photo=result.profile_photo; // employees only — copied from the Aadhaar photo on an actual match
   if(recordType==='employee' && typeof EMP_LIST!=='undefined'){
     var i=EMP_LIST.findIndex(function(x){return x.id===id;});
     if(i>-1){ Object.assign(EMP_LIST[i],updates); if(typeof empOpenForm==='function') empOpenForm(EMP_LIST[i]); }
@@ -9118,7 +9123,7 @@ function kycApplyInstantResult(recordType, id, finalStatus, result){
       var j=arr.findIndex(function(x){return x.id===id;});
       if(j>-1){
         Object.assign(arr[j],{kycStatus:updates.kyc_status,kycVerifiedBy:updates.kyc_verified_by,kycVerifiedAt:updates.kyc_verified_at,kycRemarks:updates.kyc_remarks,
-          kycDigilockerName:updates.kyc_digilocker_name, kycDigilockerDob:updates.kyc_digilocker_dob,
+          kycDigilockerName:updates.kyc_digilocker_name, kycDigilockerDob:updates.kyc_digilocker_dob, kycPhotoUrl:updates.kyc_photo_url||arr[j].kycPhotoUrl,
           aadharDocUrl:updates.aadhar_doc_url||arr[j].aadharDocUrl, panDocUrl:updates.pan_doc_url||arr[j].panDocUrl});
         openEditForm(recordType,id);
       }
@@ -29272,8 +29277,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004c"></script>
-<script src="js/employee.js?v=20261004c"></script>
-<script src="js/projects.js?v=20261004c"></script>
-<script src="js/finance.js?v=20261004c"></script>
+<script src="js/registry.js?v=20261004d"></script>
+<script src="js/employee.js?v=20261004d"></script>
+<script src="js/projects.js?v=20261004d"></script>
+<script src="js/finance.js?v=20261004d"></script>
 </html>

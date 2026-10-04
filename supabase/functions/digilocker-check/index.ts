@@ -17,13 +17,20 @@
 // DigiLocker API only exposes aadhaar / pan / driving_license, so that
 // field stays manual-upload-only regardless of how this goes.
 //
+// Aadhaar's XML also carries a <Pht> base64 photo (PAN's record has no
+// photo at all) — pulled out, re-hosted, and on an actual name/DOB
+// match also copied onto the employee's profile_photo (vendors,
+// subcontractors and labourers have no profile photo field in this app
+// today, so for them it's only stored on kyc_photo_url).
+//
 // Deploy: supabase functions deploy digilocker-check
 //
 // Response shapes the frontend should expect:
-//   {success:true, status:"pending"}                                           — still waiting on the person
-//   {success:true, status:"verified", aadhar_doc_url, pan_doc_url}              — matched, done
-//   {success:true, status:"failed", reason}                                    — session failed/expired, or name/DOB mismatch
-//   {success:false, error}                                                     — our own error (bad request, not set up, etc.)
+//   {success:true, status:"pending"}                                                        — still waiting on the person
+//   {success:true, status:"verified", kyc_photo_url, profile_photo, aadhar_doc_url, pan_doc_url} — matched, done
+//   {success:true, status:"rejected", reason, kyc_photo_url, ...}                            — name/DOB mismatch, record updated for manual review
+//   {success:true, status:"failed", reason}                                                  — session itself failed/expired, nothing written
+//   {success:false, error}                                                                   — our own error (bad request, not set up, etc.)
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -82,6 +89,26 @@ function extractIdentity(docType: string, xmlText: string): { name: string | nul
   if (!m) return { name: null, dob: null };
   const attrs = parseAttrs(m[0]);
   return { name: attrs.name || null, dob: attrs.dob || null };
+}
+
+// Only Aadhaar's XML carries a photo (<Pht>base64...</Pht> under
+// <UidData>, per Sandbox.co.in's own sample) - PAN's record has no
+// photo field at all. Returns decoded JPEG bytes, or null if the tag is
+// missing/empty (consent scope can exclude the photo even when the rest
+// of Aadhaar is returned).
+function extractAadhaarPhoto(xmlText: string): Uint8Array | null {
+  const m = /<Pht[^>]*>([\s\S]*?)<\/Pht>/i.exec(xmlText);
+  const b64 = m && m[1] ? m[1].replace(/\s+/g, "") : "";
+  if (!b64) return null;
+  try {
+    const binStr = atob(b64);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+    return bytes;
+  } catch (e) {
+    console.error("Could not decode Aadhaar photo base64:", e.message);
+    return null;
+  }
 }
 
 // Loose but deliberate normalization — DigiLocker names are in ALL CAPS
@@ -233,7 +260,7 @@ serve(async (req) => {
       // reason, that's logged and surfaced, but it never by itself
       // blocks or grants Verified — only the name/DOB match does.
       const docUpdates: Record<string, any> = {};
-      var pulledName: string | null = null, pulledDob: string | null = null;
+      var pulledName: string | null = null, pulledDob: string | null = null, pulledPhotoUrl: string | null = null;
       var storageIssues: string[] = [];
       for (const docType of ["aadhaar", "pan"]) {
         try {
@@ -261,6 +288,15 @@ serve(async (req) => {
             // (UIDAI's own record), falling back to PAN's.
             if (identity.name && !pulledName) pulledName = identity.name;
             if (identity.dob && !pulledDob) pulledDob = identity.dob;
+            // Only Aadhaar's XML carries a photo - PAN's record has none.
+            if (docType === "aadhaar") {
+              const photoBytes = extractAadhaarPhoto(xmlText);
+              if (photoBytes) {
+                const photoUrl = await rehostToCloudinary(photoBytes, "aadhaar_photo.jpg", "image/jpeg", fetchOpts);
+                if (photoUrl) pulledPhotoUrl = photoUrl;
+                else storageIssues.push("photo (could not be stored)");
+              }
+            }
           }
 
           const ext = contentType.indexOf("xml") > -1 ? ".xml" : contentType.indexOf("pdf") > -1 ? ".pdf" : contentType.indexOf("png") > -1 ? ".png" : ".jpg";
@@ -272,6 +308,7 @@ serve(async (req) => {
           storageIssues.push(docType + " (error: " + docErr.message + ")");
         }
       }
+      if (pulledPhotoUrl) docUpdates.kyc_photo_url = pulledPhotoUrl;
 
       if (!pulledName) {
         return new Response(JSON.stringify({ success: true, status: "failed", reason: "DigiLocker consent completed but no readable Aadhaar/PAN name could be pulled — try again, or verify manually" }), {
@@ -311,7 +348,7 @@ serve(async (req) => {
         // refresh/reopen the form rather than just show an error toast.
         return new Response(JSON.stringify({
           success: true, status: "rejected", reason: updates.kyc_remarks,
-          kyc_digilocker_name: pulledName, kyc_digilocker_dob: pulledDob,
+          kyc_digilocker_name: pulledName, kyc_digilocker_dob: pulledDob, kyc_photo_url: pulledPhotoUrl,
           aadhar_doc_url: docUpdates.aadhar_doc_url || null, pan_doc_url: docUpdates.pan_doc_url || null,
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -321,11 +358,18 @@ serve(async (req) => {
       updates.kyc_status = "verified";
       updates.kyc_verified_by = "DigiLocker (auto-verified)";
       updates.kyc_remarks = storageIssues.length ? ("Identity matched via DigiLocker, but could not store: " + storageIssues.join(", ")) : null;
+      // Aadhaar's photo is a verified government ID photo pulled at the
+      // moment of a confirmed name/DOB match - a good, trustworthy
+      // default for the employee's profile picture. Only done for
+      // employees (the only type with a profile photo today) and only
+      // on an actual match, never on a rejected one.
+      if (record_type === "employee" && pulledPhotoUrl) updates.profile_photo = pulledPhotoUrl;
       await supabaseAdmin.from(table).update(updates).eq("id", record_id);
 
       return new Response(JSON.stringify({
         success: true, status: "verified",
-        kyc_digilocker_name: pulledName, kyc_digilocker_dob: pulledDob,
+        kyc_digilocker_name: pulledName, kyc_digilocker_dob: pulledDob, kyc_photo_url: pulledPhotoUrl,
+        profile_photo: updates.profile_photo || null,
         aadhar_doc_url: docUpdates.aadhar_doc_url || null, pan_doc_url: docUpdates.pan_doc_url || null,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
