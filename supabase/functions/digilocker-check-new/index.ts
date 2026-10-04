@@ -169,6 +169,7 @@ serve(async (req) => {
 
       var pulledName: string | null = null, pulledDob: string | null = null, pulledPhotoUrl: string | null = null;
       var aadharDocUrl: string | null = null, panDocUrl: string | null = null;
+      var issues: string[] = []; // surfaced in the failure reason so a real cause shows up instead of a generic message
       for (const docType of ["aadhaar", "pan"]) {
         try {
           const docRes = await fetch(base + "/kyc/digilocker/sessions/" + session_id + "/documents/" + docType, {
@@ -179,9 +180,14 @@ serve(async (req) => {
           const docJson = await docRes.json();
           const fileUrl = docJson?.data?.files?.[0]?.url;
           const metaContentType = docJson?.data?.files?.[0]?.metadata?.ContentType;
-          if (!docRes.ok || !fileUrl) { console.error("No " + docType + " available:", JSON.stringify(docJson)); continue; }
+          if (!docRes.ok || !fileUrl) {
+            const msg = docType + ": not available" + (docJson?.message ? " (" + docJson.message + ")" : "");
+            console.error("No " + docType + " available:", JSON.stringify(docJson));
+            issues.push(msg);
+            continue;
+          }
           const fileRes = await fetch(fileUrl, fetchOpts);
-          if (!fileRes.ok) continue;
+          if (!fileRes.ok) { issues.push(docType + ": download failed (HTTP " + fileRes.status + ")"); continue; }
           const contentType = metaContentType || fileRes.headers.get("content-type") || "application/octet-stream";
           const bytes = new Uint8Array(await fileRes.arrayBuffer());
 
@@ -190,10 +196,13 @@ serve(async (req) => {
             const identity = extractIdentity(docType, xmlText);
             if (identity.name && !pulledName) pulledName = identity.name;
             if (identity.dob && !pulledDob) pulledDob = identity.dob;
+            if (!identity.name) issues.push(docType + ": document fetched (" + contentType + ") but no name attribute found in it");
             if (docType === "aadhaar") {
               const photoBytes = extractAadhaarPhoto(xmlText);
               if (photoBytes) pulledPhotoUrl = await rehostToCloudinary(photoBytes, "aadhaar_photo.jpg", "image/jpeg", fetchOpts);
             }
+          } else {
+            issues.push(docType + ": fetched as " + contentType + " (not XML, so no name could be read from it)");
           }
 
           const ext = contentType.indexOf("xml") > -1 ? ".xml" : contentType.indexOf("pdf") > -1 ? ".pdf" : contentType.indexOf("png") > -1 ? ".png" : ".jpg";
@@ -201,11 +210,12 @@ serve(async (req) => {
           if (docType === "aadhaar") aadharDocUrl = hostedUrl; else panDocUrl = hostedUrl;
         } catch (docErr) {
           console.error("Error fetching " + docType + " document:", docErr.message);
+          issues.push(docType + ": error (" + docErr.message + ")");
         }
       }
 
       if (!pulledName) {
-        return new Response(JSON.stringify({ success: true, status: "failed", reason: "DigiLocker consent completed but no readable name could be pulled — try again, or enter details manually" }), {
+        return new Response(JSON.stringify({ success: true, status: "failed", reason: "DigiLocker consent completed but no readable name could be pulled" + (issues.length ? " — " + issues.join("; ") : "") + " — try again, or enter details manually" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
