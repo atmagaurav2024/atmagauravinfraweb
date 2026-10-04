@@ -595,12 +595,22 @@ function pcRenderList(){
   cont.innerHTML=list.slice(0,50).map(function(item){
     var isIn=item._type==='in'||tab==='cash-in';
     var col=isIn?'#2E7D32':'#C62828';
+    // The title line shows the category (expenses always have one) or a
+    // generic "Cash In" label (funding entries have no category). Either
+    // way that's just a bucket, not what the money was actually for — so
+    // the purpose/description text (required "what was purchased" on
+    // expenses, optional free text on funding) needs its own visible
+    // line, not just a fallback inside the title that only ever showed
+    // when category was missing.
+    var purposeText = isIn ? item.purpose : item.description;
+    var escPc=function(s){return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
     return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">'+
       '<div style="display:flex;align-items:center;gap:10px;">'+
-        '<div style="width:36px;height:36px;border-radius:10px;background:'+col+'20;display:flex;align-items:center;justify-content:center;font-size:16px;">'+(isIn?'💰':'🧾')+'</div>'+
+        '<div style="width:36px;height:36px;border-radius:10px;background:'+col+'20;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+(isIn?'💰':'🧾')+'</div>'+
         '<div>'+
-          '<div style="font-size:13px;font-weight:800;color:var(--text);">'+(item.category||item.description||item.purpose||'Entry')+'</div>'+
-          '<div style="font-size:11px;color:var(--text3);">'+(pcEmpName(item.emp_id))+((!isIn&&item.project)?' · '+item.project:'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
+          '<div style="font-size:13px;font-weight:800;color:var(--text);">'+(item.category||(isIn?'Cash In':'Expense'))+'</div>'+
+          (purposeText?'<div style="font-size:12px;color:var(--text2);font-weight:600;margin-top:1px;">'+escPc(purposeText)+'</div>':'')+
+          '<div style="font-size:11px;color:var(--text3);margin-top:1px;">'+(pcEmpName(item.emp_id))+((!isIn&&item.project)?' · '+item.project:'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
           (isIn&&item.funded_by?'<div style="font-size:10px;color:#1565C0;font-weight:700;">'+(item.funded_by_type==='transfer_out'?'&#8594; to '+pcEmpName(item.funded_by_emp):'&#8592; from '+item.funded_by)+'</div>':'')+
           (!isIn&&item.payout_status&&item.payout_status!=='not_applicable'?(function(){
             var b=PC_PAYOUT_BADGE[item.payout_status]||PC_PAYOUT_BADGE.pending;
