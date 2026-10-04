@@ -9007,6 +9007,18 @@ async function kycStartInstantVerify(recordType, id){
   if(!box) return;
   box.innerHTML='<div style="font-size:11.5px;color:var(--text3);">Starting DigiLocker verification...</div>';
   try{
+    // The "Full Name (as per PAN)" field lives only in the open form
+    // until the person hits the form's own Save button — but
+    // digilocker-initiate checks what's actually in the database, so
+    // typing the name and immediately tapping Verify Instantly (without
+    // saving first) would otherwise always fail this check. Save just
+    // that one field here so Verify Instantly works on its own.
+    var panNameInput=document.getElementById(recordType==='employee'?'f-upanname':'ef-panname');
+    var typedName=panNameInput?panNameInput.value.trim():'';
+    if(typedName){
+      try{ await sbUpdate(KYC_TABLES[recordType], id, {name_as_per_pan:typedName}); }
+      catch(saveErr){ console.error('Could not save name_as_per_pan before verifying:', saveErr); }
+    }
     var res=await fetch(SUPABASE_URL+'/functions/v1/digilocker-initiate',{
       method:'POST',
       headers:{'Authorization':'Bearer '+(currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
@@ -29261,8 +29273,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004f"></script>
-<script src="js/employee.js?v=20261004f"></script>
-<script src="js/projects.js?v=20261004f"></script>
-<script src="js/finance.js?v=20261004f"></script>
+<script src="js/registry.js?v=20261004g"></script>
+<script src="js/employee.js?v=20261004g"></script>
+<script src="js/projects.js?v=20261004g"></script>
+<script src="js/finance.js?v=20261004g"></script>
 </html>
