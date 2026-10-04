@@ -258,13 +258,13 @@ function pcRefresh(){
     // in one row on a phone.
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:16px;">'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#1B5E20,#2E7D32);border:none;min-width:0;padding:10px 6px;">'+
-        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Funded</div>'+
+        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Funded</div>'+
         '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(totalIn)+'</div></div>'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#B71C1C,#C62828);border:none;min-width:0;padding:10px 6px;">'+
-        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Spent</div>'+
+        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Spent</div>'+
         '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(totalOut)+'</div></div>'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#0D2137,#1A3A5C);border:none;min-width:0;padding:10px 6px;">'+
-        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Balance</div>'+
+        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Balance</div>'+
         '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:'+(balance>=0?'#81C784':'#EF9A9A')+';margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(balance)+'</div></div>'+
     '</div>'+
     // Petty Cash has its own view/edit/delete permissions in Access
