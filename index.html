@@ -2643,7 +2643,7 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
     </span>
     <div class="an-lb">Pay</div>
   </button>
-  <button class="an-item" id="an-registry" onclick="showApp('registry')"><div class="an-ic">&#128218;</div><div class="an-lb">Registry</div></button>
+  <button class="an-item" id="an-petty-cash" onclick="showApp('petty-cash')"><div class="an-ic">&#128181;</div><div class="an-lb">Petty Cash</div></button>
   <button class="an-item" id="an-profile" onclick="showProfile()"><div class="an-ic">&#128100;</div><div class="an-lb">Profile</div></button>
 </nav>
 
@@ -3886,7 +3886,7 @@ function showApp(name){
   document.body.setAttribute('data-app', isProjectTab ? 'projects' : name);
   currentApp = isProjectTab ? 'projects' : name;
   updateNavLayout();
-  ['home','attendance','registry','profile'].forEach(function(n){
+  ['home','attendance','petty-cash','profile'].forEach(function(n){
     var el=document.getElementById('an-'+n);
     if(el) el.classList.toggle('on', n===name||(n==='home'&&(name==='dashboard'||isProjectTab)));
   });
@@ -29366,8 +29366,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004j"></script>
-<script src="js/employee.js?v=20261004j"></script>
-<script src="js/projects.js?v=20261004j"></script>
-<script src="js/finance.js?v=20261004j"></script>
+<script src="js/registry.js?v=20261004k"></script>
+<script src="js/employee.js?v=20261004k"></script>
+<script src="js/projects.js?v=20261004k"></script>
+<script src="js/finance.js?v=20261004k"></script>
 </html>
