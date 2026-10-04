@@ -8936,17 +8936,18 @@ function kycStatusBlockHtml(recordType, id, data){
     rejected: ['Rejected',     '#FFE4E6', '#E11D48']
   };
   var sc = statusMap[status] || statusMap.pending;
-  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:4px;">'+
-    '<div style="display:flex;align-items:flex-start;gap:8px;">'+
-      (d.kyc_photo_url?'<img src="'+d.kyc_photo_url+'" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);" alt="Aadhaar photo">':'')+
-      '<div>'+
-        '<span style="background:'+sc[1]+';color:'+sc[2]+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;">'+sc[0]+'</span>'+
-        (status==='verified'&&d.kyc_verified_by?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">by '+d.kyc_verified_by+(d.kyc_verified_at?' · '+fmtDate((d.kyc_verified_at||'').slice(0,10)):'')+'</div>':'')+
-        (status==='rejected'&&d.kyc_remarks?'<div style="font-size:10px;color:#E11D48;margin-top:4px;max-width:260px;">'+d.kyc_remarks+'</div>':'')+
-        (d.kyc_digilocker_name?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">DigiLocker returned: <b>'+d.kyc_digilocker_name+'</b>'+(d.kyc_digilocker_dob?' · DOB '+d.kyc_digilocker_dob:'')+'</div>':'')+
-      '</div>'+
+  // Badge and photo sit on the same line, photo right after the badge
+  // text — sized big enough (84px) to actually recognize the face, not
+  // just confirm something was pulled.
+  return '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:4px;">'+
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+      '<span style="background:'+sc[1]+';color:'+sc[2]+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;">'+sc[0]+'</span>'+
+      (d.kyc_photo_url?'<img src="'+d.kyc_photo_url+'" style="width:84px;height:84px;border-radius:10px;object-fit:cover;border:1px solid var(--border);" alt="Aadhaar photo">':'')+
     '</div>'+
-    '<div style="display:flex;gap:6px;">'+
+    (status==='verified'&&d.kyc_verified_by?'<div style="font-size:10px;color:var(--text3);margin-top:6px;">by '+d.kyc_verified_by+(d.kyc_verified_at?' · '+fmtDate((d.kyc_verified_at||'').slice(0,10)):'')+'</div>':'')+
+    (status==='rejected'&&d.kyc_remarks?'<div style="font-size:10px;color:#E11D48;margin-top:6px;">'+d.kyc_remarks+'</div>':'')+
+    (d.kyc_digilocker_name?'<div style="font-size:10px;color:var(--text3);margin-top:6px;">DigiLocker returned: <b>'+d.kyc_digilocker_name+'</b>'+(d.kyc_digilocker_dob?' · DOB '+d.kyc_digilocker_dob:'')+'</div>':'')+
+    '<div style="display:flex;gap:6px;margin-top:8px;">'+
       '<button type="button" onclick="kycMarkStatus(\''+recordType+'\',\''+id+'\',\'verified\')" style="background:#D1FAE5;color:#047857;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Mark Verified</button>'+
       '<button type="button" onclick="kycMarkStatus(\''+recordType+'\',\''+id+'\',\'rejected\')" style="background:#FFE4E6;color:#E11D48;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10007; Reject</button>'+
     '</div>'+
@@ -29277,8 +29278,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004d"></script>
-<script src="js/employee.js?v=20261004d"></script>
-<script src="js/projects.js?v=20261004d"></script>
-<script src="js/finance.js?v=20261004d"></script>
+<script src="js/registry.js?v=20261004e"></script>
+<script src="js/employee.js?v=20261004e"></script>
+<script src="js/projects.js?v=20261004e"></script>
+<script src="js/finance.js?v=20261004e"></script>
 </html>
