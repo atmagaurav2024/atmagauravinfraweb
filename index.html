@@ -8913,10 +8913,16 @@ function kycStatusBlockHtml(recordType, id, data){
   if(!id) return '';
   var d = data||{};
   var status = d.kyc_status || 'pending';
+  // "Verified"/"Rejected" alone didn't say HOW — whether DigiLocker's
+  // automated pull confirmed it, or a person clicked Mark Verified/
+  // Reject by eye. kyc_verified_by already records which one did it
+  // ("DigiLocker (auto-verified)"/"DigiLocker (auto-check)" vs an
+  // admin's own name/email), so the badge text itself now says so.
+  var isDigital = !!(d.kyc_verified_by && d.kyc_verified_by.indexOf('DigiLocker')>-1);
   var statusMap = {
     pending:  ['Not Verified', '#FEF3C7', '#B45309'],
-    verified: ['Verified',     '#D1FAE5', '#047857'],
-    rejected: ['Rejected',     '#FFE4E6', '#E11D48']
+    verified: [isDigital?'Digitally Verified':'Manually Verified', '#D1FAE5', '#047857'],
+    rejected: [isDigital?'Auto-Rejected':'Manually Rejected',      '#FFE4E6', '#E11D48']
   };
   var sc = statusMap[status] || statusMap.pending;
   // Badge and photo sit on the same line, photo right after the badge
@@ -8930,9 +8936,10 @@ function kycStatusBlockHtml(recordType, id, data){
     (status==='verified'&&d.kyc_verified_by?'<div style="font-size:10px;color:var(--text3);margin-top:6px;">by '+d.kyc_verified_by+(d.kyc_verified_at?' · '+fmtDate((d.kyc_verified_at||'').slice(0,10)):'')+'</div>':'')+
     (status==='rejected'&&d.kyc_remarks?'<div style="font-size:10px;color:#E11D48;margin-top:6px;">'+d.kyc_remarks+'</div>':'')+
     (d.kyc_digilocker_name?'<div style="font-size:10px;color:var(--text3);margin-top:6px;">DigiLocker returned: <b>'+d.kyc_digilocker_name+'</b>'+(d.kyc_digilocker_dob?' · DOB '+d.kyc_digilocker_dob:'')+'</div>':'')+
-    '<div style="display:flex;gap:6px;margin-top:8px;">'+
+    '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">'+
       '<button type="button" onclick="kycMarkStatus(\''+recordType+'\',\''+id+'\',\'verified\')" style="background:#D1FAE5;color:#047857;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Mark Verified</button>'+
       '<button type="button" onclick="kycMarkStatus(\''+recordType+'\',\''+id+'\',\'rejected\')" style="background:#FFE4E6;color:#E11D48;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10007; Reject</button>'+
+      (status!=='pending'?'<button type="button" onclick="kycResetVerification(\''+recordType+'\',\''+id+'\')" style="background:none;border:1px solid var(--border);color:var(--text3);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;">&#128465; Delete Verification</button>':'')+
     '</div>'+
   '</div>';
 }
@@ -8975,6 +8982,39 @@ async function kycMarkStatus(recordType, id, status){
         var j=arr.findIndex(function(x){return x.id===id;});
         if(j>-1){
           Object.assign(arr[j],{kycStatus:updates.kyc_status,kycVerifiedBy:updates.kyc_verified_by,kycVerifiedAt:updates.kyc_verified_at,kycRemarks:updates.kyc_remarks});
+          openEditForm(recordType,id);
+        }
+      }
+    }
+  }catch(e){ toast('Error: '+e.message,'error'); console.error(e); }
+}
+
+// "Delete Verification" — clears a previous Verified/Rejected result
+// back to Not Verified so it can be redone (wrong person confirmed by
+// mistake, a mismatch that's since been fixed, re-checking after a
+// document changed, etc.). Only clears the verification status itself
+// (kyc_status/verified_by/verified_at/remarks/the DigiLocker name+DOB+
+// photo it compared against) — any uploaded/pulled Aadhaar, PAN or
+// education documents stay on the record, since those are still valid
+// regardless of whether the verification itself gets redone.
+async function kycResetVerification(recordType, id){
+  var table = KYC_TABLES[recordType];
+  if(!table||!id) return;
+  if(!confirm('Delete this KYC verification and set it back to Not Verified?\n\nAny uploaded/pulled documents are kept — only the verification result itself is cleared.')) return;
+  try{
+    var updates = {kyc_status:'pending', kyc_verified_by:null, kyc_verified_at:null, kyc_remarks:null, kyc_digilocker_name:null, kyc_digilocker_dob:null, kyc_photo_url:null};
+    await sbUpdate(table, id, updates);
+    toast('KYC verification deleted — back to Not Verified','success');
+    if(recordType==='employee' && typeof EMP_LIST!=='undefined'){
+      var i=EMP_LIST.findIndex(function(x){return x.id===id;});
+      if(i>-1){ Object.assign(EMP_LIST[i],updates); if(typeof empOpenForm==='function') empOpenForm(EMP_LIST[i]); }
+    } else if(typeof openEditForm==='function'){
+      var arrs={vendor:(typeof VENDORS!=='undefined'?VENDORS:null),sc:(typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS:null),labour:(typeof LABOURERS!=='undefined'?LABOURERS:null)};
+      var arr=arrs[recordType];
+      if(arr){
+        var j=arr.findIndex(function(x){return x.id===id;});
+        if(j>-1){
+          Object.assign(arr[j],{kycStatus:'pending',kycVerifiedBy:'',kycVerifiedAt:'',kycRemarks:'',kycDigilockerName:'',kycDigilockerDob:'',kycPhotoUrl:''});
           openEditForm(recordType,id);
         }
       }
@@ -29273,8 +29313,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004g"></script>
-<script src="js/employee.js?v=20261004g"></script>
-<script src="js/projects.js?v=20261004g"></script>
-<script src="js/finance.js?v=20261004g"></script>
+<script src="js/registry.js?v=20261004h"></script>
+<script src="js/employee.js?v=20261004h"></script>
+<script src="js/projects.js?v=20261004h"></script>
+<script src="js/finance.js?v=20261004h"></script>
 </html>
