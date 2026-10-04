@@ -5,13 +5,15 @@
 // ── PETTY CASH ────────────────────────────────────────────
 var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
-// Date-range filter for the entry list — 'all'|'today'|'week'|'month'|
-// 'year'|'custom'. PC_DATE_FROM/TO (plain 'YYYY-MM-DD' strings) only
-// matter when PC_DATE_FILTER==='custom'. Only applied to the All/Cash
-// In/Expenses entry list (pcRenderList), same as PC_SITE_TAB — By
-// Employee shows a running balance, which a date-filtered partial net
-// would misrepresent as "the balance", so it's left unfiltered there
-// too (matching the existing Site tab precedent).
+// Date-range filter — 'all'|'today'|'week'|'month'|'year'|'custom'.
+// PC_DATE_FROM/TO (plain 'YYYY-MM-DD' strings) only matter when
+// PC_DATE_FILTER==='custom'. Applied to the All/Cash In/Expenses entry
+// list (pcRenderList) AND the Total Funded/Total Spent/Balance cards
+// (pcRefresh) — picking "Today" shows today's funded/spent/net, same
+// period as the list beneath it. Same PC_SITE_TAB precedent is why By
+// Employee stays unfiltered by date: it shows each employee's running
+// balance, which a date-filtered partial net would misrepresent as
+// "the balance".
 var PC_DATE_FILTER='all', PC_DATE_FROM=null, PC_DATE_TO=null;
 // null = not yet defaulted this session; 'all' or a specific empId once
 // set. initPettyCash() defaults this to the logged-in user's own record
@@ -199,6 +201,17 @@ function pcRefresh(){
   // Filter data by selected employee
   var pcInF  = PC_EMP_FILTER==='all' ? PC_IN  : PC_IN.filter(function(i){return i.emp_id===PC_EMP_FILTER;});
   var pcExpF = PC_EMP_FILTER==='all' ? PC_EXP : PC_EXP.filter(function(e){return e.emp_id===PC_EMP_FILTER;});
+  // Also apply the Today/This Week/etc. date-range filter — same field
+  // logic as pcRenderList's own date filtering (date, falling back to
+  // created_at). Without this, picking a period only changed the entry
+  // list below while these three cards kept showing all-time totals,
+  // which read as the cards "not updating" when a period was selected.
+  var pcCardsRange=pcDateRangeFor(PC_DATE_FILTER);
+  if(pcCardsRange){
+    var inRange=function(i){ var ds=i.date||(i.created_at||'').slice(0,10); return ds>=pcCardsRange[0] && ds<=pcCardsRange[1]; };
+    pcInF=pcInF.filter(inRange);
+    pcExpF=pcExpF.filter(inRange);
+  }
   var totalIn=pcInF.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
   var totalOut=pcExpF.reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);
   var balance=totalIn-totalOut;
@@ -365,15 +378,19 @@ function pcSetDateFilter(mode){
     var t=pcDateStr(new Date());
     PC_DATE_FROM=t; PC_DATE_TO=t;
   }
-  pcRenderDateFilter();
-  pcRenderList();
+  // pcRefresh() re-renders the Total Funded/Total Spent/Balance cards
+  // (which now apply this same date range — see pcRefresh) in addition
+  // to the date-filter bar and the entry list it used to only call here;
+  // without it the cards kept showing all-time totals while only the
+  // list below reflected the period just picked.
+  pcRefresh();
 }
 function pcApplyCustomDate(){
   var f=(document.getElementById('pc-date-from')||{}).value;
   var t=(document.getElementById('pc-date-to')||{}).value;
   if(!f||!t){toast('Pick both a from and to date','warning');return;}
   PC_DATE_FROM=f; PC_DATE_TO=t;
-  pcRenderList();
+  pcRefresh();
 }
 
 function pcSetEmpFilter(empId){PC_EMP_FILTER=empId;pcRefresh();}
