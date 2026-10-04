@@ -276,7 +276,7 @@ function pcRefresh(){
     ((typeof canAccess!=='function' || canAccess('petty-cash','edit')) ?
     '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
       '<button class="btn btn-green" onclick="pcOpenCashIn()">+ Fund Employee</button>'+
-      '<button class="btn btn-navy" onclick="pcOpenExpense()">− Record Expense</button>'+
+      '<button class="btn btn-red" onclick="pcOpenExpense()">− Record Expense</button>'+
     '</div>' : '')+
     '<div style="margin-bottom:12px;">'+
       '<button class="btn btn-outline" style="width:100%;" onclick="pcOpenReports()">📊 Download Report (Excel / PDF)</button>'+
@@ -800,7 +800,7 @@ function pcOpenExpense(){
     '<label class="flbl">Remarks</label><input class="finp" id="pce-remarks" placeholder="Remarks">';
   document.getElementById('pc-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-pc\',\'sh-pc\')">Cancel</button>'+
-    '<button class="btn btn-navy" onclick="pcSaveExpense()">🧾 Save</button>';
+    '<button class="btn btn-red" onclick="pcSaveExpense()">🧾 Save</button>';
 }
 
 // Compute the per-project split for the currently checked projects + amount,
