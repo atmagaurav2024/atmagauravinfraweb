@@ -9042,6 +9042,31 @@ function kycInstantVerifyHtml(recordType, id, kycStatus){
 // their own phone — it needs THEIR DigiLocker login, not whoever
 // clicked the button. Polls kycPollInstantVerify in the background
 // until it resolves either way.
+// Bumped every time a poll (re)starts for a given record, so an older
+// kycPollInstantVerify loop (e.g. from a previous "Verify Instantly"
+// click still ticking down in the background) recognizes it's been
+// superseded and stops instead of running alongside a newer one.
+var KYC_POLL_GEN = {};
+// Patches the in-memory list silently — no re-render, no reopening the
+// form — so a background update (name saved pre-verify, a poll result
+// landing after the admin has navigated elsewhere) is there the next
+// time this record is opened, instead of being overwritten by whatever
+// stale copy is still sitting in EMP_LIST/VENDORS/etc. EMP_LIST holds
+// raw snake_case DB rows; the registry arrays hold mapVendor/mapSC/
+// mapLabour's camelCase-mapped objects — hence two update shapes.
+function kycPatchInMemory(recordType, id, rawUpdates, mappedUpdates){
+  if(recordType==='employee' && typeof EMP_LIST!=='undefined'){
+    var i=EMP_LIST.findIndex(function(x){return x.id===id;});
+    if(i>-1) Object.assign(EMP_LIST[i], rawUpdates);
+  } else {
+    var arrs={vendor:(typeof VENDORS!=='undefined'?VENDORS:null),sc:(typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS:null),labour:(typeof LABOURERS!=='undefined'?LABOURERS:null)};
+    var arr=arrs[recordType];
+    if(arr){
+      var j=arr.findIndex(function(x){return x.id===id;});
+      if(j>-1) Object.assign(arr[j], mappedUpdates);
+    }
+  }
+}
 async function kycStartInstantVerify(recordType, id){
   var box=document.getElementById('kyc-instant-'+recordType+'-'+id);
   if(!box) return;
@@ -9052,12 +9077,18 @@ async function kycStartInstantVerify(recordType, id){
     // digilocker-initiate checks what's actually in the database, so
     // typing the name and immediately tapping Verify Instantly (without
     // saving first) would otherwise always fail this check. Save just
-    // that one field here so Verify Instantly works on its own.
+    // that one field here so Verify Instantly works on its own —
+    // and patch it into the in-memory list too, not just the database,
+    // so re-opening this same record later (without a full page
+    // reload) shows the name that was actually just saved instead of
+    // whatever stale copy was last loaded into memory.
     var panNameInput=document.getElementById(recordType==='employee'?'f-upanname':'ef-panname');
     var typedName=panNameInput?panNameInput.value.trim():'';
     if(typedName){
-      try{ await sbUpdate(KYC_TABLES[recordType], id, {name_as_per_pan:typedName}); }
-      catch(saveErr){ console.error('Could not save name_as_per_pan before verifying:', saveErr); }
+      try{
+        await sbUpdate(KYC_TABLES[recordType], id, {name_as_per_pan:typedName});
+        kycPatchInMemory(recordType, id, {name_as_per_pan:typedName}, {nameAsPerPan:typedName});
+      }catch(saveErr){ console.error('Could not save name_as_per_pan before verifying:', saveErr); }
     }
     var res=await fetch(SUPABASE_URL+'/functions/v1/digilocker-initiate',{
       method:'POST',
@@ -9079,7 +9110,9 @@ async function kycStartInstantVerify(recordType, id){
       '</div>'+
       '<div id="kyc-instant-status-'+recordType+'-'+id+'" style="margin-top:8px;font-size:11px;color:#1E3A8A;">&#8987; Waiting for them to complete verification...</div>'+
     '</div>';
-    kycPollInstantVerify(recordType, id, 0);
+    var genKey=recordType+'|'+id;
+    KYC_POLL_GEN[genKey]=(KYC_POLL_GEN[genKey]||0)+1;
+    kycPollInstantVerify(recordType, id, 0, KYC_POLL_GEN[genKey]);
   }catch(e){
     box.innerHTML='<div style="font-size:11px;color:#E11D48;">Could not reach the verification system — try again in a moment.</div>';
     console.error(e);
@@ -9093,13 +9126,25 @@ function kycCopyLink(btn, url){
 // Polls every 5s, up to ~10 minutes (120 tries) — long enough for
 // someone to receive the link, open DigiLocker on their own phone and
 // get through OTP, but not forever if they never do.
-async function kycPollInstantVerify(recordType, id, tries){
-  var statusEl=document.getElementById('kyc-instant-status-'+recordType+'-'+id);
-  if(!statusEl) return; // form was closed/re-rendered — stop silently
-  if(tries>=120){ statusEl.innerHTML='Timed out waiting — ask them to try the link again, or tap Verify Instantly again for a fresh one.'; return; }
+//
+// Deliberately does NOT stop just because the status element isn't on
+// screen any more — navigating away from this record's form (closing
+// it, switching to another screen, opening a different employee) used
+// to kill the whole poll outright, so if the person finished DigiLocker
+// a bit after that, the record was stuck showing Not Verified forever
+// with nothing left running to ever notice it succeeded. It keeps
+// polling in the background regardless, and only touches the DOM / this
+// record's form when there's something on screen to update.
+async function kycPollInstantVerify(recordType, id, tries, gen){
+  var genKey=recordType+'|'+id;
+  if(KYC_POLL_GEN[genKey]!==gen) return; // a newer "Verify Instantly" click superseded this loop
+  if(tries>=120){
+    var elTimeout=document.getElementById('kyc-instant-status-'+recordType+'-'+id);
+    if(elTimeout) elTimeout.innerHTML='Timed out waiting — ask them to try the link again, or tap Verify Instantly again for a fresh one.';
+    return;
+  }
   setTimeout(async function(){
-    var el=document.getElementById('kyc-instant-status-'+recordType+'-'+id);
-    if(!el) return; // form closed while we were waiting
+    if(KYC_POLL_GEN[genKey]!==gen) return; // superseded while we were waiting
     try{
       var res=await fetch(SUPABASE_URL+'/functions/v1/digilocker-check',{
         method:'POST',
@@ -9110,6 +9155,7 @@ async function kycPollInstantVerify(recordType, id, tries){
       if(result.success && result.status==='verified'){
         toast('Verified automatically via DigiLocker — name matched','success');
         kycApplyInstantResult(recordType, id, 'verified', result);
+        delete KYC_POLL_GEN[genKey];
         return;
       }
       if(result.success && result.status==='rejected'){
@@ -9119,25 +9165,32 @@ async function kycPollInstantVerify(recordType, id, tries){
         // file, so refresh the form rather than just leaving an error.
         toast('DigiLocker name didn\'t match — marked for manual review','warning');
         kycApplyInstantResult(recordType, id, 'rejected', result);
+        delete KYC_POLL_GEN[genKey];
         return;
       }
       if(result.success && result.status==='failed'){
-        el.innerHTML='DigiLocker verification didn\'t complete ('+(result.reason||'session failed')+') — tap Verify Instantly to send a fresh link.';
+        toast('DigiLocker verification didn\'t complete: '+(result.reason||'session failed'),'warning');
+        var elFailed=document.getElementById('kyc-instant-status-'+recordType+'-'+id);
+        if(elFailed) elFailed.innerHTML='DigiLocker verification didn\'t complete ('+(result.reason||'session failed')+') — tap Verify Instantly to send a fresh link.';
+        delete KYC_POLL_GEN[genKey];
         return;
       }
-      kycPollInstantVerify(recordType, id, tries+1); // still pending
+      kycPollInstantVerify(recordType, id, tries+1, gen); // still pending
     }catch(e){
-      kycPollInstantVerify(recordType, id, tries+1); // transient network error — next tick retries
+      kycPollInstantVerify(recordType, id, tries+1, gen); // transient network error — next tick retries
     }
   },5000);
 }
-// Patches the in-memory record the same way kycMarkStatus does, then
-// re-opens the form so the newly-pulled documents and the resulting
-// Verified/Rejected badge show up without the person needing to
-// refresh. Handles both outcomes — a mismatch is a real result worth
-// seeing immediately, not just an error to dismiss.
+// Patches the in-memory record the same way kycMarkStatus does. Only
+// re-opens the form (to show the new badge/photo/documents right away)
+// when that record's form is still the one on screen — checked via the
+// "Verify Instantly" box's own container, which only exists while that
+// form is open. If the person has since navigated elsewhere, the toast
+// already shown above is how they find out; jumping them back to a
+// record they're no longer looking at would be more disruptive than
+// helpful, so this only ever updates what's in memory for next time.
 function kycApplyInstantResult(recordType, id, finalStatus, result){
-  var updates={
+  var rawUpdates={
     kyc_status:finalStatus,
     kyc_verified_by: finalStatus==='verified' ? 'DigiLocker (auto-verified)' : 'DigiLocker (auto-check)',
     kyc_verified_at:new Date().toISOString(),
@@ -9145,25 +9198,25 @@ function kycApplyInstantResult(recordType, id, finalStatus, result){
     kyc_digilocker_name: result.kyc_digilocker_name||null,
     kyc_digilocker_dob: result.kyc_digilocker_dob||null
   };
-  if(result.aadhar_doc_url) updates.aadhar_doc_url=result.aadhar_doc_url;
-  if(result.pan_doc_url) updates.pan_doc_url=result.pan_doc_url;
-  if(result.kyc_photo_url) updates.kyc_photo_url=result.kyc_photo_url;
-  if(result.profile_photo) updates.profile_photo=result.profile_photo; // employees only — copied from the Aadhaar photo on an actual match
-  if(recordType==='employee' && typeof EMP_LIST!=='undefined'){
+  if(result.aadhar_doc_url) rawUpdates.aadhar_doc_url=result.aadhar_doc_url;
+  if(result.pan_doc_url) rawUpdates.pan_doc_url=result.pan_doc_url;
+  if(result.kyc_photo_url) rawUpdates.kyc_photo_url=result.kyc_photo_url;
+  if(result.profile_photo) rawUpdates.profile_photo=result.profile_photo; // employees only — copied from the Aadhaar photo on an actual match
+
+  var mappedUpdates={kycStatus:rawUpdates.kyc_status,kycVerifiedBy:rawUpdates.kyc_verified_by,kycVerifiedAt:rawUpdates.kyc_verified_at,kycRemarks:rawUpdates.kyc_remarks,
+    kycDigilockerName:rawUpdates.kyc_digilocker_name, kycDigilockerDob:rawUpdates.kyc_digilocker_dob};
+  if(rawUpdates.aadhar_doc_url) mappedUpdates.aadharDocUrl=rawUpdates.aadhar_doc_url;
+  if(rawUpdates.pan_doc_url) mappedUpdates.panDocUrl=rawUpdates.pan_doc_url;
+  if(rawUpdates.kyc_photo_url) mappedUpdates.kycPhotoUrl=rawUpdates.kyc_photo_url;
+  kycPatchInMemory(recordType, id, rawUpdates, mappedUpdates);
+
+  var stillOpen=!!document.getElementById('kyc-instant-'+recordType+'-'+id);
+  if(!stillOpen) return;
+  if(recordType==='employee' && typeof EMP_LIST!=='undefined' && typeof empOpenForm==='function'){
     var i=EMP_LIST.findIndex(function(x){return x.id===id;});
-    if(i>-1){ Object.assign(EMP_LIST[i],updates); if(typeof empOpenForm==='function') empOpenForm(EMP_LIST[i]); }
+    if(i>-1) empOpenForm(EMP_LIST[i]);
   } else if(typeof openEditForm==='function'){
-    var arrs={vendor:(typeof VENDORS!=='undefined'?VENDORS:null),sc:(typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS:null),labour:(typeof LABOURERS!=='undefined'?LABOURERS:null)};
-    var arr=arrs[recordType];
-    if(arr){
-      var j=arr.findIndex(function(x){return x.id===id;});
-      if(j>-1){
-        Object.assign(arr[j],{kycStatus:updates.kyc_status,kycVerifiedBy:updates.kyc_verified_by,kycVerifiedAt:updates.kyc_verified_at,kycRemarks:updates.kyc_remarks,
-          kycDigilockerName:updates.kyc_digilocker_name, kycDigilockerDob:updates.kyc_digilocker_dob, kycPhotoUrl:updates.kyc_photo_url||arr[j].kycPhotoUrl,
-          aadharDocUrl:updates.aadhar_doc_url||arr[j].aadharDocUrl, panDocUrl:updates.pan_doc_url||arr[j].panDocUrl});
-        openEditForm(recordType,id);
-      }
-    }
+    openEditForm(recordType,id);
   }
 }
 
@@ -29313,8 +29366,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004h"></script>
-<script src="js/employee.js?v=20261004h"></script>
-<script src="js/projects.js?v=20261004h"></script>
-<script src="js/finance.js?v=20261004h"></script>
+<script src="js/registry.js?v=20261004i"></script>
+<script src="js/employee.js?v=20261004i"></script>
+<script src="js/projects.js?v=20261004i"></script>
+<script src="js/finance.js?v=20261004i"></script>
 </html>
