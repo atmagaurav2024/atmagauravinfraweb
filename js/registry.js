@@ -559,6 +559,7 @@ function kycRegBlockHtml(type,item,panNameLabel,includeAadhar){
       kycDocBoxHtml('ef-pandoc','PAN Card (from DigiLocker)',item?item.panDocUrl:'')+
     '</div>'+
     kycDocBoxHtml('ef-edudoc','Education Certificate(s) — combine into one PDF',item?item.eduDocUrl:'')+
+    (item?kycInstantVerifyHtml(type,item.id,item.kycStatus):'')+
     (item?kycStatusBlockHtml(type,item.id,{kyc_status:item.kycStatus,kyc_verified_by:item.kycVerifiedBy,kyc_verified_at:item.kycVerifiedAt,kyc_remarks:item.kycRemarks}):'');
 }
 

@@ -8994,6 +8994,118 @@ async function kycMarkStatus(recordType, id, status){
   }catch(e){ toast('Error: '+e.message,'error'); console.error(e); }
 }
 
+// kycInstantVerifyHtml — the "Verify Instantly via DigiLocker" button
+// shown on an already-saved record (needs an id to attach the session
+// to). Only pulls Aadhaar + PAN automatically — education certificates
+// have no automated path via this API, so that upload box always stays
+// manual regardless of whether this is used.
+function kycInstantVerifyHtml(recordType, id, kycStatus){
+  if(!id) return ''; // can't start a DigiLocker session before the record itself is saved
+  if(kycStatus==='verified') return '';
+  return '<div id="kyc-instant-'+recordType+'-'+id+'" style="margin:8px 0 10px;">'+
+    '<button type="button" onclick="kycStartInstantVerify(\''+recordType+'\',\''+id+'\')" style="width:100%;background:#4527A0;color:white;border:none;border-radius:8px;padding:9px;font-size:11.5px;font-weight:800;cursor:pointer;">&#9889; Verify Instantly via DigiLocker</button>'+
+  '</div>';
+}
+
+// Starts a DigiLocker consent session (digilocker-initiate), then shows
+// the resulting link two ways: a direct "Open DigiLocker" button, for
+// when the person being verified is sitting right there, and a "Copy
+// Link" button, for sending it to them on WhatsApp/SMS to complete on
+// their own phone — it needs THEIR DigiLocker login, not whoever
+// clicked the button. Polls kycPollInstantVerify in the background
+// until it resolves either way.
+async function kycStartInstantVerify(recordType, id){
+  var box=document.getElementById('kyc-instant-'+recordType+'-'+id);
+  if(!box) return;
+  box.innerHTML='<div style="font-size:11.5px;color:var(--text3);">Starting DigiLocker verification...</div>';
+  try{
+    var res=await fetch(SUPABASE_URL+'/functions/v1/digilocker-initiate',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+(currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+      body:JSON.stringify({record_type:recordType, record_id:id})
+    });
+    var result=await res.json();
+    if(!res.ok || !result.success){
+      box.innerHTML='<div style="font-size:11px;color:#E11D48;">Could not start DigiLocker verification: '+(result.error||'unknown error')+'</div>'+
+        '<button type="button" onclick="kycStartInstantVerify(\''+recordType+'\',\''+id+'\')" style="margin-top:6px;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;">Try Again</button>';
+      return;
+    }
+    var url=result.authorization_url;
+    box.innerHTML='<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:10px 12px;font-size:11.5px;color:#1E3A8A;line-height:1.5;">'+
+      '<div style="margin-bottom:8px;">Send this to them so they can log into DigiLocker themselves (needs their own Aadhaar-linked mobile OTP) — this will update automatically once they finish.</div>'+
+      '<div style="display:flex;gap:6px;">'+
+        '<button type="button" onclick="window.open(\''+url+'\',\'_blank\')" style="flex:1;background:#1565C0;color:white;border:none;border-radius:8px;padding:8px;font-size:11px;font-weight:800;cursor:pointer;">Open DigiLocker</button>'+
+        '<button type="button" onclick="kycCopyLink(this,\''+url+'\')" style="flex:1;background:white;border:1px solid #BFDBFE;color:#1565C0;border-radius:8px;padding:8px;font-size:11px;font-weight:800;cursor:pointer;">Copy Link</button>'+
+      '</div>'+
+      '<div id="kyc-instant-status-'+recordType+'-'+id+'" style="margin-top:8px;font-size:11px;color:#1E3A8A;">&#8987; Waiting for them to complete verification...</div>'+
+    '</div>';
+    kycPollInstantVerify(recordType, id, 0);
+  }catch(e){
+    box.innerHTML='<div style="font-size:11px;color:#E11D48;">Could not reach the verification system — try again in a moment.</div>';
+    console.error(e);
+  }
+}
+function kycCopyLink(btn, url){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(function(){toast('Link copied','success');}).catch(function(){toast('Could not copy — long-press the link to copy manually','warning');});
+  }
+}
+// Polls every 5s, up to ~10 minutes (120 tries) — long enough for
+// someone to receive the link, open DigiLocker on their own phone and
+// get through OTP, but not forever if they never do.
+async function kycPollInstantVerify(recordType, id, tries){
+  var statusEl=document.getElementById('kyc-instant-status-'+recordType+'-'+id);
+  if(!statusEl) return; // form was closed/re-rendered — stop silently
+  if(tries>=120){ statusEl.innerHTML='Timed out waiting — ask them to try the link again, or tap Verify Instantly again for a fresh one.'; return; }
+  setTimeout(async function(){
+    var el=document.getElementById('kyc-instant-status-'+recordType+'-'+id);
+    if(!el) return; // form closed while we were waiting
+    try{
+      var res=await fetch(SUPABASE_URL+'/functions/v1/digilocker-check',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+(currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+        body:JSON.stringify({record_type:recordType, record_id:id})
+      });
+      var result=await res.json();
+      if(result.success && result.status==='verified'){
+        toast('Verified automatically via DigiLocker','success');
+        kycRefreshAfterInstantVerify(recordType, id, result);
+        return;
+      }
+      if(result.success && result.status==='failed'){
+        el.innerHTML='DigiLocker verification didn\'t complete ('+(result.reason||'session failed')+') — tap Verify Instantly to send a fresh link.';
+        return;
+      }
+      kycPollInstantVerify(recordType, id, tries+1); // still pending
+    }catch(e){
+      kycPollInstantVerify(recordType, id, tries+1); // transient network error — next tick retries
+    }
+  },5000);
+}
+// Patches the in-memory record the same way kycMarkStatus does, then
+// re-opens the form so the newly-pulled documents and Verified badge
+// show up without the person needing to refresh.
+function kycRefreshAfterInstantVerify(recordType, id, result){
+  var updates={kyc_status:'verified', kyc_verified_by:'DigiLocker (auto-verified)', kyc_verified_at:new Date().toISOString(), kyc_remarks:null};
+  if(result.aadhar_doc_url) updates.aadhar_doc_url=result.aadhar_doc_url;
+  if(result.pan_doc_url) updates.pan_doc_url=result.pan_doc_url;
+  if(recordType==='employee' && typeof EMP_LIST!=='undefined'){
+    var i=EMP_LIST.findIndex(function(x){return x.id===id;});
+    if(i>-1){ Object.assign(EMP_LIST[i],updates); if(typeof empOpenForm==='function') empOpenForm(EMP_LIST[i]); }
+  } else if(typeof openEditForm==='function'){
+    var arrs={vendor:(typeof VENDORS!=='undefined'?VENDORS:null),sc:(typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS:null),labour:(typeof LABOURERS!=='undefined'?LABOURERS:null)};
+    var arr=arrs[recordType];
+    if(arr){
+      var j=arr.findIndex(function(x){return x.id===id;});
+      if(j>-1){
+        Object.assign(arr[j],{kycStatus:updates.kyc_status,kycVerifiedBy:updates.kyc_verified_by,kycVerifiedAt:updates.kyc_verified_at,kycRemarks:updates.kyc_remarks,
+          aadharDocUrl:updates.aadhar_doc_url||arr[j].aadharDocUrl, panDocUrl:updates.pan_doc_url||arr[j].panDocUrl});
+        openEditForm(recordType,id);
+      }
+    }
+  }
+}
+
 // ── SUPABASE AUTH ──
 var SUPABASE_AUTH_URL = 'https://aywlauygsqkivdihbaut.supabase.co/auth/v1';
 
@@ -26565,7 +26677,7 @@ function getEmpDataScope(){
 // ════ COMPANY DETAILS ═══════════════════════════════════════════════════
 
 var COMPANY_DATA = {};
-var COMPANY_BILLING = {}, ALL_PLANS = [], COMPANY_PAYOUT = {};
+var COMPANY_BILLING = {}, ALL_PLANS = [], COMPANY_PAYOUT = {}, COMPANY_KYC = {};
 
 async function initCompany(){
   var body = document.getElementById('company-body');
@@ -26575,13 +26687,15 @@ async function initCompany(){
       sbFetch('company_details',{select:'*',order:'id.asc'}),
       currentUser&&currentUser.companyId?sbFetch('companies',{select:'*',filter:'id=eq.'+currentUser.companyId}).catch(function(){return [];}):Promise.resolve([]),
       sbFetch('plans',{select:'*',order:'price_monthly.asc'}).catch(function(){return [];}),
-      currentUser&&currentUser.role==='admin'?sbFetch('company_payout_settings',{select:'*'}).catch(function(){return [];}):Promise.resolve([])
+      currentUser&&currentUser.role==='admin'?sbFetch('company_payout_settings',{select:'*'}).catch(function(){return [];}):Promise.resolve([]),
+      currentUser&&currentUser.role==='admin'?sbFetch('company_kyc_settings',{select:'*'}).catch(function(){return [];}):Promise.resolve([])
     ]);
     var rows=r[0];
     COMPANY_DATA = (Array.isArray(rows)&&rows.length) ? rows[0] : {};
     COMPANY_BILLING = (Array.isArray(r[1])&&r[1].length) ? r[1][0] : {};
     ALL_PLANS = Array.isArray(r[2])?r[2]:[];
     COMPANY_PAYOUT = (Array.isArray(r[3])&&r[3].length) ? r[3][0] : {};
+    COMPANY_KYC = (Array.isArray(r[4])&&r[4].length) ? r[4][0] : {};
   }catch(e){
     COMPANY_DATA = {};
   }
@@ -26695,9 +26809,28 @@ function companyRender(){
     '<div id="co-payout-form" style="display:none;margin-top:12px;"></div>'
   : '';
 
+  var kycHtml = (currentUser&&currentUser.role==='admin') ?
+    sec('&#128274;','DigiLocker (KYC Verification)','#4527A0')+
+    '<div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.5;">'+
+      'Connect your own Sandbox.co.in account to pull Aadhaar and PAN straight from DigiLocker when verifying an employee, vendor, subcontractor or labourer — they just log into DigiLocker once to grant consent, and the record is marked Verified automatically. '+
+      (COMPANY_KYC.is_active?'':'Without this, KYC still works via manual upload + Verify/Reject — this only adds the instant automated pull.')+
+    '</div>'+
+    (COMPANY_KYC.is_active?
+      '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">'+
+        '<div><div style="font-size:12.5px;font-weight:800;color:#166534;">&#10003; Connected</div>'+
+        '<div style="font-size:11px;color:var(--text3);">Mode: '+(COMPANY_KYC.sandbox_env==='production'?'Production (live verification)':'Test mode')+'</div></div>'+
+        '<button onclick="coKycEdit()" style="background:none;border:1px solid #BBF7D0;color:#166534;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">Edit</button>'+
+      '</div>'
+      :
+      '<button onclick="coKycEdit()" style="width:100%;background:var(--navy);color:white;border:none;border-radius:10px;padding:11px;font-size:12.5px;font-weight:800;cursor:pointer;">+ Connect Sandbox.co.in</button>'
+    )+
+    '<div id="co-kyc-form" style="display:none;margin-top:12px;"></div>'
+  : '';
+
   body.innerHTML =
     billingHtml +
     payoutHtml +
+    kycHtml +
     // Basic Info
     sec('&#127968;','Company Information','#1565C0')+
     (currentUser&&currentUser.companySlug?
@@ -26813,6 +26946,54 @@ async function coPayoutSave(){
     if(COMPANY_PAYOUT.id) await sbUpdate('company_payout_settings', COMPANY_PAYOUT.id, data);
     else await sbInsert('company_payout_settings', data);
     toast('Cashfree connected — petty cash UPI payouts are now active','success');
+    initCompany();
+  }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ── KYC SETTINGS: Sandbox.co.in credentials for automated DigiLocker ──
+// Same per-company pattern as the Cashfree payout settings above — each
+// company pulls documents through THEIR OWN Sandbox.co.in account, not
+// a shared Rydax one. The api_secret is only ever read server-side
+// (inside the digilocker-initiate/digilocker-check edge functions via
+// service role) and never re-displayed in this UI once saved.
+function coKycEdit(){
+  var f=document.getElementById('co-kyc-form');
+  if(!f) return;
+  f.style.display='block';
+  f.innerHTML=
+    '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#92400E;line-height:1.5;">'+
+      'Sign up at <a href="https://www.sandbox.co.in" target="_blank" style="color:#1565C0;font-weight:700;">sandbox.co.in</a>, complete their business verification, then find your API Key and Secret under their dashboard → API Keys.'+
+    '</div>'+
+    '<label class="flbl">Environment</label>'+
+    '<select class="finp" id="co-kx-env">'+
+      '<option value="test"'+(COMPANY_KYC.sandbox_env!=='production'?' selected':'')+'>Test mode</option>'+
+      '<option value="production"'+(COMPANY_KYC.sandbox_env==='production'?' selected':'')+'>Production (live verification)</option>'+
+    '</select>'+
+    '<label class="flbl">API Key</label>'+
+    '<input class="finp" id="co-kx-key" placeholder="e.g. key_live_xxxxxxxxxxxx" value="'+(COMPANY_KYC.sandbox_api_key||'')+'">'+
+    '<label class="flbl">API Secret</label>'+
+    '<input class="finp" id="co-kx-secret" type="password" placeholder="'+(COMPANY_KYC.sandbox_api_key?'•••••••• (leave blank to keep existing)':'')+'">'+
+    '<div style="display:flex;gap:8px;margin-top:10px;">'+
+      '<button class="btn btn-outline" style="flex:1;" onclick="document.getElementById(\'co-kyc-form\').style.display=\'none\';">Cancel</button>'+
+      '<button class="btn" style="flex:1;background:var(--accent);color:white;" onclick="coKycSave()">&#10003; Save &amp; Activate</button>'+
+    '</div>';
+}
+async function coKycSave(){
+  var env=gv('co-kx-env')||'test', key=gv('co-kx-key'), secret=gv('co-kx-secret');
+  if(!key){toast('Enter the API Key','warning');return;}
+  if(!secret && !COMPANY_KYC.sandbox_api_key){toast('Enter the API Secret','warning');return;}
+  var data={
+    company_id: currentUser.companyId,
+    sandbox_api_key: key,
+    sandbox_env: env,
+    is_active: true
+  };
+  if(secret) data.sandbox_api_secret = secret; // only overwrite if a new one was typed
+  try{
+    toast('Saving...','info');
+    if(COMPANY_KYC.id) await sbUpdate('company_kyc_settings', COMPANY_KYC.id, data);
+    else await sbInsert('company_kyc_settings', data);
+    toast('Sandbox.co.in connected — instant DigiLocker verification is now active','success');
     initCompany();
   }catch(e){toast('Error: '+e.message,'error');}
 }
@@ -29071,8 +29252,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004a"></script>
-<script src="js/employee.js?v=20261004a"></script>
-<script src="js/projects.js?v=20261004a"></script>
-<script src="js/finance.js?v=20261004a"></script>
+<script src="js/registry.js?v=20261004b"></script>
+<script src="js/employee.js?v=20261004b"></script>
+<script src="js/projects.js?v=20261004b"></script>
+<script src="js/finance.js?v=20261004b"></script>
 </html>

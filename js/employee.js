@@ -2897,6 +2897,7 @@ function empOpenForm(emp){
       '<div><label class="flbl">PAN Number</label><input id="f-upan" class="finp" placeholder="ABCDE1234F" value="'+safeN(pan)+'"></div>'+
     '</div>'+
     '<label class="flbl">Full Name (as per PAN)</label><input id="f-upanname" class="finp" placeholder="Exactly as printed on the PAN card" value="'+safeN(nameAsPerPan)+'">'+
+    (isEdit?kycInstantVerifyHtml('employee',e.id,e.kyc_status):'')+
     (isEdit?kycStatusBlockHtml('employee',e.id,e):'')+
     '<div class="g2">'+
       '<div><label class="flbl">PF Number</label><input id="f-upf" class="finp" placeholder="Optional" value="'+safeN(pf)+'"></div>'+
