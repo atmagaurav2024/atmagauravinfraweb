@@ -246,7 +246,7 @@ function pcRefresh(){
       '<select onchange="pcSetEmpFilter(this.value)" style="flex:1;border:1.5px solid var(--navy);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:var(--navy);outline:none;cursor:pointer;">'+
         empOpts+
       '</select>'+
-      (PC_EMP_FILTER!=='all'?'<button onclick="pcSetEmpFilter(\'all\')" style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer;font-weight:700;">&#10005; Clear</button>':'')+
+      (PC_EMP_FILTER!=='all'?'<button onclick="pcSetEmpFilter(\'all\')" style="font-size:11px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);cursor:pointer;font-weight:700;">&#10005; Clear</button>':'')+
     '</div>')+
     // grid-template-columns:repeat(3,1fr) alone isn't enough on narrow
     // phone widths: a grid item's default min-width is auto (its content's
@@ -258,13 +258,13 @@ function pcRefresh(){
     // in one row on a phone.
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:16px;">'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#1B5E20,#2E7D32);border:none;min-width:0;padding:10px 6px;">'+
-        '<div style="font-size:9.5px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Funded</div>'+
+        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Funded</div>'+
         '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(totalIn)+'</div></div>'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#B71C1C,#C62828);border:none;min-width:0;padding:10px 6px;">'+
-        '<div style="font-size:9.5px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Spent</div>'+
+        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Spent</div>'+
         '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(totalOut)+'</div></div>'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#0D2137,#1A3A5C);border:none;min-width:0;padding:10px 6px;">'+
-        '<div style="font-size:9.5px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Balance</div>'+
+        '<div style="font-size:clamp(9.5px,2.8vw,11.5px);color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Balance</div>'+
         '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:'+(balance>=0?'#81C784':'#EF9A9A')+';margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(balance)+'</div></div>'+
     '</div>'+
     // Petty Cash has its own view/edit/delete permissions in Access
@@ -628,13 +628,13 @@ function pcRenderList(){
           '<div style="font-size:13px;font-weight:800;color:var(--text);">'+(item.category||(isIn?'Cash In':'Expense'))+'</div>'+
           (purposeText?'<div style="font-size:12px;color:var(--text2);font-weight:600;margin-top:1px;">'+escPc(purposeText)+'</div>':'')+
           '<div style="font-size:11px;color:var(--text3);margin-top:1px;">'+(pcEmpName(item.emp_id))+((!isIn&&item.project)?' · '+item.project:'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
-          (isIn&&item.funded_by?'<div style="font-size:10px;color:#1565C0;font-weight:700;">'+(item.funded_by_type==='transfer_out'?'&#8594; to '+pcEmpName(item.funded_by_emp):'&#8592; from '+item.funded_by)+'</div>':'')+
+          (isIn&&item.funded_by?'<div style="font-size:11px;color:#1565C0;font-weight:700;">'+(item.funded_by_type==='transfer_out'?'&#8594; to '+pcEmpName(item.funded_by_emp):'&#8592; from '+item.funded_by)+'</div>':'')+
           (!isIn&&item.payout_status&&item.payout_status!=='not_applicable'?(function(){
             var b=PC_PAYOUT_BADGE[item.payout_status]||PC_PAYOUT_BADGE.pending;
             var clickable=item.payout_status==='pending'||item.payout_status==='failed';
             return '<div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+
-              '<span '+(clickable?'onclick="pcAddUtr(\''+item.id+'\')"':'')+' style="font-size:9.5px;font-weight:800;background:'+b[0]+';color:'+b[1]+';padding:2px 8px;border-radius:10px;'+(clickable?'cursor:pointer;':'')+'">'+b[2]+'</span>'+
-              (item.payout_utr?'<span style="font-size:9.5px;color:var(--text3);font-weight:700;">UTR '+item.payout_utr+'</span>':'')+
+              '<span '+(clickable?'onclick="pcAddUtr(\''+item.id+'\')"':'')+' style="font-size:11px;font-weight:800;background:'+b[0]+';color:'+b[1]+';padding:2px 8px;border-radius:10px;'+(clickable?'cursor:pointer;':'')+'">'+b[2]+'</span>'+
+              (item.payout_utr?'<span style="font-size:11px;color:var(--text3);font-weight:700;">UTR '+item.payout_utr+'</span>':'')+
             '</div>';
           })():'')+
         '</div>'+
@@ -678,7 +678,7 @@ function pcOpenCashIn(){
     '<div id="pci-src-emp-wrap" style="display:none;">'+
       '<label class="flbl">Transferred From *</label><select class="fsel" id="pci-src-emp"><option value="">Select employee...</option>'+
         PC_EMPS.map(function(e){return '<option value="'+e.empId+'">'+e.name+(e.dept?' ('+e.dept+')':'')+'</option>';}).join('')+'</select>'+
-      '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">The sender\'s petty cash balance will be reduced by the same amount.</div>'+
+      '<div style="font-size:11px;color:var(--text3);margin:-6px 0 8px;">The sender\'s petty cash balance will be reduced by the same amount.</div>'+
     '</div>'+
     '<label class="flbl">Date</label><input class="finp" id="pci-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Purpose</label><input class="finp" id="pci-purpose" placeholder="Purpose of funding">'+
