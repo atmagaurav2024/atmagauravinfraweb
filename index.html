@@ -8940,7 +8940,8 @@ function kycStatusBlockHtml(recordType, id, data){
     '<div>'+
       '<span style="background:'+sc[1]+';color:'+sc[2]+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;">'+sc[0]+'</span>'+
       (status==='verified'&&d.kyc_verified_by?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">by '+d.kyc_verified_by+(d.kyc_verified_at?' · '+fmtDate((d.kyc_verified_at||'').slice(0,10)):'')+'</div>':'')+
-      (status==='rejected'&&d.kyc_remarks?'<div style="font-size:10px;color:#E11D48;margin-top:4px;">'+d.kyc_remarks+'</div>':'')+
+      (status==='rejected'&&d.kyc_remarks?'<div style="font-size:10px;color:#E11D48;margin-top:4px;max-width:260px;">'+d.kyc_remarks+'</div>':'')+
+      (d.kyc_digilocker_name?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">DigiLocker returned: <b>'+d.kyc_digilocker_name+'</b>'+(d.kyc_digilocker_dob?' · DOB '+d.kyc_digilocker_dob:'')+'</div>':'')+
     '</div>'+
     '<div style="display:flex;gap:6px;">'+
       '<button type="button" onclick="kycMarkStatus(\''+recordType+'\',\''+id+'\',\'verified\')" style="background:#D1FAE5;color:#047857;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Mark Verified</button>'+
@@ -9068,8 +9069,17 @@ async function kycPollInstantVerify(recordType, id, tries){
       });
       var result=await res.json();
       if(result.success && result.status==='verified'){
-        toast('Verified automatically via DigiLocker','success');
-        kycRefreshAfterInstantVerify(recordType, id, result);
+        toast('Verified automatically via DigiLocker — name matched','success');
+        kycApplyInstantResult(recordType, id, 'verified', result);
+        return;
+      }
+      if(result.success && result.status==='rejected'){
+        // The record WAS updated server-side (kyc_status='rejected' with
+        // the mismatch explained in kyc_remarks) — this isn't a dead end,
+        // it's DigiLocker catching a name that doesn't match what's on
+        // file, so refresh the form rather than just leaving an error.
+        toast('DigiLocker name didn\'t match — marked for manual review','warning');
+        kycApplyInstantResult(recordType, id, 'rejected', result);
         return;
       }
       if(result.success && result.status==='failed'){
@@ -9083,10 +9093,19 @@ async function kycPollInstantVerify(recordType, id, tries){
   },5000);
 }
 // Patches the in-memory record the same way kycMarkStatus does, then
-// re-opens the form so the newly-pulled documents and Verified badge
-// show up without the person needing to refresh.
-function kycRefreshAfterInstantVerify(recordType, id, result){
-  var updates={kyc_status:'verified', kyc_verified_by:'DigiLocker (auto-verified)', kyc_verified_at:new Date().toISOString(), kyc_remarks:null};
+// re-opens the form so the newly-pulled documents and the resulting
+// Verified/Rejected badge show up without the person needing to
+// refresh. Handles both outcomes — a mismatch is a real result worth
+// seeing immediately, not just an error to dismiss.
+function kycApplyInstantResult(recordType, id, finalStatus, result){
+  var updates={
+    kyc_status:finalStatus,
+    kyc_verified_by: finalStatus==='verified' ? 'DigiLocker (auto-verified)' : 'DigiLocker (auto-check)',
+    kyc_verified_at:new Date().toISOString(),
+    kyc_remarks: finalStatus==='rejected' ? (result.reason||'Name did not match') : null,
+    kyc_digilocker_name: result.kyc_digilocker_name||null,
+    kyc_digilocker_dob: result.kyc_digilocker_dob||null
+  };
   if(result.aadhar_doc_url) updates.aadhar_doc_url=result.aadhar_doc_url;
   if(result.pan_doc_url) updates.pan_doc_url=result.pan_doc_url;
   if(recordType==='employee' && typeof EMP_LIST!=='undefined'){
@@ -9099,6 +9118,7 @@ function kycRefreshAfterInstantVerify(recordType, id, result){
       var j=arr.findIndex(function(x){return x.id===id;});
       if(j>-1){
         Object.assign(arr[j],{kycStatus:updates.kyc_status,kycVerifiedBy:updates.kyc_verified_by,kycVerifiedAt:updates.kyc_verified_at,kycRemarks:updates.kyc_remarks,
+          kycDigilockerName:updates.kyc_digilocker_name, kycDigilockerDob:updates.kyc_digilocker_dob,
           aadharDocUrl:updates.aadhar_doc_url||arr[j].aadharDocUrl, panDocUrl:updates.pan_doc_url||arr[j].panDocUrl});
         openEditForm(recordType,id);
       }
@@ -29252,8 +29272,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004b"></script>
-<script src="js/employee.js?v=20261004b"></script>
-<script src="js/projects.js?v=20261004b"></script>
-<script src="js/finance.js?v=20261004b"></script>
+<script src="js/registry.js?v=20261004c"></script>
+<script src="js/employee.js?v=20261004c"></script>
+<script src="js/projects.js?v=20261004c"></script>
+<script src="js/finance.js?v=20261004c"></script>
 </html>

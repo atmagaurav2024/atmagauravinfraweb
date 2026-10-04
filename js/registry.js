@@ -127,6 +127,7 @@ function kycFields(row){
     panDocUrl:row.pan_doc_url||'', eduDocUrl:row.education_doc_url||'',
     kycStatus:row.kyc_status||'pending', kycVerifiedBy:row.kyc_verified_by||'',
     kycVerifiedAt:row.kyc_verified_at||'', kycRemarks:row.kyc_remarks||'',
+    kycDigilockerName:row.kyc_digilocker_name||'', kycDigilockerDob:row.kyc_digilocker_dob||'',
     kycStatusLabel:statusText[row.kyc_status||'pending']
   };
 }
@@ -560,7 +561,7 @@ function kycRegBlockHtml(type,item,panNameLabel,includeAadhar){
     '</div>'+
     kycDocBoxHtml('ef-edudoc','Education Certificate(s) — combine into one PDF',item?item.eduDocUrl:'')+
     (item?kycInstantVerifyHtml(type,item.id,item.kycStatus):'')+
-    (item?kycStatusBlockHtml(type,item.id,{kyc_status:item.kycStatus,kyc_verified_by:item.kycVerifiedBy,kyc_verified_at:item.kycVerifiedAt,kyc_remarks:item.kycRemarks}):'');
+    (item?kycStatusBlockHtml(type,item.id,{kyc_status:item.kycStatus,kyc_verified_by:item.kycVerifiedBy,kyc_verified_at:item.kycVerifiedAt,kyc_remarks:item.kycRemarks,kyc_digilocker_name:item.kycDigilockerName,kyc_digilocker_dob:item.kycDigilockerDob}):'');
 }
 
 function openEditForm(type,id){
@@ -729,7 +730,8 @@ async function saveRegistryRecord(type,id){
         var prev=arr[idx];
         var base={id:id,vendor_id:prev.vendorId,mat_id:prev.matId,sc_id:prev.scId,lab_id:prev.labId,
           aadhar_doc_url:prev.aadharDocUrl,pan_doc_url:prev.panDocUrl,education_doc_url:prev.eduDocUrl,
-          kyc_status:prev.kycStatus,kyc_verified_by:prev.kycVerifiedBy,kyc_verified_at:prev.kycVerifiedAt,kyc_remarks:prev.kycRemarks};
+          kyc_status:prev.kycStatus,kyc_verified_by:prev.kycVerifiedBy,kyc_verified_at:prev.kycVerifiedAt,kyc_remarks:prev.kycRemarks,
+          kyc_digilocker_name:prev.kycDigilockerName,kyc_digilocker_dob:prev.kycDigilockerDob};
         arr[idx]=maps[type](Object.assign(base,data));
       }
       toast(name+' updated','success');

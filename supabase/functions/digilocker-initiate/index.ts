@@ -88,11 +88,19 @@ serve(async (req) => {
     const table = TABLES[record_type];
     const { data: record } = await supabaseAdmin
       .from(table)
-      .select("id")
+      .select("id, name_as_per_pan")
       .eq("id", record_id)
       .eq("company_id", caller.company_id) // tenant safety, belt & suspenders alongside RLS
       .single();
     if (!record) throw new Error("Record not found");
+    // Required so digilocker-check has something to confirm the pulled
+    // documents against — without this, a session would (and initially
+    // did) mark the record Verified purely because SOMEONE completed
+    // DigiLocker consent, with nothing to check that it was actually the
+    // same person as this record.
+    if (!record.name_as_per_pan || !record.name_as_per_pan.trim()) {
+      throw new Error("Enter the Full Name (as per PAN) above first — it's compared against whatever DigiLocker returns, so we don't mark this Verified against the wrong person's documents");
+    }
 
     const { data: kyc } = await supabaseAdmin
       .from("company_kyc_settings")
