@@ -139,7 +139,7 @@ serve(async (req) => {
         headers: {
           "x-api-key": kyc.sandbox_api_key,
           "x-api-secret": kyc.sandbox_api_secret,
-          "x-api-version": "1.0",
+          "x-api-version": "1.0.0",
         },
         ...fetchOpts,
       });
