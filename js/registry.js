@@ -115,26 +115,41 @@ async function initRegistry(){
   loadAllData();
 }
 
+// kycFields(row) — the KYC/DigiLocker columns are identical across
+// vendors, subcontractors and labourers, so every mapper below spreads
+// this in rather than repeating the same 8 keys 3 times. kycStatusLabel
+// is a precomputed display string for openDetail's plain label/value
+// table (which just stringifies whatever's in the field).
+function kycFields(row){
+  var statusText={pending:'Not Verified',verified:'✓ Verified'+(row.kyc_verified_by?' by '+row.kyc_verified_by:''),rejected:'✕ Rejected'+(row.kyc_remarks?' — '+row.kyc_remarks:'')};
+  return {
+    nameAsPerPan:row.name_as_per_pan||'', aadharDocUrl:row.aadhar_doc_url||'',
+    panDocUrl:row.pan_doc_url||'', eduDocUrl:row.education_doc_url||'',
+    kycStatus:row.kyc_status||'pending', kycVerifiedBy:row.kyc_verified_by||'',
+    kycVerifiedAt:row.kyc_verified_at||'', kycRemarks:row.kyc_remarks||'',
+    kycStatusLabel:statusText[row.kyc_status||'pending']
+  };
+}
 function mapVendor(v){
-  return {id:v.id,vendorId:v.vendor_id,name:v.name||'Unknown',cat:v.category||'',status:v.status||'active',rating:v.rating||0,
-    gst:v.gst||'',pan:v.pan||'',contact:v.contact_person||'',phone:v.phone||'',email:v.email||'',address:v.address||'',
+  return Object.assign({id:v.id,vendorId:v.vendor_id,name:v.name||'Unknown',cat:v.category||'',status:v.status||'active',rating:v.rating||0,
+    gst:v.gst||'',pan:v.pan||'',aadhar:v.aadhar||'',contact:v.contact_person||'',phone:v.phone||'',email:v.email||'',address:v.address||'',
     brands:v.brands||'',payTerms:v.pay_terms||'',leadTime:v.lead_time||'',orders:v.total_orders||0,
-    totalValue:v.total_value||0,materialRates:[],col:catColor(v.category)};
+    totalValue:v.total_value||0,materialRates:[],col:catColor(v.category)}, kycFields(v));
 }
 function mapMaterial(m){
   return {id:m.id,matId:m.mat_id,name:m.name,cat:m.category||'',code:m.code||'',unit:m.unit,uom:m.uom,spec:m.spec,col:catColor(m.category)};
 }
 function mapSC(s){
-  return {id:s.id,scId:s.sc_id,name:s.name||'Unknown',trade:s.trade||'',rating:s.rating||0,
-    gst:s.gst||'',pan:s.pan||'',contact:s.contact_person||'',phone:s.phone||'',email:s.email||'',address:s.address||'',
+  return Object.assign({id:s.id,scId:s.sc_id,name:s.name||'Unknown',trade:s.trade||'',rating:s.rating||0,
+    gst:s.gst||'',pan:s.pan||'',aadhar:s.aadhar||'',contact:s.contact_person||'',phone:s.phone||'',email:s.email||'',address:s.address||'',
     exp:s.experience||'',turnover:s.turnover||'',workers:s.workers||0,speciality:s.speciality||'',
-    pbgAvail:s.pbg_available,emdAvail:s.emd_available,status:s.status||'active',projects:[],col:'#1565C0'};
+    pbgAvail:s.pbg_available,emdAvail:s.emd_available,status:s.status||'active',projects:[],col:'#1565C0'}, kycFields(s));
 }
 function mapLabour(l){
-  return {id:l.id,labId:l.lab_id||l.id.slice(0,8).toUpperCase(),name:l.name||'Unknown',skill:l.skill||'',type:l.type||'unskilled',
+  return Object.assign({id:l.id,labId:l.lab_id||l.id.slice(0,8).toUpperCase(),name:l.name||'Unknown',skill:l.skill||'',type:l.type||'unskilled',
     phone:l.phone||'',address:l.address||'',aadhar:l.aadhar||'',pan:l.pan||'',dailyRate:l.daily_rate||0,
     source:l.source||'direct',contractor:l.contractor||'',project:l.project||'',
-    status:l.status||'active',joined:l.joined||'',bloodGroup:l.blood_group||'',remarks:l.remarks||''};
+    status:l.status||'active',joined:l.joined||'',bloodGroup:l.blood_group||'',remarks:l.remarks||''}, kycFields(l));
 }
 function catColor(cat){
   var colors={steel:'#C62828',cement:'#37474F',concrete:'#1565C0',structural:'#C62828',
@@ -344,11 +359,12 @@ function openDetail(type,id){
   var items={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS,user:USERS};
   var item=(items[type]||[]).find(function(x){return x.id===id;});
   if(!item) return;
+  var kycCols=[{k:'nameAsPerPan',l:'Name (as per PAN)'},{k:'kycStatusLabel',l:'KYC Status'}];
   var labels={
-    vendor:  [{k:'vendorId',l:'Vendor ID'},{k:'name',l:'Name'},{k:'cat',l:'Category'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'pan',l:'PAN No'},{k:'contact',l:'Contact Person'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'brands',l:'Brands'},{k:'payTerms',l:'Pay Terms'},{k:'leadTime',l:'Lead Time'},{k:'rating',l:'Rating'}],
+    vendor:  [{k:'vendorId',l:'Vendor ID'},{k:'name',l:'Name'},{k:'cat',l:'Category'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'pan',l:'PAN No'},{k:'aadhar',l:'Aadhaar No'},{k:'contact',l:'Contact Person'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'brands',l:'Brands'},{k:'payTerms',l:'Pay Terms'},{k:'leadTime',l:'Lead Time'},{k:'rating',l:'Rating'}].concat(kycCols),
     material:[{k:'matId',l:'Material ID'},{k:'name',l:'Name'},{k:'cat',l:'Category'},{k:'code',l:'Code'},{k:'uom',l:'Unit'},{k:'spec',l:'Specification'}],
-    sc:      [{k:'scId',l:'SC ID'},{k:'name',l:'Name'},{k:'trade',l:'Trade'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'pan',l:'PAN No'},{k:'contact',l:'Contact'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'exp',l:'Experience'},{k:'speciality',l:'Speciality'},{k:'workers',l:'Workers'},{k:'turnover',l:'Turnover'}],
-    labour:  [{k:'labId',l:'Labour ID'},{k:'name',l:'Name'},{k:'skill',l:'Skill'},{k:'type',l:'Type'},{k:'phone',l:'Phone'},{k:'address',l:'Address'},{k:'aadhar',l:'Aadhar No'},{k:'pan',l:'PAN No'},{k:'dailyRate',l:'Daily Rate'},{k:'source',l:'Source'},{k:'bloodGroup',l:'Blood Group'},{k:'joined',l:'Joined'}],
+    sc:      [{k:'scId',l:'SC ID'},{k:'name',l:'Name'},{k:'trade',l:'Trade'},{k:'status',l:'Status'},{k:'gst',l:'GST No'},{k:'pan',l:'PAN No'},{k:'aadhar',l:'Aadhaar No'},{k:'contact',l:'Contact'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'address',l:'Address'},{k:'exp',l:'Experience'},{k:'speciality',l:'Speciality'},{k:'workers',l:'Workers'},{k:'turnover',l:'Turnover'}].concat(kycCols),
+    labour:  [{k:'labId',l:'Labour ID'},{k:'name',l:'Name'},{k:'skill',l:'Skill'},{k:'type',l:'Type'},{k:'phone',l:'Phone'},{k:'address',l:'Address'},{k:'aadhar',l:'Aadhar No'},{k:'pan',l:'PAN No'},{k:'dailyRate',l:'Daily Rate'},{k:'source',l:'Source'},{k:'bloodGroup',l:'Blood Group'},{k:'joined',l:'Joined'}].concat(kycCols),
     user:    [{k:'empId',l:'Emp ID'},{k:'name',l:'Name'},{k:'role',l:'Role'},{k:'dept',l:'Department'},{k:'phone',l:'Phone'},{k:'email',l:'Email'},{k:'status',l:'Status'}]
   };
   var fields=labels[type]||[];
@@ -359,10 +375,21 @@ function openDetail(type,id){
       '<div style="font-size:10px;color:var(--text3);font-weight:700;width:110px;flex-shrink:0;">'+f.l+'</div>'+
       '<div style="font-size:12px;font-weight:700;flex:1;word-break:break-word;">'+v+'</div></div>';
   }).join('');
+  // Uploaded KYC documents (Aadhaar/PAN/education) aren't plain text, so
+  // they don't fit the label/value rows above — shown as tappable links
+  // instead, same idea as the Employee view sheet's "Uploaded Documents".
+  function kycDocLink(url,label){
+    if(!url) return '';
+    return '<a href="'+url+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#E3F2FD;color:#1565C0;border-radius:8px;padding:6px 12px;margin:0 6px 6px 0;font-size:12px;font-weight:700;text-decoration:none;">&#128196; '+label+'</a>';
+  }
+  var docsHtml=(item.aadharDocUrl||item.panDocUrl||item.eduDocUrl)?
+    '<div style="padding:10px 14px 0;"><div style="font-size:10px;color:var(--text3);font-weight:700;margin-bottom:6px;">KYC DOCUMENTS</div>'+
+      kycDocLink(item.aadharDocUrl,'Aadhaar')+kycDocLink(item.panDocUrl,'PAN')+kycDocLink(item.eduDocUrl,'Education')+
+    '</div>':'';
   var safeId=id.replace(/'/g,'');
   var safeName=(item.name||'').replace(/'/g,'');
   document.getElementById('det-title').textContent=item.name;
-  document.getElementById('det-body').innerHTML='<div style="padding:10px 14px;">'+rows+'</div>';
+  document.getElementById('det-body').innerHTML='<div style="padding:10px 14px;">'+rows+'</div>'+docsHtml;
   document.getElementById('det-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-det\',\'sh-det\')">Close</button> '+
     '<button class="btn" style="background:var(--bg);color:#1565C0;font-weight:800;" onclick="openEditForm(\''+type+'\',\''+safeId+'\')">✎ Edit</button> '+
@@ -515,6 +542,26 @@ async function deleteRecord(type,id){
   try{await sbDelete(tables[type],id);}catch(e){console.error(e);}
 }
 
+// Shared "KYC / DigiLocker" block appended to the Vendor, Subcontractor
+// and Labour add/edit forms (kycDigilockerNoteHtml/kycDocBoxHtml/
+// kycStatusBlockHtml are defined once in index.html and reused here the
+// same way uploadToCloudinary/safeN already are). includeAadhar=false
+// for labour, which already has its own Aadhaar number input in its
+// main field layout (next to Joined Date) — adding only what that type
+// doesn't already have avoids a second #ef-aadhar in the same form.
+function kycRegBlockHtml(type,item,panNameLabel,includeAadhar){
+  return '<label class="flbl" style="margin-top:10px;">'+(panNameLabel||'Full Name (as per PAN)')+'</label>'+
+    '<input id="ef-panname" class="finp" placeholder="Exactly as printed on the PAN card" value="'+(item?(item.nameAsPerPan||''):'')+'">'+
+    kycDigilockerNoteHtml()+
+    (includeAadhar!==false?('<label class="flbl">Aadhaar Number'+(type!=='labour'?' (Authorized Signatory)':'')+'</label><input id="ef-aadhar" class="finp" value="'+(item?(item.aadhar||''):'')+'" placeholder="XXXX XXXX XXXX">'):'')+
+    '<div class="g2">'+
+      kycDocBoxHtml('ef-aadhardoc','Aadhaar (from DigiLocker)',item?item.aadharDocUrl:'')+
+      kycDocBoxHtml('ef-pandoc','PAN Card (from DigiLocker)',item?item.panDocUrl:'')+
+    '</div>'+
+    kycDocBoxHtml('ef-edudoc','Education Certificate(s) — combine into one PDF',item?item.eduDocUrl:'')+
+    (item?kycStatusBlockHtml(type,item.id,{kyc_status:item.kycStatus,kyc_verified_by:item.kycVerifiedBy,kyc_verified_at:item.kycVerifiedAt,kyc_remarks:item.kycRemarks}):'');
+}
+
 function openEditForm(type,id){
   var items={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS};
   var item=id?(items[type]||[]).find(function(x){return x.id===id;}):null;
@@ -549,7 +596,8 @@ function openEditForm(type,id){
         '<div><label class="flbl">Brands / Products</label><input id="ef-brands" class="finp" value="'+(item?item.brands||'':'')+'" placeholder="TMT, MS Plate..."></div>'+
         '<div><label class="flbl">Payment Terms</label><input id="ef-payterms" class="finp" value="'+(item?item.payTerms||'':'')+'" placeholder="30 days credit"></div>'+
       '</div>'+
-      '<label class="flbl">Lead Time</label><input id="ef-leadtime" class="finp" value="'+(item?item.leadTime||'':'')+'" placeholder="7-10 days">';
+      '<label class="flbl">Lead Time</label><input id="ef-leadtime" class="finp" value="'+(item?item.leadTime||'':'')+'" placeholder="7-10 days">'+
+      kycRegBlockHtml('vendor',item,'Authorized Signatory\'s Name (as per PAN)');
   } else if(type==='material'){
     body=
       '<div class="g2">'+
@@ -585,7 +633,8 @@ function openEditForm(type,id){
       '<div class="g2">'+
         '<div><label class="flbl">PBG Available</label><select id="ef-pbg" class="fsel"><option value="true"'+(item&&item.pbgAvail?' selected':'')+'>Yes</option><option value="false"'+(item&&!item.pbgAvail?' selected':'')+'>No</option></select></div>'+
         '<div><label class="flbl">Status</label><select id="ef-status" class="fsel">'+['active','inactive'].map(function(s){return '<option value="'+s+'"'+(item&&item.status===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div>'+
-      '</div>';
+      '</div>'+
+      kycRegBlockHtml('sc',item,'Authorized Signatory\'s Name (as per PAN)');
   } else if(type==='labour'){
     body=
       '<div class="g2">'+
@@ -605,7 +654,8 @@ function openEditForm(type,id){
         '<div><label class="flbl">Joined Date</label><input id="ef-joined" class="finp" type="date" value="'+(item?item.joined||'':'')+'"></div>'+
       '</div>'+
       '<label class="flbl">PAN Number</label><input id="ef-pan" class="finp" value="'+(item?item.pan||'':'')+'" placeholder="ABCDE1234F — for TDS, if applicable" style="text-transform:uppercase;" maxlength="10" oninput="this.value=this.value.toUpperCase()">'+
-      '<label class="flbl">Address</label><textarea id="ef-address" class="finp" rows="2">'+(item?item.address||'':'')+'</textarea>';
+      '<label class="flbl">Address</label><textarea id="ef-address" class="finp" rows="2">'+(item?item.address||'':'')+'</textarea>'+
+      kycRegBlockHtml('labour',item,'Full Name (as per PAN)',false);
   }
   setTimeout(function(){
     var sel=document.getElementById('ef-cat')||document.getElementById('ef-trade')||document.getElementById('ef-skill');
@@ -632,15 +682,16 @@ async function saveRegistryRecord(type,id){
   // right deductee (Accounts → TDS, and the TDS challan/26Q return), so it's
   // captured on vendors, subcontractors and labour alike.
   var pan=gv2('ef-pan'); if(pan) pan=pan.toUpperCase();
+  var hasKyc = (type==='vendor'||type==='sc'||type==='labour');
   if(type==='vendor'){
-    data={name:name,category:gv2('ef-cat')||null,gst:gv2('ef-gst')||null,pan:pan||null,status:gv2('ef-status')||'active',
+    data={name:name,category:gv2('ef-cat')||null,gst:gv2('ef-gst')||null,pan:pan||null,aadhar:gv2('ef-aadhar')||null,status:gv2('ef-status')||'active',
       contact_person:gv2('ef-contact')||null,phone:gv2('ef-phone')||null,email:gv2('ef-email')||null,
       address:gv2('ef-address')||null,brands:gv2('ef-brands')||null,pay_terms:gv2('ef-payterms')||null,
       lead_time:gv2('ef-leadtime')||null,rating:parseFloat(gv2('ef-rating'))||0};
   } else if(type==='material'){
     data={name:name,category:gv2('ef-cat')||null,code:gv2('ef-code')||null,uom:gv2('ef-uom')||null,spec:gv2('ef-spec')||null};
   } else if(type==='sc'){
-    data={name:name,trade:gv2('ef-trade')||null,gst:gv2('ef-gst')||null,pan:pan||null,phone:gv2('ef-phone')||null,
+    data={name:name,trade:gv2('ef-trade')||null,gst:gv2('ef-gst')||null,pan:pan||null,aadhar:gv2('ef-aadhar')||null,phone:gv2('ef-phone')||null,
       contact_person:gv2('ef-contact')||null,email:gv2('ef-email')||null,address:gv2('ef-address')||null,
       experience:gv2('ef-exp')||null,workers:parseInt(gv2('ef-workers'))||0,speciality:gv2('ef-spec')||null,
       pbg_available:gv2('ef-pbg')==='true',status:gv2('ef-status')||'active'};
@@ -649,15 +700,37 @@ async function saveRegistryRecord(type,id){
       daily_rate:parseFloat(gv2('ef-rate'))||0,blood_group:gv2('ef-blood')||null,
       aadhar:gv2('ef-aadhar')||null,joined:gv2('ef-joined')||null,address:gv2('ef-address')||null};
   }
+  if(hasKyc) data.name_as_per_pan=gv2('ef-panname')||null;
   var tables={vendor:'vendors',material:'materials',sc:'subcontractors',labour:'labourers'};
   var maps={vendor:mapVendor,material:mapMaterial,sc:mapSC,labour:mapLabour};
   var arrs={vendor:VENDORS,material:MATERIALS,sc:SUBCONTRACTORS,labour:LABOURERS};
   try{
+    if(hasKyc){
+      toast('Uploading documents...','info');
+      var aadharFile=document.getElementById('ef-aadhardoc')&&document.getElementById('ef-aadhardoc').files[0];
+      var panFile=document.getElementById('ef-pandoc')&&document.getElementById('ef-pandoc').files[0];
+      var eduFile=document.getElementById('ef-edudoc')&&document.getElementById('ef-edudoc').files[0];
+      if(aadharFile) data.aadhar_doc_url=await uploadToCloudinary(aadharFile,'kyc','ef-aadhardoc');
+      if(panFile) data.pan_doc_url=await uploadToCloudinary(panFile,'kyc','ef-pandoc');
+      if(eduFile) data.education_doc_url=await uploadToCloudinary(eduFile,'kyc','ef-edudoc');
+      toast('Saving...','info');
+    }
     if(id){
       await sbUpdate(tables[type],id,data);
       var arr=arrs[type];
       var idx=arr.findIndex(function(x){return x.id===id;});
-      if(idx>-1) arr[idx]=maps[type](Object.assign({id:id,vendor_id:arr[idx].vendorId,mat_id:arr[idx].matId,sc_id:arr[idx].scId,lab_id:arr[idx].labId},data));
+      // Start from the PREVIOUS mapped item's raw-shaped fields (not just
+      // the id columns) so anything not part of this submission — doc
+      // URLs that weren't re-uploaded, the KYC review fields a verifier
+      // set separately via kycMarkStatus — survives the re-map instead
+      // of reverting to blank until the next full reload.
+      if(idx>-1){
+        var prev=arr[idx];
+        var base={id:id,vendor_id:prev.vendorId,mat_id:prev.matId,sc_id:prev.scId,lab_id:prev.labId,
+          aadhar_doc_url:prev.aadharDocUrl,pan_doc_url:prev.panDocUrl,education_doc_url:prev.eduDocUrl,
+          kyc_status:prev.kycStatus,kyc_verified_by:prev.kycVerifiedBy,kyc_verified_at:prev.kycVerifiedAt,kyc_remarks:prev.kycRemarks};
+        arr[idx]=maps[type](Object.assign(base,data));
+      }
       toast(name+' updated','success');
     } else {
       var prefix={vendor:'VND',material:'MAT',sc:'SUB',labour:'LAB'};

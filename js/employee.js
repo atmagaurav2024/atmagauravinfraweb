@@ -2424,8 +2424,10 @@ function empViewDetail(id){
       sec('&#128203;','KYC / Documents','#6A1B9A')+
       row('Aadhaar No.',e.aadhar||e.aadhar_no||null)+
       row('PAN No.',e.pan||e.pan_no||null)+
+      row('Name (as per PAN)',e.name_as_per_pan||null)+
       row('UAN (PF)',e.pf_no||e.pf||e.uan_no||null)+
       row('ESIC No.',e.esic_no||e.esic||null)+
+      row('KYC Status',({pending:'Not Verified',verified:'✓ Verified'+(e.kyc_verified_by?' by '+e.kyc_verified_by:''),rejected:'✕ Rejected'+(e.kyc_remarks?' — '+e.kyc_remarks:'')})[e.kyc_status||'pending'])+
     '</div>'+
     '<div style="background:var(--card-bg);border-radius:12px;padding:4px 14px;margin-bottom:10px;">'+
       sec('&#127981;','Bank Details','#C62828')+
@@ -2434,11 +2436,12 @@ function empViewDetail(id){
       row('IFSC Code',e.ifsc||null)+
       row('Account Holder',e.account_holder||e.accName||null)+
     '</div>'+
-    ((e.aadhar_doc_url||e.pan_doc_url)?
+    ((e.aadhar_doc_url||e.pan_doc_url||e.education_doc_url)?
       '<div style="background:var(--card-bg);border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
         sec('&#128206;','Uploaded Documents','#1565C0')+
         docLink(e.aadhar_doc_url,'Aadhaar Card')+
         docLink(e.pan_doc_url,'PAN Card')+
+        docLink(e.education_doc_url,'Education Certificate(s)')+
       '</div>':'')+
     (e.rejection_reason?
       '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:10px;">'+
@@ -2806,6 +2809,8 @@ function empOpenForm(emp){
   var permanent=isEdit?(e.permanent_address||e.permanent||''):'';
   var aadhar=isEdit?(e.aadhar||e.aadhar_no||''):'';
   var pan=isEdit?(e.pan||e.pan_no||''):'';
+  var nameAsPerPan=isEdit?(e.name_as_per_pan||''):'';
+  var eduDocUrl=isEdit?(e.education_doc_url||''):'';
   var pf=isEdit?(e.pf_no||e.pf||''):'';
   var esic=isEdit?(e.esic_no||e.esic||''):'';
   var bankName=isEdit?(e.bank_name||e.bank||''):'';
@@ -2886,10 +2891,13 @@ function empOpenForm(emp){
       '</div>'
     :'')+
     hdr('🪪','KYC Details','#6A1B9A')+
+    kycDigilockerNoteHtml()+
     '<div class="g2">'+
       '<div><label class="flbl">Aadhar Number</label><input id="f-uaadhar" class="finp" placeholder="XXXX XXXX XXXX" value="'+safeN(aadhar)+'"></div>'+
       '<div><label class="flbl">PAN Number</label><input id="f-upan" class="finp" placeholder="ABCDE1234F" value="'+safeN(pan)+'"></div>'+
     '</div>'+
+    '<label class="flbl">Full Name (as per PAN)</label><input id="f-upanname" class="finp" placeholder="Exactly as printed on the PAN card" value="'+safeN(nameAsPerPan)+'">'+
+    (isEdit?kycStatusBlockHtml('employee',e.id,e):'')+
     '<div class="g2">'+
       '<div><label class="flbl">PF Number</label><input id="f-upf" class="finp" placeholder="Optional" value="'+safeN(pf)+'"></div>'+
       '<div><label class="flbl">ESIC Number</label><input id="f-uesic" class="finp" placeholder="Optional" value="'+safeN(esic)+'"></div>'+
@@ -2931,6 +2939,7 @@ function empOpenForm(emp){
         '<div class="upload-progress-wrap" id="f-upan-doc-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="f-upan-doc-prog-name"></span><span class="upload-progress-pct" id="f-upan-doc-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="f-upan-doc-prog-fill"></div></div></div>'+
       '</div></div>'+
     '</div>'+
+    kycDocBoxHtml('f-uedu-doc','Education Certificate(s) — combine into one PDF',eduDocUrl)+
     '<input type="hidden" id="f-uedit-id" value="'+(isEdit?e.id:'')+'">'+
     // Password reset section for existing employees
     (isEdit?
@@ -3204,7 +3213,7 @@ async function empFormSave(){
       return ns.length?ns.join(', '):null;
     })(),
     address:gv('f-uaddress')||null, permanent_address:gv('f-upermanent')||null,
-    aadhar:gv('f-uaadhar')||null, pan:gv('f-upan')||null,
+    aadhar:gv('f-uaadhar')||null, pan:gv('f-upan')||null, name_as_per_pan:gv('f-upanname')||null,
     pf_no:gv('f-upf')||null, esic_no:gv('f-uesic')||null,
     bank_name:gv('f-ubank')||null, account_no:gv('f-uaccno')||null,
     ifsc:gv('f-uifsc')||null, account_holder:gv('f-uaccname')||null,
@@ -3217,9 +3226,11 @@ async function empFormSave(){
     var photoFile=document.getElementById('f-uphoto')&&document.getElementById('f-uphoto').files[0];
     var aadharFile=document.getElementById('f-uaadhar-doc')&&document.getElementById('f-uaadhar-doc').files[0];
     var panFile=document.getElementById('f-upan-doc')&&document.getElementById('f-upan-doc').files[0];
+    var eduFile=document.getElementById('f-uedu-doc')&&document.getElementById('f-uedu-doc').files[0];
     if(photoFile)data.profile_photo=await uploadToCloudinary(photoFile,'photos','f-uphoto');
     if(aadharFile)data.aadhar_doc_url=await uploadToCloudinary(aadharFile,'kyc','f-uaadhar-doc');
     if(panFile)data.pan_doc_url=await uploadToCloudinary(panFile,'kyc','f-upan-doc');
+    if(eduFile)data.education_doc_url=await uploadToCloudinary(eduFile,'kyc','f-uedu-doc');
     toast('Saving...','info');
 
     if(editId){

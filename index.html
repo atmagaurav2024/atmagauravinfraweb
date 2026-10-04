@@ -8875,6 +8875,124 @@ function handleFilePreview(inputId, previewId){
   reader.readAsDataURL(file);
 }
 
+// ── KYC / DIGILOCKER SELF-VERIFICATION ──────────────────────────────
+// Shared by the Employee, Vendor, Subcontractor and Labour registration
+// forms. There's no low-cost way for a business this size to get direct
+// DigiLocker API access — that requires becoming a certified DigiLocker
+// "Requestor Organization" through a paid Technology Solution Provider
+// (per-verification fees, business approval process). The practical free
+// route instead: the person verifies themselves. They log into
+// digilocker.gov.in (or the DigiLocker app) with their OWN Aadhaar-linked
+// mobile OTP, download their Aadhaar/PAN/education certificates there,
+// and upload those PDFs here. DigiLocker-issued documents carry a digital
+// signature/QR code that proves they're genuine and untampered —
+// whoever reviews the upload checks that at DigiLocker's own free
+// "Verify Document" page before marking the record Verified below.
+//
+// kycDigilockerNoteHtml() — the instructional callout, identical on
+// every form.
+function kycDigilockerNoteHtml(){
+  return '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#1E3A8A;line-height:1.55;">'+
+    '&#128274; <b>Self-verify via DigiLocker — free, no app sign-up needed:</b> ask them to log into '+
+    '<a href="https://digilocker.gov.in" target="_blank" style="color:#1565C0;font-weight:700;">digilocker.gov.in</a> '+
+    '(or the DigiLocker app) with their own Aadhaar-linked mobile OTP, download their Aadhaar, PAN and education '+
+    'certificates there, then upload those PDFs below. DigiLocker-issued files carry a digital signature/QR code '+
+    'proving they\'re genuine — check it at DigiLocker\'s free '+
+    '<a href="https://digilocker.gov.in/web/en/verify-document" target="_blank" style="color:#1565C0;font-weight:700;">Verify Document</a> '+
+    'page before marking this Verified.'+
+  '</div>';
+}
+
+// kycDocBoxHtml(id, label, existingUrl) — one upload-box matching the
+// existing .upload-box/.upload-preview pattern (index.html ~1358-1389),
+// consistent with the Aadhaar/PAN upload boxes the Employee form already
+// has, so a new doc type (education certs) or a new form (vendor/sc/
+// labour, which had no document upload at all before) looks the same.
+function kycDocBoxHtml(id, label, existingUrl){
+  return '<div><label class="flbl">'+label+'</label>'+
+    '<div class="upload-box" onclick="document.getElementById(\''+id+'\').click()">'+
+      // .upload-preview is display:none by default (only shown once
+      // handleFilePreview fires for a newly-chosen file) — force it
+      // visible inline when there's already an uploaded file, otherwise
+      // this "already on file" link would silently never render.
+      '<div id="'+id+'-prev" class="upload-preview"'+(existingUrl?' style="display:block;"':'')+'>'+(existingUrl?'<a href="'+existingUrl+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:#1565C0;font-weight:700;text-decoration:none;">&#128196; Current file — tap to view</a>':'')+'</div>'+
+      '<input type="file" id="'+id+'" accept="image/*,application/pdf" onchange="handleFilePreview(\''+id+'\',\''+id+'-prev\')">'+
+      '<div class="upload-label">📄 Upload</div>'+
+      '<div class="upload-progress-wrap" id="'+id+'-prog"><div class="upload-progress-label"><span class="upload-progress-name" id="'+id+'-prog-name"></span><span class="upload-progress-pct" id="'+id+'-prog-pct">0%</span></div><div class="upload-progress-bar"><div class="upload-progress-fill" id="'+id+'-prog-fill"></div></div></div>'+
+    '</div></div>';
+}
+
+// kycStatusBlockHtml(recordType, id, data) — the Verified/Rejected badge
+// + review buttons, identical logic across all 4 record types. Shown
+// only when editing an existing record (nothing to verify before the
+// documents are even saved once).
+function kycStatusBlockHtml(recordType, id, data){
+  if(!id) return '';
+  var d = data||{};
+  var status = d.kyc_status || 'pending';
+  var statusMap = {
+    pending:  ['Not Verified', '#FEF3C7', '#B45309'],
+    verified: ['Verified',     '#D1FAE5', '#047857'],
+    rejected: ['Rejected',     '#FFE4E6', '#E11D48']
+  };
+  var sc = statusMap[status] || statusMap.pending;
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:4px;">'+
+    '<div>'+
+      '<span style="background:'+sc[1]+';color:'+sc[2]+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;">'+sc[0]+'</span>'+
+      (status==='verified'&&d.kyc_verified_by?'<div style="font-size:10px;color:var(--text3);margin-top:4px;">by '+d.kyc_verified_by+(d.kyc_verified_at?' · '+fmtDate((d.kyc_verified_at||'').slice(0,10)):'')+'</div>':'')+
+      (status==='rejected'&&d.kyc_remarks?'<div style="font-size:10px;color:#E11D48;margin-top:4px;">'+d.kyc_remarks+'</div>':'')+
+    '</div>'+
+    '<div style="display:flex;gap:6px;">'+
+      '<button type="button" onclick="kycMarkStatus(\''+recordType+'\',\''+id+'\',\'verified\')" style="background:#D1FAE5;color:#047857;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Mark Verified</button>'+
+      '<button type="button" onclick="kycMarkStatus(\''+recordType+'\',\''+id+'\',\'rejected\')" style="background:#FFE4E6;color:#E11D48;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10007; Reject</button>'+
+    '</div>'+
+  '</div>';
+}
+
+var KYC_TABLES = {employee:'employees', vendor:'vendors', sc:'subcontractors', labour:'labourers'};
+
+// kycMarkStatus — reviewer action (someone with access to the record's
+// edit form), not the self-verification itself. Updates the DB, then
+// refreshes whichever in-memory list/render this record type uses and
+// re-opens the same form so the badge reflects the change immediately.
+async function kycMarkStatus(recordType, id, status){
+  var table = KYC_TABLES[recordType];
+  if(!table||!id) return;
+  var remarks = null;
+  if(status==='rejected'){
+    remarks = prompt('Reason for rejecting this KYC (visible to whoever reviews it next):')||'';
+    if(remarks===null) return; // cancelled
+  } else if(!confirm('Mark this record\'s KYC as Verified?\n\nOnly do this after checking the uploaded documents\' DigiLocker signature at digilocker.gov.in/web/en/verify-document.')){
+    return;
+  }
+  try{
+    var byName = (currentUser&&(currentUser.name||currentUser.email))||'Admin';
+    var updates = {kyc_status:status, kyc_verified_by:byName, kyc_verified_at:new Date().toISOString(), kyc_remarks:remarks||null};
+    await sbUpdate(table, id, updates);
+    toast('KYC marked '+(status==='verified'?'Verified':'Rejected'),'success');
+    if(recordType==='employee' && typeof EMP_LIST!=='undefined'){
+      var i=EMP_LIST.findIndex(function(x){return x.id===id;});
+      if(i>-1){ Object.assign(EMP_LIST[i],updates); if(typeof empOpenForm==='function') empOpenForm(EMP_LIST[i]); }
+    } else if(typeof openEditForm==='function'){
+      // Registry arrays (VENDORS/SUBCONTRACTORS/LABOURERS) hold mapVendor/
+      // mapSC/mapLabour's camelCase-mapped objects, not raw DB rows, so
+      // `updates` (snake_case, exactly what was just written to the
+      // table) needs translating to the camelCase keys those mappers
+      // produce — assigning it as-is would add unused stray snake_case
+      // properties and leave the camelCase ones (which the form/detail
+      // view actually read) stale until the next reload.
+      var arrs={vendor:(typeof VENDORS!=='undefined'?VENDORS:null),sc:(typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS:null),labour:(typeof LABOURERS!=='undefined'?LABOURERS:null)};
+      var arr=arrs[recordType];
+      if(arr){
+        var j=arr.findIndex(function(x){return x.id===id;});
+        if(j>-1){
+          Object.assign(arr[j],{kycStatus:updates.kyc_status,kycVerifiedBy:updates.kyc_verified_by,kycVerifiedAt:updates.kyc_verified_at,kycRemarks:updates.kyc_remarks});
+          openEditForm(recordType,id);
+        }
+      }
+    }
+  }catch(e){ toast('Error: '+e.message,'error'); console.error(e); }
+}
 
 // ── SUPABASE AUTH ──
 var SUPABASE_AUTH_URL = 'https://aywlauygsqkivdihbaut.supabase.co/auth/v1';
@@ -28953,8 +29071,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261003u"></script>
-<script src="js/employee.js?v=20261003u"></script>
-<script src="js/projects.js?v=20261003u"></script>
-<script src="js/finance.js?v=20261003u"></script>
+<script src="js/registry.js?v=20261004a"></script>
+<script src="js/employee.js?v=20261004a"></script>
+<script src="js/projects.js?v=20261004a"></script>
+<script src="js/finance.js?v=20261004a"></script>
 </html>
