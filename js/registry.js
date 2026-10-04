@@ -544,7 +544,7 @@ async function deleteRecord(type,id){
 }
 
 // Shared "KYC / DigiLocker" block appended to the Vendor, Subcontractor
-// and Labour add/edit forms (kycDigilockerNoteHtml/kycDocBoxHtml/
+// and Labour add/edit forms (kycDocBoxHtml/kycInstantVerifyHtml/
 // kycStatusBlockHtml are defined once in index.html and reused here the
 // same way uploadToCloudinary/safeN already are). includeAadhar=false
 // for labour, which already has its own Aadhaar number input in its
@@ -553,7 +553,6 @@ async function deleteRecord(type,id){
 function kycRegBlockHtml(type,item,panNameLabel,includeAadhar){
   return '<label class="flbl" style="margin-top:10px;">'+(panNameLabel||'Full Name (as per PAN)')+'</label>'+
     '<input id="ef-panname" class="finp" placeholder="Exactly as printed on the PAN card" value="'+(item?(item.nameAsPerPan||''):'')+'">'+
-    kycDigilockerNoteHtml()+
     (includeAadhar!==false?('<label class="flbl">Aadhaar Number'+(type!=='labour'?' (Authorized Signatory)':'')+'</label><input id="ef-aadhar" class="finp" value="'+(item?(item.aadhar||''):'')+'" placeholder="XXXX XXXX XXXX">'):'')+
     '<div class="g2">'+
       kycDocBoxHtml('ef-aadhardoc','Aadhaar (from DigiLocker)',item?item.aadharDocUrl:'')+

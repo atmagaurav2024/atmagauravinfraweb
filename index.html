@@ -8875,33 +8875,16 @@ function handleFilePreview(inputId, previewId){
   reader.readAsDataURL(file);
 }
 
-// ── KYC / DIGILOCKER SELF-VERIFICATION ──────────────────────────────
+// ── KYC / DIGILOCKER ─────────────────────────────────────────────────
 // Shared by the Employee, Vendor, Subcontractor and Labour registration
-// forms. There's no low-cost way for a business this size to get direct
-// DigiLocker API access — that requires becoming a certified DigiLocker
-// "Requestor Organization" through a paid Technology Solution Provider
-// (per-verification fees, business approval process). The practical free
-// route instead: the person verifies themselves. They log into
-// digilocker.gov.in (or the DigiLocker app) with their OWN Aadhaar-linked
-// mobile OTP, download their Aadhaar/PAN/education certificates there,
-// and upload those PDFs here. DigiLocker-issued documents carry a digital
-// signature/QR code that proves they're genuine and untampered —
-// whoever reviews the upload checks that at DigiLocker's own free
-// "Verify Document" page before marking the record Verified below.
-//
-// kycDigilockerNoteHtml() — the instructional callout, identical on
-// every form.
-function kycDigilockerNoteHtml(){
-  return '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#1E3A8A;line-height:1.55;">'+
-    '&#128274; <b>Self-verify via DigiLocker — free, no app sign-up needed:</b> ask them to log into '+
-    '<a href="https://digilocker.gov.in" target="_blank" style="color:#1565C0;font-weight:700;">digilocker.gov.in</a> '+
-    '(or the DigiLocker app) with their own Aadhaar-linked mobile OTP, download their Aadhaar, PAN and education '+
-    'certificates there, then upload those PDFs below. DigiLocker-issued files carry a digital signature/QR code '+
-    'proving they\'re genuine — check it at DigiLocker\'s free '+
-    '<a href="https://digilocker.gov.in/web/en/verify-document" target="_blank" style="color:#1565C0;font-weight:700;">Verify Document</a> '+
-    'page before marking this Verified.'+
-  '</div>';
-}
+// forms. Real verification is automated via Sandbox.co.in (the
+// "Verify Instantly via DigiLocker" button, below) — the old free
+// self-verify flow (person self-uploads from digilocker.gov.in, whoever
+// reviews it manually checks the signature) has been removed now that
+// the automated check covers it; manual upload + Mark Verified/Reject
+// stay only as a fallback for education certificates (never automated —
+// not supported by Sandbox.co.in's API) and for a company that hasn't
+// set up Sandbox.co.in yet.
 
 // kycDocBoxHtml(id, label, existingUrl) — one upload-box matching the
 // existing .upload-box/.upload-preview pattern (index.html ~1358-1389),
@@ -29278,8 +29261,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261004e"></script>
-<script src="js/employee.js?v=20261004e"></script>
-<script src="js/projects.js?v=20261004e"></script>
-<script src="js/finance.js?v=20261004e"></script>
+<script src="js/registry.js?v=20261004f"></script>
+<script src="js/employee.js?v=20261004f"></script>
+<script src="js/projects.js?v=20261004f"></script>
+<script src="js/finance.js?v=20261004f"></script>
 </html>

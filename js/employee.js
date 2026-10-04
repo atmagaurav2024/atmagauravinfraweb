@@ -2891,7 +2891,6 @@ function empOpenForm(emp){
       '</div>'
     :'')+
     hdr('🪪','KYC Details','#6A1B9A')+
-    kycDigilockerNoteHtml()+
     '<div class="g2">'+
       '<div><label class="flbl">Aadhar Number</label><input id="f-uaadhar" class="finp" placeholder="XXXX XXXX XXXX" value="'+safeN(aadhar)+'"></div>'+
       '<div><label class="flbl">PAN Number</label><input id="f-upan" class="finp" placeholder="ABCDE1234F" value="'+safeN(pan)+'"></div>'+
