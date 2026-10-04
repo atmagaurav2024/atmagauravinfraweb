@@ -2786,8 +2786,153 @@ async function empSaveLeaveFix(empId,leaveTypes){
 }
 
 // ── EMPLOYEE FORM ─────────────────────────────────────
+// "Fetch from DigiLocker" on Add New Employee — an alternative to
+// typing name/DOB/photo/documents in by hand. Pulls from a session
+// that isn't attached to any database row (there's no employee row
+// yet to attach it to, and nothing existing to match pulled documents
+// against — whoever completes DigiLocker consent simply IS the person
+// being registered). Held here until the admin actually saves the
+// form; empFormSave merges it into the insert payload.
+var EMP_DIGILOCKER_FETCH=null;
+var EMP_DL_SESSION_ID=null;
+var EMP_DL_POLL_GEN=0;
+
+function empDigilockerFetchBoxHtml(){
+  return '<div id="emp-dlfetch-box" style="background:#F5F3FF;border:1.5px solid #C4B5FD;border-radius:12px;padding:14px;margin-bottom:16px;">'+
+    '<div style="font-size:13px;font-weight:800;color:#4527A0;margin-bottom:4px;">&#9889; Fetch from DigiLocker <span style="font-size:10px;font-weight:700;color:#6D28D9;background:#EDE9FE;padding:2px 8px;border-radius:20px;margin-left:4px;">Recommended</span></div>'+
+    '<div style="font-size:11.5px;color:#5B21B6;line-height:1.5;margin-bottom:10px;">Have the new employee log into DigiLocker to pull their verified name, date of birth, photo, Aadhaar and PAN automatically — faster and more reliable than typing it in, and marks their KYC Verified immediately.</div>'+
+    '<div id="emp-dlfetch-body">'+
+      '<button type="button" onclick="empFetchFromDigilocker()" style="width:100%;background:#4527A0;color:white;border:none;border-radius:8px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;">Fetch from DigiLocker</button>'+
+      '<div style="text-align:center;margin-top:8px;"><a href="#" onclick="empSkipDigilockerFetch();return false;" style="font-size:11px;color:#6D28D9;text-decoration:underline;">Enter details manually instead</a></div>'+
+    '</div>'+
+  '</div>';
+}
+function empSkipDigilockerFetch(){
+  var box=document.getElementById('emp-dlfetch-box');
+  if(box) box.style.display='none';
+}
+async function empFetchFromDigilocker(){
+  var body=document.getElementById('emp-dlfetch-body');
+  if(!body) return;
+  body.innerHTML='<div style="font-size:11.5px;color:#5B21B6;">Starting DigiLocker verification...</div>';
+  try{
+    var res=await fetch(SUPABASE_URL+'/functions/v1/digilocker-initiate-new',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+(currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+      body:JSON.stringify({})
+    });
+    var result=await res.json();
+    if(!res.ok||!result.success){
+      body.innerHTML='<div style="font-size:11px;color:#E11D48;">Could not start DigiLocker verification: '+(result.error||'unknown error')+'</div>'+
+        '<button type="button" onclick="empFetchFromDigilocker()" style="margin-top:6px;background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;">Try Again</button>'+
+        '<div style="text-align:center;margin-top:8px;"><a href="#" onclick="empSkipDigilockerFetch();return false;" style="font-size:11px;color:#6D28D9;text-decoration:underline;">Enter details manually instead</a></div>';
+      return;
+    }
+    EMP_DL_SESSION_ID=result.session_id;
+    var url=result.authorization_url;
+    body.innerHTML='<div style="background:#fff;border:1px solid #DDD6FE;border-radius:10px;padding:10px 12px;font-size:11.5px;color:#4527A0;line-height:1.5;">'+
+      '<div style="margin-bottom:8px;">Have the new employee open this on their own phone and log in with their Aadhaar-linked mobile OTP — this updates automatically once they finish.</div>'+
+      '<div style="display:flex;gap:6px;">'+
+        '<button type="button" onclick="window.open(\''+url+'\',\'_blank\')" style="flex:1;background:#4527A0;color:white;border:none;border-radius:8px;padding:8px;font-size:11px;font-weight:800;cursor:pointer;">Open DigiLocker</button>'+
+        '<button type="button" onclick="kycCopyLink(this,\''+url+'\')" style="flex:1;background:white;border:1px solid #DDD6FE;color:#4527A0;border-radius:8px;padding:8px;font-size:11px;font-weight:800;cursor:pointer;">Copy Link</button>'+
+      '</div>'+
+      '<div id="emp-dlfetch-status" style="margin-top:8px;font-size:11px;color:#4527A0;">&#8987; Waiting for them to complete verification...</div>'+
+    '</div>';
+    EMP_DL_POLL_GEN++;
+    empPollDigilockerFetch(EMP_DL_SESSION_ID, 0, EMP_DL_POLL_GEN);
+  }catch(e){
+    body.innerHTML='<div style="font-size:11px;color:#E11D48;">Could not reach the verification system — try again in a moment.</div>';
+    console.error(e);
+  }
+}
+// Polls every 5s, up to ~10 minutes — same budget as the existing
+// per-record "Verify Instantly", and likewise doesn't depend on the
+// status element still being on screen to keep running (closing this
+// form before DigiLocker is done would otherwise strand the fetch with
+// no way to land once it completes).
+async function empPollDigilockerFetch(sessionId, tries, gen){
+  if(gen!==EMP_DL_POLL_GEN) return; // a newer fetch attempt superseded this one
+  if(tries>=120){
+    var elT=document.getElementById('emp-dlfetch-status');
+    if(elT) elT.innerHTML='Timed out waiting — tap Fetch from DigiLocker again for a fresh link, or enter details manually.';
+    return;
+  }
+  setTimeout(async function(){
+    if(gen!==EMP_DL_POLL_GEN) return;
+    try{
+      var res=await fetch(SUPABASE_URL+'/functions/v1/digilocker-check-new',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+(currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+        body:JSON.stringify({session_id:sessionId})
+      });
+      var result=await res.json();
+      if(result.success && result.status==='verified'){
+        toast('Fetched from DigiLocker','success');
+        empApplyDigilockerFetch(result);
+        return;
+      }
+      if(result.success && result.status==='failed'){
+        var elF=document.getElementById('emp-dlfetch-status');
+        if(elF) elF.innerHTML='DigiLocker didn\'t complete ('+(result.reason||'session failed')+') — tap Fetch from DigiLocker to try again.';
+        return;
+      }
+      empPollDigilockerFetch(sessionId, tries+1, gen); // still pending
+    }catch(e){
+      empPollDigilockerFetch(sessionId, tries+1, gen); // transient error — next tick retries
+    }
+  },5000);
+}
+// DigiLocker's dob attribute is usually DD-MM-YYYY (UIDAI's e-KYC
+// format); the <input type=date> needs YYYY-MM-DD.
+function digilockerDobToInputValue(dob){
+  if(!dob) return '';
+  var digits=dob.replace(/[^0-9]/g,'');
+  if(digits.length!==8) return '';
+  if(/^\d{4}/.test(dob.trim()) && parseInt(dob.slice(0,4),10)>1900) return digits.slice(0,4)+'-'+digits.slice(4,6)+'-'+digits.slice(6,8);
+  return digits.slice(4,8)+'-'+digits.slice(2,4)+'-'+digits.slice(0,2);
+}
+// Drops the fetched details straight into the open form's own fields
+// (so the admin sees and can still edit everything before saving) and
+// stashes the rest for empFormSave to merge in when the form is
+// actually submitted — nothing reaches the database until then.
+function empApplyDigilockerFetch(result){
+  var parts=(result.name||'').trim().split(/\s+/).filter(Boolean);
+  var fname=parts[0]||'', lname=parts.length>1?parts[parts.length-1]:'', mname=parts.length>2?parts.slice(1,-1).join(' '):'';
+  var fnameEl=document.getElementById('f-ufname'), mnameEl=document.getElementById('f-umname'), lnameEl=document.getElementById('f-ulname');
+  if(fnameEl) fnameEl.value=fname;
+  if(mnameEl) mnameEl.value=mname;
+  if(lnameEl) lnameEl.value=lname;
+  var panNameEl=document.getElementById('f-upanname');
+  if(panNameEl) panNameEl.value=result.name||'';
+  var dobEl=document.getElementById('f-udob');
+  if(dobEl){ var dv=digilockerDobToInputValue(result.dob); if(dv) dobEl.value=dv; }
+  if(result.photo_url){
+    var prev=document.getElementById('f-uphoto-prev');
+    if(prev) prev.innerHTML='<img src="'+result.photo_url+'" style="width:100%;height:100%;object-fit:cover;">';
+  }
+  if(result.aadhar_doc_url){
+    var aprev=document.getElementById('f-uaadhar-doc-prev');
+    if(aprev){ aprev.innerHTML='<a href="'+result.aadhar_doc_url+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:#1565C0;font-weight:700;text-decoration:none;">&#128196; Fetched from DigiLocker — tap to view</a>'; aprev.style.display='block'; }
+  }
+  if(result.pan_doc_url){
+    var pprev=document.getElementById('f-upan-doc-prev');
+    if(pprev){ pprev.innerHTML='<a href="'+result.pan_doc_url+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:#1565C0;font-weight:700;text-decoration:none;">&#128196; Fetched from DigiLocker — tap to view</a>'; pprev.style.display='block'; }
+  }
+  EMP_DIGILOCKER_FETCH={
+    profile_photo:result.photo_url||null, aadhar_doc_url:result.aadhar_doc_url||null, pan_doc_url:result.pan_doc_url||null,
+    kyc_digilocker_name:result.name||null, kyc_digilocker_dob:result.dob||null
+  };
+  var box=document.getElementById('emp-dlfetch-box');
+  if(box){
+    box.style.background='#ECFDF5'; box.style.borderColor='#6EE7B7';
+    var bodyEl=document.getElementById('emp-dlfetch-body');
+    if(bodyEl) bodyEl.innerHTML='<div style="font-size:11.5px;color:#047857;font-weight:700;">&#10003; Fetched from DigiLocker — review the details below before saving. <a href="#" onclick="empFetchFromDigilocker();return false;" style="color:#047857;text-decoration:underline;font-weight:700;">Fetch again</a></div>';
+  }
+}
+
 function empOpenForm(emp){
   var isEdit=!!emp;
+  EMP_DIGILOCKER_FETCH=null; EMP_DL_SESSION_ID=null; EMP_DL_POLL_GEN++; // never carry a stale fetch (or a still-ticking poll) into a new form session
   var e=emp||{};
 
   document.getElementById('emp-sheet-title').textContent=isEdit?'Edit Employee':'Register New Employee';
@@ -2835,6 +2980,7 @@ function empOpenForm(emp){
   }
 
   var html=
+    (!isEdit?empDigilockerFetchBoxHtml():'')+
     hdr('👤','Personal Details','#1565C0')+
     '<div class="g3">'+
       '<div><label class="flbl">First Name *</label><input id="f-ufname" class="finp" placeholder="First name" value="'+safeN(fname)+'"></div>'+
@@ -3221,6 +3367,21 @@ async function empFormSave(){
     emergency_phone:gv('f-uecphone')||null
   };
 
+  // Pre-fill from a completed "Fetch from DigiLocker" (new-employee only —
+  // an edit always has its own existing values to keep). The manual-upload
+  // blocks just below still take priority if the admin replaced any of
+  // these with their own file after fetching.
+  if(!editId && EMP_DIGILOCKER_FETCH){
+    data.profile_photo=EMP_DIGILOCKER_FETCH.profile_photo||null;
+    data.aadhar_doc_url=EMP_DIGILOCKER_FETCH.aadhar_doc_url||null;
+    data.pan_doc_url=EMP_DIGILOCKER_FETCH.pan_doc_url||null;
+    data.kyc_digilocker_name=EMP_DIGILOCKER_FETCH.kyc_digilocker_name||null;
+    data.kyc_digilocker_dob=EMP_DIGILOCKER_FETCH.kyc_digilocker_dob||null;
+    data.kyc_status='verified';
+    data.kyc_verified_by='DigiLocker (auto-verified)';
+    data.kyc_verified_at=new Date().toISOString();
+  }
+
   try{
     toast('Uploading documents...','info');
     var photoFile=document.getElementById('f-uphoto')&&document.getElementById('f-uphoto').files[0];
@@ -3306,6 +3467,7 @@ async function empFormSave(){
         EMP_LIST.unshift(result[0]);
         toast(name+' added — visible in Pending tab for approval.','success');
       }
+      EMP_DIGILOCKER_FETCH=null; EMP_DL_SESSION_ID=null; // saved — don't let a stale fetch leak into the next new-employee form
     }
     closeEmpSheet();
     // For new employee → go to pending tab; for edit → stay on current tab
