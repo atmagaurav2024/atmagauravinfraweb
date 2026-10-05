@@ -688,7 +688,50 @@ function pcOpenCashIn(){
     '<button class="btn btn-green" onclick="pcSaveCashIn()">💰 Fund</button>';
 }
 
+// Double-submit guard for the Fund / Record Expense sheet. Both saves do
+// several awaited network calls (insert, optional transfer-out insert,
+// reload, GL auto-post, UPI payout), during which the Save button stayed
+// live — a second tap inserted a duplicate funding/expense row (and, for
+// UPI, could even trigger a second payout). While saving, this shows a
+// spinner on the primary button, disables every control in the sheet,
+// and blocks taps on the sheet/overlay (so it can't be dismissed
+// half-way either). pcLockSheet(false) restores everything — used on
+// failure so the person can fix the problem and retry. PC_SAVING itself
+// also makes a re-entrant call return immediately, covering a
+// double-tap that lands before the disabled state is painted.
+var PC_SAVING=false;
+function pcLockSheet(on, busyLabel){
+  PC_SAVING=!!on;
+  var sheet=document.getElementById('sh-pc'), ov=document.getElementById('ov-pc'), foot=document.getElementById('pc-sheet-foot');
+  var footBtns=foot?foot.querySelectorAll('button'):[];
+  var primary=footBtns.length?footBtns[footBtns.length-1]:null;
+  if(on){
+    if(primary && primary.getAttribute('data-orig-html')===null){
+      primary.setAttribute('data-orig-html', primary.innerHTML);
+      primary.innerHTML='<span class="btn-spinner"></span>'+(busyLabel||'Saving...');
+    }
+    if(sheet){
+      sheet.querySelectorAll('button,input,select,textarea').forEach(function(el){ el.disabled=true; });
+      sheet.style.pointerEvents='none';
+    }
+    footBtns.forEach(function(b){ b.style.opacity='.65'; b.style.cursor='wait'; });
+    if(ov) ov.style.pointerEvents='none';
+  } else {
+    if(sheet){
+      sheet.querySelectorAll('button,input,select,textarea').forEach(function(el){ el.disabled=false; });
+      sheet.style.pointerEvents='';
+    }
+    footBtns.forEach(function(b){ b.style.opacity=''; b.style.cursor=''; });
+    if(primary && primary.getAttribute('data-orig-html')!==null){
+      primary.innerHTML=primary.getAttribute('data-orig-html');
+      primary.removeAttribute('data-orig-html');
+    }
+    if(ov) ov.style.pointerEvents='';
+  }
+}
+
 async function pcSaveCashIn(){
+  if(PC_SAVING) return;
   if(typeof canAccess==='function' && !canAccess('petty-cash','edit')){toast('You do not have permission to fund employees','error');return;}
   var emp=gv('pci-emp'), amount=parseFloat(gv('pci-amount'));
   if(!emp){toast('Select employee','warning');return;}
@@ -702,6 +745,7 @@ async function pcSaveCashIn(){
   var nameOf=function(id){ return (PC_EMPS.find(function(x){return x.empId===id;})||{}).name||id; };
   var empName=nameOf(emp);
   var srcLabel = src==='bank' ? 'Company — Bank' : src==='cash' ? 'Company — Cash in Hand' : nameOf(srcEmp);
+  pcLockSheet(true,'Funding...');
   try{
     var when=gv('pci-date')||new Date().toISOString().slice(0,10);
     // No project on funding: money handed to an employee can be spent across
@@ -734,6 +778,7 @@ async function pcSaveCashIn(){
         sourceType:'petty_cash_in', sourceId:res[0].id});
     }
   }catch(e){toast('Error: '+e.message,'error');}
+  finally{ pcLockSheet(false); }
 }
 
 function pcOpenExpense(){
@@ -858,6 +903,7 @@ function pcUpdateAllocPreview(){
 }
 
 async function pcSaveExpense(){
+  if(PC_SAVING) return;
   if(typeof canAccess==='function' && !canAccess('petty-cash','edit')){toast('You do not have permission to record expenses','error');return;}
   var emp=gv('pce-emp'), cat=gv('pce-cat'), amount=parseFloat(gv('pce-amount')), desc=gv('pce-desc');
   if(!emp){toast('Select employee','warning');return;}
@@ -874,6 +920,7 @@ async function pcSaveExpense(){
   var upiId = payMethod==='upi' ? gv('pce-upi-id') : '';
   if(payMethod==='upi' && !upiId){ toast('Scan a QR code or enter a UPI ID / mobile number','warning'); return; }
 
+  pcLockSheet(true,'Saving...');
   try{
     var res=await sbInsert('petty_cash_expenses',{
       emp_id:emp,category:cat,amount:amount,date:gv('pce-date'),
@@ -903,6 +950,7 @@ async function pcSaveExpense(){
         narration:'Petty cash — '+cat+' — '+desc, sourceType:'petty_cash_expense', sourceId:res[0].id});
     }
   }catch(e){toast('Error: '+e.message,'error');}
+  finally{ pcLockSheet(false); }
 }
 
 // ── SCAN & PAY (dashboard QR button) ───────────────────────
