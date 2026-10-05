@@ -574,7 +574,7 @@ async function openProjForm(id){
       '<div><label class="flbl">Project Name *</label>'+
         '<input id="pf-name" class="finp" value="'+esc(p.name||'')+'">'+
       '</div>'+
-      '<div><label class="flbl">Short Name</label>'+
+      '<div><label class="flbl">Short Name *</label>'+
         '<input id="pf-short-name" class="finp" value="'+esc(p.short_name||'')+'" placeholder="e.g. NH-161G">'+
       '</div>'+
     '</div>'+
@@ -750,6 +750,9 @@ async function saveProjForm(editId){
   if(window._pfSaving) return; // guard against double-submit from a rapid double click
   var name = (document.getElementById('pf-name')||{value:''}).value.trim();
   if(!name){toast('Project name required','warning');return;}
+  // Short name is compulsory: compact screens (Petty Cash site tabs,
+  // dashboard cards, etc.) show it instead of the often very long full name.
+  if(!(document.getElementById('pf-short-name')||{value:''}).value.trim()){toast('Short name required','warning');return;}
 
   window._pfSaving = true;
   var saveBtn=document.getElementById('pf-save-btn'), delBtn=document.getElementById('pf-delete-btn');

@@ -87,7 +87,7 @@ async function initPettyCash(){
       sbFetch('petty_cash_in',{select:'*',order:'created_at.desc'}),
       sbFetch('petty_cash_expenses',{select:'*',order:'date.desc'}),
       sbFetch('employees',{select:'id,emp_id,first_name,last_name,department',filter:'status=eq.active',order:'first_name.asc'}),
-      sbFetch('projects',{select:'id,name,contract_value',order:'name.asc'}),
+      sbFetch('projects',{select:'id,name,short_name,contract_value',order:'name.asc'}),
     ]);
     PC_IN=Array.isArray(cashIn)?cashIn:[];
     PC_EXP=Array.isArray(expenses)?expenses:[];
@@ -313,13 +313,27 @@ function pcRenderTabButtons(){
   }).join('');
 }
 
+// Short name for a project given its full name, or for a comma-joined list
+// of full names (expense rows store project names joined with ', ').
+// Projects without a short name (older records) keep their full name.
+function pcProjShort(txt){
+  if(!txt) return txt;
+  var out=String(txt);
+  PC_PROJS.filter(function(p){return p.short_name && p.name;})
+    .sort(function(a,b){return b.name.length-a.name.length;})
+    .forEach(function(p){ out=out.split(p.name).join(p.short_name); });
+  return out;
+}
+
 function pcRenderSiteTabs(){
   var wrap=document.getElementById('pc-site-tabs');if(!wrap)return;
   // "Office" alongside the real sites so expenses recorded against it
   // (see pcOpenExpense) can be filtered the same way any site can.
   var projects=['all','Office'].concat(PC_PROJS.map(function(p){return p.name;}));
   wrap.innerHTML=projects.map(function(p){
-    return '<button onclick="pcFilterSite(\''+p+'\')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:'+(PC_SITE_TAB===p?'var(--navy)':'var(--card-bg)')+';color:'+(PC_SITE_TAB===p?'white':'var(--text2)')+';font-family:Nunito;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+p+'</button>';
+    // The filter key stays the full project name (that's what expense rows
+    // store); only the visible label is the short name.
+    return '<button onclick="pcFilterSite(\''+p+'\')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:'+(PC_SITE_TAB===p?'var(--navy)':'var(--card-bg)')+';color:'+(PC_SITE_TAB===p?'white':'var(--text2)')+';font-family:Nunito;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+pcProjShort(p)+'</button>';
   }).join('');
 }
 
@@ -627,7 +641,7 @@ function pcRenderList(){
         '<div>'+
           '<div style="font-size:13px;font-weight:800;color:var(--text);">'+(item.category||(isIn?'Cash In':'Expense'))+'</div>'+
           (purposeText?'<div style="font-size:12px;color:var(--text2);font-weight:600;margin-top:1px;">'+escPc(purposeText)+'</div>':'')+
-          '<div style="font-size:11px;color:var(--text3);margin-top:1px;">'+(pcEmpName(item.emp_id))+((!isIn&&item.project)?' · '+item.project:'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-top:1px;">'+(pcEmpName(item.emp_id))+((!isIn&&item.project)?' · '+pcProjShort(item.project):'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
           (isIn&&item.funded_by?'<div style="font-size:11px;color:#1565C0;font-weight:700;">'+(item.funded_by_type==='transfer_out'?'&#8594; to '+pcEmpName(item.funded_by_emp):'&#8592; from '+item.funded_by)+'</div>':'')+
           (!isIn&&item.payout_status&&item.payout_status!=='not_applicable'?(function(){
             var b=PC_PAYOUT_BADGE[item.payout_status]||PC_PAYOUT_BADGE.pending;
