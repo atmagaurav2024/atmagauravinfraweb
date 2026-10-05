@@ -810,7 +810,7 @@ function pcOpenExpense(){
   var realProjChecks=PC_PROJS.map(function(p){
     return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:600;cursor:pointer;">'+
       '<input type="checkbox" class="pce-proj-chk" value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'" data-contract="'+(parseFloat(p.contract_value)||0)+'" style="width:16px;height:16px;" onchange="pcUpdateAllocPreview()">'+
-      (p.name||'Unnamed')+
+      (p.short_name||p.name||'Unnamed')+
     '</label>';
   }).join('')||'<div style="font-size:11px;color:var(--text3);padding:6px 0;">No projects found</div>';
   var projChecks=officeCheck+realProjChecks;
@@ -911,7 +911,7 @@ function pcUpdateAllocPreview(){
   var allocs=pcComputeAllocations();
   var prev=document.getElementById('pce-alloc-preview');
   if(prev) prev.innerHTML=allocs.map(function(a){
-    return '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>'+a.name+'</span><span style="font-weight:800;color:#4A148C;">'+pcFmtLocal(a.amount)+'</span></div>';
+    return '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>'+pcProjShort(a.name)+'</span><span style="font-weight:800;color:#4A148C;">'+pcFmtLocal(a.amount)+'</span></div>';
   }).join('');
 }
 
