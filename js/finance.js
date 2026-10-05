@@ -290,7 +290,7 @@ function pcRefresh(){
 }
 
 function pcRenderTabs(){
-  return '<div id="pc-tab-bar" style="display:flex;gap:4px;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:10px;width:fit-content;">'+
+  return '<div id="pc-tab-bar" style="display:flex;gap:4px;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:10px;width:100%;box-sizing:border-box;">'+
     pcRenderTabButtons()+
   '</div>';
 }
@@ -307,7 +307,7 @@ function pcSwitchTab(tab){
 function pcRenderTabButtons(){
   return ['all','cash-in','expenses','by-emp'].map(function(t){
     var active=PC_CAT===t;
-    return '<button onclick="pcSwitchTab(\''+t+'\')" style="padding:7px 14px;border-radius:6px;border:none;font-family:Nunito;font-size:12px;font-weight:700;cursor:pointer;'+
+    return '<button onclick="pcSwitchTab(\''+t+'\')" style="flex:1;min-width:0;white-space:nowrap;padding:7px 4px;border-radius:6px;border:none;font-family:Nunito;font-size:12px;font-weight:700;cursor:pointer;'+
       'background:'+(active?'var(--navy)':'transparent')+';color:'+(active?'white':'var(--text2)')+';transition:background .2s;">'+
       {all:'All','cash-in':'Cash In',expenses:'Expenses','by-emp':'By Employee'}[t]+'</button>';
   }).join('');
