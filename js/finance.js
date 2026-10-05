@@ -242,7 +242,6 @@ function pcRefresh(){
     // (per employee or per role) is what grants this.
     (!showEmpFilterBar ? '' :
     '<div style="background:var(--card-bg);border-radius:12px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'+
-      '<label style="font-size:11px;font-weight:800;color:var(--navy);white-space:nowrap;">&#128101; Employee</label>'+
       '<select onchange="pcSetEmpFilter(this.value)" style="flex:1;border:1.5px solid var(--navy);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:700;font-family:Nunito,sans-serif;color:var(--navy);outline:none;cursor:pointer;">'+
         empOpts+
       '</select>'+
