@@ -807,7 +807,7 @@ function pcOpenExpense(){
       '<input type="checkbox" class="pce-proj-chk" value="office" data-name="Office" data-contract="0" data-office="1" style="width:16px;height:16px;" onchange="pcUpdateAllocPreview()">'+
       '&#127970; Office'+
     '</label>';
-  var realProjChecks=PC_PROJS.map(function(p){
+  var realProjChecks=entryProjects(PC_PROJS).map(function(p){
     return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:600;cursor:pointer;">'+
       '<input type="checkbox" class="pce-proj-chk" value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'" data-contract="'+(parseFloat(p.contract_value)||0)+'" style="width:16px;height:16px;" onchange="pcUpdateAllocPreview()">'+
       (p.short_name||p.name||'Unnamed')+

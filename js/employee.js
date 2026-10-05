@@ -2151,7 +2151,7 @@ function empOpenTransfer(empId, empName){
     var ds=document.getElementById('tr-dept');
     if(ds) ds.innerHTML='<option value="">-- Select --</option>'+depts.map(function(d){return '<option value="'+d.name+'">'+d.name+'</option>';}).join('');
     var ps=document.getElementById('tr-proj');
-    if(ps) ps.innerHTML='<option value="">All Projects</option>'+projs.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
+    if(ps) ps.innerHTML='<option value="">All Projects</option>'+entryProjects(projs).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
   }).catch(function(){});
 }
 
@@ -3153,8 +3153,9 @@ function empOpenForm(emp){
       }catch(pe){ chosen=projVal?[String(projVal)]:[]; }
       chosen=chosen.map(function(x){return String(x).trim();}).filter(Boolean);
 
-      ps.innerHTML = projs.length
-        ? projs.map(function(p){
+      var projsForBox = entryProjects(projs, chosen);   // closed-for-entry projects hidden unless already assigned
+      ps.innerHTML = projsForBox.length
+        ? projsForBox.map(function(p){
             var on=chosen.indexOf(p.id)>-1 || chosen.indexOf(p.name)>-1;
             return '<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer;font-size:12px;">'+
               '<input type="checkbox" class="f-uproj-chk" value="'+p.id+'" data-name="'+p.name.replace(/"/g,'&quot;')+'"'+(on?' checked':'')+' style="width:auto;margin:0;">'+
@@ -3164,7 +3165,7 @@ function empOpenForm(emp){
     }
     // Work location offers Head Office plus the sites this employee is
     // actually assigned to, rather than every project in the company.
-    EMP_FORM_PROJECTS=projs;
+    EMP_FORM_PROJECTS=entryProjects(projs, projVal);
     empSyncLocationOptions(workLoc);
     // Ticking or unticking a project updates the list immediately
     document.querySelectorAll('.f-uproj-chk').forEach(function(c){

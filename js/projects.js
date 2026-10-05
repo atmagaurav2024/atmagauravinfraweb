@@ -578,6 +578,12 @@ async function openProjForm(id){
         '<input id="pf-short-name" class="finp" value="'+esc(p.short_name||'')+'" placeholder="e.g. NH-161G">'+
       '</div>'+
     '</div>'+
+    // ── Close for Entry ──
+    '<label style="display:flex;align-items:flex-start;gap:10px;background:#FFF3E0;border:1px solid #FFCC80;border-radius:10px;padding:10px 12px;margin-bottom:10px;cursor:pointer;">'+
+      '<input type="checkbox" id="pf-closed" data-was="'+(p.closed_for_entry?'1':'0')+'"'+(p.closed_for_entry?' checked':'')+' style="width:18px;height:18px;margin-top:1px;flex-shrink:0;">'+
+      '<span><span style="font-size:12.5px;font-weight:800;color:#E65100;">Close project for Entry</span>'+
+      '<span style="display:block;font-size:11px;color:var(--text2);margin-top:2px;">A closed project no longer appears in project dropdowns where new entries are made (petty cash, employee assignment, loans, etc.). Existing records and reports are not affected.</span></span>'+
+    '</label>'+
     // ── Row 2: Length ──
     '<div class="g2" style="margin-bottom:8px;">'+
       '<div><label class="flbl">Project Length (km)</label>'+
@@ -812,6 +818,11 @@ async function saveProjForm(editId){
   addCol('client_gstin',   (document.getElementById('pf-client-gstin')||{value:''}).value.trim().toUpperCase()||null);
   addCol('client_state',   (document.getElementById('pf-client-state')||{value:''}).value.trim()||null);
   addCol('execution_mode', (document.getElementById('pf-exec-mode')||{value:''}).value||null);
+  // Only sent when ticked, or when un-ticking a project that was closed —
+  // so saving ordinary projects keeps working even before the
+  // closed_for_entry column exists in the database.
+  var closedCb=document.getElementById('pf-closed');
+  if(closedCb && (closedCb.checked || closedCb.getAttribute('data-was')==='1')) data.closed_for_entry=closedCb.checked;
 
   try{
     toast('Saving...','info');
@@ -903,6 +914,7 @@ async function saveProjForm(editId){
     window._pfSaving=false;
     closeProjSheet();
     loadProjData(true); // force refresh list + selector after save
+    if(typeof loadClosedProjects==='function') loadClosedProjects(); // dropdowns pick up a newly closed/re-opened project
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
   finally{
     window._pfSaving=false;

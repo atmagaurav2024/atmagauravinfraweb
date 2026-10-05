@@ -115,7 +115,7 @@ async function regLoadDropdowns() {
     var ps = document.getElementById('r-project');
     if (ps && Array.isArray(projs)) {
       ps.innerHTML = '<option value="All Projects">All Projects</option>' +
-        projs.map(function(p) { return '<option value="' + p.name + '">' + p.name + '</option>'; }).join('');
+        (typeof entryProjects==='function'?entryProjects(projs):projs).map(function(p) { return '<option value="' + p.name + '">' + p.name + '</option>'; }).join('');
     }
   } catch(e) { console.warn('regLoadDropdowns:', e); }
 }

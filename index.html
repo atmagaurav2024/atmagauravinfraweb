@@ -3897,6 +3897,7 @@ function showApp(name){
   collapseRail();
   applyDrawerPermissions();
   applyPlanLocks();
+  if(!window._closedProjLoaded){ window._closedProjLoaded=true; loadClosedProjects(); }
   if(name==='attendance'){initAttendance();}
   if(name==='dashboard'){ loadDashboardInsights(); if(!window._coLoaded){window._coLoaded=true;preloadCompanyData();} }
   if(name==='registry'){initRegistry();startSync();}
@@ -4234,6 +4235,36 @@ function scopeProjects(list){
   var ids=userProjectIds();
   if(!ids) return list||[];
   return (list||[]).filter(function(p){ return ids.indexOf(String(p.id))>-1; });
+}
+
+// ── PROJECTS CLOSED FOR ENTRY ──────────────────────────────────────────
+// A project can be marked "Closed for Entry" in its form (projects.
+// closed_for_entry). Such a project is dropped from every dropdown where
+// a NEW entry picks a project (petty cash expense, employee assignment/
+// transfer, loan allocation, asset assignment, ...), while everything
+// already recorded against it — and the Projects module itself — keeps
+// showing it. entryProjects(list, keep) filters a project list for such a
+// dropdown; `keep` (an id/name, or an array of them) lets an existing
+// record that already points at a closed project still show it as
+// selected when edited, instead of silently losing the value.
+// The closed set is loaded separately (and never throws) so that nothing
+// breaks before the closed_for_entry column has been added to the database.
+var CLOSED_PROJECTS={ids:{},names:{}};
+async function loadClosedProjects(){
+  try{
+    var rows=await sbFetch('projects',{select:'id,name',filter:'closed_for_entry=eq.true'});
+    var ids={},names={};
+    (Array.isArray(rows)?rows:[]).forEach(function(r){ ids[String(r.id)]=1; if(r.name) names[r.name]=1; });
+    CLOSED_PROJECTS={ids:ids,names:names};
+  }catch(e){ /* column not added yet, or offline — treat as nothing closed */ }
+}
+function entryProjects(list, keep){
+  var keepArr=(Array.isArray(keep)?keep:[keep]).filter(function(k){return k!==undefined&&k!==null&&k!=='';}).map(String);
+  return (list||[]).filter(function(p){
+    var closed=CLOSED_PROJECTS.ids[String(p.id)]||(p.name&&CLOSED_PROJECTS.names[p.name]);
+    if(!closed) return true;
+    return keepArr.indexOf(String(p.id))>-1 || (p.name&&keepArr.indexOf(p.name)>-1);
+  });
 }
 
 // ── SCREENS ────────────────────────────────────────────────────────────
@@ -4796,7 +4827,7 @@ async function regLoadDropdowns(){
     var ps = document.getElementById('r-project');
     if(ps){
       ps.innerHTML = '<option value="All Projects">All Projects</option>'+
-        projs.map(function(p){return '<option value="'+p.name+'">'+p.name+'</option>';}).join('');
+        entryProjects(projs).map(function(p){return '<option value="'+p.name+'">'+p.name+'</option>';}).join('');
     }
   } catch(e){
     // Fallback: keep loading state, user can type manually
@@ -7381,7 +7412,7 @@ function editRecord(type,id){
     var nameParts=(u.name||'').split(' ');
     var projOpts='<option value="">All Projects</option>';
     if(typeof PROJ_DATA!=='undefined'&&PROJ_DATA.length){
-      projOpts+= PROJ_DATA.map(function(p){return '<option value="'+p.name+'"'+(u.project===p.name?' selected':'')+'>'+p.name+'</option>';}).join('');
+      projOpts+= entryProjects(PROJ_DATA, u.project).map(function(p){return '<option value="'+p.name+'"'+(u.project===p.name?' selected':'')+'>'+p.name+'</option>';}).join('');
     }
     var stOpts=['active','pending','inactive'].map(function(st){
       return '<option value="'+st+'"'+(u.status===st?' selected':'')+'>'+st+'</option>';
@@ -7477,6 +7508,7 @@ async function loadLocationDropdown(selectId, currentVal){
   try{
     var projs = await sbFetch('projects',{select:'id,name',order:'name.asc'});
     if(typeof scopeProjects==='function') projs = scopeProjects(projs);
+    projs = entryProjects(projs, currentVal);
     var locs = ['Head Office'].concat(Array.isArray(projs)?projs.map(function(p){return p.name;}):[]);
     el.innerHTML = '<option value="">-- Select Location --</option>'+
       locs.map(function(l){
@@ -11361,7 +11393,7 @@ function empOpenTransfer(empId, empName){
     var ds=document.getElementById('tr-dept');
     if(ds) ds.innerHTML='<option value="">-- Select --</option>'+depts.map(function(d){return '<option value="'+d.name+'">'+d.name+'</option>';}).join('');
     var ps=document.getElementById('tr-proj');
-    if(ps) ps.innerHTML='<option value="">All Projects</option>'+projs.map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
+    if(ps) ps.innerHTML='<option value="">All Projects</option>'+entryProjects(projs).map(function(p){return '<option value="'+p.id+'">'+p.name+'</option>';}).join('');
   }).catch(function(){});
 }
 
@@ -12188,7 +12220,7 @@ function empOpenForm(emp){
     var ps=document.getElementById('f-uproject');
     if(ps){
       ps.innerHTML='<option value="">All Projects</option>'+
-        projs.map(function(p){return '<option value="'+p.id+'"'+(p.id===projVal||p.name===projVal?' selected':'')+'>'+p.name+'</option>';}).join('');
+        entryProjects(projs, projVal).map(function(p){return '<option value="'+p.id+'"'+(p.id===projVal||p.name===projVal?' selected':'')+'>'+p.name+'</option>';}).join('');
     }
     // Also populate work location from projects + Head Office
     var ls=document.getElementById('f-ulocation');
@@ -20534,7 +20566,7 @@ function lnAllocOpenForm(loanId, editAllocId){
   var othersSum=others.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   var maxAmount=Math.max(0, principal-othersSum);
 
-  var projOpts='<option value="">Select project...</option>'+LN_PROJECTS_LITE.map(function(p){
+  var projOpts='<option value="">Select project...</option>'+entryProjects(LN_PROJECTS_LITE, ex&&ex.project_id).map(function(p){
     return '<option value="'+p.id+'"'+((ex&&ex.project_id===p.id)?' selected':'')+'>'+(p.name||p.code)+'</option>';
   }).join('');
 
@@ -20735,7 +20767,7 @@ function lnOpenSettle(loanId){
     '<div class="ln-lbl" style="margin-top:0;">Funding Project</div>'+
     '<select class="ln-input" id="ls-fundproj" style="margin-bottom:4px;" onchange="lnSettleRecompute()">'+
       '<option value="">Company level (not project-specific)</option>'+
-      LN_PROJECTS_LITE.map(function(p){return '<option value="'+p.id+'">'+(p.name||p.code)+'</option>';}).join('')+
+      entryProjects(LN_PROJECTS_LITE).map(function(p){return '<option value="'+p.id+'">'+(p.name||p.code)+'</option>';}).join('')+
     '</select>'+
     '<div class="ln-sub" style="margin-bottom:10px;">Which project\u2019s cash actually paid this. If no single project funded it, leave as Company level \u2014 no inter-project advances are created in that case.</div>'+
     '<div class="ln-lbl">Date *</div><input class="ln-input" id="ls-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" style="margin-bottom:10px;">'+
@@ -20992,7 +21024,7 @@ function lnAlloc2InlineForm(loanId, ex){
   var others=LN_ALLOCATIONS.filter(function(a){return a.loan_id===loanId && a.status==='ACTIVE' && a.id!==(ex&&ex.id);});
   var othersSum=others.reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
   var maxAmount=Math.max(0, principal-othersSum);
-  var projOpts='<option value="">Select project...</option>'+LN_PROJECTS_LITE.map(function(p){
+  var projOpts='<option value="">Select project...</option>'+entryProjects(LN_PROJECTS_LITE, ex&&ex.project_id).map(function(p){
     return '<option value="'+p.id+'"'+((ex&&ex.project_id===p.id)?' selected':'')+'>'+(p.name||p.code)+'</option>';
   }).join('');
   return '<div class="ln-card" style="background:var(--card-bg);margin-bottom:'+(ex?'0':'14px')+';">'+
@@ -23621,7 +23653,7 @@ function tpmOpenTransfer(id){
     '<div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Currently: '+(tpmProjectName(x.current_project_id)||'Not assigned \u2014 in the yard')+'</div>'+
     '<div class="fgrp"><label class="flbl">Assign To</label><select id="tpmx-project" class="fsel">'+
       '<option value="">Yard / Unassigned</option>'+
-      TPM_PROJECTS_LITE.map(function(p){return '<option value="'+p.id+'"'+(x.current_project_id===p.id?' selected':'')+'>'+(p.name||p.code)+'</option>';}).join('')+
+      entryProjects(TPM_PROJECTS_LITE, x.current_project_id).map(function(p){return '<option value="'+p.id+'"'+(x.current_project_id===p.id?' selected':'')+'>'+(p.name||p.code)+'</option>';}).join('')+
     '</select></div>'+
     '<div class="fgrp"><label class="flbl">Date *</label><input id="tpmx-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div>'+
     '<div class="fgrp"><label class="flbl">Remarks</label><input id="tpmx-remarks" class="finp" placeholder="e.g. Moved for foundation work"></div>';
@@ -29366,8 +29398,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261005f"></script>
-<script src="js/employee.js?v=20261005f"></script>
-<script src="js/projects.js?v=20261005f"></script>
-<script src="js/finance.js?v=20261005f"></script>
+<script src="js/registry.js?v=20261005g"></script>
+<script src="js/employee.js?v=20261005g"></script>
+<script src="js/projects.js?v=20261005g"></script>
+<script src="js/finance.js?v=20261005g"></script>
 </html>
