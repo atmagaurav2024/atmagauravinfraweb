@@ -602,7 +602,15 @@ function pcRenderList(){
   var pcInSrc  = PC_EMP_FILTER==='all'?PC_IN :PC_IN.filter(function(i){return i.emp_id===PC_EMP_FILTER;});
   var pcExpSrc = PC_EMP_FILTER==='all'?PC_EXP:PC_EXP.filter(function(e){return e.emp_id===PC_EMP_FILTER;});
   var list=tab==='cash-in'?pcInSrc:tab==='expenses'?pcExpSrc:[...pcInSrc.map(function(i){return Object.assign({},i,{_type:'in'});}),...pcExpSrc.map(function(e){return Object.assign({},e,{_type:'exp'});})];
-  list=list.sort(function(a,b){return new Date(b.created_at||b.date||0)-new Date(a.created_at||a.date||0);});
+  // Newest entry DATE first (not newest keyed-in first), so a back-dated
+  // entry lands where its date belongs. Same-day entries then fall back to
+  // when they were recorded, latest first.
+  var pcDs=function(i){ return i.date||(i.created_at||'').slice(0,10); };
+  list=list.sort(function(a,b){
+    var da=pcDs(a), db=pcDs(b);
+    if(da!==db) return da<db?1:-1;
+    return new Date(b.created_at||0)-new Date(a.created_at||0);
+  });
   if(PC_SITE_TAB!=='all')list=list.filter(function(i){
     // Cash In (funding) entries are deliberately not tied to one project —
     // "money handed to an employee can be spent across any site" (see
