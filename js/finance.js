@@ -114,6 +114,21 @@ async function initPettyCash(){
       PC_IN=PC_IN.filter(function(i){ return pcAllowedIds[i.emp_id]; });
       PC_EXP=PC_EXP.filter(function(e){ return pcAllowedIds[e.emp_id]; });
     }
+    // Office expenses (the synthetic non-site entry) are company overhead:
+    // admins see all of them, everyone else only the ones recorded against
+    // their own employee record. Expenses that include a real site stay
+    // governed by the normal project/employee scoping above.
+    var pcIsAdmin=String((currentUser&&currentUser.role)||'').trim().toLowerCase()==='admin';
+    if(!pcIsAdmin){
+      var pcMe=currentUser||{};
+      PC_EXP=PC_EXP.filter(function(x){
+        var ids=[]; try{ ids=x.project_ids?JSON.parse(x.project_ids):[]; }catch(err){}
+        var officeOnly = ids.length ? ids.every(function(i){return String(i)==='office';})
+                                    : String(x.project||'').trim().toLowerCase()==='office';
+        if(!officeOnly) return true;
+        return x.emp_id===pcMe.empId || x.emp_id===pcMe.id;
+      });
+    }
     // Default the employee filter to "myself" the first time this screen
     // loads in a session — not on every re-fetch after a save (initPettyCash
     // runs again after funding/recording/confirming an entry), which would
