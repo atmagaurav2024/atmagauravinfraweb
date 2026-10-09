@@ -4216,7 +4216,10 @@ function scopeRows(list, opts){
     if(r.project_ids){
       try{
         var arr=typeof r.project_ids==='string'?JSON.parse(r.project_ids):r.project_ids;
-        if(Array.isArray(arr)&&arr.length) return arr.some(function(x){return ids.indexOf(String(x))>-1;});
+        // 'office' is Petty Cash's synthetic non-site entry (not a project
+        // row), so it can never be in a user's assigned project ids —
+        // treat it as company-level and keep it, like other unlinked rows.
+        if(Array.isArray(arr)&&arr.length) return arr.some(function(x){return String(x)==='office'||ids.indexOf(String(x))>-1;});
       }catch(e){}
     }
     var pid=r[idField];
@@ -29398,8 +29401,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261006a"></script>
-<script src="js/employee.js?v=20261006a"></script>
-<script src="js/projects.js?v=20261006a"></script>
-<script src="js/finance.js?v=20261006a"></script>
+<script src="js/registry.js?v=20261006b"></script>
+<script src="js/employee.js?v=20261006b"></script>
+<script src="js/projects.js?v=20261006b"></script>
+<script src="js/finance.js?v=20261006b"></script>
 </html>
