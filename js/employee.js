@@ -512,6 +512,29 @@ function empTabAllowed(tab){
   return key ? canAccess(key,'view') : true;
 }
 
+// Per-action permission for an Employee-module tab (view/add/edit/delete as
+// granted in Access Control). Admins and installs with no permission profile
+// are unrestricted, exactly like canAccess().
+function empPerm(tab,perm){
+  if(!currentUser || currentUser.role==='admin') return true;
+  var key = EMP_TAB_KEYS[tab] || tab;
+  return canAccess(key,perm);
+}
+// True (after telling the user) when the action is NOT allowed — used as a
+// guard at the top of every function that writes or deletes.
+function empDeny(tab,perm,what){
+  if(empPerm(tab,perm)) return false;
+  toast('View-only access'+(what?' — you cannot '+what:''),'warning');
+  return true;
+}
+// Which Access Control tab governs an employee record, by its status.
+function empStatusTab(e){
+  var st=e&&e.status;
+  if(st==='resigned') return 'resigned';
+  if(st==='active'||st==='inactive') return 'active';
+  return 'pending';
+}
+
 function empHideForbiddenTabs(){
   Object.keys(EMP_TAB_KEYS).forEach(function(tab){
     var btn = document.getElementById('emp-t-'+tab);
@@ -529,7 +552,7 @@ function empTab(tab,btn){
   if(tb)Array.from(tb.children).forEach(function(b){b.style.background='transparent';b.style.color='var(--text3)';});
   if(btn){btn.style.background='var(--navy)';btn.style.color='white';}
   var addBtn=document.getElementById('emp-add-btn');
-  if(addBtn) addBtn.style.display=(tab==='active'||tab==='pending'||tab==='advances')?'':'none';
+  if(addBtn) addBtn.style.display=(tab==='advances' || ((tab==='active'||tab==='pending') && empPerm('active','add')))?'':'none';
   empRender();
 }
 
@@ -551,6 +574,7 @@ function empRender(){
         btn.addEventListener('click',function(){
           var payId   = btn.getAttribute('data-pay-del-id');
           var empName = btn.getAttribute('data-pay-del-name')||'this employee';
+          if(empDeny('pay','delete','delete pay records')) return;
           if(!confirm('Delete pay record for '+empName+'? This cannot be undone.')) return;
           sbDelete('employee_pay',payId).then(function(){
             EMP_PAY = EMP_PAY.filter(function(p){return p.id!==payId;});
@@ -590,6 +614,7 @@ function empRender(){
       btn.addEventListener('click',function(){
         var payId = btn.getAttribute('data-inc-del-payid');
         var empName = btn.getAttribute('data-inc-del-name')||'this entry';
+        if(empDeny('increment','delete','delete increments')) return;
         if(!confirm('Delete increment entry for '+empName+'? This will also remove the pay record.')) return;
         // Delete from employee_pay
         sbDelete('employee_pay', payId).then(function(){
@@ -658,6 +683,7 @@ async function salLoadRecords(){
 // ── Finalise salary: save all employee records for the month ─────────────
 
 async function salFinalise(){
+  if(empDeny('salary','add','finalise salary')) return;
   var _advToRecord=[];
   var month = parseInt((document.getElementById('sal-month')||{}).value)||0;
   var year  = parseInt((document.getElementById('sal-year')||{}).value)||0;
@@ -988,7 +1014,7 @@ function empSalaryHTML(){
         '<button onclick="salSelectAll(true)" style="flex:1;padding:8px;background:#E8F5E9;color:#1B5E20;border:1px solid #A5D6A7;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;">&#9989; Select All</button>'+
         '<button onclick="salSelectAll(false)" style="flex:1;padding:8px;background:#F5F5F5;color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;">&#9645; Deselect All</button>'+
         '<button onclick="salLoadLOPDays()" title="Re-check Attendance + Approved-without-Pay leave for the selected month" style="flex:1;padding:8px;background:#E3F2FD;color:#1565C0;border:1px solid #90CAF9;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;">&#8635; Refresh LWP</button>'+
-        '<button onclick="salFinalise()" style="flex:2;padding:8px 14px;background:#1B5E20;color:white;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#10003; Finalise Selected</button>'+
+        (empPerm('salary','add')?'<button onclick="salFinalise()" style="flex:2;padding:8px 14px;background:#1B5E20;color:white;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">&#10003; Finalise Selected</button>':'')+
       '</div>'+
     '</div>';
 
@@ -1201,6 +1227,7 @@ function salToggleLog(divId){
 // Wire salary log buttons after render
 
 async function salDeleteEmpRecord(recordId, empName, monthLabel){
+  if(empDeny('salary','delete','delete salary records')) return;
   if(!confirm('Delete salary record for '+empName+' ('+monthLabel+')?\n\nThis cannot be undone.')) return;
   try{
     var undone=await advUndoRecoveryFor(recordId);
@@ -1279,6 +1306,7 @@ function salWireLogButtons(){
 }
 
 async function salDeleteMonth(month, year, label){
+  if(empDeny('salary','delete','delete salary records')) return;
   if(!confirm('Delete finalised salary for '+label+'?\nThis will permanently remove all '+label+' salary records.')) return;
   var toDelete = SALARY_RECORDS.filter(function(r){return r.month===month&&r.year===year;});
   try{
@@ -1721,7 +1749,7 @@ function empIncrementHTML(){
               '<div style="font-size:12px;font-weight:900;">&#8377;'+Number(p.basic||0).toLocaleString('en-IN')+'</div>'+
               '<div style="font-size:10px;color:var(--text3);">Net &#8377;'+Number(p.net_salary||0).toLocaleString('en-IN')+'</div>'+
             '</div>'+
-            (i>0?'<button data-inc-del-payid="'+p.id+'" data-inc-del-name="'+name+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>'+'<button id="dl-inc-'+e.id+'-'+i+'" data-eid="'+e.id+'" data-nb="'+p.basic+'" data-ob="'+prevBasic+'" data-dt="'+fmtDate(p.effective_date)+'" data-rm="'+(p.remarks||'')+'" data-pobj="'+encodeURIComponent(JSON.stringify(prevPay||{}))+'" data-nobj="'+encodeURIComponent(JSON.stringify(p))+'" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;flex-shrink:0;">&#128196;</button>':'<span style="font-size:10px;color:var(--text3);padding:0 4px;">First</span>')+
+            (i>0?(empPerm('increment','delete')?'<button data-inc-del-payid="'+p.id+'" data-inc-del-name="'+name+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+'<button id="dl-inc-'+e.id+'-'+i+'" data-eid="'+e.id+'" data-nb="'+p.basic+'" data-ob="'+prevBasic+'" data-dt="'+fmtDate(p.effective_date)+'" data-rm="'+(p.remarks||'')+'" data-pobj="'+encodeURIComponent(JSON.stringify(prevPay||{}))+'" data-nobj="'+encodeURIComponent(JSON.stringify(p))+'" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;flex-shrink:0;">&#128196;</button>':'<span style="font-size:10px;color:var(--text3);padding:0 4px;">First</span>')+
           '</div>'+
         '</div>';
       }).join('');
@@ -1737,7 +1765,7 @@ function empIncrementHTML(){
             (curBasic?'Current Basic: <b>&#8377;'+curBasic.toLocaleString('en-IN')+'</b>':'No Pay Fixed')+
           '</div>'+
         '</div>'+
-        '<button onclick="empOpenIncrement(\''+e.id+'\',\''+safeN(name)+'\','+curBasic+')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:800;cursor:pointer;">+ Increment</button>'+
+        (empPerm('increment','add')?'<button onclick="empOpenIncrement(\''+e.id+'\',\''+safeN(name)+'\','+curBasic+')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:800;cursor:pointer;">+ Increment</button>':'')+
       '</div>'+
       (pays.length?'<div style="padding:8px 14px 10px;border-top:1px solid #F0F4F8;">'+logRows+'</div>':'')+
     '</div>';
@@ -1745,6 +1773,7 @@ function empIncrementHTML(){
 }
 
 function empOpenIncrement(empId, empName, curBasic){
+  if(empDeny('increment','add','add increments')) return;
   document.getElementById('emp-sheet-title').textContent = 'Increment — '+empName;
   document.getElementById('emp-sheet-body').innerHTML =
     '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:14px;">'+
@@ -1790,6 +1819,7 @@ function incCalcFromAmt(){
   if(dn)dn.textContent='+ ₹'+(nb-curBasic).toLocaleString('en-IN');
 }
 async function empSaveIncrement(){
+  if(empDeny('increment','add','add increments')) return;
   var empId = (document.getElementById('inc-emp-id')||{}).value||'';
   var date  = (document.getElementById('inc-date')||{}).value||'';
   var newBasic = parseFloat((document.getElementById('inc-new-basic')||{value:0}).value)||0;
@@ -1886,6 +1916,7 @@ async function hrSaveOrder(empId, orderType, effectiveDate, details, orderRef){
 
 
 async function hrDeleteOrder(orderId, label, refreshFn){
+  if(empDeny(EMP_TAB,'delete','delete orders')) return;
   if(!confirm('Delete "'+label+'"?\n\nThis will permanently remove this record and cannot be undone.')) return;
   try{
     var order = EMP_ORDERS.find(function(o){return o.id===orderId;});
@@ -2012,7 +2043,7 @@ function empTransferHTML(){
               '<div style="font-size:10px;color:var(--text3);">w.e.f. '+fmtDate(o.effective_date)+' · '+summary+(o.order_ref?' · '+o.order_ref:'')+'</div>'+
             '</div>'+
             '<div style="display:flex;gap:6px;flex-shrink:0;">'+
-              '<button data-del-ord-id="'+o.id+'" data-del-ord-label="'+typeLabel+' '+fmtDate(o.effective_date)+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>'+
+              (empPerm('transfer','delete')?'<button data-del-ord-id="'+o.id+'" data-del-ord-label="'+typeLabel+' '+fmtDate(o.effective_date)+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
               '<button id="hr-ord-'+o.id+'" data-type="'+o.order_type+'" data-eid="'+e.id+'" data-det="'+encodeURIComponent(o.details||'{}')+'" data-dt="'+fmtDate(o.effective_date)+'" style="background:#E8EAF6;color:#3949AB;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128196;</button>'+
             '</div>'+
           '</div>';
@@ -2038,6 +2069,9 @@ function empTransferHTML(){
 function hrWireOrderButtons(){
   setTimeout(function(){
     // ── Transfer / Promote / Resign action buttons ──────────────────────
+    if(!empPerm('transfer','add')){
+      document.querySelectorAll('[data-trf-emp],[data-pro-emp],[data-res-emp]').forEach(function(b){ b.style.display='none'; });
+    }
     document.querySelectorAll('[data-trf-emp]').forEach(function(btn){
       btn.addEventListener('click',function(){
         var eid  = btn.getAttribute('data-trf-emp');
@@ -2085,6 +2119,7 @@ function hrWireOrderButtons(){
 // ─── Updated Save Functions ───────────────────────────────────────────────
 
 async function empSaveTransfer(){
+  if(empDeny('transfer','add','record transfers')) return;
   var empId    = (document.getElementById('tr-emp-id')||{}).value||'';
   var date     = (document.getElementById('tr-date')||{}).value||'';
   var dept     = (document.getElementById('tr-dept')||{}).value||'';
@@ -2130,6 +2165,7 @@ async function empSaveTransfer(){
 }
 
 function empOpenTransfer(empId, empName){
+  if(empDeny('transfer','add','record transfers')) return;
   document.getElementById('emp-sheet-title').textContent = 'Transfer — '+empName;
   document.getElementById('emp-sheet-body').innerHTML =
     '<label class="flbl">Effective Date *</label><input id="tr-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
@@ -2156,6 +2192,7 @@ function empOpenTransfer(empId, empName){
 }
 
 function empOpenPromotion(empId, empName){
+  if(empDeny('transfer','add','record promotions')) return;
   document.getElementById('emp-sheet-title').textContent = 'Promotion — '+empName;
   document.getElementById('emp-sheet-body').innerHTML =
     '<label class="flbl">Effective Date *</label><input id="pro-date" class="finp" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
@@ -2173,6 +2210,7 @@ function empOpenPromotion(empId, empName){
 }
 
 async function empSavePromotion(){
+  if(empDeny('transfer','add','record promotions')) return;
   var empId  = (document.getElementById('pro-emp-id')||{}).value||'';
   var date   = (document.getElementById('pro-date')||{}).value||'';
   var role   = (document.getElementById('pro-role')||{}).value||'';
@@ -2290,7 +2328,7 @@ function hrPayLogForEmp(empId){
         '</div>'+
         '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">'+
           (d.net_salary||d.newPay?'<span style="font-size:11px;font-weight:800;">Net &#8377;'+(d.net_salary||(d.newPay?d.newPay.net_salary:0)||0).toLocaleString('en-IN')+'</span>':'')+
-          '<button data-del-pay-ord-id="'+o.id+'" data-del-pay-ord-label="'+typeLabel+' '+fmtDate(o.effective_date)+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:3px 7px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>'+
+          (empPerm(EMP_TAB,'delete')?'<button data-del-pay-ord-id="'+o.id+'" data-del-pay-ord-label="'+typeLabel+' '+fmtDate(o.effective_date)+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:3px 7px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
           (hasFullData?'<button data-ord-id="'+o.id+'" data-ord-type="'+o.order_type+'" style="background:#E3F2FD;color:#1565C0;border:none;border-radius:6px;padding:3px 7px;font-size:10px;font-weight:800;cursor:pointer;">&#128196;</button>':'')+
         '</div>'+
       '</div>';
@@ -2299,6 +2337,7 @@ function hrPayLogForEmp(empId){
 }
 
 function empOpenResignation(empId, empName){
+  if(empDeny('transfer','add','record resignations')) return;
   document.getElementById('emp-sheet-title').textContent = 'Resignation — '+empName;
   document.getElementById('emp-sheet-body').innerHTML =
     '<div style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:14px;">'+
@@ -2321,6 +2360,7 @@ function empOpenResignation(empId, empName){
 }
 
 async function empSaveResignation(){
+  if(empDeny('transfer','add','record resignations')) return;
   var empId = (document.getElementById('res-emp-id')||{}).value||'';
   var resDate = (document.getElementById('res-date')||{}).value||'';
   var lwd     = (document.getElementById('res-lwd')||{}).value||'';
@@ -2452,9 +2492,11 @@ function empViewDetail(id){
 
   var foot='<button class="btn btn-outline" onclick="closeEmpSheet()">Close</button>';
   if(e.status==='pending'||!e.status){
+    if(empPerm('pending','edit')){
     foot+='<button class="btn" style="background:#C62828;color:white;" onclick="empReject(\''+e.id+'\')">✕ Reject</button>';
     foot+='<button class="btn" style="background:#2E7D32;color:white;" onclick="empApprove(\''+e.id+'\')">✓ Approve</button>';
-  } else {
+    }
+  } else if(empPerm(empStatusTab(e),'edit')){
     foot+='<button class="btn btn-navy" onclick="closeEmpSheet();setTimeout(function(){empOpenForm(EMP_LIST.find(function(x){return x.id===\''+e.id+'\';}))||empOpenForm({id:\''+e.id+'\'});},300);">&#9998; Edit</button>';
   }
   document.getElementById('emp-sheet-foot').innerHTML=foot;
@@ -2462,6 +2504,7 @@ function empViewDetail(id){
 }
 
 async function empApprove(id){
+  if(empDeny('pending','edit','approve employees')) return;
   var e=EMP_LIST.find(function(x){return x.id===id;});
   if(!e)return;
   var name=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim();
@@ -2483,6 +2526,7 @@ async function empApprove(id){
 }
 
 async function empReject(id){
+  if(empDeny('pending','edit','reject employees')) return;
   var e=EMP_LIST.find(function(x){return x.id===id;});
   if(!e)return;
   var name=((e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'')).trim();
@@ -2547,7 +2591,7 @@ function empListHTML(status){
     var hasPay=EMP_PAY.some(function(p){return p.employee_id===e.id;});
     var roleColors={'Admin':'#C62828','Project Manager':'#1565C0','Site Engineer':'#2E7D32','Finance / Accounts':'#6A1B9A'};
     var rc=roleColors[e.role||e.designation]||'#37474F';
-    var clickFn=status==='active'?'empOpenEditForm(\''+e.id+'\')'  :'empViewDetail(\''+e.id+'\')';
+    var clickFn=(status==='active' && empPerm('active','edit'))?'empOpenEditForm(\''+e.id+'\')'  :'empViewDetail(\''+e.id+'\')';
 return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;" onclick="'+clickFn+'">'+
       '<div style="padding:12px 14px;display:flex;align-items:center;gap:12px;">'+
         '<div style="width:44px;height:44px;border-radius:12px;background:'+col+';display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:white;flex-shrink:0;overflow:hidden;">'+
@@ -2563,11 +2607,12 @@ return '<div style="background:var(--card-bg);border-radius:14px;border:1px soli
           '</div>'+
         '</div>'+
         (status==='pending'?
+          (!empPerm('pending','edit') ? '<div style="font-size:20px;color:var(--text3);">&#8250;</div>' :
           '<div style="display:flex;flex-direction:column;gap:6px;" onclick="event.stopPropagation()">'+
             '<button onclick="empApprove(\''+e.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Approve</button>'+
             '<button onclick="empOpenForm(EMP_LIST.find(function(x){return x.id===\''+e.id+'\';}))" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#9998; Edit</button>'+
             '<button onclick="empReject(\''+e.id+'\')" style="background:#C62828;color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#10005; Reject</button>'+
-          '</div>':
+          '</div>'):
           status==='active'?
           '<div style="display:flex;flex-direction:column;gap:6px;align-items:center;" onclick="event.stopPropagation()">'+
             '<button onclick="downloadIDCard(\''+e.id+'\')" style="background:#1B5E20;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#127891; ID Card</button>'+
@@ -2654,7 +2699,7 @@ function empPayHTML(){
           // Footer: date + delete
           '<div style="padding:8px 10px;background:var(--bg);display:flex;justify-content:space-between;align-items:center;">'+
             '<div style="font-size:10px;color:var(--text3);">w.e.f. '+latest.effective_date+(latest.remarks?' &bull; '+latest.remarks.replace('Increment: ',''):'')+'</div>'+
-            '<button data-pay-del-id="'+latest.id+'" data-pay-del-name="'+safeN(name)+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:800;cursor:pointer;">&#128465; Delete</button>'+
+            (empPerm('pay','delete')?'<button data-pay-del-id="'+latest.id+'" data-pay-del-name="'+safeN(name)+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:800;cursor:pointer;">&#128465; Delete</button>':'')+
           '</div>'+
         '</div>';
     } else {
@@ -2668,9 +2713,9 @@ function empPayHTML(){
           '<div style="font-size:11px;color:var(--text3);">'+(e.employee_code||e.emp_id||'—')+' &bull; '+(e.designation||e.role||'—')+' &bull; '+(e.department||'—')+'</div>'+
         '</div>'+
         (latest?'<button onclick="empGenerateOfferLetter(\''+e.id+'\')" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; Offer Letter</button>':'')+
-        '<button onclick="empOpenPay(\''+e.id+'\',\''+safeN(name)+'\')" style="background:#1B5E20;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
+        (empPerm('pay',latest?'edit':'add')?'<button onclick="empOpenPay(\''+e.id+'\',\''+safeN(name)+'\')" style="background:#1B5E20;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:800;cursor:pointer;">'+
           (latest?'&#9998; Revise':'+ Fix Pay')+
-        '</button>'+
+        '</button>':'')+
       '</div>'+
       detailHTML+
     '</div>';
@@ -2716,7 +2761,7 @@ function empLeaveFixHTML(){
           '<div style="font-weight:800;font-size:13px;">'+name+'</div>'+
           '<div style="font-size:10.5px;color:var(--text3);">'+(e.designation||e.role||'')+'</div>'+
         '</div>'+
-        '<button onclick="empOpenLeaveFix(\''+e.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11.5px;font-weight:800;cursor:pointer;">&#127796; Fix Leaves</button>'+
+        (empPerm('leavefix','edit')?'<button onclick="empOpenLeaveFix(\''+e.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11.5px;font-weight:800;cursor:pointer;">&#127796; Fix Leaves</button>':'')+
       '</div>'+
       chipsHTML+
     '</div>';
@@ -2724,6 +2769,7 @@ function empLeaveFixHTML(){
 }
 
 function empOpenLeaveFix(empId){
+  if(empDeny('leavefix','edit','change leave fixation')) return;
   var e=EMP_LIST.find(function(x){return x.id===empId;});
   if(!e){toast('Employee not found','warning');return;}
   var name=(e.first_name||'')+(e.middle_name?' '+e.middle_name:'')+(e.last_name?' '+e.last_name:'');
@@ -2758,6 +2804,7 @@ function empOpenLeaveFix(empId){
 }
 
 async function empSaveLeaveFix(empId,leaveTypes){
+  if(empDeny('leavefix','edit','change leave fixation')) return;
   var rows=[];
   leaveTypes.forEach(function(lt){
     var qtyInp=document.getElementById('lf-qty-'+lt.id);
@@ -2932,6 +2979,7 @@ function empApplyDigilockerFetch(result){
 
 function empOpenForm(emp){
   var isEdit=!!emp;
+  if(isEdit ? empDeny(empStatusTab(emp),'edit','edit employees') : empDeny('active','add','add employees')) return;
   EMP_DIGILOCKER_FETCH=null; EMP_DL_SESSION_ID=null; EMP_DL_POLL_GEN++; // never carry a stale fetch (or a still-ticking poll) into a new form session
   var e=emp||{};
 
@@ -3108,7 +3156,7 @@ function empOpenForm(emp){
 
   document.getElementById('emp-sheet-foot').innerHTML=
     '<button class="btn btn-outline" onclick="closeEmpSheet()">Cancel</button>'+
-    (isEdit&&e.status!=='resigned'?'<button class="btn" style="background:#C62828;color:white;" onclick="empDeleteEmployee(\''+e.id+'\',\''+safeN([fname,mname,lname].filter(Boolean).join(' '))+'\')">🗑 Delete</button>':'')+
+    (isEdit&&e.status!=='resigned'&&empPerm(empStatusTab(e),'delete')?'<button class="btn" style="background:#C62828;color:white;" onclick="empDeleteEmployee(\''+e.id+'\',\''+safeN([fname,mname,lname].filter(Boolean).join(' '))+'\')">🗑 Delete</button>':'')+
     (isEdit?'<button class="btn" style="background:#1565C0;color:white;" onclick="empResetPassword(\''+e.id+'\',\''+safeN([fname,mname,lname].filter(Boolean).join(' '))+'\',\''+safeN(phone)+'\')">🔑 Reset Password</button>':'')+
     '<button class="btn btn-indigo" onclick="empFormSave()" style="flex:1;">'+(isEdit?'✓ Save Changes':'✓ Register Employee')+'</button>';
 
@@ -3223,6 +3271,8 @@ function empClearPasswordFields(){
 }
 
 async function empDeleteEmployee(id,name){
+  var delEmp=EMP_LIST.find(function(x){return x.id===id;});
+  if(empDeny(empStatusTab(delEmp),'delete','delete employees')) return;
   if(!confirm('Delete "'+name+'"? This cannot be undone.'))return;
   try{
     toast('Deleting...','info');
@@ -3239,6 +3289,8 @@ async function empDeleteEmployee(id,name){
 }
 
 async function empResetPassword(empId, empName, phone){
+  var rpEmp=EMP_LIST.find(function(x){return x.id===empId;});
+  if(empDeny(empStatusTab(rpEmp),'edit','reset passwords')) return;
   if(!phone){toast('No mobile number on file — cannot reset password','error');return;}
   document.getElementById('emp-sheet-title').textContent = '\uD83D\uDD10 Reset Password — '+empName;
   document.getElementById('emp-sheet-body').innerHTML =
@@ -3314,6 +3366,10 @@ async function empResetPassword(empId, empName, phone){
 
 async function empFormSave(){
   var editId=(document.getElementById('f-uedit-id')||{}).value||'';
+  if(editId){
+    var sfEmp=EMP_LIST.find(function(x){return x.id===editId;});
+    if(empDeny(empStatusTab(sfEmp),'edit','edit employees')) return;
+  } else if(empDeny('active','add','add employees')) return;
   var fname=gv('f-ufname'), mname=gv('f-umname')||'', lname=gv('f-ulname');
   var name=[fname,mname,lname].filter(Boolean).join(' ').trim();
   if(!name){toast('Name is required','warning');return;}
@@ -3481,6 +3537,7 @@ async function empFormSave(){
 }
 
 function empOpenPay(empId, empName){
+  if(empDeny('pay', EMP_PAY.some(function(x){return x.employee_id===empId;})?'edit':'add', 'change pay structures')) return;
   var existing=EMP_PAY.filter(function(p){return p.employee_id===empId;}).sort(function(a,b){return b.effective_date.localeCompare(a.effective_date);});
   var v=existing[0]||{};
   var emp=EMP_LIST.find(function(e){return e.id===empId;})||{};
@@ -4052,6 +4109,7 @@ function empGenerateOfferLetter(empId){
 }
 
 async function empSavePay(){
+  if(!empPerm('pay','add') && !empPerm('pay','edit')){ toast('View-only access — you cannot change pay structures','warning'); return; }
   var empId=document.getElementById('pf-emp-id')?document.getElementById('pf-emp-id').value:'';
   var date=document.getElementById('pf-date')?document.getElementById('pf-date').value:'';
   var basic=gn('pf-basic');

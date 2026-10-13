@@ -27975,7 +27975,7 @@ function empDocList(e){
     var attrs = Object.keys(data||{}).map(function(k){
       return 'data-'+k+'="'+encodeURIComponent(String(data[k]||''))+'"';
     }).join(' ');
-    var delBtn = data.orderId
+    var delBtn = (data.orderId && (typeof empPerm!=='function'||empPerm('downloads','delete')))
       ? '<button data-del-id="'+data.orderId+'" data-del-label="'+label+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">&#128465;</button>'
       : '';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #F9F9F9;">'+
@@ -28637,6 +28637,7 @@ function downloadResignationLetter(empId){
 
 // Open payment entry sheet for one employee record
 function salOpenPayment(recordId, empName, netPayable){
+  if(typeof empDeny==='function' && empDeny('salary','edit','record salary payments')) return;
   var rec = SALARY_RECORDS.find(function(r){return r.id===recordId;})||{};
   var already = rec.payment_date;
   document.getElementById('emp-sheet-title').textContent = '\u{1F4B8} Mark Payment — '+empName;
@@ -28664,6 +28665,7 @@ function salOpenPayment(recordId, empName, netPayable){
 }
 
 async function salSavePayment(){
+  if(typeof empDeny==='function' && empDeny('salary','edit','record salary payments')) return;
   var rid   = (document.getElementById('sal-pay-rid')||{}).value||'';
   var date  = (document.getElementById('sal-pay-date')||{}).value||'';
   var ref   = (document.getElementById('sal-pay-ref')||{}).value||'';
@@ -28679,6 +28681,7 @@ async function salSavePayment(){
 }
 
 async function salClearPayment(){
+  if(typeof empDeny==='function' && empDeny('salary','edit','change salary payments')) return;
   var rid = (document.getElementById('sal-pay-rid')||{}).value||'';
   if(!rid||!confirm('Clear payment record for this employee?')) return;
   try{
@@ -28737,7 +28740,7 @@ function salBuildLogSection(logMap, logKeys){
           '<div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">'+
             '<button data-sal-pdf-month="'+g.month+'" data-sal-pdf-year="'+g.year+'" data-sal-pdf-label="'+g.label+'" style="background:#C62828;color:white;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;" onclick="event.stopPropagation()">&#128196; PDF</button>'+
             '<button data-sal-xls-month="'+g.month+'" data-sal-xls-year="'+g.year+'" data-sal-xls-label="'+g.label+'" style="background:#2E7D32;color:white;border:none;border-radius:6px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer;" onclick="event.stopPropagation()">&#128202; Excel</button>'+
-            '<button data-sal-del-month="'+g.month+'" data-sal-del-year="'+g.year+'" data-sal-del-label="'+g.label+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:4px 6px;font-size:10px;font-weight:800;cursor:pointer;" onclick="event.stopPropagation()">&#128465;</button>'+
+            ((typeof empPerm!=='function'||empPerm('salary','delete'))?'<button data-sal-del-month="'+g.month+'" data-sal-del-year="'+g.year+'" data-sal-del-label="'+g.label+'" style="background:#FEE2E2;color:#C62828;border:none;border-radius:6px;padding:4px 6px;font-size:10px;font-weight:800;cursor:pointer;" onclick="event.stopPropagation()">&#128465;</button>':'')+
             '<span id="sal-arr-'+key+'" style="font-size:18px;color:var(--text3);">&#8250;</span>'+
           '</div>'+
         '</div>'+
@@ -28789,14 +28792,14 @@ function salBuildLogSection(logMap, logKeys){
                     )+
                   '</td>'+
                   '<td style="padding:7px 8px;text-align:center;white-space:nowrap;">'+
-                    '<button data-sal-pay-rid="'+r.id+'" data-sal-pay-name="'+r.employee_name+'" data-sal-pay-amt="'+r.net_payable+'" '+
+                    ((typeof empPerm!=='function'||empPerm('salary','edit'))?'<button data-sal-pay-rid="'+r.id+'" data-sal-pay-name="'+r.employee_name+'" data-sal-pay-amt="'+r.net_payable+'" '+
                       'style="background:'+(isPaid?'#E8F5E9':'#1B5E20')+';color:'+(isPaid?'#1B5E20':'white')+';border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;margin-right:3px;">'+
                       (isPaid?'&#9998; Edit':'&#128176; Pay')+
-                    '</button>'+
+                    '</button>':'')+
                     (isPaid?
                       '<button data-sal-slip-eid="'+r.employee_id+'" data-sal-slip-rid="'+r.id+'" style="background:var(--accent);color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">Slip</button>'
                     : '<span style="font-size:10px;color:var(--text3);">Pay first</span>')+
-                    '<button data-sal-del-rid="'+r.id+'" data-sal-del-name="'+r.employee_name+'" data-sal-del-label="'+r.month_label+'" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 6px;font-size:11px;font-weight:800;cursor:pointer;margin-left:3px;" title="Delete record">&#215;</button>'+
+                    ((typeof empPerm!=='function'||empPerm('salary','delete'))?'<button data-sal-del-rid="'+r.id+'" data-sal-del-name="'+r.employee_name+'" data-sal-del-label="'+r.month_label+'" style="background:#FFEBEE;color:#C62828;border:none;border-radius:5px;padding:3px 6px;font-size:11px;font-weight:800;cursor:pointer;margin-left:3px;" title="Delete record">&#215;</button>':'')+
                   '</td>'+
                 '</tr>';
               }).join('')+
@@ -29437,8 +29440,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261013a"></script>
-<script src="js/employee.js?v=20261013a"></script>
-<script src="js/projects.js?v=20261013a"></script>
-<script src="js/finance.js?v=20261013a"></script>
+<script src="js/registry.js?v=20261013b"></script>
+<script src="js/employee.js?v=20261013b"></script>
+<script src="js/projects.js?v=20261013b"></script>
+<script src="js/finance.js?v=20261013b"></script>
 </html>
