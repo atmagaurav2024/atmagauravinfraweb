@@ -1232,7 +1232,9 @@ input,select,textarea{font-size:16px !important;}
 #app-attendance .tabs-row::-webkit-scrollbar{display:none;}
 #app-attendance .tab{white-space:nowrap;padding:7px 12px !important;font-size:12px !important;}
 /* Table */
-#app-attendance .table-card{overflow-x:hidden;}
+#app-attendance .table-card{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+#app-attendance .table-card .att-table{min-width:620px;}
+#app-attendance .table-card .att-table th,#app-attendance .table-card .att-table td{white-space:nowrap;}
 #app-attendance .table-card-header{flex-wrap:wrap;gap:8px;padding:12px !important;}
 #app-attendance .tch-actions{flex-wrap:wrap;gap:6px;width:100%;}
 #app-attendance .status-row{flex-wrap:wrap;gap:6px;}
@@ -29447,8 +29449,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261013c"></script>
-<script src="js/employee.js?v=20261013c"></script>
-<script src="js/projects.js?v=20261013c"></script>
-<script src="js/finance.js?v=20261013c"></script>
+<script src="js/registry.js?v=20261013d"></script>
+<script src="js/employee.js?v=20261013d"></script>
+<script src="js/projects.js?v=20261013d"></script>
+<script src="js/finance.js?v=20261013d"></script>
 </html>
