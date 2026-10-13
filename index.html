@@ -5327,8 +5327,12 @@ async function attLoadAll(){
 
   ATT_MONTH_RECORDS = monthRecords;
 
+  // Rejected punches never count. Pending ones (made outside the site
+  // radius, awaiting approval) DO count for the button state, so the
+  // employee can punch out without waiting for the in-punch approval.
+  todayPunches = todayPunches.filter(function(p){ return p.status!=='rejected'; });
   punchLog = todayPunches.map(function(p){
-    return {id:p.id, type:p.punch_type, time:new Date(p.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:p.lat, lng:p.lng, duration:null};
+    return {id:p.id, type:p.punch_type, status:p.status, time:new Date(p.punch_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), loc:'On-Site', lat:p.lat, lng:p.lng, duration:null};
   });
   // Restore punch-in state across a refresh
   if(punchLog.length && punchLog[punchLog.length-1].type==='in'){
@@ -5342,6 +5346,10 @@ async function attLoadAll(){
     if(status) status.textContent='Punched In at '+punchInTime.toLocaleTimeString();
   } else {
     isPunchedIn=false;
+    var rg=document.getElementById('punch-ring'), ic=document.getElementById('punch-icon'), lb=document.getElementById('punch-label');
+    if(rg) rg.className='punch-ring punch-ring-in';
+    if(ic) ic.textContent='👉';
+    if(lb) lb.textContent='PUNCH IN';
   }
   renderPunchLog();
 
@@ -5762,6 +5770,26 @@ async function confirmPunch() {
         status:'pending', project_id:geo.nearestProjectId||null, distance_m:(geo.nearestDistance!=null)?Math.round(geo.nearestDistance):null
       });
       if(selfieObjP && selfieObjP.deleteToken && pendingRes && pendingRes[0]) SELFIE_DELETE_TOKENS[pendingRes[0].id]=selfieObjP.deleteToken;
+      // The punch is saved as pending, so flip the button right away: a
+      // pending Punch In must offer Punch Out (the approver can approve
+      // both whenever they like), and a pending Punch Out returns to Punch In.
+      var pRing=document.getElementById('punch-ring'), pIcon=document.getElementById('punch-icon'), pLabel=document.getElementById('punch-label'), pStatus=document.getElementById('punch-status');
+      var pTime=nowTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      if(!wasPunchedIn){
+        isPunchedIn=true; punchInTime=nowTime;
+        if(pRing) pRing.className='punch-ring punch-ring-out';
+        if(pIcon) pIcon.textContent='⏹';
+        if(pLabel) pLabel.textContent='PUNCH OUT';
+        if(pStatus) pStatus.textContent='Punched In at '+nowTime.toLocaleTimeString()+' · awaiting approval';
+      } else {
+        isPunchedIn=false;
+        if(pRing) pRing.className='punch-ring punch-ring-in';
+        if(pIcon) pIcon.textContent='👉';
+        if(pLabel) pLabel.textContent='PUNCH IN';
+        if(pStatus) pStatus.textContent='Last Out: '+nowTime.toLocaleTimeString()+' · awaiting approval';
+      }
+      punchLog.push({id:(pendingRes&&pendingRes[0])?pendingRes[0].id:null, type:(wasPunchedIn?'out':'in'), status:'pending', time:pTime, loc:'Outside site', lat:currentLat, lng:currentLng, selfie:selfiePreviewSrc});
+      renderPunchLog();
     }catch(e){ showToast('Could not submit punch for approval: '+e.message,'error'); }
     resetSelfieBox();
     return;
@@ -8174,7 +8202,7 @@ function renderPunchLog() {
       (entry.selfie ? '<img src="'+entry.selfie+'" style="width:32px;height:32px;border-radius:50%;object-fit:cover;margin-right:8px;flex-shrink:0;">' : '') +
       '<div class="punch-dot ' + (entry.type === 'in' ? 'punch-dot-in' : 'punch-dot-out') + '"></div>' +
       '<div class="punch-entry-info">' +
-        '<div class="punch-entry-type">' + (entry.type === 'in' ? '✅ Punch In' : '⏹ Punch Out') + '</div>' +
+        '<div class="punch-entry-type">' + (entry.type === 'in' ? '✅ Punch In' : '⏹ Punch Out') + (entry.status==='pending'?' <span style="font-size:10px;font-weight:800;background:#FFF3E0;color:#E65100;padding:2px 7px;border-radius:10px;">⏳ Awaiting approval</span>':'') + '</div>' +
         '<div class="punch-entry-time">' + entry.time + ' · <span style="color:var(--blue2);">📍 ' + coordLabel + '</span></div>' +
       '</div>' +
       durHtml +
@@ -8317,15 +8345,23 @@ async function decidePunch(id, decision){
       approved_by: currentUser.id, approved_at: new Date().toISOString()
     });
 
+    var empId=row.emp_id;
     if(decision==='approve'){
-      var empId=row.emp_id, date=row.date, punchTime=new Date(row.punch_time);
+      var date=row.date, punchTime=new Date(row.punch_time);
       var attRows=await sbFetch('attendance',{select:'*',filter:'employee_id=eq.'+empId+'&date=eq.'+date});
       var attRow=(attRows&&attRows[0])||null;
       var timeStr=punchTime.toTimeString().slice(0,8);
 
       if(row.punch_type==='in'){
         if(attRow){
-          await sbUpdate('attendance', attRow.id, {status:'present', punch_in:timeStr, punch_in_lat:row.lat, punch_in_lng:row.lng, punch_in_selfie:row.selfie_url});
+          var inUpd={status:'present', punch_in:timeStr, punch_in_lat:row.lat, punch_in_lng:row.lng, punch_in_selfie:row.selfie_url};
+          // Punch Out may have been approved first — work out hours now.
+          if(attRow.punch_out){
+            var outDt=new Date(date+'T'+attRow.punch_out);
+            var dMin=Math.round((outDt-punchTime)/60000);
+            if(dMin>0) inUpd.hours_worked=Math.round((dMin/60)*100)/100;
+          }
+          await sbUpdate('attendance', attRow.id, inUpd);
         } else {
           await sbInsert('attendance',{employee_id:empId, date:date, status:'present', punch_in:timeStr, punch_in_lat:row.lat, punch_in_lng:row.lng, punch_in_selfie:row.selfie_url, marked_by:currentUser.id});
         }
@@ -29401,8 +29437,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261006c"></script>
-<script src="js/employee.js?v=20261006c"></script>
-<script src="js/projects.js?v=20261006c"></script>
-<script src="js/finance.js?v=20261006c"></script>
+<script src="js/registry.js?v=20261013a"></script>
+<script src="js/employee.js?v=20261013a"></script>
+<script src="js/projects.js?v=20261013a"></script>
+<script src="js/finance.js?v=20261013a"></script>
 </html>
