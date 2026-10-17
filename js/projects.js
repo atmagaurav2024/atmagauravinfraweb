@@ -825,10 +825,33 @@ async function saveProjForm(editId){
 
   // File upload (Cloudinary link stored in attachments)
   var attachments=[];
+  var legacyFiles=[];
   PF_FILES.forEach(function(f){
-    if(f.url) attachments.push({name:f.name,url:f.url});
+    if(f.url){
+      if(String(f.url).indexOf('data:')===0) legacyFiles.push(f); // old base64 attachment
+      else attachments.push({name:f.name,url:f.url});
+    }
   });
   var newFiles=PF_FILES.filter(function(f){return f.file;});
+  // Convert old base64 attachments to Cloudinary links (keeps the row small)
+  if(legacyFiles.length){
+    toast('Optimising '+legacyFiles.length+' old file(s)...','info');
+    for(var li=0;li<legacyFiles.length;li++){
+      var lf=legacyFiles[li], lUrl=null;
+      try{
+        var lblob=await (await fetch(lf.url)).blob();
+        var lfile=new File([lblob], lf.name||('file_'+li), {type:lblob.type||'application/pdf'});
+        lUrl=await uploadToCloudinary(lfile,'projects',null);
+      }catch(e){ console.warn('Legacy file convert:',e); }
+      if(!lUrl){
+        toast('Could not convert an old file. Please re-upload it and try again.','error');
+        if(saveBtn){ saveBtn.disabled=false; saveBtn.style.opacity=''; saveBtn.style.cursor=''; saveBtn.innerHTML=saveBtnOrigHTML; }
+        if(delBtn){ delBtn.disabled=false; delBtn.style.opacity=''; delBtn.style.cursor=''; }
+        return;
+      }
+      attachments.push({name:lf.name,url:lUrl});
+    }
+  }
   if(newFiles.length){
     // Upload to Cloudinary and store only the link — never embed the file
     // (base64) in the projects row, which made multi-PDF saves time out.
