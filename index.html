@@ -3551,7 +3551,7 @@ async function loadDashboardInsights(filterProjId){
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">'+
         actionCard(dIcon('clipboard','#E11D48'),'#FFE4E6', pendingApprovalsCount, 'Pending Employee', null, 'goToPendingEmployees()')+
         actionCard(dIcon('cart','#B45309'),'#FEF3C7', pendingRRs.length, 'Pending PO', null, pendingPOOnclick)+
-        actionCard(dIcon('doc','#2563EB'),'#DBEAFE', lowStock.length, 'Low Stock / GRN','projects')+
+        actionCard(dIcon('doc','#2563EB'),'#DBEAFE', lowStock.length, 'Low Stock','projects')+
         actionCard(dIcon('card','#9333EA'),'#F3E8FF', inr(pendingBillsAmount), pendingBillsCount+' Pending Bill'+(pendingBillsCount===1?'':'s'), null, pendingBillsOnclick)+
         (canApprovePunches ? actionCard(dIcon('people','#047857'),'#D1FAE5', pendingOutsidePunches, 'Approve Outside Attendance', null, 'goToPendingPunches()') : actionCard(dIcon('people','#047857'),'#D1FAE5', attendanceIssuesCount, 'Attendance Issues', 'attendance'))+
         actionCard(dIcon('rupee','#E11D48'),'#FFE4E6', inr(receivablesAmount), receivablesCount+' Receivable'+(receivablesCount===1?'':'s'), null, receivablesOnclick)+
@@ -29509,8 +29509,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261017f"></script>
-<script src="js/employee.js?v=20261017f"></script>
-<script src="js/projects.js?v=20261017f"></script>
-<script src="js/finance.js?v=20261017f"></script>
+<script src="js/registry.js?v=20261017g"></script>
+<script src="js/employee.js?v=20261017g"></script>
+<script src="js/projects.js?v=20261017g"></script>
+<script src="js/finance.js?v=20261017g"></script>
 </html>

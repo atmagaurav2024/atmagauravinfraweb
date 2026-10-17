@@ -14792,6 +14792,10 @@ function storeRender(){
       '<td style="padding:9px 10px;font-size:11px;text-align:right;font-weight:800;color:#558B2F;">'+inHand.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
       '<td style="padding:9px 10px;font-size:11px;text-align:right;color:#E65100;">'+issued.toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
       '<td style="padding:9px 10px;font-size:11px;text-align:right;font-weight:800;color:#1565C0;">'+(inHand+issued).toFixed(2)+' <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span></td>'+
+      '<td style="padding:9px 10px;font-size:11px;text-align:right;white-space:nowrap;">'+
+        (g.min_qty>0?'<span style="font-weight:800;color:'+(isLow?'#C62828':'var(--text)')+';">'+g.min_qty+'</span> <span style="font-size:9px;color:var(--text3);">'+g.unit+'</span>':'<span style="color:var(--text3);">—</span>')+
+        ' <button onclick="storeSetMin(\''+firstId+'\')" title="Set minimum stock level" style="background:none;border:none;color:#6A1B9A;cursor:pointer;font-size:13px;padding:0 2px;">&#9998;</button>'+
+      '</td>'+
       '<td style="padding:9px 10px;font-size:10px;color:var(--text3);">'+(g.last_grn_date?g.last_grn_date.split('-').reverse().join('/'):'—')+'</td>'+
       '<td style="padding:9px 10px;">'+
         '<div style="display:flex;gap:4px;">'+
@@ -14813,12 +14817,13 @@ function storeRender(){
     summaryBar+
     '<div style="background:var(--card-bg);border-radius:14px;overflow:hidden;">'+
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
-        '<table style="width:100%;border-collapse:collapse;min-width:480px;">'+
+        '<table style="width:100%;border-collapse:collapse;min-width:560px;">'+
           '<thead><tr style="background:#6A1B9A;color:white;">'+
             '<th style="padding:8px 10px;font-size:9px;text-align:left;">MATERIAL</th>'+
             '<th style="padding:8px 10px;font-size:9px;text-align:right;color:#E8F5E9;">IN HAND</th>'+
             '<th style="padding:8px 10px;font-size:9px;text-align:right;color:#FFE0B2;">ISSUED</th>'+
             '<th style="padding:8px 10px;font-size:9px;text-align:right;">TOTAL IN</th>'+
+            '<th style="padding:8px 10px;font-size:9px;text-align:right;">MIN STOCK</th>'+
             '<th style="padding:8px 10px;font-size:9px;text-align:left;">LAST GRN</th>'+
             '<th style="padding:8px 10px;font-size:9px;text-align:left;">ACTION</th>'+
           '</tr></thead>'+
@@ -15116,6 +15121,34 @@ async function storeDeleteIssueLog(logId){
     toast('Issue log deleted — qty restored to store','success');
     storeRender();
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
+}
+
+// Sets the minimum stock level for a material (applies to every store entry
+// of the same item + unit, since the Store shows them as one row). When the
+// quantity in hand drops to or below this level the item is flagged Low
+// Stock here and counted on the dashboard's Low Stock card. 0 clears it.
+async function storeSetMin(itemId){
+  var item=STORE_ITEMS.find(function(i){return i.id===itemId;});
+  if(!item) return;
+  var key=(item.item_name||'').toLowerCase()+'__'+(item.unit||'').toLowerCase();
+  var group=STORE_ITEMS.filter(function(i){return ((i.item_name||'').toLowerCase()+'__'+(i.unit||'').toLowerCase())===key;});
+  var cur=parseFloat(item.min_qty)||0;
+  var v=prompt('Minimum stock level for "'+item.item_name+'"'+(item.unit?' ('+item.unit+')':'')+'\n\nYou will be flagged Low Stock when quantity in hand is at or below this. Enter 0 to remove.', cur||'');
+  if(v===null) return;
+  v=String(v).trim();
+  var n=v===''?0:parseFloat(v);
+  if(isNaN(n)||n<0){ toast('Enter a valid number (0 or more)','warning'); return; }
+  try{
+    for(var i=0;i<group.length;i++){
+      await sbUpdate('store_inventory',group[i].id,{min_qty:n});
+      group[i].min_qty=n;
+    }
+    toast(n>0?'Minimum stock set to '+n+(item.unit?' '+item.unit:''):'Minimum stock cleared','success');
+    storeRender();
+  }catch(e){
+    var m=String(e&&e.message||e);
+    toast(/min_qty/i.test(m)?'Minimum stock column missing — run supabase/store_min_qty.sql once':'Error: '+m,'error');
+  }
 }
 
 async function storeDelete(itemId){
