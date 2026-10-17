@@ -2868,12 +2868,13 @@ async function loadDashboardInsights(filterProjId){
       safe(sbFetch('boq_exec_resources',{select:'id,project_id,boq_item_id,party_name,qty,rate,unit',filter:'exec_type=eq.planned'})),
       safe(sbFetch('attendance',{select:'employee_id,status',filter:'date=eq.'+(new Date().toISOString().slice(0,10))})),
       safe(sbFetch('petty_cash_expenses',{select:'*'})),
-      safe(sbFetch('app_activity_log',{select:'*',filter:'limit=4',order:'created_at.desc'}))
+      safe(sbFetch('app_activity_log',{select:'*',filter:'limit=4',order:'created_at.desc'})),
+      safe(sbFetch('attendance_punches',{select:'id',filter:'status=eq.pending'}))
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
         pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
         salesPayments=r[10]||[], boqJmRows=r[11]||[], plannedResRows=r[12]||[], todayAttendanceRows=r[13]||[], pettyExpenseRows=r[14]||[],
-        recentActivityRows=r[15]||[];
+        recentActivityRows=r[15]||[], pendingOutsidePunchRows=r[16]||[];
     var presentTodayRows = todayAttendanceRows.filter(function(a){return a.status==='present';});
 
     // Restrict every project-linked source to the user's assigned projects,
@@ -3462,6 +3463,10 @@ async function loadDashboardInsights(filterProjId){
       }
     });
 
+    // Punches made from outside the assigned site radius, waiting for an
+    // approver. Only managers can act on them, so only they see the card.
+    var pendingOutsidePunches = pendingOutsidePunchRows.length;
+    var canApprovePunches = (typeof attIsManager==='function') ? attIsManager() : (currentUser&&(currentUser.role==='admin'||currentUser.role==='pm'));
     var attendanceIssuesCount = attAbsent + (employees.filter(function(e){return e.status==='active';}).length - attMarkedTotal);
     if(attendanceIssuesCount<0) attendanceIssuesCount=0;
 
@@ -3547,7 +3552,7 @@ async function loadDashboardInsights(filterProjId){
         actionCard(dIcon('cart','#B45309'),'#FEF3C7', pendingRRs.length, 'Pending PO', null, pendingPOOnclick)+
         actionCard(dIcon('doc','#2563EB'),'#DBEAFE', lowStock.length, 'Low Stock / GRN','projects')+
         actionCard(dIcon('card','#9333EA'),'#F3E8FF', inr(pendingBillsAmount), pendingBillsCount+' Pending Bill'+(pendingBillsCount===1?'':'s'), null, pendingBillsOnclick)+
-        actionCard(dIcon('people','#047857'),'#D1FAE5', attendanceIssuesCount, 'Attendance Issues', 'attendance')+
+        (canApprovePunches ? actionCard(dIcon('people','#047857'),'#D1FAE5', pendingOutsidePunches, 'Approve Outside Attendance', null, 'goToPendingPunches()') : actionCard(dIcon('people','#047857'),'#D1FAE5', attendanceIssuesCount, 'Attendance Issues', 'attendance'))+
         actionCard(dIcon('rupee','#E11D48'),'#FFE4E6', inr(receivablesAmount), receivablesCount+' Receivable'+(receivablesCount===1?'':'s'), null, receivablesOnclick)+
       '</div>';
 
@@ -3672,7 +3677,7 @@ async function loadDashboardInsights(filterProjId){
 
     var fyTextEl=document.getElementById('dash-fy-text');
     if(fyTextEl) fyTextEl.textContent=fyLabel;
-    var notifCount = pendingApprovalsCount + pendingRRs.length + lowStock.length + pendingBillsCount + attendanceIssuesCount;
+    var notifCount = pendingApprovalsCount + pendingRRs.length + lowStock.length + pendingBillsCount + (canApprovePunches ? pendingOutsidePunches : attendanceIssuesCount);
     var notifBadge=document.getElementById('dash-notif-badge');
     if(notifBadge){
       if(notifCount>0){ notifBadge.textContent=notifCount>99?'99+':notifCount; notifBadge.style.display='flex'; }
@@ -3982,6 +3987,22 @@ window.addEventListener('resize', function(){
 // SALES_SUBTAB on the sales side). group=null signals a top-level
 // tab; innerSubTab is optional and only applies to tabs that have
 // their own further sub-navigation like these two.
+// Dashboard "Approve Outside Attendance" card: open Attendance on the
+// Pending Punches tab (punches made outside the site radius).
+function goToPendingPunches(){
+  showApp('attendance');
+  var tries=0;
+  (function open(){
+    var btn=document.getElementById('tab-btn-pending');
+    if(btn && typeof switchTab==='function'){
+      btn.style.display='';
+      switchTab('pending',btn);
+      // attendance init may still be settling; re-assert once
+      if(tries===0){ tries++; setTimeout(function(){ if(document.getElementById('tab-pending') && document.getElementById('tab-pending').style.display==='none') switchTab('pending',btn); },500); }
+    } else if(tries++<10){ setTimeout(open,100); }
+  })();
+}
+
 function goToProjectSubTab(projId, group, subTab, innerSubTab){
   // Dashboard "Pending PO" lands on the requisitions list already filtered
   // to Pending; any other way into that tab starts unfiltered.
@@ -29454,8 +29475,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261017c"></script>
-<script src="js/employee.js?v=20261017c"></script>
-<script src="js/projects.js?v=20261017c"></script>
-<script src="js/finance.js?v=20261017c"></script>
+<script src="js/registry.js?v=20261017d"></script>
+<script src="js/employee.js?v=20261017d"></script>
+<script src="js/projects.js?v=20261017d"></script>
+<script src="js/finance.js?v=20261017d"></script>
 </html>
