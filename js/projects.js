@@ -542,13 +542,11 @@ function pfRemoveCoord(i){PF_COORDS.splice(i,1);pfRenderCoords();}
 function pfRenderCoords(){
   var el=document.getElementById('pf-coord-list');if(!el)return;
   if(!PF_COORDS.length){el.innerHTML='<div style="font-size:10px;color:var(--text3);padding:4px 0;">No coordinates added yet</div>';return;}
-  el.innerHTML=PF_COORDS.map(function(c,i){
-    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px;font-size:10px;">'+
-      '<span style="font-size:16px;">&#128205;</span>'+
-      '<div style="flex:1;"><b>'+c.label+'</b><div style="color:var(--text3);">'+c.lat+', '+c.lng+'</div></div>'+
-      '<button onclick="pfRemoveCoord('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
-    '</div>';
-  }).join('');
+  el.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:5px;">'+PF_COORDS.map(function(c,i){
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 8px;background:var(--bg);border:1px solid var(--border,#ddd);border-radius:14px;font-size:10px;white-space:nowrap;">'+
+      '&#128205; <b>'+esc(c.label)+'</b>: '+c.lat+', '+c.lng+
+      '<button type="button" onclick="pfRemoveCoord('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;line-height:1;padding:0 3px;">&#215;</button></span>';
+  }).join('')+'</div>';
 }
 
 // ── Contract price auto-calc ─────────────────────────────────
