@@ -1041,14 +1041,17 @@ function boqRender(){
     (BOQ_ITEMS.length?'<button onclick="boqDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="boqDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>':'')+
     '</div>';
   if(!BOQ_ITEMS.length){el.innerHTML=actionBar+'<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128203;</div><div style="font-weight:700;margin-top:10px;">No BOQ items yet</div><div style="font-size:12px;margin-top:6px;">Tap + to add one, or Import Excel to bulk-load</div></div>';return;}
-  var total=BOQ_ITEMS.reduce(function(s,i){return s+Math.round((parseFloat(i.boq_qty)||0)*(parseFloat(i.rate)||0)*100)/100;},0);
+  var total=BOQ_ITEMS.reduce(function(s,i){return s+boqR10((parseFloat(i.boq_qty)||0)*(parseFloat(i.rate)||0));},0);
   el.innerHTML=actionBar+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR(total)+'</div></div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #4A148C;"><div style="font-size:10px;color:var(--text3);font-weight:700;">ITEMS</div><div style="font-size:20px;font-weight:900;color:#4A148C;">'+BOQ_ITEMS.length+'</div></div><div style="background:var(--card-bg);border-radius:12px;padding:12px;border-left:3px solid #2E7D32;"><div style="font-size:10px;color:var(--text3);font-weight:700;">TOTAL</div><div style="font-size:16px;font-weight:900;color:#2E7D32;">'+fmtINR2(total)+'</div></div></div>'+
     BOQ_ITEMS.map(function(item){var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0;var subs=BOQ_SUBITEMS.filter(function(s){return s.boq_item_id===item.id;});
-      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:var(--bg);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;color:var(--text);">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:var(--text2);">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR2(bq*rate)+'</div><div style="font-size:10px;color:var(--text2);">'+bq+' '+item.unit+' x \u20b9'+rate+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
+      return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;"><div style="padding:10px 14px;background:var(--bg);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div style="flex:1;"><span style="font-size:10px;font-family:monospace;background:#EDE7F6;color:#7B1FA2;padding:2px 7px;border-radius:6px;font-weight:700;">'+item.item_code+'</span><div style="font-size:13px;font-weight:800;margin-top:4px;color:var(--text);">'+(item.short_name||item.description)+'</div>'+(item.short_name?'<div style="font-size:10px;color:var(--text2);">'+item.description+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;"><div style="font-size:13px;font-weight:900;color:#4A148C;">'+fmtINR2(bq*rate)+'</div><div style="font-size:10px;color:var(--text2);">'+boqF2(bq)+' '+item.unit+' x \u20b9'+boqF2(rate)+'</div></div></div>'+(subs.length?'<div style="padding:8px 14px;font-size:11px;border-bottom:1px solid var(--border);">'+subs.map(function(s){return '<span style="background:#F3E5F5;color:#7B1FA2;border-radius:4px;padding:2px 7px;margin-right:4px;display:inline-block;margin-bottom:2px;">'+s.name+'</span>';}).join('')+'</div>':'')+'<div style="padding:8px 14px;display:flex;gap:8px;justify-content:flex-end;"><button onclick="boqEditItem(\''+item.id+'\')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#9998; Edit</button><button onclick="boqDeleteItem(\''+item.id+'\')" style="background:none;border:1px solid #FFCDD2;border-radius:8px;color:#C62828;font-size:11px;font-weight:800;cursor:pointer;padding:4px 12px;">&#128465;</button></div></div>';
     }).join('');
 }
 function boqProjName(){var projId=(document.getElementById('boq-proj-sel')||{}).value||PROJ_MOD_SEL_ID||'';var p=(PROJ_DATA||[]).find(function(x){return x.id===projId;});return p?p.name:'';}
+// BOQ precision: qty/rate/amount are kept to 10 decimals, shown to 2.
+function boqR10(n){ n=parseFloat(n); return isFinite(n)?parseFloat(n.toFixed(10)):0; }
+function boqF2(n){ return Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 async function boqDownloadExcel(){
   if(!BOQ_ITEMS.length){toast('No BOQ items to export','warning');return;}
   if((!COMPANY_DATA||!COMPANY_DATA.name) && typeof preloadCompanyData==='function'){ try{await preloadCompanyData();}catch(e){} }
@@ -1058,11 +1061,11 @@ async function boqDownloadExcel(){
   var lines=[[compName],['Bill of Quantities - '+projName],[''],header];
   var total=0;
   BOQ_ITEMS.forEach(function(item){
-    var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0,amt=Math.round(bq*rate*100)/100;
+    var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0,amt=boqR10(bq*rate);
     total+=amt;
-    lines.push([item.item_code,item.description,item.short_name||'',item.unit,bq,rate,amt.toFixed(2),item.remarks||'']);
+    lines.push([item.item_code,item.description,item.short_name||'',item.unit,bq.toFixed(2),rate.toFixed(2),amt.toFixed(2),item.remarks||'']);
   });
-  lines.push(['','','','','','GRAND TOTAL',Math.round(total),'']);
+  lines.push(['','','','','','GRAND TOTAL',total.toFixed(2),'']);
   var csv=lines.map(function(row){
     return row.map(function(cell){
       var s=String(cell==null?'':cell);
@@ -1099,7 +1102,7 @@ async function boqDownloadPDF(){
   '</tr>';
   var tbody='';
   BOQ_ITEMS.forEach(function(item,i){
-    var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0,amt=Math.round(bq*rate*100)/100;
+    var bq=parseFloat(item.boq_qty)||0,rate=parseFloat(item.rate)||0,amt=boqR10(bq*rate);
     total+=amt;
     var bg=i%2===0?'var(--card-bg)':'var(--bg)';
     tbody+='<tr style="border-bottom:1px solid #F0F0F0;background:'+bg+'">'+
@@ -1107,7 +1110,7 @@ async function boqDownloadPDF(){
       '<td style="padding:5px 8px;font-size:9px;">'+item.description+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;">'+(item.short_name||'')+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;text-align:center;">'+item.unit+'</td>'+
-      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+bq+'</td>'+
+      '<td style="padding:5px 8px;font-size:9px;text-align:right;">'+boqF2(bq)+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;text-align:right;">\u20b9'+rate.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;text-align:right;font-weight:700;color:#2E7D32;">\u20b9'+amt.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td>'+
       '<td style="padding:5px 8px;font-size:9px;">'+(item.remarks||'')+'</td>'+
@@ -1115,7 +1118,7 @@ async function boqDownloadPDF(){
   });
   tbody+='<tr style="background:#4A148C;color:white;">'+
     '<td colspan="6" style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">GRAND TOTAL</td>'+
-    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+Math.round(total).toLocaleString('en-IN')+'</td>'+
+    '<td style="padding:7px 8px;font-size:10px;font-weight:900;text-align:right;">\u20b9'+boqF2(total)+'</td>'+
     '<td></td>'+
   '</tr>';
 
@@ -1219,14 +1222,14 @@ function boqParseImportRows(rows){
   rows.forEach(function(r){
     var code=colCode?String(r[colCode]||'').trim():'';
     var desc=colDesc?String(r[colDesc]||'').trim():'';
-    var qty=colQty?parseFloat(r[colQty]):NaN;
+    var qty=colQty?boqR10(r[colQty]):NaN;
     if(!code||!desc||!qty){invalid++;return;}
     valid.push({
       item_code:code, description:desc,
       short_name:colShort?(String(r[colShort]||'').trim()||null):null,
       unit:colUnit?(String(r[colUnit]||'').trim()||'Nos'):'Nos',
       boq_qty:qty,
-      rate:colRate?(parseFloat(r[colRate])||0):0,
+      rate:colRate?boqR10(r[colRate]):0,
       remarks:colRemarks?(String(r[colRemarks]||'').trim()||null):null
     });
   });
@@ -1238,7 +1241,7 @@ function boqParseImportRows(rows){
   }
 
   var rowsHtml=valid.slice(0,8).map(function(v){
-    return '<tr><td style="padding:5px 8px;font-size:11px;">'+v.item_code+'</td><td style="padding:5px 8px;font-size:11px;">'+v.description+'</td><td style="padding:5px 8px;font-size:11px;text-align:right;">'+v.boq_qty+' '+v.unit+'</td><td style="padding:5px 8px;font-size:11px;text-align:right;">\u20b9'+v.rate+'</td></tr>';
+    return '<tr><td style="padding:5px 8px;font-size:11px;">'+v.item_code+'</td><td style="padding:5px 8px;font-size:11px;">'+v.description+'</td><td style="padding:5px 8px;font-size:11px;text-align:right;">'+boqF2(v.boq_qty)+' '+v.unit+'</td><td style="padding:5px 8px;font-size:11px;text-align:right;">\u20b9'+boqF2(v.rate)+'</td></tr>';
   }).join('');
   preview.innerHTML=
     '<div style="padding:10px 12px;background:'+(invalid?'#FFF3E0':'#E8F5E9')+';border-radius:8px;margin-bottom:10px;font-size:12px;color:'+(invalid?'#8A5A00':'#1B5E20')+';">'+
@@ -1292,16 +1295,16 @@ async function boqOpenAddItem(editItem){
   uomOpts+='<option disabled>\u2014\u2014\u2014\u2014\u2014\u2014</option>'+
            '<option value="__cat_edit__">\u270e Add / Edit units\u2026</option>';
   document.getElementById('boq-sheet-title').textContent=editItem?'Edit BOQ Item':'New BOQ Item';
-  document.getElementById('boq-sheet-body').innerHTML='<label class="flbl">Item Code *</label><input id="bi-code" class="finp" value="'+(v.item_code||'')+'"><label class="flbl">Description *</label><input id="bi-desc" class="finp" value="'+(v.description||'')+'"><label class="flbl">Short Name</label><input id="bi-short" class="finp" value="'+(v.short_name||'')+'"><div class="g2"><div><label class="flbl">Unit</label><select id="bi-unit" class="fsel" onchange="if(!catSelectChanged(this,\'uom\'))catRememberValue(this);">'+uomOpts+'</select></div><div><label class="flbl">BOQ Qty *</label><input id="bi-qty" class="finp" type="number" step="0.001" value="'+(v.boq_qty||'')+'"></div></div><label class="flbl">Rate (\u20b9)</label><input id="bi-rate" class="finp" type="number" step="0.01" value="'+(v.rate||'')+'"><label class="flbl">Remarks</label><textarea id="bi-remarks" class="ftxt">'+(v.remarks||'')+'</textarea>';
+  document.getElementById('boq-sheet-body').innerHTML='<label class="flbl">Item Code *</label><input id="bi-code" class="finp" value="'+(v.item_code||'')+'"><label class="flbl">Description *</label><input id="bi-desc" class="finp" value="'+(v.description||'')+'"><label class="flbl">Short Name</label><input id="bi-short" class="finp" value="'+(v.short_name||'')+'"><div class="g2"><div><label class="flbl">Unit</label><select id="bi-unit" class="fsel" onchange="if(!catSelectChanged(this,\'uom\'))catRememberValue(this);">'+uomOpts+'</select></div><div><label class="flbl">BOQ Qty *</label><input id="bi-qty" class="finp" type="number" step="any" value="'+(v.boq_qty||'')+'"></div></div><label class="flbl">Rate (\u20b9)</label><input id="bi-rate" class="finp" type="number" step="any" value="'+(v.rate||'')+'"><label class="flbl">Remarks</label><textarea id="bi-remarks" class="ftxt">'+(v.remarks||'')+'</textarea>';
   document.getElementById('boq-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeBOQSheet()">Cancel</button><button class="btn" style="background:#7B1FA2;color:white;" onclick="boqSaveItem(\''+(editItem?editItem.id:'')+'\')">&#10003; '+(editItem?'Save':'Add')+'</button>';
   openBOQSheet();
 }
 function boqEditItem(id){var item=BOQ_ITEMS.find(function(i){return i.id===id;});if(!item)return;closeBOQSheet();setTimeout(function(){boqOpenAddItem(item);},320);}
 async function boqSaveItem(editId){
-  var code=gv('bi-code'),desc=gv('bi-desc'),qty=parseFloat(gv('bi-qty'))||0;
+  var code=gv('bi-code'),desc=gv('bi-desc'),qty=boqR10(gv('bi-qty'));
   if(!code||!desc||!qty){toast('Code, description and qty required','warning');return;}
   var projId=(document.getElementById('boq-proj-sel')||{}).value||'';
-  var data={project_id:projId,item_code:code,description:desc,short_name:gv('bi-short')||null,unit:(document.getElementById('bi-unit')||{value:'Nos'}).value,boq_qty:qty,rate:parseFloat(gv('bi-rate'))||0,remarks:gv('bi-remarks')||null};
+  var data={project_id:projId,item_code:code,description:desc,short_name:gv('bi-short')||null,unit:(document.getElementById('bi-unit')||{value:'Nos'}).value,boq_qty:qty,rate:boqR10(gv('bi-rate')),remarks:gv('bi-remarks')||null};
   try{toast('Saving...','info');
     if(editId){await sbUpdate('boq_items',editId,data);var idx=BOQ_ITEMS.findIndex(function(i){return i.id===editId;});if(idx>-1)BOQ_ITEMS[idx]=Object.assign(BOQ_ITEMS[idx],data);toast('Updated!','success');}
     else{var res=await sbInsert('boq_items',data);if(res&&res[0])BOQ_ITEMS.push(res[0]);toast('Added!','success');}
