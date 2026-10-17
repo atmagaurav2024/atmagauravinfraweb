@@ -478,6 +478,66 @@ function pfAddCoord(){
   document.getElementById('pf-new-lbl').value='';
   pfRenderCoords();
 }
+
+// ── Map picker (Leaflet + OpenStreetMap) ─────────────────────
+var PF_MAP=null, PF_MAP_PTS=[];
+function pfLoadLeaflet(cb){
+  if(window.L){cb();return;}
+  var css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css);
+  var sc=document.createElement('script');sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+  sc.onload=cb;sc.onerror=function(){toast('Could not load map. Check internet.','error');};
+  document.head.appendChild(sc);
+}
+function pfOpenMap(){
+  PF_MAP_PTS=[];
+  var ov=document.getElementById('pf-map-ov');if(ov)ov.remove();
+  ov=document.createElement('div');ov.id='pf-map-ov';
+  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:#fff;display:flex;flex-direction:column;';
+  ov.innerHTML='<div style="padding:8px 10px;background:#1565C0;color:#fff;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
+    '<b style="font-size:13px;flex:1;">Tap on map to drop points</b>'+
+    '<button type="button" onclick="pfMapLocate()" style="padding:6px 10px;border:none;border-radius:6px;font-weight:700;">&#128205; My location</button>'+
+    '<button type="button" onclick="pfMapUndo()" style="padding:6px 10px;border:none;border-radius:6px;font-weight:700;">Undo</button></div>'+
+    '<div style="padding:6px 10px;display:flex;gap:6px;"><input id="pf-map-q" class="finp" placeholder="Search place / address" style="margin:0;flex:1;" onkeydown="if(event.key===\'Enter\')pfMapSearch()"><button type="button" onclick="pfMapSearch()" style="padding:6px 12px;border:none;border-radius:6px;background:#455A64;color:#fff;font-weight:700;">Search</button></div>'+
+    '<div id="pf-map" style="flex:1;min-height:200px;"></div>'+
+    '<div style="padding:8px 10px;display:flex;gap:8px;align-items:center;border-top:1px solid #ddd;">'+
+    '<span id="pf-map-cnt" style="flex:1;font-size:12px;">0 points</span>'+
+    '<button type="button" onclick="pfMapClose()" style="padding:8px 14px;border:1px solid #999;background:#fff;border-radius:6px;font-weight:700;">Cancel</button>'+
+    '<button type="button" onclick="pfMapDone()" style="padding:8px 14px;border:none;background:#2E7D32;color:#fff;border-radius:6px;font-weight:800;">Use points</button></div>';
+  document.body.appendChild(ov);
+  pfLoadLeaflet(function(){
+    var start=[22.5726,88.3639],z=5;
+    if(PF_COORDS.length){start=[parseFloat(PF_COORDS[0].lat),parseFloat(PF_COORDS[0].lng)];z=15;}
+    PF_MAP=L.map('pf-map').setView(start,z);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(PF_MAP);
+    PF_COORDS.forEach(function(c){L.circleMarker([c.lat,c.lng],{radius:7,color:'#888'}).addTo(PF_MAP).bindTooltip(c.label);});
+    PF_MAP.on('click',function(e){
+      var m=L.marker(e.latlng,{draggable:true}).addTo(PF_MAP);
+      var pt={lat:e.latlng.lat,lng:e.latlng.lng,m:m};
+      m.on('dragend',function(){var ll=m.getLatLng();pt.lat=ll.lat;pt.lng=ll.lng;});
+      PF_MAP_PTS.push(pt);pfMapCnt();
+    });
+    if(!PF_COORDS.length) pfMapLocate(true);
+  });
+}
+function pfMapCnt(){var e=document.getElementById('pf-map-cnt');if(e)e.textContent=PF_MAP_PTS.length+' new point(s) — drag a marker to adjust';}
+function pfMapUndo(){var p=PF_MAP_PTS.pop();if(p)PF_MAP.removeLayer(p.m);pfMapCnt();}
+function pfMapLocate(quiet){
+  if(!navigator.geolocation){if(!quiet)toast('Location not supported','warning');return;}
+  navigator.geolocation.getCurrentPosition(function(pos){PF_MAP.setView([pos.coords.latitude,pos.coords.longitude],16);},function(){if(!quiet)toast('Could not get location','warning');},{enableHighAccuracy:true,timeout:10000});
+}
+function pfMapSearch(){
+  var q=(document.getElementById('pf-map-q')||{}).value;if(!q)return;
+  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(d){
+    if(!d.length){toast('Place not found','warning');return;}
+    PF_MAP.setView([parseFloat(d[0].lat),parseFloat(d[0].lon)],16);
+  }).catch(function(){toast('Search failed','error');});
+}
+function pfMapClose(){var ov=document.getElementById('pf-map-ov');if(ov)ov.remove();if(PF_MAP){PF_MAP.remove();PF_MAP=null;}PF_MAP_PTS=[];}
+function pfMapDone(){
+  PF_MAP_PTS.forEach(function(p){PF_COORDS.push({lat:p.lat.toFixed(6),lng:p.lng.toFixed(6),label:'Point '+(PF_COORDS.length+1)});});
+  var n=PF_MAP_PTS.length;pfMapClose();pfRenderCoords();
+  if(n)toast(n+' coordinate(s) added','success');
+}
 function pfRemoveCoord(i){PF_COORDS.splice(i,1);pfRenderCoords();}
 function pfRenderCoords(){
   var el=document.getElementById('pf-coord-list');if(!el)return;
@@ -603,6 +663,7 @@ async function openProjForm(id){
         '<input id="pf-new-lbl" class="finp" placeholder="Label (e.g. Km 120)" style="margin:0;">'+
         '<button onclick="pfAddCoord()" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Add</button>'+
       '</div>'+
+      '<button type="button" onclick="pfOpenMap()" style="margin-top:6px;background:#2E7D32;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128506; Pick points on Map</button>'+
     '</div>'+
     // ── Cost section ──
     '<div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:10px;">'+
