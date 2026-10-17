@@ -2631,6 +2631,14 @@ async function rrLoadItems(){
   rrRender();
 }
 
+// Status filter for the Requisitions list ('all' or pending/approved/...).
+// The dashboard's Pending PO card sets it to 'pending' before landing here.
+var RR_STATUS_FILTER='all';
+function rrSetStatusFilter(st){
+  RR_STATUS_FILTER = (RR_STATUS_FILTER===st) ? 'all' : st;
+  rrRender();
+}
+
 function rrRender(){
   var el=document.getElementById('rr-content'); if(!el)return;
   var projId=PROJ_MOD_SEL_ID||'';
@@ -2647,7 +2655,8 @@ function rrRender(){
   var summaryBar=
     '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">'+
       Object.keys(counts).filter(function(k){return counts[k]>0;}).map(function(k){
-        return '<div style="background:var(--card-bg);border-radius:10px;padding:8px 14px;border-left:4px solid '+statusColors[k]+';flex:1;min-width:80px;">'+
+        var on=RR_STATUS_FILTER===k;
+        return '<div onclick="rrSetStatusFilter(\''+k+'\')" title="Tap to filter, tap again to show all" style="cursor:pointer;background:var(--card-bg);border-radius:10px;padding:8px 14px;border-left:4px solid '+statusColors[k]+';flex:1;min-width:80px;'+(on?'box-shadow:0 0 0 2px '+statusColors[k]+';':(RR_STATUS_FILTER!=='all'?'opacity:.55;':''))+'">'+
           '<div style="font-size:18px;font-weight:900;color:'+statusColors[k]+';">'+counts[k]+'</div>'+
           '<div style="font-size:10px;color:var(--text3);font-weight:700;">'+statusLabels[k]+'</div>'+
         '</div>';
@@ -2723,6 +2732,11 @@ function rrRender(){
     var iSubs=RR_PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
     var iRes=RR_PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
     var itemRRs=rrByItem[item.id]||[];
+    var rrFiltered=RR_STATUS_FILTER!=='all';
+    if(rrFiltered){
+      itemRRs=itemRRs.filter(function(r){return r.status===RR_STATUS_FILTER;});
+      if(!itemRRs.length) return ''; // filtering by status: only items that have such requisitions
+    }
 
     if(!iRes.length) return ''; // skip items with no planned resources
 
@@ -2779,10 +2793,10 @@ function rrRender(){
         '<span style="font-size:10px;font-family:monospace;background:#B2EBF2;color:#00838F;padding:2px 7px;border-radius:4px;">'+item.item_code+'</span>'+
         '<span style="font-size:13px;font-weight:800;margin-left:8px;color:var(--text);">'+(item.short_name||item.description)+'</span>'+
       '</div>'+
-      '<div style="padding:4px 0;border-bottom:1px solid var(--border);">'+
+      (rrFiltered?'':'<div style="padding:4px 0;border-bottom:1px solid var(--border);">'+
         '<div style="padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">PLANNED RESOURCES</div>'+
         resRows+
-      '</div>'+
+      '</div>')+
       (rrList?
         '<div>'+
           '<div style="padding:4px 12px;font-size:9px;font-weight:800;color:var(--text3);">REQUISITIONS</div>'+
@@ -2802,8 +2816,9 @@ function rrRender(){
       '</div>'+
     '</div>'+
     (Object.values(counts).some(function(v){return v>0;})?summaryBar:'')+
-    combinedSectionHtml+
-    (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">No planned resources found. Add resources in Planning tab first.</div>');
+    (RR_STATUS_FILTER==='all'?combinedSectionHtml:'')+
+    (RR_STATUS_FILTER!=='all'?'<div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:8px;">Showing '+statusLabels[RR_STATUS_FILTER]+' only &mdash; <span onclick="rrSetStatusFilter(\''+RR_STATUS_FILTER+'\')" style="color:#1565C0;cursor:pointer;text-decoration:underline;">show all</span></div>':'')+
+    (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">'+(RR_STATUS_FILTER!=='all'?'No '+statusLabels[RR_STATUS_FILTER].toLowerCase()+' requisitions.':'No planned resources found. Add resources in Planning tab first.')+'</div>');
 }
 
 function rrProjName(){var projSel=document.getElementById('proj-mod-sel');return (projSel&&projSel.options&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'');}

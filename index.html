@@ -3514,8 +3514,8 @@ async function loadDashboardInsights(filterProjId){
       return { id: pid, name: proj?(proj.short_name||proj.name):'Unknown project', count: pendingRRCountByProj[pid] };
     }).sort(function(a,b){return b.count-a.count;});
     var pendingPOOnclick = pendingRRProjIds.length===1
-      ? 'goToProjectSubTab(\''+pendingRRProjIds[0]+'\',\'construction\',\'rr\',\'\')'
-      : (pendingRRProjIds.length>1 ? 'showProjectPicker(\'Pending Purchase Orders\',DASH_PENDING_PO_PROJECTS,\'construction\',\'rr\',\'\')' : 'showApp(\'projects\')');
+      ? 'goToProjectSubTab(\''+pendingRRProjIds[0]+'\',\'construction\',\'rr\',\'pending\')'
+      : (pendingRRProjIds.length>1 ? 'showProjectPicker(\'Pending Purchase Orders\',DASH_PENDING_PO_PROJECTS,\'construction\',\'rr\',\'pending\')' : 'showApp(\'projects\')');
 
     // Pending Bills — purchase bills only (work_bills), generated but
     // not yet fully paid. Lands on the Bills & Payments tab's "View
@@ -3983,6 +3983,11 @@ window.addEventListener('resize', function(){
 // tab; innerSubTab is optional and only applies to tabs that have
 // their own further sub-navigation like these two.
 function goToProjectSubTab(projId, group, subTab, innerSubTab){
+  // Dashboard "Pending PO" lands on the requisitions list already filtered
+  // to Pending; any other way into that tab starts unfiltered.
+  if(subTab==='rr' && typeof window.RR_STATUS_FILTER!=='undefined'){
+    try{ RR_STATUS_FILTER = (innerSubTab==='pending') ? 'pending' : 'all'; }catch(e){}
+  }
   showApp('projects');
   setTimeout(function(){
     if(typeof projSelectAndGo==='function') projSelectAndGo(projId);
@@ -29449,8 +29454,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261013d"></script>
-<script src="js/employee.js?v=20261013d"></script>
-<script src="js/projects.js?v=20261013d"></script>
-<script src="js/finance.js?v=20261013d"></script>
+<script src="js/registry.js?v=20261017a"></script>
+<script src="js/employee.js?v=20261017a"></script>
+<script src="js/projects.js?v=20261017a"></script>
+<script src="js/finance.js?v=20261017a"></script>
 </html>
