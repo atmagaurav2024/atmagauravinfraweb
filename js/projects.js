@@ -2667,7 +2667,7 @@ function rrRender(){
 
   var itemById={}; RR_PLAN_ITEMS.forEach(function(it){ itemById[it.id]=it; });
   var combinedSectionHtml='';
-  if(RR_COMBINED_PLAN_GROUPS.length){
+  if(RR_COMBINED_PLAN_GROUPS.length || RR_COMBINED_RR_GROUPS.length){
     var groupCards=RR_COMBINED_PLAN_GROUPS.map(function(g){
       var gItems=RR_COMBINED_PLAN_ITEMS.filter(function(it){return it.group_id===g.id;});
       var lineRows=gItems.map(function(it){
@@ -2729,6 +2729,27 @@ function rrRender(){
   });
 
   // BOQ item cards with their planned resources and RRs
+  var rrRowHtml=function(r){
+          var sc=statusColors[r.status]||'#555';
+          var sl=statusLabels[r.status]||r.status;
+          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg);">'+
+            '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+sc+'20;color:'+sc+';">'+sl+'</span>'+
+            '<div style="flex:1;font-size:11px;">'+
+              '<b>'+r.party_name+'</b> — '+r.qty+' '+(r.unit||'')+
+              '<div style="font-size:9px;color:var(--text3);">'+r.rr_number+' | '+( r.remarks||'')+'</div>'+
+            '</div>'+
+            '<div style="display:flex;gap:4px;flex-shrink:0;">'+
+              '<button onclick="rrDownloadPDF(\''+r.id+'\',\''+projName+'\')" title="Download PDF" style="background:#00838F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;">&#11015; PDF</button>'+
+              (r.status==='pending'
+                ? '<button onclick="rrApprove(\''+r.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#10003; Approve</button>'+
+                  '<button onclick="rrReject(\''+r.id+'\')" style="background:#C62828;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#10005; Reject</button>'
+                : r.status==='approved'
+                  ? '<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:3px 8px;border-radius:4px;font-weight:700;">&#128203; Go to Work Allotment tab to allot</span>'
+                  : '')+
+              '<button onclick="rrDelete(\''+r.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
+            '</div>'+
+          '</div>';
+        };
   var itemCards=RR_PLAN_ITEMS.map(function(item){
     var iSubs=RR_PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
     var iRes=RR_PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
@@ -2766,27 +2787,7 @@ function rrRender(){
 
     // RR list for this item
     var rrList=itemRRs.length
-      ? itemRRs.map(function(r){
-          var sc=statusColors[r.status]||'#555';
-          var sl=statusLabels[r.status]||r.status;
-          return '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg);">'+
-            '<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:'+sc+'20;color:'+sc+';">'+sl+'</span>'+
-            '<div style="flex:1;font-size:11px;">'+
-              '<b>'+r.party_name+'</b> — '+r.qty+' '+(r.unit||'')+
-              '<div style="font-size:9px;color:var(--text3);">'+r.rr_number+' | '+( r.remarks||'')+'</div>'+
-            '</div>'+
-            '<div style="display:flex;gap:4px;flex-shrink:0;">'+
-              '<button onclick="rrDownloadPDF(\''+r.id+'\',\''+projName+'\')" title="Download PDF" style="background:#00838F;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;">&#11015; PDF</button>'+
-              (r.status==='pending'
-                ? '<button onclick="rrApprove(\''+r.id+'\')" style="background:#2E7D32;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#10003; Approve</button>'+
-                  '<button onclick="rrReject(\''+r.id+'\')" style="background:#C62828;color:white;border:none;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">&#10005; Reject</button>'
-                : r.status==='approved'
-                  ? '<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:3px 8px;border-radius:4px;font-weight:700;">&#128203; Go to Work Allotment tab to allot</span>'
-                  : '')+
-              '<button onclick="rrDelete(\''+r.id+'\')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;">&#215;</button>'+
-            '</div>'+
-          '</div>';
-        }).join('')
+      ? itemRRs.map(rrRowHtml).join('')
       : '';
 
     return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
@@ -2806,6 +2807,21 @@ function rrRender(){
     +'</div>';
   }).filter(Boolean).join('');
 
+  // Requisitions the per-item cards above can't show (no BOQ item link, or
+  // the BOQ item has no planned resources) — counted in the status boxes, so
+  // they must be listed somewhere or the numbers don't match the records.
+  var shownItemIds={};
+  RR_PLAN_ITEMS.forEach(function(it){ if(RR_PLAN_RES.some(function(r){return r.boq_item_id===it.id;})) shownItemIds[it.id]=true; });
+  var orphanRRs=RR_ITEMS.filter(function(r){
+    return !(r.boq_item_id && shownItemIds[r.boq_item_id]) && (RR_STATUS_FILTER==='all'||r.status===RR_STATUS_FILTER);
+  });
+  var orphanHtml=orphanRRs.length
+    ? '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
+        '<div style="padding:9px 14px;background:var(--bg);border-bottom:1px solid var(--border);font-size:12px;font-weight:800;color:var(--text);">Other Requisitions</div>'+
+        orphanRRs.map(rrRowHtml).join('')+
+      '</div>'
+    : '';
+
   el.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'+
       '<div style="font-size:13px;font-weight:800;color:#00838F;">&#128203; Resource Requisitions</div>'+
@@ -2820,7 +2836,8 @@ function rrRender(){
     (pendingTotal>0?'<div style="margin-bottom:12px;"><button onclick="rrApproveAllPending()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Approve All Pending ('+pendingTotal+')</button></div>':'')+
     combinedSectionHtml+
     (RR_STATUS_FILTER!=='all'?'<div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:8px;">Showing '+statusLabels[RR_STATUS_FILTER]+' only &mdash; <span onclick="rrSetStatusFilter(\''+RR_STATUS_FILTER+'\')" style="color:#1565C0;cursor:pointer;text-decoration:underline;">show all</span></div>':'')+
-    (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">'+(RR_STATUS_FILTER!=='all'?'No '+statusLabels[RR_STATUS_FILTER].toLowerCase()+' requisitions.':'No planned resources found. Add resources in Planning tab first.')+'</div>');
+    orphanHtml+
+    ((itemCards||orphanHtml)?itemCards:'<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">'+(RR_STATUS_FILTER!=='all'?'No '+statusLabels[RR_STATUS_FILTER].toLowerCase()+' requisitions.':'No planned resources found. Add resources in Planning tab first.')+'</div>');
 }
 
 function rrProjName(){var projSel=document.getElementById('proj-mod-sel');return (projSel&&projSel.options&&projSel.selectedIndex>=0?projSel.options[projSel.selectedIndex].text:'');}
