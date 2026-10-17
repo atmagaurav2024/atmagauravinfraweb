@@ -6997,6 +6997,11 @@ function logAudit(action, table, recordId, changes){
 }
 
 async function sbInsert(table, data){
+  // Tables with NO server-side company_id default must always be sent one.
+  if(table==='employees' && typeof currentUser!=='undefined' && currentUser && currentUser.companyId){
+    if(Array.isArray(data)) data.forEach(function(r){ if(r && r.company_id==null) r.company_id=currentUser.companyId; });
+    else if(data && data.company_id==null) data.company_id=currentUser.companyId;
+  }
   var res = await fetch(SUPABASE_URL+'/rest/v1/'+table,{
     method:'POST',
     headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+(typeof currentUser!=='undefined'&&currentUser&&currentUser.accessToken?currentUser.accessToken:SUPABASE_ANON_KEY),'Content-Type':'application/json','Prefer':'return=representation'},
@@ -29509,8 +29514,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261017t"></script>
-<script src="js/employee.js?v=20261017t"></script>
-<script src="js/projects.js?v=20261017t"></script>
-<script src="js/finance.js?v=20261017t"></script>
+<script src="js/registry.js?v=20261017u"></script>
+<script src="js/employee.js?v=20261017u"></script>
+<script src="js/projects.js?v=20261017u"></script>
+<script src="js/finance.js?v=20261017u"></script>
 </html>

@@ -3508,6 +3508,9 @@ async function empFormSave(){
       // New — get next ID
       var newEmpId=await getNextRYDAXId();
       data.emp_id=newEmpId; data.badge_no=newEmpId; data.status='pending';
+      // employees.company_id has NO database default (by design — the default
+      // would be circular), so every insert must carry the company explicitly.
+      data.company_id=currentUser.companyId;
 
       // Create Supabase Auth account with entered password
       var pw = (document.getElementById('f-upassword')||{}).value||'';
