@@ -539,10 +539,14 @@ function pfMapDone(){
   if(n)toast(n+' coordinate(s) added','success');
 }
 function pfRemoveCoord(i){PF_COORDS.splice(i,1);pfRenderCoords();}
+var PF_COORDS_SHOW=false;
+function pfToggleCoords(){PF_COORDS_SHOW=!PF_COORDS_SHOW;pfRenderCoords();}
 function pfRenderCoords(){
   var el=document.getElementById('pf-coord-list');if(!el)return;
   if(!PF_COORDS.length){el.innerHTML='<div style="font-size:10px;color:var(--text3);padding:4px 0;">No coordinates added yet</div>';return;}
-  el.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:5px;">'+PF_COORDS.map(function(c,i){
+  var btn='<button type="button" onclick="pfToggleCoords()" style="background:none;border:none;color:#1565C0;font-size:11px;font-weight:800;cursor:pointer;padding:2px 0;">'+(PF_COORDS_SHOW?'\u25B2 Hide coordinates':'\u25BC Show all coordinates ('+PF_COORDS.length+')')+'</button>';
+  if(!PF_COORDS_SHOW){el.innerHTML=btn;return;}
+  el.innerHTML=btn+'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;">'+PF_COORDS.map(function(c,i){
     return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 8px;background:var(--bg);border:1px solid var(--border,#ddd);border-radius:14px;font-size:10px;white-space:nowrap;">'+
       '&#128205; <b>'+esc(c.label)+'</b>: '+c.lat+', '+c.lng+
       '<button type="button" onclick="pfRemoveCoord('+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:14px;line-height:1;padding:0 3px;">&#215;</button></span>';
@@ -596,7 +600,7 @@ async function openProjForm(id){
   PF_FILES  = [];
   PF_EOT    = [];
   PF_PROVISIONS = [];
-
+  PF_COORDS_SHOW=false; // Load existing coordinates
   // Load existing coordinates
   if(p.coordinates){
     try{PF_COORDS=JSON.parse(p.coordinates);}catch(e){}
