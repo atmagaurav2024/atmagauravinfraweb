@@ -3398,6 +3398,13 @@ async function empFormSave(){
   var roleRaw=gv('f-urole');
   var roleMap={'Admin':'admin','Project Manager':'pm','Site Engineer':'engineer','Junior Engineer':'engineer','QC Engineer':'qhse','Safety Officer':'qhse','Finance / Accounts':'finance','HR / Admin':'admin','Viewer (Read Only)':'viewer','Client Viewer':'viewer'};
   var role=roleMap[roleRaw]||'viewer';
+  // Editing an existing employee with an empty/unrecognised role dropdown
+  // (e.g. role list not loaded) must NOT silently demote them to 'viewer':
+  // keep the role + designation they already have.
+  if(editId && !roleMap[roleRaw]){
+    var exU=(typeof USERS!=='undefined'&&USERS?USERS:[]).find(function(u){return String(u.id)===String(editId);});
+    if(exU && exU.role){ role=exU.role; roleRaw=exU.access||roleRaw; }
+  }
 
   var data={
     first_name:fname, middle_name:mname||null, last_name:lname||null,
