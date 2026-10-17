@@ -823,25 +823,29 @@ async function saveProjForm(editId){
   if(saveBtn){ saveBtn.disabled=true; saveBtn.style.opacity='0.6'; saveBtn.style.cursor='not-allowed'; saveBtn.innerHTML='\u23f3 Saving\u2026'; }
   if(delBtn){ delBtn.disabled=true; delBtn.style.opacity='0.6'; delBtn.style.cursor='not-allowed'; }
 
-  // File upload (base64 encode for storage — small files only)
+  // File upload (Cloudinary link stored in attachments)
   var attachments=[];
   PF_FILES.forEach(function(f){
     if(f.url) attachments.push({name:f.name,url:f.url});
   });
   var newFiles=PF_FILES.filter(function(f){return f.file;});
   if(newFiles.length){
-    try{
-      await Promise.all(newFiles.map(function(f){
-        return new Promise(function(resolve){
-          var reader=new FileReader();
-          reader.onload=function(e){
-            attachments.push({name:f.name,url:e.target.result,fileName:f.file.name,type:f.type});
-            resolve();
-          };
-          reader.readAsDataURL(f.file);
-        });
-      }));
-    }catch(e){console.warn('File encode:',e);}
+    // Upload to Cloudinary and store only the link — never embed the file
+    // (base64) in the projects row, which made multi-PDF saves time out.
+    toast('Uploading '+newFiles.length+' file(s)...','info');
+    var upFailed=false;
+    for(var fi=0;fi<newFiles.length;fi++){
+      var nf=newFiles[fi], upUrl=null;
+      try{ upUrl=await uploadToCloudinary(nf.file,'projects',null); }catch(e){ console.warn('Project file upload:',e); }
+      if(!upUrl){ upFailed=true; break; }
+      attachments.push({name:nf.name,url:upUrl,fileName:nf.file.name,type:nf.type});
+    }
+    if(upFailed){
+      toast('File upload failed. Please try again.','error');
+      if(saveBtn){ saveBtn.disabled=false; saveBtn.style.opacity=''; saveBtn.style.cursor=''; saveBtn.innerHTML=saveBtnOrigHTML; }
+      if(delBtn){ delBtn.disabled=false; delBtn.style.opacity=''; delBtn.style.cursor=''; }
+      return;
+    }
   }
 
   // Only send columns that exist in the projects table
