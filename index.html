@@ -3492,6 +3492,7 @@ async function loadDashboardInsights(filterProjId){
     }
     function actionCard(icon,iconBg,value,label,anchor,customOnclick){
       var onclickExpr = customOnclick || (anchor?'showApp(\''+anchor+'\')':'');
+      if(onclickExpr) onclickExpr = 'dashBusyStart();'+onclickExpr;
       return '<div onclick="'+onclickExpr+'" style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:11px 12px;'+(onclickExpr?'cursor:pointer;':'')+'">'+
         '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px;">'+
           '<div style="width:30px;height:30px;border-radius:9px;background:'+iconBg+';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">'+icon+'</div>'+
@@ -3586,7 +3587,7 @@ async function loadDashboardInsights(filterProjId){
           '<tbody>'+projectHealthRowsHtml+'</tbody>'+
         '</table>'+
         '<div class="dash-swipe-hint" style="text-align:center;font-size:10px;color:var(--text3);padding-top:4px;display:none;">&#8592; swipe to see more &#8594;</div>'+
-        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:auto;padding-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all projects &#8594;</div>'+
+        '<div onclick="dashBusyStart();showApp(\'projects\')" style="text-align:right;margin-top:auto;padding-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all projects &#8594;</div>'+
       '</div></div>';
 
     var totalContractValue = plannedRevenueContract, totalBilled = revenueBilled, outstanding = revenueUnbilled;
@@ -3615,7 +3616,7 @@ async function loadDashboardInsights(filterProjId){
         procRow('Pending Purchase Orders', pendingRRs.length, '#FEF3C7', '#B45309')+
         procRow('Pending GRN / MR', lowStock.length?Math.max(0,Math.round(lowStock.length/2)):0, '#DBEAFE', '#2563EB')+
         procRow('Pending Vendor Bills', pendingBillsCount, '#F3E8FF', '#9333EA')+
-        '<div onclick="showApp(\'projects\')" style="text-align:right;margin-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all &#8594;</div>'+
+        '<div onclick="dashBusyStart();showApp(\'projects\')" style="text-align:right;margin-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all &#8594;</div>'+
       '</div>';
 
     var workforceHtml =
@@ -3656,7 +3657,7 @@ async function loadDashboardInsights(filterProjId){
       '<div><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Recent Activity</div>'+
       '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
         recentActivityHtml+
-        '<div onclick="showApp(\'access\')" style="text-align:right;margin-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all activity &#8594;</div>'+
+        '<div onclick="dashBusyStart();showApp(\'access\')" style="text-align:right;margin-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all activity &#8594;</div>'+
       '</div></div>';
 
     gridEl.innerHTML =
@@ -3990,6 +3991,32 @@ window.addEventListener('resize', function(){
 // Dashboard "Approve Outside Attendance" card: open Attendance on the
 // Pending Punches tab (punches made outside the site radius).
 // Dashboard "Pending Employee" card: open Employees on its Pending tab.
+// Full-screen "loading" shield used by the dashboard's View all links: shows
+// a spinner and swallows every tap until the destination has had time to
+// load, so a second tap can't fire another navigation or open something else.
+function dashBusyStart(){
+  if(document.getElementById('dash-busy')) return;
+  if(!document.getElementById('dash-busy-style')){
+    var st=document.createElement('style'); st.id='dash-busy-style';
+    st.textContent='@keyframes dashBusySpin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(st);
+  }
+  var ov=document.createElement('div');
+  ov.id='dash-busy';
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;cursor:progress;';
+  ov.innerHTML='<div style="background:var(--card-bg,#fff);border-radius:14px;padding:18px 22px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 28px rgba(0,0,0,.25);">'+
+    '<div style="width:22px;height:22px;border:3px solid rgba(0,0,0,.15);border-top-color:#2563EB;border-radius:50%;animation:dashBusySpin .7s linear infinite;"></div>'+
+    '<div style="font-size:13px;font-weight:800;color:var(--text,#222);">Loading...</div></div>';
+  ['click','touchstart','mousedown'].forEach(function(ev){ ov.addEventListener(ev,function(e){e.stopPropagation();e.preventDefault();},true); });
+  document.body.appendChild(ov);
+  clearTimeout(window._dashBusyT);
+  window._dashBusyT=setTimeout(dashBusyEnd,1800);
+}
+function dashBusyEnd(){
+  clearTimeout(window._dashBusyT);
+  var ov=document.getElementById('dash-busy'); if(ov) ov.remove();
+}
+
 function goToPendingEmployees(){
   window.EMP_OPEN_TAB='pending';
   showApp('employees');
@@ -4041,6 +4068,7 @@ function goToProjectSubTab(projId, group, subTab, innerSubTab){
 // tell which projects actually need attention, lists each one by name
 // with its count so they can jump straight to any of them.
 function showProjectPicker(title, items, group, subTab, innerSubTab){
+  if(typeof dashBusyEnd==='function') dashBusyEnd();
   var existing = document.getElementById('dash-project-picker');
   if(existing) existing.remove();
   var navArgs = '\''+(group||'')+'\',\''+subTab+'\',\''+(innerSubTab||'')+'\'';
@@ -29481,8 +29509,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261017e"></script>
-<script src="js/employee.js?v=20261017e"></script>
-<script src="js/projects.js?v=20261017e"></script>
-<script src="js/finance.js?v=20261017e"></script>
+<script src="js/registry.js?v=20261017f"></script>
+<script src="js/employee.js?v=20261017f"></script>
+<script src="js/projects.js?v=20261017f"></script>
+<script src="js/finance.js?v=20261017f"></script>
 </html>
