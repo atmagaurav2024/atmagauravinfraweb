@@ -1037,7 +1037,7 @@ function boqRender(){
   // there are items yet — Import Excel in particular is how someone with an
   // empty BOQ bulk-loads it in the first place, so it can't be gated behind
   // BOQ_ITEMS already having rows.
-  var actionBar='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="boqOpenImport()" style="background:#7B1FA2;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128228; Import Excel</button>'+
+  var actionBar='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="boqOpenImport()" style="background:#7B1FA2;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128228; Import Excel</button><button onclick="boqDownloadSample()" style="background:#00695C;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#11015; Sample Excel</button>'+
     (BOQ_ITEMS.length?'<button onclick="boqDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="boqDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button>':'')+
     '</div>';
   if(!BOQ_ITEMS.length){el.innerHTML=actionBar+'<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128203;</div><div style="font-weight:700;margin-top:10px;">No BOQ items yet</div><div style="font-size:12px;margin-top:6px;">Tap + to add one, or Import Excel to bulk-load</div></div>';return;}
@@ -1159,11 +1159,26 @@ async function boqOpenImport(){
   document.getElementById('boq-sheet-title').textContent='Import BOQ from Excel';
   document.getElementById('boq-sheet-body').innerHTML=
     '<div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Upload a .xlsx, .xls or .csv file. First row must be column headers. Recognised columns: <b>Item Code, Description, Short Name, Unit, BOQ Qty, Rate, Remarks</b> (matched by name, any order — case-insensitive). Item Code, Description and BOQ Qty are required for a row to import.</div>'+
+    '<button type="button" onclick="boqDownloadSample()" style="background:#00695C;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:10px;">&#11015; Download Sample Excel</button>'+
     '<input type="file" id="boq-import-file" accept=".xlsx,.xls,.csv" onchange="boqHandleImportFile(this)" style="display:block;width:100%;padding:10px;border:1.5px dashed var(--border);border-radius:10px;font-size:12px;">'+
     '<div id="boq-import-preview" style="margin-top:12px;"></div>';
   document.getElementById('boq-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeBOQSheet()">Cancel</button>';
   BOQ_IMPORT_PARSED=[];
   openBOQSheet();
+}
+async function boqDownloadSample(){
+  try{
+    await loadXLSXLib();
+    var head=['Item Code','Description','Short Name','Unit','BOQ Qty','Rate','Remarks'];
+    var data=[head,
+      ['1.01','Earthwork in excavation for roadway in all types of soil','Excavation','Cum',1000,150,'Sample row \u2014 delete before upload'],
+      ['2.01','Providing and laying DBM 50mm thick','DBM','Cum',500,9200,'']];
+    var ws=XLSX.utils.aoa_to_sheet(data);
+    ws['!cols']=[{wch:12},{wch:55},{wch:18},{wch:8},{wch:12},{wch:12},{wch:30}];
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'BOQ');
+    XLSX.writeFile(wb,'BOQ_Import_Sample.xlsx');
+  }catch(e){ toast('Could not create sample: '+e.message,'error'); }
 }
 async function boqHandleImportFile(input){
   var file=input.files&&input.files[0];
