@@ -387,9 +387,40 @@ async function loadProjData(forceFetch){
   }
 }
 
+// Project list filter tabs: All / Ongoing / DLP / Completed (default Ongoing).
+// "Ongoing" = everything not under DLP and not completed (planning, RR,
+// in-progress, active) so no project becomes unreachable except via All.
+var PROJ_LIST_FILTER='ongoing';
+function projBucket(p){
+  var st=(p&&p.status)||'';
+  if(st==='under-dlp') return 'dlp';
+  if(st==='fully-completed') return 'completed';
+  return 'ongoing';
+}
+function projSetFilter(f){
+  PROJ_LIST_FILTER=f;
+  var si=document.getElementById('proj-search'); if(si) si.value='';
+  renderProjList();
+}
 function renderProjList(list){
   var el = document.getElementById('proj-list'); if(!el) return;
+  var isSearch=!!list; // search results span all projects
   list = list || PROJ_DATA;
+  var filterBar='';
+  if(!isSearch && PROJ_DATA.length){
+    var cnt={all:PROJ_DATA.length,ongoing:0,dlp:0,completed:0};
+    PROJ_DATA.forEach(function(p){cnt[projBucket(p)]++;});
+    filterBar='<div style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:10px;">'+
+      [['all','All'],['ongoing','Ongoing'],['dlp','DLP'],['completed','Completed']].map(function(t){
+        var on=PROJ_LIST_FILTER===t[0];
+        return '<button onclick="projSetFilter(\''+t[0]+'\')" style="flex-shrink:0;padding:6px 14px;font-size:12px;font-weight:800;border-radius:18px;cursor:pointer;font-family:Nunito,sans-serif;white-space:nowrap;border:1px solid '+(on?'#111827':'var(--border)')+';background:'+(on?'#111827':'var(--card-bg)')+';color:'+(on?'#fff':'var(--text2)')+';">'+t[1]+' ('+cnt[t[0]]+')</button>';
+      }).join('')+'</div>';
+    if(PROJ_LIST_FILTER!=='all') list=list.filter(function(p){return projBucket(p)===PROJ_LIST_FILTER;});
+  }
+  if(!list.length && filterBar){
+    el.innerHTML=filterBar+'<div style="text-align:center;padding:30px;color:var(--text3);font-size:12px;font-weight:700;">No '+({ongoing:'ongoing',dlp:'DLP',completed:'completed'}[PROJ_LIST_FILTER]||'')+' projects</div>';
+    return;
+  }
   if(!list.length){
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#127959;</div><div style="font-weight:700;margin-top:10px;">No projects yet</div><div style="font-size:12px;margin-top:6px;">Tap + to add</div></div>';
     return;
@@ -402,7 +433,7 @@ function renderProjList(list){
     'rr':      {label:'RR',col:'#00838F'},
     'active':{label:'Active',col:'#1565C0'}
   };
-  el.innerHTML = list.map(function(p){
+  el.innerHTML = filterBar + list.map(function(p){
     var st = statusMap[p.status]||{label:p.status||'Active',col:'#1565C0'};
     var inrFmt=function(n){return n?'\u20b9'+Number(n).toLocaleString('en-IN'):'';};
     var coords=[];try{coords=p.coordinates?JSON.parse(p.coordinates):[];}catch(e){}
