@@ -573,6 +573,7 @@ function pfAddFile(){
   var file=fileEl.files&&fileEl.files[0];
   if(!name){toast('Enter file name/description','warning');return;}
   if(!file){toast('Select a file','warning');return;}
+  if(file.size>10485760){toast('File is '+(file.size/1048576).toFixed(1)+' MB. Maximum allowed is 10 MB — please compress it first.','error');return;}
   PF_FILES.push({name:name,file:file,size:file.size,type:file.type});
   nameEl.value='';
   fileEl.value='';
@@ -840,11 +841,12 @@ async function saveProjForm(editId){
       var lf=legacyFiles[li], lUrl=null;
       try{
         var lblob=await (await fetch(lf.url)).blob();
+        if(lblob.size>10485760){ toast('"'+(lf.name||'file')+'" is '+(lblob.size/1048576).toFixed(1)+' MB (max 10 MB). Remove it or compress and re-upload it, then save.','error'); lUrl=null; throw new Error('too large'); }
         var lfile=new File([lblob], lf.name||('file_'+li), {type:lblob.type||'application/pdf'});
         lUrl=await uploadToCloudinary(lfile,'projects',null);
       }catch(e){ console.warn('Legacy file convert:',e); }
       if(!lUrl){
-        toast('Could not convert an old file. Please re-upload it and try again.','error');
+        if(!document.querySelector('.toast.error,.toast-error')) toast('Could not convert an old file. Please re-upload it and try again.','error');
         if(saveBtn){ saveBtn.disabled=false; saveBtn.style.opacity=''; saveBtn.style.cursor=''; saveBtn.innerHTML=saveBtnOrigHTML; }
         if(delBtn){ delBtn.disabled=false; delBtn.style.opacity=''; delBtn.style.cursor=''; }
         return;
