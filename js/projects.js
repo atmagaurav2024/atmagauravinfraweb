@@ -641,9 +641,9 @@ async function openProjForm(id){
       '</div>'+
     '</div>'+
     // ── Close for Entry ──
-    '<label style="display:flex;align-items:flex-start;gap:10px;background:#FFF3E0;border:1px solid #FFCC80;border-radius:10px;padding:10px 12px;margin-bottom:10px;cursor:pointer;">'+
+    '<label style="display:flex;align-items:flex-start;gap:10px;background:var(--card-bg);border:1px solid #FB8C00;border-radius:10px;padding:10px 12px;margin-bottom:10px;cursor:pointer;">'+
       '<input type="checkbox" id="pf-closed" data-was="'+(p.closed_for_entry?'1':'0')+'"'+(p.closed_for_entry?' checked':'')+' style="width:18px;height:18px;margin-top:1px;flex-shrink:0;">'+
-      '<span><span style="font-size:12.5px;font-weight:800;color:#E65100;">Close project for Entry</span>'+
+      '<span><span style="font-size:12.5px;font-weight:800;color:#FB8C00;">Close project for Entry</span>'+
       '<span style="display:block;font-size:11px;color:var(--text2);margin-top:2px;">A closed project no longer appears in project dropdowns where new entries are made (petty cash, employee assignment, loans, etc.). Existing records and reports are not affected.</span></span>'+
     '</label>'+
     // ── Row 2: Length ──
