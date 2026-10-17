@@ -657,14 +657,8 @@ async function openProjForm(id){
     '</div>'+
     // ── Coordinates ──
     '<div style="margin-bottom:10px;">'+
-      '<label class="flbl">GPS Coordinates <span style="font-size:9px;font-weight:400;color:var(--text3);">(for attendance geofencing — add multiple for highway)</span></label>'+
+      '<label class="flbl">GPS Coordinates <span style="font-size:9px;font-weight:400;color:var(--text3);">(for attendance geofencing — pick one or more points on the map)</span></label>'+
       '<div id="pf-coord-list" style="margin-bottom:6px;"></div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center;">'+
-        '<input id="pf-new-lat" class="finp" placeholder="Latitude (e.g. 22.5726)" style="margin:0;">'+
-        '<input id="pf-new-lng" class="finp" placeholder="Longitude (e.g. 88.3639)" style="margin:0;">'+
-        '<input id="pf-new-lbl" class="finp" placeholder="Label (e.g. Km 120)" style="margin:0;">'+
-        '<button onclick="pfAddCoord()" style="background:#1565C0;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;">+ Add</button>'+
-      '</div>'+
       '<button type="button" onclick="pfOpenMap()" style="margin-top:6px;background:#2E7D32;color:white;border:none;border-radius:7px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128506; Pick points on Map</button>'+
     '</div>'+
     // ── Cost section ──
