@@ -502,7 +502,33 @@ async function saveNewCat(type){
 async function loadCategories(){
   try{
     var data=await sbFetch('categories',{select:'*',order:'created_at.asc'});
-    if(!data||!data.length)return;
+    if(!data||!data.length){
+      // First load for this company: the registry shows built-in defaults that
+      // were never stored, so deletes/edits acted on phantom rows and the
+      // Employee form (which reads the database) saw nothing. Save the defaults
+      // once so everything works from the same list.
+      try{
+        var seedRows=[],seedRefs=[];
+        Object.keys(catSectionMap).forEach(function(type){
+          (CAT_DATA[type]||[]).forEach(function(c){
+            seedRows.push({type:type,name:c.name,icon:c.icon||'📦',description:c.desc||'',color:c.color||'#37474F',active:c.active!==false});
+            seedRefs.push(c);
+          });
+        });
+        if(seedRows.length){
+          var saved=await sbInsert('categories',seedRows);
+          if(Array.isArray(saved)&&saved.length===seedRefs.length){
+            // rows may come back in any order: match on type+name
+            saved.forEach(function(r){
+              var ref=seedRefs.find(function(c,ix){return seedRows[ix].type===r.type&&seedRows[ix].name===r.name&&!c._seeded;});
+              if(ref){ ref.id=r.id; ref._seeded=true; }
+            });
+            Object.keys(catSectionMap).forEach(function(type){renderCatSection(type,catSectionMap[type]);});
+          }
+        }
+      }catch(e){console.warn('Seeding default categories failed:',e);}
+      return;
+    }
     // Derived from catSectionMap rather than a second hardcoded list — the
     // two had already drifted, so a new type saved to the database but was
     // dropped on reload.
