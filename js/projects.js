@@ -2651,6 +2651,8 @@ function rrRender(){
   // Summary counts
   var counts={pending:0,approved:0,rejected:0,allotted:0};
   RR_ITEMS.forEach(function(r){counts[r.status]=(counts[r.status]||0)+1;});
+  RR_COMBINED_RR_GROUPS.forEach(function(g){counts[g.status]=(counts[g.status]||0)+1;});
+  var pendingTotal=counts.pending||0;
 
   var summaryBar=
     '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">'+
@@ -2693,7 +2695,7 @@ function rrRender(){
         '<div style="padding:8px 14px;">'+itemsHtml+'</div>'+
       '</div>';
     }).join('');
-    var raisedGroupCards=RR_COMBINED_RR_GROUPS.map(function(g){
+    var raisedGroupCards=RR_COMBINED_RR_GROUPS.filter(function(g){return RR_STATUS_FILTER==='all'||g.status===RR_STATUS_FILTER;}).map(function(g){
       var giItems=RR_COMBINED_RR_ITEMS.filter(function(ri){return ri.group_id===g.id;});
       var sc=statusColors[g.status]||'#555'; var sl=statusLabels[g.status]||g.status;
       var partyNames=Array.from(new Set(giItems.map(function(it){return it.party_name;})));
@@ -2714,8 +2716,7 @@ function rrRender(){
         '</div></div>';
     }).join('');
     combinedSectionHtml=
-      '<div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Combined Planning Groups</div>'+
-      groupCards+
+      (RR_STATUS_FILTER==='all'?'<div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Combined Planning Groups</div>'+groupCards:'')+
       (raisedGroupCards?'<div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;">Combined RRs Raised</div>'+raisedGroupCards:'');
   }
 
@@ -2816,7 +2817,8 @@ function rrRender(){
       '</div>'+
     '</div>'+
     (Object.values(counts).some(function(v){return v>0;})?summaryBar:'')+
-    (RR_STATUS_FILTER==='all'?combinedSectionHtml:'')+
+    (pendingTotal>0?'<div style="margin-bottom:12px;"><button onclick="rrApproveAllPending()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:800;cursor:pointer;">&#10003; Approve All Pending ('+pendingTotal+')</button></div>':'')+
+    combinedSectionHtml+
     (RR_STATUS_FILTER!=='all'?'<div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:8px;">Showing '+statusLabels[RR_STATUS_FILTER]+' only &mdash; <span onclick="rrSetStatusFilter(\''+RR_STATUS_FILTER+'\')" style="color:#1565C0;cursor:pointer;text-decoration:underline;">show all</span></div>':'')+
     (itemCards||'<div style="text-align:center;padding:40px;color:var(--text3);background:var(--card-bg);border-radius:12px;">'+(RR_STATUS_FILTER!=='all'?'No '+statusLabels[RR_STATUS_FILTER].toLowerCase()+' requisitions.':'No planned resources found. Add resources in Planning tab first.')+'</div>');
 }
@@ -3742,6 +3744,33 @@ async function rrApprove(rrId){
     toast('RR approved — Work Allotment tab updated','success');
     rrRender();
   }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// Approves every pending RR (and combined RR group) for the selected
+// project in one go — a "Combined RR" raise creates one requisition per
+// item, and approving them one by one left the rest showing Pending.
+async function rrApproveAllPending(){
+  var pend=RR_ITEMS.filter(function(r){return r.status==='pending';});
+  var pendGroups=RR_COMBINED_RR_GROUPS.filter(function(g){return g.status==='pending';});
+  var n=pend.length+pendGroups.length;
+  if(!n){ toast('Nothing pending','info'); return; }
+  if(!confirm('Approve all '+n+' pending requisition'+(n!==1?'s':'')+' for this project?')) return;
+  var ok=0, failed=0;
+  for(var i=0;i<pend.length;i++){
+    try{
+      await sbUpdate('resource_requisitions',pend[i].id,{status:'approved'});
+      pend[i].status='approved';
+      if(!WA_APPROVED_RRS.some(function(r){return r.id===pend[i].id;})) WA_APPROVED_RRS.push(pend[i]);
+      ok++;
+    }catch(e){ console.error('approve RR failed',e); failed++; }
+  }
+  for(var j=0;j<pendGroups.length;j++){
+    try{ await sbUpdate('combined_rr_groups',pendGroups[j].id,{status:'approved'}); pendGroups[j].status='approved'; ok++; }
+    catch(e){ console.error('approve group failed',e); failed++; }
+  }
+  WA_LOADED_PROJ='';
+  toast(ok+' approved'+(failed?', '+failed+' failed — see console':''), failed?'warning':'success');
+  rrRender();
 }
 
 async function rrReject(rrId){
