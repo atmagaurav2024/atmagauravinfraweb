@@ -495,6 +495,11 @@ async function initEmpMgmt(){
   // Open first accessible tab
   var allTabs = ['active','pending','pay','leavefix','salary','increment','transfer','annual','downloads','resigned'];
   var firstTab = allTabs.find(function(t){ return empTabAllowed(t); }) || 'active';
+  // A dashboard shortcut (e.g. Pending Employee card) can ask to land on a specific tab.
+  if(window.EMP_OPEN_TAB){
+    if(allTabs.indexOf(window.EMP_OPEN_TAB)>-1 && empTabAllowed(window.EMP_OPEN_TAB)) firstTab = window.EMP_OPEN_TAB;
+    window.EMP_OPEN_TAB = null;
+  }
   empTab(firstTab, document.getElementById('emp-t-'+firstTab));
 }
 
