@@ -3517,12 +3517,23 @@ async function empFormSave(){
       if(pw && phone){
         try{
           toast('Creating login account...','info');
-          var authResult = await authSignUp(phone, pw, typeof ensureCompanySlug==='function' ? await ensureCompanySlug() : currentUser.companySlug);
-          if(authResult && !authResult.error && (authResult.user||authResult.id)){
+          var empSlug = typeof ensureCompanySlug==='function' ? await ensureCompanySlug() : currentUser.companySlug;
+          var authResult = await authSignUp(phone, pw, empSlug);
+          if(authResult && (authResult.user||authResult.id) && !authResult.error && !authResult.error_code){
             data.auth_id = authResult.user ? authResult.user.id : authResult.id;
-          } else if(authResult && authResult.error){
-            // Auth user may already exist — try to continue without blocking
-            console.warn('Auth signup note:', authResult.error.message||authResult.error);
+          } else {
+            // Login may already exist (e.g. an earlier attempt created it but the
+            // employee save failed). If the same password is used, sign in to
+            // get its id and link it instead of leaving the employee login-less.
+            var siRes = null;
+            try{ siRes = await authSignIn(phone, pw, empSlug); }catch(e2){}
+            if(siRes && siRes.user && siRes.user.id){
+              data.auth_id = siRes.user.id;
+            } else {
+              var whyMsg = (authResult && (authResult.msg||authResult.error_description||authResult.message||(authResult.error&&authResult.error.message)))||'unknown reason';
+              console.warn('Auth signup note:', authResult);
+              toast('Employee saved, but login could not be created: '+whyMsg+'. If this mobile already has a login, delete it in Supabase → Authentication → Users and re-save.','warning');
+            }
           }
         }catch(authErr){ console.warn('Auth signup (non-fatal):', authErr); }
       }
