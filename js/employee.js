@@ -3181,6 +3181,11 @@ function empOpenForm(emp){
     sbFetch('projects',{select:'id,name',order:'name.asc'})
   ]).then(function(results){
     var roles=Array.isArray(results[0])?results[0]:[];
+    // New company with no saved roles yet: offer the standard roles so the
+    // dropdown is never empty (an empty role used to save as 'viewer').
+    if(!roles.length){
+      roles=['Admin','Project Manager','Site Engineer','Junior Engineer','QC Engineer','Safety Officer','Finance / Accounts','HR / Admin','Viewer (Read Only)','Client Viewer'].map(function(n){return {name:n};});
+    }
     var depts=Array.isArray(results[1])?results[1]:[];
     var projs=Array.isArray(results[2])?results[2]:[];
 
@@ -3397,6 +3402,7 @@ async function empFormSave(){
 
   var roleRaw=gv('f-urole');
   var roleMap={'Admin':'admin','Project Manager':'pm','Site Engineer':'engineer','Junior Engineer':'engineer','QC Engineer':'qhse','Safety Officer':'qhse','Finance / Accounts':'finance','HR / Admin':'admin','Viewer (Read Only)':'viewer','Client Viewer':'viewer'};
+  if(!editId && !roleRaw){ toast('Please select a Role / Designation','warning'); return; }
   var role=roleMap[roleRaw]||'viewer';
   // Editing an existing employee with an empty/unrecognised role dropdown
   // (e.g. role list not loaded) must NOT silently demote them to 'viewer':
