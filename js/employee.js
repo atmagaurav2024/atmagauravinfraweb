@@ -3486,20 +3486,28 @@ async function empFormSave(){
         try{
           toast('Updating login password...','info');
           var empPhone = phone||gv('f-uphone');
-          var authRes = await authSignUp(empPhone, pw1, typeof ensureCompanySlug==='function' ? await ensureCompanySlug() : currentUser.companySlug);
-          if(authRes && authRes.error && authRes.error.message && authRes.error.message.toLowerCase().includes('already')){
-            // User exists in auth — we cannot reset via anon key, inform admin
-            toast(name+' updated. To reset login password, use Supabase Auth dashboard or ask employee to use Forgot Password.','info');
-          } else {
-            // Same gap as empResetPassword: a brand-new auth account's id
-            // must be saved onto employees.auth_id or this employee can
+          var empSlug2 = typeof ensureCompanySlug==='function' ? await ensureCompanySlug() : currentUser.companySlug;
+          var hadAuth = ((EMP_LIST.find(function(x){return x.id===editId;})||{}).auth_id)||null;
+          var authRes = await authSignUp(empPhone, pw1, empSlug2);
+          var newAuthId2 = authRes && (authRes.user ? authRes.user.id : authRes.id);
+          if(!newAuthId2 && !hadAuth){
+            // Employee has no login yet but one may already exist for this
+            // mobile (left over from an earlier failed attempt): link it if the
+            // password matches.
+            try{ var si2 = await authSignIn(empPhone, pw1, empSlug2); if(si2 && si2.user && si2.user.id) newAuthId2 = si2.user.id; }catch(e3){}
+          }
+          if(newAuthId2 && !hadAuth){
+            // A login must be saved onto employees.auth_id or this employee can
             // never be found by the login lookup again.
-            var newAuthId2 = authRes && (authRes.user ? authRes.user.id : authRes.id);
-            if(newAuthId2){
-              try{ await sbUpdate('employees', editId, {auth_id:newAuthId2}); }
-              catch(linkErr){ console.warn('Failed to link new auth account to employee record:', linkErr); }
-            }
-            toast(name+' updated and password reset!','success');
+            try{ await sbUpdate('employees', editId, {auth_id:newAuthId2}); }
+            catch(linkErr){ console.warn('Failed to link new auth account to employee record:', linkErr); }
+            toast(name+' updated and login created!','success');
+          } else if(hadAuth){
+            // Existing login: the anon key cannot change an existing password.
+            toast(name+' updated. To change the password of an existing login use Supabase > Authentication > Users, or the Forgot Password option.','info');
+          } else {
+            var whyE=(authRes&&(authRes.msg||authRes.error_description||authRes.message||(authRes.error&&authRes.error.message)))||'unknown reason';
+            toast(name+' updated, but the login could not be created: '+whyE+'. Create it in Supabase > Authentication > Users (email '+String(empPhone).replace(/[^0-9]/g,'')+'@'+empSlug2+'.rydax.internal, tick Auto Confirm), then link it.','warning');
           }
         }catch(authErr){
           console.warn('Password reset error:', authErr);
