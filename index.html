@@ -1765,7 +1765,7 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
           <svg id="dash-theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
           <svg id="dash-theme-icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#F1F5F9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         </div>
-        <div style="position:relative;cursor:pointer;" onclick="showApp('access')">
+        <div id="dash-bell-wrap" style="position:relative;cursor:pointer;" onclick="dashToggleBell(event)">
           <div style="width:32px;height:32px;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M9.5 19a2.5 2.5 0 005 0"/></svg></div>
           <div id="dash-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#E11D48;color:white;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;"></div>
         </div>
@@ -3679,6 +3679,13 @@ async function loadDashboardInsights(filterProjId){
     var fyTextEl=document.getElementById('dash-fy-text');
     if(fyTextEl) fyTextEl.textContent=fyLabel;
     var notifCount = pendingApprovalsCount + pendingRRs.length + lowStock.length + pendingBillsCount + (canApprovePunches ? pendingOutsidePunches : attendanceIssuesCount);
+    window.DASH_NOTIFS=[
+      {n:pendingApprovalsCount,label:'Pending employee approvals',go:'goToPendingEmployees()'},
+      {n:pendingRRs.length,label:'Pending purchase orders (PO)',go:pendingPOOnclick},
+      {n:lowStock.length,label:'Low stock items',go:"showApp('projects')"},
+      {n:pendingBillsCount,label:'Pending purchase bills',go:pendingBillsOnclick},
+      canApprovePunches?{n:pendingOutsidePunches,label:'Outside-site attendance to approve',go:'goToPendingPunches()'}:{n:attendanceIssuesCount,label:'Attendance issues',go:"showApp('attendance')"}
+    ].filter(function(x){return x.n>0;});
     var notifBadge=document.getElementById('dash-notif-badge');
     if(notifBadge){
       if(notifCount>0){ notifBadge.textContent=notifCount>99?'99+':notifCount; notifBadge.style.display='flex'; }
@@ -3764,6 +3771,25 @@ window.addEventListener('resize', function(){
 // happened to re-save that employee. Defaulting an unconfigured param
 // to denied (not granted) is the safe reading and keeps runtime access
 // in sync with what Access Control visibly shows.
+function dashToggleBell(ev){
+  if(ev) ev.stopPropagation();
+  var old=document.getElementById('dash-bell-menu');
+  if(old){ old.remove(); return; }
+  var wrap=document.getElementById('dash-bell-wrap'); if(!wrap) return;
+  var items=window.DASH_NOTIFS||[];
+  var rows=items.length ? items.map(function(x){
+    return '<div onclick="dashCloseBell();'+String(x.go).replace(/"/g,'&quot;')+'" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;cursor:pointer;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);">'+
+      '<span>'+x.label+'</span><span style="background:#E11D48;color:#fff;font-size:11px;font-weight:800;min-width:20px;text-align:center;padding:2px 7px;border-radius:10px;">'+x.n+'</span></div>';
+  }).join('') : '<div style="padding:18px 14px;font-size:13px;color:var(--text3);text-align:center;">Nothing needs your attention</div>';
+  var m=document.createElement('div');
+  m.id='dash-bell-menu';
+  m.style.cssText='position:absolute;top:40px;right:0;width:270px;max-width:80vw;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:9999;overflow:hidden;cursor:default;';
+  m.onclick=function(e){e.stopPropagation();};
+  m.innerHTML='<div style="padding:10px 14px;font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);">Needs attention</div>'+rows;
+  wrap.appendChild(m);
+  setTimeout(function(){ document.addEventListener('click',dashCloseBell,{once:true}); },0);
+}
+function dashCloseBell(){ var m=document.getElementById('dash-bell-menu'); if(m) m.remove(); }
 function canAccess(m,p){if(!currentUser)return false;if(currentUser.role==='admin')return true;if(!Object.keys(USER_PERMISSIONS).length)return true;var mp=USER_PERMISSIONS[m];return mp?mp[p]===true:false;}
 // Shows/hides the "Scan & Pay" bottom-nav item — a real 5th member of
 // #app-nav (see the comment by its markup) rather than a dashboard-only
@@ -29451,8 +29477,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019h"></script>
-<script src="js/employee.js?v=20261019h"></script>
-<script src="js/projects.js?v=20261019h"></script>
-<script src="js/finance.js?v=20261019h"></script>
+<script src="js/registry.js?v=20261019i"></script>
+<script src="js/employee.js?v=20261019i"></script>
+<script src="js/projects.js?v=20261019i"></script>
+<script src="js/finance.js?v=20261019i"></script>
 </html>
