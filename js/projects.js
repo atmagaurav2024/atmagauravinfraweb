@@ -15886,12 +15886,21 @@ async function partyQuickAddSave(){
 // key stays stable: names matching the original five keep their old keys
 // so existing allotments, bills and payments still match.
 // ───────────────────────────────────────────────────────────────────
-var PARTY_TYPES=[];            // [{key,label,source,color}]
+// Built-in types are always present; extra ones are added in Master Registry.
+var PARTY_BUILTIN=[
+  {key:'sc',label:'Subcontractor',source:'sc',color:'#6A1B9A',builtin:true},
+  {key:'vendor',label:'Vendor',source:'vendor',color:'#1565C0',builtin:true},
+  {key:'labour_contractor',label:'Labour Contractor',source:'sc',color:'#2E7D32',builtin:true},
+  {key:'labour',label:'Labour',source:'labour',color:'#37474F',builtin:true},
+  {key:'machinery',label:'Machinery',source:'machinery',color:'#E65100',builtin:true},
+  {key:'design_consultant',label:'Design Consultant',source:'vendor',color:'#00838F',builtin:true}
+];
+var PARTY_TYPES=PARTY_BUILTIN.slice();            // built-in + custom: [{key,label,source,color}]
 var PARTY_TYPES_LOADED=false;
 var PARTY_SOURCES=[['sc','Subcontractors list'],['vendor','Vendors list'],['labour','Labourers list'],['machinery','Equipment list (falls back to Vendors)']];
-var PARTY_LEGACY_KEYS={'subcontractor':'sc','vendor':'vendor','labour contractor':'labour_contractor','labour':'labour','machinery':'machinery'};
-var PARTY_LEGACY_SOURCE={sc:'sc',labour_contractor:'sc',vendor:'vendor',labour:'labour',machinery:'machinery'};
-var PARTY_LEGACY_LABEL={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+var PARTY_LEGACY_KEYS={'subcontractor':'sc','vendor':'vendor','labour contractor':'labour_contractor','labour':'labour','machinery':'machinery','design consultant':'design_consultant'};
+var PARTY_LEGACY_SOURCE={sc:'sc',labour_contractor:'sc',vendor:'vendor',labour:'labour',machinery:'machinery',design_consultant:'vendor'};
+var PARTY_LEGACY_LABEL={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery',design_consultant:'Design Consultant'};
 var PARTY_LEGACY_COLOR={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
 
 function partySlug(name){
@@ -15919,10 +15928,11 @@ async function partyTypesLoad(force){
   if(PARTY_TYPES_LOADED && !force) return PARTY_TYPES;
   try{
     var rows=await sbFetch('categories',{select:'id,name,description,color,active',filter:'type=eq.partytype',order:'created_at.asc'});
-    PARTY_TYPES=(Array.isArray(rows)?rows:[]).filter(function(r){return r.active!==false;}).map(function(r){
+    var custom=(Array.isArray(rows)?rows:[]).filter(function(r){return r.active!==false;}).map(function(r){
       var d=partyDecode(r.description), key=d.key||partySlug(r.name);
       return {key:key,label:r.name,source:d.source||PARTY_LEGACY_SOURCE[key]||'vendor',color:r.color||'#37474F'};
-    });
+    }).filter(function(c){ return !PARTY_BUILTIN.some(function(b){return b.key===c.key;}); });   // built-ins can't be duplicated
+    PARTY_TYPES=PARTY_BUILTIN.concat(custom);
     PARTY_TYPES_LOADED=true;
   }catch(e){ console.warn('partyTypesLoad',e); }
   return PARTY_TYPES;
