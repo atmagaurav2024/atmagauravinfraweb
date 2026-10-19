@@ -3140,23 +3140,8 @@ function empOpenForm(emp){
     '</div>'+
     kycDocBoxHtml('f-uedu-doc','Education Certificate(s) — combine into one PDF',eduDocUrl)+
     '<input type="hidden" id="f-uedit-id" value="'+(isEdit?e.id:'')+'">'+
-    // Password reset section for existing employees
-    (isEdit?
-      hdr('\uD83D\uDD10','Reset Login Password','#E65100')+
-      '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:11px;color:#E65100;">'+
-        '&#8505; Leave blank to keep current password. Enter new password to change it.'+
-      '</div>'+
-      '<label class="flbl">New Password</label>'+
-      '<div class="inp-wrap">'+
-        '<input id="f-upassword" class="finp" type="password" autocomplete="new-password" placeholder="Leave blank to keep current" style="margin-bottom:0;padding-right:44px;">'+
-        '<span class="inp-ic" onclick="var el=document.getElementById(\'f-upassword\');el.type=el.type===\'password\'?\'text\':\'password\';" style="cursor:pointer;">&#128065;</span>'+
-      '</div>'+
-      '<label class="flbl" style="margin-top:8px;">Confirm New Password</label>'+
-      '<div class="inp-wrap">'+
-        '<input id="f-upassword2" class="finp" type="password" autocomplete="new-password" placeholder="Re-enter new password" style="margin-bottom:0;padding-right:44px;">'+
-        '<span class="inp-ic" onclick="var el=document.getElementById(\'f-upassword2\');el.type=el.type===\'password\'?\'text\':\'password\';" style="cursor:pointer;">&#128065;</span>'+
-      '</div>'
-    :'');
+    // Password reset for existing employees lives only on the Reset Password button.
+    '';
   document.getElementById('emp-sheet-body').innerHTML=html;
 
   document.getElementById('emp-sheet-foot').innerHTML=
@@ -3345,6 +3330,30 @@ async function empResetPassword(empId, empName, phone){
     if(pw1!==pw2){toast('Passwords do not match','warning');return;}
     try{
       toast('Updating password...','info');
+      // 1) Normal case: the employee already has a login -> change its password
+      //    through the admin_set_employee_password database function (the browser's
+      //    public key cannot change an existing password by itself).
+      var rpcRes = await fetch(SUPABASE_URL+'/rest/v1/rpc/admin_set_employee_password',{
+        method:'POST',
+        headers:{'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+((currentUser&&currentUser.accessToken)||SUPABASE_ANON_KEY),'Content-Type':'application/json'},
+        body:JSON.stringify({p_employee_id:empId, p_new_password:pw1})
+      });
+      var rpcBody = await rpcRes.json().catch(function(){return null;});
+      if(rpcRes.ok && rpcBody==='ok'){
+        toast(empName+"'s password updated successfully!",'success');
+        closeEmpSheet();
+        return;
+      }
+      if(!rpcRes.ok){
+        var rpcMsg=(rpcBody&&(rpcBody.message||rpcBody.hint))||('HTTP '+rpcRes.status);
+        if(rpcRes.status===404 || /could not find the function|schema cache/i.test(rpcMsg)){
+          toast('Password reset is not set up yet. Run supabase/admin_set_employee_password.sql once in the Supabase SQL Editor.','error');
+        } else {
+          toast('Could not change password: '+rpcMsg,'error');
+        }
+        return;
+      }
+      // 2) rpcBody==='no_login': this employee has no login yet -> create one.
       var authResult = await authSignUp(phone, pw1, co);
       if(authResult && authResult.error){
         var msg = authResult.error.message||'';
