@@ -485,10 +485,10 @@ function searchProj(q){
 
 // ── Auto-generate project code ──────────────────────────────
 function genProjCode(){
-  var prefix='RYDAX';
+  var prefix=(typeof companyIdPrefix==='function')?companyIdPrefix():'RYDAX';
   var existing=PROJ_DATA.map(function(p){
-    var m=(p.code||'').match(/^[A-Z]+-(\d+)$/);
-    return m?parseInt(m[1]):0;
+    var m=String(p.code||'').toUpperCase().match(/^([A-Z0-9]+)-(\d+)$/);
+    return (m&&m[1]===prefix)?parseInt(m[2],10):0;
   });
   var next=existing.length?Math.max.apply(null,existing)+1:1;
   return prefix+'-'+String(next).padStart(3,'0');

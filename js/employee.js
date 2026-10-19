@@ -3557,7 +3557,7 @@ async function empFormSave(){
         result=await sbInsert('employees',data);
       }catch(insErr){
         if(insErr.message&&(insErr.message.includes('duplicate')||insErr.message.includes('23505'))){
-          data.emp_id='RYDAX-T'+String(Date.now()).slice(-6);
+          data.emp_id=(typeof companyIdPrefix==='function'?companyIdPrefix():'RYDAX')+'-T'+String(Date.now()).slice(-6);
           data.badge_no=data.emp_id;
           result=await sbInsert('employees',data);
         } else { throw insErr; }

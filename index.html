@@ -5264,7 +5264,7 @@ verifyOTP=async function(){
         await sbInsertMinimal('employees',data);
       }catch(insErr){
         if(insErr.message&&(insErr.message.includes('duplicate')||insErr.message.includes('23505'))){
-          data.emp_id='RYDAX-T'+String(Date.now()).slice(-6);
+          data.emp_id=companyIdPrefix()+'-T'+String(Date.now()).slice(-6);
           data.badge_no=data.emp_id;
           await sbInsertMinimal('employees',data);
         } else { throw insErr; }
@@ -8864,21 +8864,26 @@ function stopSync(){
 }
 
 
+// ID prefix for this company's employees / projects: its company code (e.g. AIPL).
+function companyIdPrefix(){
+  var slug='';
+  try{ slug=(currentUser&&currentUser.companySlug)||''; }catch(e){}
+  slug=String(slug).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return slug||'RYDAX';
+}
 async function getNextRYDAXId(){
+  var prefix=companyIdPrefix();
   try{
     var data = await sbFetch('employees',{select:'emp_id',order:'created_at.desc'});
-    if(!data || !data.length) return 'RYDAX-001';
     var max = 0;
-    data.forEach(function(e){
-      if(e.emp_id && e.emp_id.startsWith('RYDAX-')){
-        var num = parseInt(e.emp_id.replace('RYDAX-',''))||0;
-        if(num>max) max=num;
-      }
+    (data||[]).forEach(function(e){
+      var m=String(e.emp_id||'').toUpperCase().match(/^([A-Z0-9]+)-(\d+)$/);
+      if(m && m[1]===prefix){ var num=parseInt(m[2],10)||0; if(num>max) max=num; }
     });
-    return 'RYDAX-'+String(max+1).padStart(3,'0');
+    return prefix+'-'+String(max+1).padStart(3,'0');
   } catch(e){
     // Timestamp fallback guarantees uniqueness
-    return 'RYDAX-T'+String(Date.now()).slice(-6);
+    return prefix+'-T'+String(Date.now()).slice(-6);
   }
 }
 
@@ -12542,7 +12547,7 @@ async function empFormSave(){
         result=await sbInsert('employees',data);
       }catch(insErr){
         if(insErr.message&&(insErr.message.includes('duplicate')||insErr.message.includes('23505'))){
-          data.emp_id='RYDAX-T'+String(Date.now()).slice(-6);
+          data.emp_id=companyIdPrefix()+'-T'+String(Date.now()).slice(-6);
           data.badge_no=data.emp_id;
           result=await sbInsert('employees',data);
         } else { throw insErr; }
@@ -13841,10 +13846,10 @@ function searchProj(q){
 
 // ── Auto-generate project code ──────────────────────────────
 function genProjCode(){
-  var prefix='RYDAX';
+  var prefix=(typeof companyIdPrefix==='function')?companyIdPrefix():'RYDAX';
   var existing=PROJ_DATA.map(function(p){
-    var m=(p.code||'').match(/^[A-Z]+-(\d+)$/);
-    return m?parseInt(m[1]):0;
+    var m=String(p.code||'').toUpperCase().match(/^([A-Z0-9]+)-(\d+)$/);
+    return (m&&m[1]===prefix)?parseInt(m[2],10):0;
   });
   var next=existing.length?Math.max.apply(null,existing)+1:1;
   return prefix+'-'+String(next).padStart(3,'0');
@@ -29514,8 +29519,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019b"></script>
-<script src="js/employee.js?v=20261019b"></script>
-<script src="js/projects.js?v=20261019b"></script>
-<script src="js/finance.js?v=20261019b"></script>
+<script src="js/registry.js?v=20261019c"></script>
+<script src="js/employee.js?v=20261019c"></script>
+<script src="js/projects.js?v=20261019c"></script>
+<script src="js/finance.js?v=20261019c"></script>
 </html>
