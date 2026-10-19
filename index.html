@@ -22014,17 +22014,40 @@ async function lnDelParty(id){
   catch(e){toast('Error: '+e.message,'error');}
 }
 
+// "+ Add new party" inside the loan form: keeps what was typed, opens the
+// party form, then comes back to the loan form with the new party selected.
+function lnPartyChanged(sel, dir, editId){
+  if(sel.value!=='__new__') return;
+  var snap={};
+  document.querySelectorAll('#ln-sheet-body [id^="ll-"]').forEach(function(el){ snap[el.id]=el.value; });
+  var back=function(partyId){
+    lnOpenLoan(dir, editId);
+    Object.keys(snap).forEach(function(id){ var el=document.getElementById(id); if(el && id!=='ll-party') el.value=snap[id]; });
+    var ps=document.getElementById('ll-party');
+    if(ps){ ps.value=partyId||(snap['ll-party']!=='__new__'?snap['ll-party']:''); }
+    if(typeof lnUpdatePaymentType==='function') lnUpdatePaymentType();
+  };
+  lnOpenParty();
+  document.getElementById('ln-sheet-title').textContent='New Party';
+  var t=document.getElementById('lp-type'); if(t) t.value=(dir==='taken'?'creditor':'debtor');
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" id="lp-back-btn">Cancel</button>'+
+    '<button class="btn btn-navy" id="lp-save-btn">Save Party</button>';
+  document.getElementById('lp-back-btn').onclick=function(){ back(null); };
+  document.getElementById('lp-save-btn').onclick=function(){ lnSaveParty(null,function(saved){ back(saved.id); }); };
+}
 function lnOpenLoan(dir, editId){
   var ex=editId?LN_LOANS.find(function(l){return l.id===editId;}):null;
   if(editId&&!ex){ toast('Loan not found','warning'); return; }
   if(ex) dir=ex.direction;
   var isTaken=(dir==='taken');
   var elig=LN_PARTIES.filter(function(p){return p.party_type==='both'||p.party_type===(isTaken?'creditor':'debtor');});
-  if(!elig.length){ toast('Add a '+(isTaken?'creditor':'debtor')+' in the Parties tab first','warning'); return; }
   document.getElementById('ln-sheet-title').textContent=ex?'Edit Loan':(isTaken?'New Loan Taken':'New Loan Given');
   document.getElementById('ln-sheet-body').innerHTML=
-    '<label class="flbl">'+(isTaken?'Lender (Creditor)':'Borrower (Debtor)')+' *</label><select class="fsel" id="ll-party">'+
-      elig.map(function(p){return '<option value="'+p.id+'"'+((ex&&ex.party_id===p.id)?' selected':'')+'>'+p.name+'</option>';}).join('')+'</select>'+
+    '<label class="flbl">'+(isTaken?'Lender (Creditor)':'Borrower (Debtor)')+' *</label><select class="fsel" id="ll-party" onchange="lnPartyChanged(this,\''+dir+'\','+(ex?'\''+ex.id+'\'':'null')+')">'+
+      (elig.length?'':'<option value="">Select '+(isTaken?'lender':'borrower')+'...</option>')+
+      elig.map(function(p){return '<option value="'+p.id+'"'+((ex&&ex.party_id===p.id)?' selected':'')+'>'+p.name+'</option>';}).join('')+
+      '<option value="__new__">+ Add new party\u2026</option></select>'+
     '<label class="flbl">Principal Amount (&#8377;) *</label><input class="finp" id="ll-principal" type="number" step="0.01" placeholder="0.00" value="'+(ex?(parseFloat(ex.principal)||''):'')+'">'+
     '<label class="flbl">Date *</label><input class="finp" id="ll-date" type="date" value="'+((ex&&ex.start_date)||new Date().toISOString().slice(0,10))+'">'+
     '<label class="flbl">Interest Rate (% p.a.)</label><input class="finp" id="ll-rate" type="number" step="0.01" placeholder="0 for interest-free" value="'+(ex?(parseFloat(ex.interest_rate)||''):'')+'" oninput="lnUpdatePaymentType()">'+
@@ -29477,8 +29500,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019l"></script>
-<script src="js/employee.js?v=20261019l"></script>
-<script src="js/projects.js?v=20261019l"></script>
-<script src="js/finance.js?v=20261019l"></script>
+<script src="js/registry.js?v=20261019m"></script>
+<script src="js/employee.js?v=20261019m"></script>
+<script src="js/projects.js?v=20261019m"></script>
+<script src="js/finance.js?v=20261019m"></script>
 </html>
