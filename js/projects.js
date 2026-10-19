@@ -2927,8 +2927,8 @@ function rrRender(){
         .reduce(function(s,r){return s+(parseFloat(r.qty)||0);},0);
       var planQty=parseFloat(res.qty)||0;
       var remaining=Math.max(0,planQty-raised);
-      var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
-      var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+      var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
+      var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
       var col=tCol[res.exec_type]||'#555';
 
       return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);">'+
@@ -3004,7 +3004,7 @@ function rrDownloadAllExcel(){
   if(!RR_ITEMS.length){toast('No requisitions to export','warning');return;}
   var projName=rrProjName();
   var compName=typeof coName==='function'?coName():'RYDAX';
-  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'});
   var stLbl={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
   function fmtD(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var header=['RR Number','Date Raised','BOQ Item','Party Name','Party Type','Qty','Unit','Required Date','Status','Requested By','Remarks'];
@@ -3034,7 +3034,7 @@ function rrDownloadAllPDF(){
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
-  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'});
   var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var stLbl={pending:'Pending',approved:'Approved',rejected:'Rejected',allotted:'Allotted'};
   function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
@@ -3544,12 +3544,7 @@ async function rrGroupOpenAllotForm(groupId){
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
         '<div><label class="flbl">Party Type *</label>'+
           '<select id="wa-party-type" class="fsel">'+
-            '<option value="">— Select Type —</option>'+
-            '<option value="sc">Subcontractor</option>'+
-            '<option value="vendor">Vendor</option>'+
-            '<option value="labour_contractor">Labour Contractor</option>'+
-            '<option value="labour">Labour</option>'+
-            '<option value="machinery">Machinery</option>'+
+            partyTypeOptsHtml()+
           '</select>'+
         '</div>'+
         '<div><label class="flbl">Party Name *</label>'+
@@ -3751,7 +3746,7 @@ async function rrGroupDownloadPDF(groupId, projName){
   var co=typeof COMPANY_DATA!=='undefined'?COMPANY_DATA:{};
   function fmtD(d){if(!d)return '\u2014';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var inr=function(n){return '\u20b9'+Math.round(parseFloat(n)||0).toLocaleString('en-IN');};
-  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'});
   var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var stLbl={pending:'PENDING',approved:'APPROVED',rejected:'REJECTED',allotted:'ALLOTTED'};
   var sc=stCol[group.status]||'#555';
@@ -4054,7 +4049,7 @@ function rrDownloadPDF(rrId, projName){
   var item=RR_PLAN_ITEMS.find(function(i){return i.id===rr.boq_item_id;})||{};
   var planRes=RR_PLAN_RES.find(function(r){return r.id===rr.plan_res_id;})||{};
   function fmtD(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
-  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'});
   var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var stLbl={pending:'PENDING',approved:'APPROVED',rejected:'REJECTED',allotted:'ALLOTTED'};
   var sc=stCol[rr.status]||'#555';
@@ -4147,8 +4142,8 @@ function execRender(){
   var el=document.getElementById('exec-content');if(!el)return;
   if(!WA_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items</div>';return;}
 
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
 
   // Wire allot buttons via event delegation (no once:true — content re-renders on each save)
   if(!el._execClickWired){
@@ -4331,7 +4326,7 @@ function execAllotDownloadExcel(){
   if(!rows.length){toast('No planned resources to export','warning');return;}
   var projName=execProjName();
   var compName=typeof coName==='function'?coName():'RYDAX';
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   var header=['Item Code','Description','Party Name','Type','Planned Qty','Unit','RR Approved','Allotted','Balance'];
   var lines=[[compName],['Work Allotment Statement - '+projName],[''],header];
   rows.forEach(function(row){
@@ -4359,7 +4354,7 @@ function execAllotDownloadPDF(){
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
   var thead='<tr style="background:#E65100;color:white;">'+
     '<th style="'+thStyle+'text-align:left;">Item Code</th>'+
@@ -4473,12 +4468,7 @@ async function execOpenMultiAllot(){
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
         '<div><label class="flbl">Party Type *</label>'+
           '<select id="wa-party-type" class="fsel">'+
-            '<option value="">— Select Type —</option>'+
-            '<option value="sc">Subcontractor</option>'+
-            '<option value="vendor">Vendor</option>'+
-            '<option value="labour_contractor">Labour Contractor</option>'+
-            '<option value="labour">Labour</option>'+
-            '<option value="machinery">Machinery</option>'+
+            partyTypeOptsHtml()+
           '</select>'+
         '</div>'+
         '<div><label class="flbl">Party Name *</label>'+
@@ -4772,12 +4762,7 @@ async function execOpenAllot(itemId){
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
         '<div><label class="flbl">Party Type *</label>'+
           '<select id="wa-party-type" class="fsel">'+
-            '<option value="">— Select Type —</option>'+
-            '<option value="sc">Subcontractor</option>'+
-            '<option value="vendor">Vendor</option>'+
-            '<option value="labour_contractor">Labour Contractor</option>'+
-            '<option value="labour">Labour</option>'+
-            '<option value="machinery">Machinery</option>'+
+            partyTypeOptsHtml()+
           '</select>'+
         '</div>'+
         '<div><label class="flbl">Party Name *</label>'+
@@ -4928,19 +4913,12 @@ async function execOpenAllot(itemId){
 
 // Load party names dropdown when type changes
 async function waLoadPartyNames(type){
+  if(type==='__new_ptype__') return;   // the "+ Add party type" entry, handled separately
   var sel = document.getElementById('wa-party-name');
   if(!sel||!type){if(sel)sel.innerHTML='<option value="">— Select type first —</option>';return;}
   sel.innerHTML='<option value="">&#9203; Loading...</option>';
   try{
-    var rows=[];
-    if(type==='sc'||type==='labour_contractor') rows=await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    else if(type==='vendor') rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    else if(type==='labour') rows=await sbFetch('labourers',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    else if(type==='machinery'){
-      try{rows=await sbFetch('equipment',{select:'id,name',order:'name.asc'});}catch(e){rows=[];}
-      if(!Array.isArray(rows)||!rows.length) rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    }
-    var list=Array.isArray(rows)?rows:[];
+    var list=await partyFetchNames(type);
     sel.innerHTML='<option value="">— Select —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('')+PARTY_ADD_OPT;
   }catch(e){sel.innerHTML='<option value="">— Error loading —</option>';console.error(e);}
 }
@@ -4971,15 +4949,7 @@ async function waTypeChangeFor(resId, type){
   if(!sel||!type){if(sel)sel.innerHTML='<option value="">— Select type first —</option>';return;}
   sel.innerHTML='<option value="">&#9203; Loading...</option>';
   try{
-    var rows=[];
-    if(type==='sc'||type==='labour_contractor') rows=await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    else if(type==='vendor') rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    else if(type==='labour') rows=await sbFetch('labourers',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    else if(type==='machinery'){
-      try{rows=await sbFetch('equipment',{select:'id,name',order:'name.asc'});}catch(e){rows=[];}
-      if(!Array.isArray(rows)||!rows.length) rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    }
-    var list=Array.isArray(rows)?rows:[];
+    var list=await partyFetchNames(type);
     sel.innerHTML='<option value="">— Select —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('')+PARTY_ADD_OPT;
   }catch(e){sel.innerHTML='<option value="">— Error —</option>';console.error(e);}
 }
@@ -4990,22 +4960,7 @@ async function waTypeChange(){
   if(!sel||!type){ if(sel) sel.innerHTML='<option value="">— Select party type first —</option>'; return; }
   sel.innerHTML='<option value="">&#9203; Loading...</option>';
   try{
-    var rows=[];
-    if(type==='sc'){
-      rows = await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    } else if(type==='vendor'){
-      rows = await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    } else if(type==='labour_contractor'){
-      rows = await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    } else if(type==='labour'){
-      rows = await sbFetch('labourers',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-    } else if(type==='machinery'){
-      try{ rows = await sbFetch('equipment',{select:'id,name',order:'name.asc'}); }catch(e){ rows=[]; }
-      if(!Array.isArray(rows)||!rows.length){
-        rows = await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
-      }
-    }
-    var list = Array.isArray(rows)?rows:[];
+    var list=await partyFetchNames(type);
     sel.innerHTML='<option value="">'+(list.length?'— Select —':'— No party found —')+'</option>'+
       list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('')+PARTY_ADD_OPT;
   }catch(e){
@@ -7042,8 +6997,8 @@ function execRenderOrders(){
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128196;</div><div style="font-weight:700;margin-top:8px;">No orders yet</div><div style="font-size:12px;margin-top:4px;">Generate WO/PO from the Allotted Work tab</div></div>';
     return;
   }
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
   var fmtD=function(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
 
   // Group by doc_type + doc_number
@@ -7108,7 +7063,7 @@ function execOrdersDownloadExcel(){
   if(!grouped.wo.length&&!grouped.po.length){toast('No orders to export','warning');return;}
   var projName=execProjName();
   var compName=typeof coName==='function'?coName():'RYDAX';
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   function fmtD4(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var header=['Doc No','Party','Party Type','Date','Items','Total Amount'];
   var lines=[[compName],['Work Order / Purchase Order Register - '+projName]];
@@ -7147,7 +7102,7 @@ function execOrdersDownloadPDF(){
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   function fmtD4(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
 
   function buildTable(list,prefix,col){
@@ -7255,8 +7210,8 @@ function execRenderAllotted(){
     return;
   }
 
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
   var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
 
   // Group by batch_id — allotments saved together appear as one group
@@ -7421,7 +7376,7 @@ function execAllottedDownloadExcel(){
   if(!WA_ALLOT.length){toast('No allotments to export','warning');return;}
   var projName=execProjName();
   var compName=typeof coName==='function'?coName():'RYDAX';
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   var header=['Item Code','Description','Resource','Party (Paid To)','Type','Qty','Unit','Rate','Amount','Date','Doc Status','Advance Paid'];
   var lines=[[compName],['Work Allotment Register - '+projName],[''],header];
   var total=0,totalAdv=0;
@@ -7457,7 +7412,7 @@ function execAllottedDownloadPDF(){
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
   var thead='<tr style="background:#1B5E20;color:white;">'+
     '<th style="'+thStyle+'text-align:left;">Item Code</th>'+
@@ -7539,7 +7494,7 @@ function execAllottedDownloadPDF(){
 }
 
 async function execGenPartyDoc(partyKey, docType){
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   var parts=partyKey.split('::');
   var partyType=parts[0], partyName=parts.slice(1).join('::');
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
@@ -7846,7 +7801,7 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
   var fmtD=function(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
   var today=new Date().toISOString().slice(0,10);
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
 
   // Build combined document
   var isLumpsum = batchItems.length && !!batchItems[0].lumpsum_amount;
@@ -8313,7 +8268,7 @@ function execOpenDailyEntryPicker(){
 }
 
 function execDailyFlattenRows(){
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   var entries=execDailySortedEntries();
   var rows=[];
   entries.forEach(function(d){
@@ -8613,8 +8568,8 @@ function execRenderDailyContent(){
   var el=document.getElementById('dp-daily-content');if(!el)return;
   var selDate=WA_DAILY_DATE;
 
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   function pColor(pct){return pct>=100?'#2E7D32':pct>=60?'#1565C0':pct>=30?'#F57F17':'#E65100';}
   function fmt(n){var v=parseFloat(n)||0;return v%1===0?String(v):v.toFixed(2).replace(/\.?0+$/,'');}
 
@@ -8865,8 +8820,8 @@ async function execOpenDailyEntry(itemId){
     return a.boq_item_id===itemId||(a.boq_subitem_id&&itemSubIds.includes(a.boq_subitem_id));
   });
 
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
 
   // Build resource name — from planned resource (what material it IS)
   function getResName(a){
@@ -9190,8 +9145,8 @@ async function execEditDailyEntry(entryId, itemId){
   // Parse existing resources_used
   var existingRes=[];try{existingRes=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
 
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
 
   // Store-aware resource rows for edit — same logic as new entry
   function getEditResName(a){
@@ -9418,8 +9373,8 @@ function execRenderBills(){
   execRefreshPanCache(execRenderBills); // best-effort: re-render once party PAN data lands, if not already cached
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:0});};
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
 
   // ── Sub-tab bar ─────────────────────────────────────────────────────────
   var tabs=[
@@ -9445,8 +9400,8 @@ function execRenderBills(){
 
   // Summary (Abstract overview) sub-tab
   if(BILL_SUBTAB==='summary'){
-    var tLblS={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-    var tColS={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+    var tLblS=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+    var tColS=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
     var partyMap={};
     WA_ALLOT.filter(function(a){return a.project_id===projId;}).forEach(function(a){
       var ptype=a.exec_type||a.party_type||'';
@@ -10077,7 +10032,7 @@ function purchaseBillsRegDownloadExcel(){
   if(!rows.length){toast('No purchase bills to export','warning');return;}
   var projName=execProjName();
   var compName=typeof coName==='function'?coName():'RYDAX';
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   function fmtD5(d){if(!d)return '';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var header=['Bill Ref/No','Date','Party','Party Type','Description','Work Amount','Additions','Gross Amount','Deductions Held','Net Payable','Paid','Balance Due'];
   var lines=[[compName],['Purchase Bills Register - '+projName],[''],header];
@@ -10110,7 +10065,7 @@ function purchaseBillsRegDownloadPDF(){
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var today=typeof fmtDate==='function'?fmtDate(new Date()):new Date().toLocaleDateString();
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   function fmtD5(d){if(!d)return '—';if(/^\d{4}-\d{2}-\d{2}/.test(d)){var p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}return d;}
   var thStyle='padding:6px 8px;font-size:9px;font-weight:800;text-align:right;white-space:nowrap;';
   var thead='<tr style="background:#1565C0;color:white;">'+
@@ -10248,7 +10203,7 @@ function execRenderPaymentsCore(el, projId){
     return;
   }
 
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
 
   var html=keys.map(function(key){
     var g=partyGroups[key];
@@ -15835,7 +15790,6 @@ async function scSaveProgress(scopeId){
 // ───────────────────────────────────────────────────────────────────
 var PARTY_ADD_OPT='<option value="__new_party__">+ Add new party…</option>';
 var PARTY_QA_TARGET=null;
-var PARTY_QA_TYPES=[['sc','Subcontractor'],['vendor','Vendor'],['labour_contractor','Labour Contractor'],['labour','Labour'],['machinery','Machinery']];
 
 document.addEventListener('change',function(ev){
   var el=ev.target;
@@ -15859,7 +15813,7 @@ function partyQuickAddOpen(selEl){
     '<div style="background:var(--card-bg);border-radius:16px;width:100%;max-width:400px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);max-height:90vh;overflow:auto;">'+
       '<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:12px;">Add New Party</div>'+
       '<label class="flbl">Party Type *</label><select id="pqa-type" class="fsel">'+
-        PARTY_QA_TYPES.map(function(t){return '<option value="'+t[0]+'"'+(t[0]===preset?' selected':'')+'>'+t[1]+'</option>';}).join('')+'</select>'+
+        PARTY_TYPES.map(function(t){return '<option value="'+t.key+'"'+(t.key===preset?' selected':'')+'>'+t.label+'</option>';}).join('')+'</select>'+
       '<label class="flbl">Party Name *</label><input id="pqa-name" class="finp" placeholder="Company / person name">'+
       '<label class="flbl">Contact Person</label><input id="pqa-contact" class="finp">'+
       '<label class="flbl">Phone</label><input id="pqa-phone" class="finp" type="tel">'+
@@ -15886,11 +15840,12 @@ async function partyQuickAddSave(){
   var btn=document.getElementById('pqa-save'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
   try{
     var res;
-    if(type==='vendor'||type==='machinery'){
-      res=await sbInsert('vendors',{vendor_id:'VND-'+String((typeof VENDORS!=='undefined'?VENDORS.length:0)+1).padStart(3,'0'),name:name,category:type==='machinery'?'machinery':'general',status:'active',gst:gst,contact_person:contact,phone:phone,total_orders:0,total_value:0});
+    var psrc=partySourceOf(type), plabel=partyLabel(type);
+    if(psrc==='vendor'||psrc==='machinery'){
+      res=await sbInsert('vendors',{vendor_id:'VND-'+String((typeof VENDORS!=='undefined'?VENDORS.length:0)+1).padStart(3,'0'),name:name,category:psrc==='machinery'?'machinery':'general',status:'active',gst:gst,contact_person:contact,phone:phone,total_orders:0,total_value:0});
       if(res&&res[0]&&typeof VENDORS!=='undefined'&&typeof mapVendor==='function') VENDORS.unshift(mapVendor(res[0]));
-    }else if(type==='sc'||type==='labour_contractor'){
-      res=await sbInsert('subcontractors',{sc_id:'SC-REG-'+String((typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS.length:0)+1).padStart(3,'0'),name:name,trade:type==='labour_contractor'?'labour contractor':'general',gst:gst,contact_person:contact,phone:phone,workers:0,pbg_available:false,emd_available:false,status:'active'});
+    }else if(psrc==='sc'){
+      res=await sbInsert('subcontractors',{sc_id:'SC-REG-'+String((typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS.length:0)+1).padStart(3,'0'),name:name,trade:String(plabel||'general').toLowerCase(),gst:gst,contact_person:contact,phone:phone,workers:0,pbg_available:false,emd_available:false,status:'active'});
       if(res&&res[0]&&typeof SUBCONTRACTORS!=='undefined'&&typeof mapSC==='function') SUBCONTRACTORS.unshift(mapSC(res[0]));
     }else{
       res=await sbInsert('labourers',{name:name,skill:'',type:'',phone:phone||'',daily_rate:0,status:'active'});
@@ -15923,3 +15878,166 @@ async function partyQuickAddSave(){
     if(btn){btn.disabled=false;btn.textContent='Save Party';}
   }
 }
+
+// ───────────────────────────────────────────────────────────────────
+// Party Types — customised in Master Registry → Party Types.
+// A type has a label and a "source": which list its party names come
+// from (subcontractors, vendors, labourers or equipment). The internal
+// key stays stable: names matching the original five keep their old keys
+// so existing allotments, bills and payments still match.
+// ───────────────────────────────────────────────────────────────────
+var PARTY_TYPES=[];            // [{key,label,source,color}]
+var PARTY_TYPES_LOADED=false;
+var PARTY_SOURCES=[['sc','Subcontractors list'],['vendor','Vendors list'],['labour','Labourers list'],['machinery','Equipment list (falls back to Vendors)']];
+var PARTY_LEGACY_KEYS={'subcontractor':'sc','vendor':'vendor','labour contractor':'labour_contractor','labour':'labour','machinery':'machinery'};
+var PARTY_LEGACY_SOURCE={sc:'sc',labour_contractor:'sc',vendor:'vendor',labour:'labour',machinery:'machinery'};
+var PARTY_LEGACY_LABEL={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+var PARTY_LEGACY_COLOR={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+
+function partySlug(name){
+  var n=String(name||'').toLowerCase().trim();
+  if(PARTY_LEGACY_KEYS[n]) return PARTY_LEGACY_KEYS[n];
+  var k=n.replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+  if(!k||k==='planned') k='pt_'+Date.now();
+  return k;
+}
+function partyEncode(source,key){ return 'src:'+source+'|key:'+key; }
+function partyDecode(desc){
+  var o={source:'',key:''};
+  String(desc||'').split('|').forEach(function(part){
+    var i=part.indexOf(':'); if(i<0) return;
+    var k=part.slice(0,i), v=part.slice(i+1);
+    if(k==='src') o.source=v; else if(k==='key') o.key=v;
+  });
+  return o;
+}
+function partyDescText(desc){
+  var d=partyDecode(desc), src=PARTY_SOURCES.find(function(x){return x[0]===d.source;});
+  return 'Party names come from: '+(src?src[1]:'—');
+}
+async function partyTypesLoad(force){
+  if(PARTY_TYPES_LOADED && !force) return PARTY_TYPES;
+  try{
+    var rows=await sbFetch('categories',{select:'id,name,description,color,active',filter:'type=eq.partytype',order:'created_at.asc'});
+    PARTY_TYPES=(Array.isArray(rows)?rows:[]).filter(function(r){return r.active!==false;}).map(function(r){
+      var d=partyDecode(r.description), key=d.key||partySlug(r.name);
+      return {key:key,label:r.name,source:d.source||PARTY_LEGACY_SOURCE[key]||'vendor',color:r.color||'#37474F'};
+    });
+    PARTY_TYPES_LOADED=true;
+  }catch(e){ console.warn('partyTypesLoad',e); }
+  return PARTY_TYPES;
+}
+function partyTypeOf(key){ return PARTY_TYPES.find(function(p){return p.key===key;}); }
+function partyLabel(key){ var t=partyTypeOf(key); return t?t.label:(PARTY_LEGACY_LABEL[key]||key); }
+function partySourceOf(key){ var t=partyTypeOf(key); return t?t.source:(PARTY_LEGACY_SOURCE[key]||'vendor'); }
+
+// Registry label/colour wins over the old built-in text, and a type that is
+// not in the old map still shows its registry label instead of a raw key.
+function partyLblMap(base){
+  return new Proxy(base,{get:function(t,k){
+    if(typeof k!=='string') return t[k];
+    var pt=partyTypeOf(k); if(pt) return pt.label;
+    return (k in t)?t[k]:undefined;
+  }});
+}
+function partyColMap(base){
+  return new Proxy(base,{get:function(t,k){
+    if(typeof k!=='string') return t[k];
+    if(k in t) return t[k];
+    var pt=partyTypeOf(k); return pt?pt.color:undefined;
+  }});
+}
+
+function partyTypeOptsHtml(sel){
+  if(!PARTY_TYPES_LOADED){
+    // First open before the list has arrived: load it, then refill any open dropdown
+    partyTypesLoad().then(function(){
+      document.querySelectorAll('select#wa-party-type').forEach(function(el){
+        var keep=el.value; el.innerHTML=partyTypeOptsHtml(); el.value=keep;
+      });
+    });
+  }
+  return '<option value="">— Select Type —</option>'+
+    PARTY_TYPES.map(function(t){return '<option value="'+t.key+'"'+(t.key===sel?' selected':'')+'>'+t.label+'</option>';}).join('')+
+    '<option disabled>──────────</option><option value="__new_ptype__">+ Add party type…</option>';
+}
+
+async function partyFetchNames(type){
+  await partyTypesLoad();
+  var src=partySourceOf(type), rows=[];
+  if(src==='sc') rows=await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+  else if(src==='labour') rows=await sbFetch('labourers',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+  else if(src==='machinery'){
+    try{ rows=await sbFetch('equipment',{select:'id,name',order:'name.asc'}); }catch(e){ rows=[]; }
+    if(!Array.isArray(rows)||!rows.length) rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+  }
+  else rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+  return Array.isArray(rows)?rows:[];
+}
+
+// ── Add / create a party type (from Master Registry or from the dropdown) ──
+var PARTY_TYPE_ADD_TARGET=null;
+document.addEventListener('change',function(ev){
+  var el=ev.target;
+  if(!el||el.tagName!=='SELECT'||el.value!=='__new_ptype__') return;
+  el.value='';
+  PARTY_TYPE_ADD_TARGET=el;
+  partyTypeAddOpen();
+});
+function partyTypeAddOpen(){
+  var old=document.getElementById('ptype-add-ov'); if(old) old.remove();
+  var ov=document.createElement('div');
+  ov.id='ptype-add-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100001;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML=
+    '<div style="background:var(--card-bg);border-radius:16px;width:100%;max-width:400px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);">'+
+      '<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:12px;">Add Party Type</div>'+
+      '<label class="flbl">Party Type Name *</label><input id="ptype-name" class="finp" placeholder="e.g. Consultant, Transporter">'+
+      '<label class="flbl">Party names come from *</label><select id="ptype-src" class="fsel">'+
+        PARTY_SOURCES.map(function(x){return '<option value="'+x[0]+'">'+x[1]+'</option>';}).join('')+'</select>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin:2px 0 12px;">When you pick this type, the Party Name dropdown lists the parties from that Master Registry list.</div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+        '<button class="btn btn-outline" onclick="partyTypeAddClose()">Cancel</button>'+
+        '<button id="ptype-save" class="btn btn-navy" onclick="partyTypeAddSave()">Save</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){var n=document.getElementById('ptype-name'); if(n) n.focus();},50);
+}
+function partyTypeAddClose(){ var o=document.getElementById('ptype-add-ov'); if(o) o.remove(); PARTY_TYPE_ADD_TARGET=null; }
+async function partyTypeAddSave(){
+  var name=((document.getElementById('ptype-name')||{}).value||'').trim();
+  var src=(document.getElementById('ptype-src')||{}).value||'vendor';
+  if(!name){ toast('Enter a party type name','warning'); return; }
+  await partyTypesLoad();
+  if(PARTY_TYPES.some(function(t){return t.label.toLowerCase()===name.toLowerCase();})){ toast('"'+name+'" already exists','warning'); return; }
+  var key=partySlug(name);
+  var btn=document.getElementById('ptype-save'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    var insRes=await sbInsert('categories',{type:'partytype',name:name,icon:'',description:partyEncode(src,key),color:'#37474F',active:true});
+    var newCatId=(insRes&&insRes[0]&&insRes[0].id)||('partytype-'+Date.now());
+    PARTY_TYPES.push({key:key,label:name,source:src,color:'#37474F'});
+    if(typeof CAT_DATA!=='undefined'){
+      (CAT_DATA.partytype=CAT_DATA.partytype||[]).push({id:newCatId,icon:'&#129309;',name:name,desc:partyEncode(src,key),color:'#37474F',count:0,active:true});
+      if(typeof renderCatSection==='function') renderCatSection('partytype','partytype-cats');
+    }
+    var target=PARTY_TYPE_ADD_TARGET;
+    partyTypeAddClose();
+    toast(name+' added','success');
+    // Refill every open party-type dropdown, and select the new one in the one that opened this
+    document.querySelectorAll('select#wa-party-type').forEach(function(el){
+      var keep=el.value; el.innerHTML=partyTypeOptsHtml(); el.value=keep;
+    });
+    if(target && document.body.contains(target)){
+      target.value=key;
+      target.dispatchEvent(new Event('change',{bubbles:true}));
+      if(target.id==='wa-party-type' && typeof waLoadPartyNames==='function') waLoadPartyNames(key);
+    }
+  }catch(e){
+    console.error('partyTypeAddSave',e);
+    toast('Could not save party type: '+(e.message||e),'error');
+    if(btn){btn.disabled=false;btn.textContent='Save';}
+  }
+}
+// Load the list as soon as the app starts using it
+try{ setTimeout(function(){ if(typeof sbFetch==='function' && typeof currentUser!=='undefined' && currentUser) partyTypesLoad(); },3000); }catch(e){}

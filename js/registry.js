@@ -14,10 +14,10 @@ var ROLE_IC={admin:'&#128084;',pm:'&#127959;',engineer:'&#9881;&#65039;',qhse:'&
 var CAT_DATA={
   // No built-in defaults: every list starts empty and is built by the company
   // in Master Registry.
-  vendor:[], material:[], sc:[], role:[], dept:[], uom:[], labour:[], resource:[], leave:[], pettycash:[]
+  vendor:[], material:[], sc:[], role:[], dept:[], uom:[], labour:[], resource:[], leave:[], pettycash:[], partytype:[]
 };
 
-var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats'};
+var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats',partytype:'partytype-cats'};
 
 function catKey(name){ return (name||'').toLowerCase().trim(); }
 
@@ -35,6 +35,7 @@ async function initRegistry(){
   renderCatSection('dept','dept-cats');
   renderCatSection('leave','leave-cats');
   renderCatSection('pettycash','pettycash-cats');
+  renderCatSection('partytype','partytype-cats');
   loadAllData();
 }
 
@@ -356,7 +357,7 @@ function renderCatSection(type,containerId){
   el.innerHTML=cats.map(function(c,i){
     return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--border);">' +
       '<div style="width:38px;height:38px;border-radius:10px;background:'+c.color+'20;border:1px solid '+c.color+'40;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+c.icon+'</div>' +
-      '<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+c.name+'</div><div style="font-size:11px;color:var(--text3);">'+c.desc+'</div></div>' +
+      '<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+c.name+'</div><div style="font-size:11px;color:var(--text3);">'+(type==='partytype'&&typeof partyDescText==='function'?partyDescText(c.desc):c.desc)+'</div></div>' +
       '<div onclick="toggleCat(\''+type+'\','+i+')" style="width:40px;height:22px;border-radius:11px;background:'+(c.active?'var(--green)':'#CBD5E1')+';position:relative;cursor:pointer;">' +
         '<div style="position:absolute;top:3px;left:'+(c.active?'21':'3')+'px;width:16px;height:16px;border-radius:50%;background:white;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div>' +
       '</div>' +
@@ -377,12 +378,13 @@ function deleteCat(type,i){
   if(pillMap[type]) rebuildPills(type,pillMap[type],colorMap[type],fnMap[type]);
   toast(cat.name+' removed','success');
   if(cat.id&&!cat.id.startsWith(type+'-new')){
-    sbDelete('categories',cat.id).catch(function(){});
+    sbDelete('categories',cat.id).then(function(){ if(type==='partytype' && typeof partyTypesLoad==='function') partyTypesLoad(true); }).catch(function(){});
   }
 }
 
 function toggleCat(type,i){
   CAT_DATA[type][i].active=!CAT_DATA[type][i].active;
+  if(type==='partytype'){ try{ var _c=CAT_DATA[type][i]; sbFetch('categories',{select:'id',filter:'type=eq.partytype&name=eq.'+encodeURIComponent(_c.name)}).then(function(r){ if(r&&r[0]) return sbUpdate('categories',r[0].id,{active:_c.active}); }).then(function(){ return partyTypesLoad(true); }); }catch(e){} }
   renderCatSection(type,catSectionMap[type]);
   var pillMap={vendor:'vendor-cat-pills',material:'mat-cat-pills',sc:'sc-cat-pills',labour:'lab-cat-pills'};
   var fnMap={vendor:filterVendors,material:filterMaterials,sc:filterSC,labour:filterLabour};
@@ -392,6 +394,7 @@ function toggleCat(type,i){
 }
 
 function addCategory(type){
+  if(type==='partytype'){ return partyTypeAddOpen(); }
   document.getElementById('add-title').textContent='Add Category';
   document.getElementById('add-body').innerHTML=
     '<label class="flbl">Category Name *</label><input class="finp" id="new-cat-name" placeholder="e.g. Precast Concrete">'+

@@ -2572,6 +2572,17 @@ body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
       <div id="pettycash-cats"></div>
     </div>
 
+    <div class="card" style="padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div>
+          <div style="font-size:14px;font-weight:800;">&#129309; Party Types</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Types shown when allotting work (e.g. Subcontractor, Vendor, Consultant) and where each one gets its party names from</div>
+        </div>
+        <button class="btn btn-navy btn-sm" onclick="addCategory('partytype')">+ Add</button>
+      </div>
+      <div id="partytype-cats"></div>
+    </div>
+
     <div style="height:10px"></div>
   </div>
 
@@ -5463,7 +5474,7 @@ async function attLoadAll(){
   }
   renderPunchLog();
 
-  var tLbl={'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'};
+  var tLbl=partyLblMap({'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'});
   leaveData = leaves.map(function(l){
     return {id:l.id, empId:l.emp_id, emp:l.emp_name, type:tLbl[l.leave_type]||l.leave_type, rawType:l.leave_type, from:attDisplayDate(l.from_date), to:attDisplayDate(l.to_date), fromRaw:l.from_date, toRaw:l.to_date, days:l.days, reason:l.reason||'', applied:attDisplayDate((l.created_at||'').slice(0,10)), status:l.status, paid:(l.paid!==false), approvedByName:l.approved_by_name||null, approvedAt:l.approved_at||null};
   });
@@ -6813,7 +6824,7 @@ async function submitLeave() {
       from_date: fromDate, to_date: toDate, days: days, reason: extraNote+(reason||''), status:'pending'
     });
     var saved = (res && res[0]) || {};
-    var tLbl={'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'};
+    var tLbl=partyLblMap({'Casual Leave (CL)':'Casual Leave','Sick Leave (SL)':'Sick Leave','Earned Leave (EL)':'Earned Leave','Comp Off':'Comp Off','Loss of Pay (LOP)':'Loss of Pay'});
     leaveData.unshift({id:saved.id, emp:empName, type:tLbl[leaveType]||leaveType, from:attDisplayDate(fromDate), to:attDisplayDate(toDate), days:days, reason:reason, applied:attDisplayDate(attToday()), status:'pending'});
     renderLeave();
     showToast('Leave application submitted for approval!', 'success');
@@ -8854,7 +8865,7 @@ async function getNextRYDAXId(){
 
 
 // ── CATEGORY SYNC ──
-var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats'};
+var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats',partytype:'partytype-cats'};
 
 async function loadCategories(){
   try{
@@ -15169,8 +15180,8 @@ function rrRender(){
         .reduce(function(s,r){return s+(parseFloat(r.qty)||0);},0);
       var planQty=parseFloat(res.qty)||0;
       var remaining=Math.max(0,planQty-raised);
-      var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
-      var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+      var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
+      var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
       var col=tCol[res.exec_type]||'#555';
 
       return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid #F5F5F5;">'+
@@ -15398,7 +15409,7 @@ function rrDownloadPDF(rrId, projName){
   var item=RR_PLAN_ITEMS.find(function(i){return i.id===rr.boq_item_id;})||{};
   var planRes=RR_PLAN_RES.find(function(r){return r.id===rr.plan_res_id;})||{};
   
-  var tLbl={vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'Subcontractor',labour_contractor:'Labour Contractor',labour:'Labour',machinery:'Machinery'});
   var stCol={pending:'#F57F17',approved:'#2E7D32',rejected:'#C62828',allotted:'#1565C0'};
   var stLbl={pending:'PENDING',approved:'APPROVED',rejected:'REJECTED',allotted:'ALLOTTED'};
   var sc=stCol[rr.status]||'#555';
@@ -15488,8 +15499,8 @@ function execRender(){
   var el=document.getElementById('exec-content');if(!el)return;
   if(!WA_ITEMS.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No BOQ items</div>';return;}
 
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
 
   // Wire allot buttons via event delegation (no once:true — content re-renders on each save)
   if(!el._execClickWired){
@@ -15647,12 +15658,7 @@ async function execOpenAllot(itemId){
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'+
         '<div><label class="flbl">Party Type *</label>'+
           '<select id="wa-party-type" class="fsel">'+
-            '<option value="">— Select Type —</option>'+
-            '<option value="sc">Subcontractor</option>'+
-            '<option value="vendor">Vendor</option>'+
-            '<option value="labour_contractor">Labour Contractor</option>'+
-            '<option value="labour">Labour</option>'+
-            '<option value="machinery">Machinery</option>'+
+            partyTypeOptsHtml()+
           '</select>'+
         '</div>'+
         '<div><label class="flbl">Party Name *</label>'+
@@ -16236,8 +16242,8 @@ function execRenderOrders(){
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);"><div style="font-size:36px;">&#128196;</div><div style="font-weight:700;margin-top:8px;">No orders yet</div><div style="font-size:12px;margin-top:4px;">Generate WO/PO from the Allotted Work tab</div></div>';
     return;
   }
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
 
   // Group by doc_type then sort by doc_number
   var grouped={wo:[],po:[]};
@@ -16300,8 +16306,8 @@ function execRenderAllotted(){
     return;
   }
 
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
   var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
 
   // Group by batch_id — allotments saved together appear as one group
@@ -16433,7 +16439,7 @@ function execRenderAllotted(){
 }
 
 async function execGenPartyDoc(partyKey, docType){
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   var parts=partyKey.split('::');
   var partyType=parts[0], partyName=parts.slice(1).join('::');
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
@@ -16535,7 +16541,7 @@ async function execGenBatchDoc(batchKey, docType){
   var inr=function(n){return '&#8377;'+Math.round(Number(n||0)).toLocaleString('en-IN');};
   var fmtD=function(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
   var today=new Date().toISOString().slice(0,10);
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
 
   // Get all allotments in this batch
   var batchItems = WA_ALLOT.filter(function(a){
@@ -16849,8 +16855,8 @@ function execRenderDailyContent(){
   var el=document.getElementById('dp-daily-content');if(!el)return;
   var selDate=WA_DAILY_DATE;
 
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   function pColor(pct){return pct>=100?'#2E7D32':pct>=60?'#1565C0':pct>=30?'#F57F17':'#E65100';}
   function fmt(n){var v=parseFloat(n)||0;return v%1===0?String(v):v.toFixed(2).replace(/\.?0+$/,'');}
 
@@ -17091,8 +17097,8 @@ async function execOpenDailyEntry(itemId){
     return a.boq_item_id===itemId||(a.boq_subitem_id&&itemSubIds.includes(a.boq_subitem_id));
   });
 
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
 
   // Build resource name — from planned resource (what material it IS)
   function getResName(a){
@@ -17370,8 +17376,8 @@ async function execEditDailyEntry(entryId, itemId){
   // Parse existing resources_used
   var existingRes=[];try{existingRes=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
 
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
 
   // Store-aware resource rows for edit — same logic as new entry
   function getEditResName(a){
@@ -17562,8 +17568,8 @@ function execRenderBills(){
   var el=document.getElementById('exec-content');if(!el)return;
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var inr=function(n){return '\u20b9'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:0});};
-  var tLbl={vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'};
-  var tCol={vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'};
+  var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
+  var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
 
   if(!WA_ALLOT.length){
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No allotments yet</div>';
@@ -29507,8 +29513,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019s"></script>
-<script src="js/employee.js?v=20261019s"></script>
-<script src="js/projects.js?v=20261019s"></script>
-<script src="js/finance.js?v=20261019s"></script>
+<script src="js/registry.js?v=20261019t"></script>
+<script src="js/employee.js?v=20261019t"></script>
+<script src="js/projects.js?v=20261019t"></script>
+<script src="js/finance.js?v=20261019t"></script>
 </html>
