@@ -3380,7 +3380,22 @@ function rrGroupToggleRateMode(mode){
 // Fills every item's rate box from its own planned rate, shifted by the
 // given %, in one go — then each box is still a plain input the user can
 // type over individually for any item that needs a different rate.
-// Live total of qty x rate across every item in the combined RR allotment
+// Each item can be filled either way: type the Rate (amount = qty x rate) or
+// type the Amount (rate = amount / qty). The saved value is always the rate.
+function rrGroupRowFor(inp){ return inp.closest('[data-ri-row]')||inp.parentNode.parentNode; }
+function rrGroupRateInput(rateInp){
+  var row=rrGroupRowFor(rateInp), amt=row.querySelector('.rr-grp-item-amt');
+  var r=parseFloat(rateInp.value), q=parseFloat(rateInp.getAttribute('data-qty'))||0;
+  if(amt) amt.value=isNaN(r)?'':String(parseFloat((q*r).toFixed(2)));
+  rrGroupUpdateTotal();
+}
+function rrGroupAmtInput(amtInp){
+  var row=rrGroupRowFor(amtInp), rate=row.querySelector('.rr-grp-item-rate');
+  var a=parseFloat(amtInp.value), q=rate?(parseFloat(rate.getAttribute('data-qty'))||0):0;
+  if(rate) rate.value=(isNaN(a)||q<=0)?'':String(parseFloat((a/q).toFixed(10)));
+  rrGroupUpdateTotal();
+}
+// Live total across every item in the combined RR allotment (sum of qty x rate)
 function rrGroupUpdateTotal(){
   var t=0, filled=0, all=0;
   document.querySelectorAll('.rr-grp-item-rate').forEach(function(inp){
@@ -3400,6 +3415,7 @@ function rrGroupApplyPctToRates(){
     var base=parseFloat(inp.getAttribute('data-planned-rate'))||0;
     if(base<=0){ skipped++; return; }
     inp.value=(base*(1+pct/100)).toFixed(2);
+    rrGroupRateInput(inp);
     filled++;
   });
   rrGroupUpdateTotal();
@@ -3458,11 +3474,15 @@ async function rrGroupOpenAllotForm(groupId){
     var boqItem=itemById[ri.boq_item_id];
     var planItem=ri.plan_item_id?planItemById[ri.plan_item_id]:null;
     var plannedRate=planItem?(parseFloat(planItem.rate)||0):0;
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;gap:6px;">'+
+    return '<div data-ri-row="1" style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;gap:6px;">'+
       '<span style="flex:1;">'+(boqItem?(boqItem.short_name||boqItem.description):ri.boq_item_id)+' <span style="color:var(--text3);">('+ri.party_name+')</span><br><span style="color:var(--text2);">'+ri.qty+' '+(ri.unit||'')+'</span></span>'+
       '<div style="text-align:center;">'+
         '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Rate (\u20b9) <span style="color:var(--text3);">(planned: '+plannedRate+')</span></div>'+
-        '<input class="rr-grp-item-rate finp" data-ri-id="'+ri.id+'" data-planned-rate="'+plannedRate+'" data-qty="'+(parseFloat(ri.qty)||0)+'" oninput="rrGroupUpdateTotal()" type="number" step="any" placeholder="Enter rate" style="width:100px;padding:4px 6px;font-size:11px;text-align:center;">'+
+        '<input class="rr-grp-item-rate finp" data-ri-id="'+ri.id+'" data-planned-rate="'+plannedRate+'" data-qty="'+(parseFloat(ri.qty)||0)+'" oninput="rrGroupRateInput(this)" type="number" step="any" placeholder="Enter rate" style="width:90px;padding:4px 6px;font-size:11px;text-align:center;">'+
+      '</div>'+
+      '<div style="text-align:center;">'+
+        '<div style="font-size:9px;color:var(--text3);margin-bottom:2px;">Amount (\u20b9) <span style="color:var(--text3);">(qty \u00d7 rate)</span></div>'+
+        '<input class="rr-grp-item-amt finp" data-ri-id="'+ri.id+'" oninput="rrGroupAmtInput(this)" type="number" step="any" placeholder="or enter amount" style="width:100px;padding:4px 6px;font-size:11px;text-align:center;">'+
       '</div>'+
     '</div>';
   }).join('');
