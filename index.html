@@ -1306,6 +1306,13 @@ body{--card-bg:#fff;}
    inherit these variables through normal CSS inheritance, rather than
    falling outside a narrower container's scope and losing the theme. */
 body.dash-dark{--bg:#1E293B;--card-bg:#1E293B;--border:#334155;--text:#F1F5F9;--text2:#CBD5E1;--text3:#94A3B8;--bg2:#1E293B;--bg3:#334155;--border2:#334155;--white:#1E293B;--accent:var(--navy);}
+/* Master Registry (and other lists) in dark mode: anything coloured with the
+   dark navy brand colour becomes unreadable on dark cards, so lift it. */
+body.dash-dark .ni.on .ni-lb{color:#60A5FA;}
+body.dash-dark .ni-lb{color:#94A3B8;}
+body.dash-dark .b-navy{background:rgba(148,163,184,.18);color:#E2E8F0;border-color:rgba(148,163,184,.35);}
+body.dash-dark .rc-name,body.dash-dark .section-title,body.dash-dark .sec-title,body.dash-dark #app-registry .stat-val,body.dash-dark #app-registry .stat-num{color:var(--text);}
+body.dash-dark #app-registry [style*="color:var(--navy)"],body.dash-dark #app-registry [style*="color:#0D2137"],body.dash-dark #app-registry [style*="color:#1A237E"]{color:#E2E8F0 !important;}
 body.dash-dark #app-dashboard{background:#0F172A;}
 body.dash-dark #app-dashboard .dash-top{background:#0F172A;border-bottom-color:#334155;}
 body.dash-dark #app-dashboard .dt-greeting{color:#F1F5F9;}
@@ -29500,8 +29507,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019o"></script>
-<script src="js/employee.js?v=20261019o"></script>
-<script src="js/projects.js?v=20261019o"></script>
-<script src="js/finance.js?v=20261019o"></script>
+<script src="js/registry.js?v=20261019p"></script>
+<script src="js/employee.js?v=20261019p"></script>
+<script src="js/projects.js?v=20261019p"></script>
+<script src="js/finance.js?v=20261019p"></script>
 </html>
