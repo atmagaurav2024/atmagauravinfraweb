@@ -539,7 +539,21 @@ function pfOpenMap(){
     var start=[22.5726,88.3639],z=5;
     if(PF_COORDS.length){start=[parseFloat(PF_COORDS[0].lat),parseFloat(PF_COORDS[0].lng)];z=15;}
     PF_MAP=L.map('pf-map').setView(start,z);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(PF_MAP);
+    // Street map (OpenStreetMap) with automatic fallback to a second provider when
+    // OSM's free tile servers return errors (e.g. 503 when busy), plus satellite.
+    var osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'});
+    var carto=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,subdomains:'abcd',attribution:'&copy; OpenStreetMap contributors &copy; CARTO'});
+    var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Imagery &copy; Esri'});
+    var osmErrs=0, switched=false;
+    osm.on('tileerror',function(){
+      osmErrs++;
+      if(osmErrs>=3 && !switched && PF_MAP.hasLayer(osm)){
+        switched=true; PF_MAP.removeLayer(osm); carto.addTo(PF_MAP);
+        toast('Map server busy \u2014 switched to backup map','info');
+      }
+    });
+    osm.addTo(PF_MAP);
+    L.control.layers({'Street':osm,'Street (backup)':carto,'Satellite':sat}).addTo(PF_MAP);
     PF_COORDS.forEach(function(c){L.circleMarker([c.lat,c.lng],{radius:7,color:'#888'}).addTo(PF_MAP).bindTooltip(c.label);});
     PF_MAP.on('click',function(e){
       var m=L.marker(e.latlng,{draggable:true}).addTo(PF_MAP);
