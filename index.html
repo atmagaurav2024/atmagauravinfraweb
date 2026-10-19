@@ -9398,7 +9398,7 @@ function updateDashboardUser(){
   });
   document.querySelectorAll('#dash-role').forEach(function(el){ el.textContent = role + ' • ' + project; });
   var headerNameEl=document.getElementById('dash-header-name'); if(headerNameEl) headerNameEl.textContent=name;
-  var headerRoleEl=document.getElementById('dash-header-role'); if(headerRoleEl){ var r=currentUser.role||'—'; headerRoleEl.textContent=r.charAt(0).toUpperCase()+r.slice(1); }
+  var headerRoleEl=document.getElementById('dash-header-role'); if(headerRoleEl){ var r=currentUser.access||currentUser.role||'—'; headerRoleEl.textContent=r.charAt(0).toUpperCase()+r.slice(1); }
 
   // Update greeting
   var hr = new Date().getHours();
@@ -29450,8 +29450,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019f"></script>
-<script src="js/employee.js?v=20261019f"></script>
-<script src="js/projects.js?v=20261019f"></script>
-<script src="js/finance.js?v=20261019f"></script>
+<script src="js/registry.js?v=20261019g"></script>
+<script src="js/employee.js?v=20261019g"></script>
+<script src="js/projects.js?v=20261019g"></script>
+<script src="js/finance.js?v=20261019g"></script>
 </html>
