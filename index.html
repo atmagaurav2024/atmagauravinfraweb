@@ -7925,11 +7925,11 @@ function renderMatRateRows(){
   }
   var matOpts=MATERIALS.map(function(m){
     return '<option value="'+m.id+'">'+m.name+' ('+m.uom+')</option>';
-  }).join('');
+  }).join('')+(typeof MAT_ADD_OPT!=='undefined'?MAT_ADD_OPT:'');
   el.innerHTML=vendorMatRates.map(function(r,i){
     return '<div style="display:grid;grid-template-columns:1fr 120px 36px;gap:8px;margin-bottom:8px;align-items:center;">'+
       '<select class="fsel" style="font-size:12px;padding:8px 10px;" onchange="vendorMatRates['+i+'].matId=this.value">'+
-      '<option value="">-- Select Material --</option>'+matOpts+'</select>'+
+      '<option value="">-- Select Material --</option>'+(r.matId?matOpts.replace('value="'+r.matId+'"','value="'+r.matId+'" selected'):matOpts)+'</select>'+
       '<input class="finp" type="number" placeholder="Rate/unit" style="font-size:12px;padding:8px 10px;" value="'+r.rate+'" oninput="vendorMatRates['+i+'].rate=this.value">'+
       '<button onclick="removeMatRateRow('+i+')" style="width:36px;height:36px;border-radius:10px;border:none;background:#FFEBEE;color:#C62828;font-size:16px;cursor:pointer;flex-shrink:0;">&#215;</button>'+
     '</div>';
@@ -29500,8 +29500,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019m"></script>
-<script src="js/employee.js?v=20261019m"></script>
-<script src="js/projects.js?v=20261019m"></script>
-<script src="js/finance.js?v=20261019m"></script>
+<script src="js/registry.js?v=20261019n"></script>
+<script src="js/employee.js?v=20261019n"></script>
+<script src="js/projects.js?v=20261019n"></script>
+<script src="js/finance.js?v=20261019n"></script>
 </html>

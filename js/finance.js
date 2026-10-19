@@ -842,7 +842,7 @@ function pcOpenExpense(){
     '<label class="flbl">Employee *</label><select class="fsel" id="pce-emp"><option value="">Select employee...</option>'+
       PC_EMPS.map(function(e){return '<option value="'+e.empId+'"'+(e.empId===pcMyEmpId()?' selected':'')+'>'+e.name+'</option>';}).join('')+'</select>'+
     '<label class="flbl">Category *</label><select class="fsel" id="pce-cat"><option value="">Select...</option>'+
-      pcCats().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'</select>'+
+      pcCats().map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'<option disabled>──────────</option><option value="__cat_edit__" data-type="pettycash">&#9998; Add / Edit list…</option></select>'+
     '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-amount" type="number" placeholder="0" oninput="pcUpdateAllocPreview()">'+
     '<label class="flbl">Date</label><input class="finp" id="pce-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
     '<label class="flbl">Payment Method</label>'+
@@ -1299,7 +1299,7 @@ function pcOpenEditEntry(id,type){
       '<label class="flbl">Employee *</label><select class="fsel" id="pce-ed-emp"><option value="">Select employee...</option>'+
         PC_EMPS.map(function(e){return '<option value="'+e.empId+'"'+(e.empId===row.emp_id?' selected':'')+'>'+e.name+'</option>';}).join('')+'</select>'+
       '<label class="flbl">Category *</label><select class="fsel" id="pce-ed-cat"><option value="">Select...</option>'+
-        pcCats().map(function(c){return '<option value="'+esc(c)+'"'+(c===row.category?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'+
+        pcCats().map(function(c){return '<option value="'+esc(c)+'"'+(c===row.category?' selected':'')+'>'+c+'</option>';}).join('')+'<option disabled>──────────</option><option value="__cat_edit__" data-type="pettycash">&#9998; Add / Edit list…</option></select>'+
       '<label class="flbl">Amount (₹) *</label><input class="finp" id="pce-ed-amount" type="number" value="'+(row.amount||'')+'">'+
       '<label class="flbl">Date</label><input class="finp" id="pce-ed-date" type="date" value="'+(row.date||'')+'">'+
       '<label class="flbl">Description *</label><input class="finp" id="pce-ed-desc" value="'+esc(row.description)+'">'+

@@ -447,9 +447,97 @@ async function loadCategories(){
 }
 
 function catOptions(type){
+  // Ends with an "Add / Edit list" entry so a missing option can be added
+  // from inside any form (handled by the document-level listener below).
   return (CAT_DATA[type]||[]).filter(function(c){return c.active;}).map(function(c){
     return '<option value="'+c.name+'">'+c.icon+' '+c.name+'</option>';
-  }).join('');
+  }).join('') +
+  '<option disabled>──────────</option>' +
+  '<option value="__cat_edit__" data-type="'+type+'">\u270e Add / Edit list\u2026</option>';
+}
+
+// One listener serves every dropdown that carries the Add / Edit entry, so it
+// no longer has to be wired onto each select by hand. Dropdowns that are
+// already wired restore their own value first, so this never double-fires.
+document.addEventListener('change',function(ev){
+  var el=ev.target;
+  if(!el||el.tagName!=='SELECT') return;
+  if(el.value==='__cat_edit__'){
+    var opt=el.options[el.selectedIndex];
+    var type=opt&&opt.getAttribute('data-type');
+    if(!type) return;                       // wired dropdown without data-type: its own handler deals with it
+    el.value=el.dataset.prevValue||'';
+    if(!el.id) el.id='cat-sel-'+Date.now();
+    catOpenQuickEdit(type, el.id);
+  } else if(el.dataset){
+    el.dataset.prevValue=el.value;
+  }
+});
+
+// ── "+ Add new material" in the material dropdowns (vendor material rates) ──
+var MAT_ADD_OPT='<option disabled>──────────</option><option value="__new_material__">+ Add new material…</option>';
+var MAT_QA_ROW=-1;
+document.addEventListener('change',function(ev){
+  var el=ev.target;
+  if(!el||el.tagName!=='SELECT'||el.value!=='__new_material__') return;
+  var m=/vendorMatRates\[(\d+)\]/.exec(el.getAttribute('onchange')||'');
+  MAT_QA_ROW=m?parseInt(m[1],10):-1;
+  matQuickAddOpen();
+});
+function matQuickAddOpen(){
+  var old=document.getElementById('mat-qa-ov'); if(old) old.remove();
+  var ov=document.createElement('div');
+  ov.id='mat-qa-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML=
+    '<div style="background:var(--card-bg);border-radius:16px;width:100%;max-width:400px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);max-height:90vh;overflow:auto;">'+
+      '<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:12px;">Add New Material</div>'+
+      '<label class="flbl">Material Name *</label><input id="mqa-name" class="finp" placeholder="e.g. Cement OPC 53">'+
+      '<label class="flbl">Category</label><select id="mqa-cat" class="fsel" onchange="if(!catSelectChanged(this,\'material\'))catRememberValue(this);"><option value="">— Select —</option>'+catOptions('material')+'</select>'+
+      '<label class="flbl">Unit of Measure</label><select id="mqa-uom" class="fsel" onchange="if(!catSelectChanged(this,\'uom\'))catRememberValue(this);"><option value="">— Select —</option>'+catOptions('uom')+'</select>'+
+      '<label class="flbl">Specification (optional)</label><input id="mqa-spec" class="finp">'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">'+
+        '<button class="btn btn-outline" onclick="matQuickAddClose(false)">Cancel</button>'+
+        '<button id="mqa-save" class="btn btn-navy" onclick="matQuickAddSave()">Save Material</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){var n=document.getElementById('mqa-name'); if(n) n.focus();},50);
+}
+function matQuickAddClose(saved){
+  var o=document.getElementById('mat-qa-ov'); if(o) o.remove();
+  if(!saved && MAT_QA_ROW>-1 && typeof vendorMatRates!=='undefined' && vendorMatRates[MAT_QA_ROW]){
+    vendorMatRates[MAT_QA_ROW].matId='';
+    if(typeof renderMatRateRows==='function') renderMatRateRows();
+  }
+}
+async function matQuickAddSave(){
+  var name=((document.getElementById('mqa-name')||{}).value||'').trim();
+  var cat=(document.getElementById('mqa-cat')||{}).value||'';
+  var uom=(document.getElementById('mqa-uom')||{}).value||'';
+  var spec=((document.getElementById('mqa-spec')||{}).value||'').trim()||null;
+  if(cat==='__cat_edit__') cat=''; if(uom==='__cat_edit__') uom='';
+  if(!name){toast('Material name is required','warning');return;}
+  var btn=document.getElementById('mqa-save'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    var n=MATERIALS.length+1;
+    var prefix=(cat||'MAT').replace(/[^a-zA-Z]/g,'').toUpperCase().slice(0,4)||'MAT';
+    var code=prefix+'-'+String(n).padStart(4,'0');
+    var res=await sbInsert('materials',{mat_id:'MAT-'+String(n).padStart(3,'0'),name:name,category:cat.toLowerCase(),code:code,unit:uom||null,uom:uom||null,spec:spec});
+    if(!(res&&res[0])) throw new Error('Nothing was saved');
+    var mat=mapMaterial(res[0]);
+    MATERIALS.unshift(mat);
+    toast(name+' added','success');
+    if(MAT_QA_ROW>-1 && typeof vendorMatRates!=='undefined' && vendorMatRates[MAT_QA_ROW]){
+      vendorMatRates[MAT_QA_ROW].matId=mat.id;
+      if(typeof renderMatRateRows==='function') renderMatRateRows();
+    }
+    matQuickAddClose(true);
+  }catch(e){
+    console.error('matQuickAddSave',e);
+    toast('Could not save material: '+(e.message||e),'error');
+    if(btn){btn.disabled=false;btn.textContent='Save Material';}
+  }
 }
 
 async function deleteRecord(type,id){
