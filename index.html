@@ -5289,6 +5289,7 @@ verifyOTP=async function(){
 // ═══════════════════════════════════════════
 // ATTENDANCE JS
 // ═══════════════════════════════════════════
+function attCanEdit(){ return !!currentUser && (currentUser.role==='admin' || (typeof canAccess==='function' && canAccess('attendance','edit'))); }
 function attIsManager(){
   if(!currentUser) return false;
   if(currentUser.role==='admin'||currentUser.role==='pm') return true;
@@ -5473,13 +5474,13 @@ function applyAttendanceRoleView(isManager){
   if(tableCard) tableCard.style.display = isManager ? '' : 'none';
   // Mark all present button — admin only
   var markAllBtn = document.querySelector('#app-attendance .btn-green');
-  if(markAllBtn) markAllBtn.style.display = (currentUser.role==='admin') ? '' : 'none';
+  if(markAllBtn) markAllBtn.style.display = attCanEdit() ? '' : 'none';
   // Status buttons — admin only (disable + grey out for others)
-  var isAdmin = currentUser.role === 'admin';
+  var isAdmin = attCanEdit();
   document.querySelectorAll('#app-attendance .sts-btn').forEach(function(b){
     b.style.opacity = isAdmin ? '1' : '0.35';
     b.style.pointerEvents = isAdmin ? '' : 'none';
-    b.title = isAdmin ? '' : 'Only Admin can change attendance status';
+    b.title = isAdmin ? '' : 'You do not have permission to change attendance status';
   });
   // Show personal punch card for employees
   var selfCard = document.getElementById('att-self-card');
@@ -6006,7 +6007,7 @@ function renderAttTable() {
 function attTimeToMin(hhmm){ var p=(hhmm||'0:0').split(':'); return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0); }
 
 async function attUpdateTime(idx, field, value){
-  if(currentUser.role !== 'admin'){ showToast('Only Admin can edit attendance','warning'); renderAttTable(); return; }
+  if(!attCanEdit()){ showToast('You do not have permission to edit attendance','warning'); renderAttTable(); return; }
   var e = employees[idx];
   e[field] = value;
   renderAttTable();
@@ -6024,7 +6025,7 @@ async function attUpdateTime(idx, field, value){
   }catch(err){ showToast('Failed to save: '+err.message,'error'); }
 }
 async function attUpdateRemarks(idx, value){
-  if(currentUser.role !== 'admin'){ showToast('Only Admin can edit attendance','warning'); renderAttTable(); return; }
+  if(!attCanEdit()){ showToast('You do not have permission to edit attendance','warning'); renderAttTable(); return; }
   var e = employees[idx];
   e.remarks = value;
   try{
@@ -6040,8 +6041,8 @@ async function attUpdateRemarks(idx, value){
 }
 
 async function setStatus(idx, status, btn) {
-  if(currentUser.role !== 'admin'){
-    showToast('Only Admin can change attendance status', 'warning');
+  if(!attCanEdit()){
+    showToast('You do not have permission to change attendance status', 'warning');
     return;
   }
   var emp = employees[idx];
@@ -6089,11 +6090,11 @@ async function setStatus(idx, status, btn) {
 }
 
 function lockStatusBtnsIfNotAdmin(){
-  if(currentUser.role === 'admin') return;
+  if(attCanEdit()) return;
   document.querySelectorAll('#app-attendance .sts-btn').forEach(function(b){
     b.style.opacity='0.35';
     b.style.pointerEvents='none';
-    b.title='Only Admin can change attendance status';
+    b.title='You do not have permission to change attendance status';
   });
 }
 
@@ -6108,8 +6109,8 @@ function updateSummary() {
 }
 
 async function markAllPresent() {
-  if(currentUser.role !== 'admin'){
-    showToast('Only Admin can change attendance status', 'warning');
+  if(!attCanEdit()){
+    showToast('You do not have permission to change attendance status', 'warning');
     return;
   }
   var toMark = employees.filter(function(e){ return e.status !== 'present'; });
@@ -6167,7 +6168,7 @@ async function attReloadDailyDate(){
 }
 
 async function attSaveAll(){
-  if(currentUser.role !== 'admin'){ showToast('Only Admin can save attendance','warning'); return; }
+  if(!attCanEdit()){ showToast('You do not have permission to save attendance','warning'); return; }
   if(!employees.length){ showToast('No attendance rows to save','warning'); return; }
   showToast('Saving all entries for '+attDisplayDate(ATT_SELECTED_DATE)+'…','info');
   try{
@@ -29450,8 +29451,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019g"></script>
-<script src="js/employee.js?v=20261019g"></script>
-<script src="js/projects.js?v=20261019g"></script>
-<script src="js/finance.js?v=20261019g"></script>
+<script src="js/registry.js?v=20261019h"></script>
+<script src="js/employee.js?v=20261019h"></script>
+<script src="js/projects.js?v=20261019h"></script>
+<script src="js/finance.js?v=20261019h"></script>
 </html>

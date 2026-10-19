@@ -3407,17 +3407,14 @@ async function empFormSave(){
   var roleRaw=gv('f-urole');
   var roleMap={'Admin':'admin','Project Manager':'pm','Site Engineer':'engineer','Junior Engineer':'engineer','QC Engineer':'qhse','Safety Officer':'qhse','Finance / Accounts':'finance','HR / Admin':'admin','Viewer (Read Only)':'viewer','Client Viewer':'viewer'};
   if(!editId && !roleRaw){ toast('Please select a Role / Designation','warning'); return; }
-  var role=roleMap[roleRaw]||'viewer';
-  // Editing an existing employee: never demote their access level just because
-  // the role chosen is a custom name (not in roleMap) or the dropdown was empty.
-  // A custom role name is saved as the designation; the access level (role)
-  // stays what it already was. Only an EMPTY dropdown also keeps the old designation.
-  if(editId && !roleMap[roleRaw]){
+  // Only a role named 'Admin' grants full admin access. Every other role is
+  // controlled by the Access Control module; its stored access level is just a
+  // neutral placeholder ('viewer') that nothing relies on for permissions.
+  var role=(String(roleRaw||'').trim().toLowerCase()==='admin')?'admin':(roleMap[roleRaw]||'viewer');
+  if(editId && !roleRaw){
+    // Empty dropdown on edit: keep whatever the employee already has.
     var exU=(typeof USERS!=='undefined'&&USERS?USERS:[]).find(function(u){return String(u.id)===String(editId);});
-    if(exU){
-      if(exU.role) role=exU.role;
-      if(!roleRaw) roleRaw=exU.access||roleRaw;
-    }
+    if(exU){ if(exU.role) role=exU.role; roleRaw=exU.access||roleRaw; }
   }
 
   var data={
