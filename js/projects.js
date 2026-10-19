@@ -4897,7 +4897,7 @@ async function waLoadPartyNames(type){
       if(!Array.isArray(rows)||!rows.length) rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
     }
     var list=Array.isArray(rows)?rows:[];
-    sel.innerHTML='<option value="">— Select —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('');
+    sel.innerHTML='<option value="">— Select —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('')+PARTY_ADD_OPT;
   }catch(e){sel.innerHTML='<option value="">— Error loading —</option>';console.error(e);}
 }
 
@@ -4936,7 +4936,7 @@ async function waTypeChangeFor(resId, type){
       if(!Array.isArray(rows)||!rows.length) rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
     }
     var list=Array.isArray(rows)?rows:[];
-    sel.innerHTML='<option value="">— Select —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('');
+    sel.innerHTML='<option value="">— Select —</option>'+list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('')+PARTY_ADD_OPT;
   }catch(e){sel.innerHTML='<option value="">— Error —</option>';console.error(e);}
 }
 
@@ -4962,11 +4962,8 @@ async function waTypeChange(){
       }
     }
     var list = Array.isArray(rows)?rows:[];
-    if(!list.length){
-      sel.innerHTML='<option value="">— No '+type+' found in Registry —</option>';return;
-    }
-    sel.innerHTML='<option value="">— Select —</option>'+
-      list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('');
+    sel.innerHTML='<option value="">'+(list.length?'— Select —':'— No party found —')+'</option>'+
+      list.map(function(r){return '<option value="'+r.name+'">'+r.name+'</option>';}).join('')+PARTY_ADD_OPT;
   }catch(e){
     console.error('waTypeChange:',e);
     sel.innerHTML='<option value="">— Error loading —</option>';
@@ -15784,4 +15781,101 @@ async function scSaveProgress(scopeId){
     execRenderLumpsumScopeProgress();
     toast('Progress logged ('+fmtINR(amount)+'). Generate the bill from Bills & Payments → Generate Bills.','success');
   }catch(e){toast('Error: '+e.message,'error');}
+}
+
+// ───────────────────────────────────────────────────────────────────
+// Quick "+ Add new party" — shown at the bottom of every party-name
+// dropdown. Opens a small window (own overlay, so it works on top of
+// any sheet), saves into the right registry table by party type, then
+// selects the new party in the dropdown that opened it.
+// ───────────────────────────────────────────────────────────────────
+var PARTY_ADD_OPT='<option value="__new_party__">+ Add new party…</option>';
+var PARTY_QA_TARGET=null;
+var PARTY_QA_TYPES=[['sc','Subcontractor'],['vendor','Vendor'],['labour_contractor','Labour Contractor'],['labour','Labour'],['machinery','Machinery']];
+
+document.addEventListener('change',function(ev){
+  var el=ev.target;
+  if(!el||el.tagName!=='SELECT'||el.value!=='__new_party__') return;
+  el.value='';
+  partyQuickAddOpen(el);
+});
+
+function partyQuickAddOpen(selEl){
+  PARTY_QA_TARGET=selEl;
+  // Preselect the type already chosen next to this dropdown
+  var preset='';
+  var scope=selEl.closest('.wa-res-row')||selEl.parentNode&&selEl.parentNode.parentNode||document;
+  var tsel=(selEl.id==='wa-party-name')?document.getElementById('wa-party-type'):(scope.querySelector&&scope.querySelector('select[onchange*="waTypeChangeFor"]'))||document.getElementById('wa-type');
+  if(tsel&&tsel.value) preset=tsel.value;
+  var old=document.getElementById('party-qa-ov'); if(old) old.remove();
+  var ov=document.createElement('div');
+  ov.id='party-qa-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML=
+    '<div style="background:var(--card-bg);border-radius:16px;width:100%;max-width:400px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);max-height:90vh;overflow:auto;">'+
+      '<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:12px;">Add New Party</div>'+
+      '<label class="flbl">Party Type *</label><select id="pqa-type" class="fsel">'+
+        PARTY_QA_TYPES.map(function(t){return '<option value="'+t[0]+'"'+(t[0]===preset?' selected':'')+'>'+t[1]+'</option>';}).join('')+'</select>'+
+      '<label class="flbl">Party Name *</label><input id="pqa-name" class="finp" placeholder="Company / person name">'+
+      '<label class="flbl">Contact Person</label><input id="pqa-contact" class="finp">'+
+      '<label class="flbl">Phone</label><input id="pqa-phone" class="finp" type="tel">'+
+      '<label class="flbl">GST No. (optional)</label><input id="pqa-gst" class="finp">'+
+      '<div style="font-size:10.5px;color:var(--text3);margin:2px 0 12px;">More details can be added later from the Registry.</div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+        '<button class="btn btn-outline" onclick="partyQuickAddClose()">Cancel</button>'+
+        '<button id="pqa-save" class="btn btn-navy" onclick="partyQuickAddSave()">Save Party</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){var n=document.getElementById('pqa-name'); if(n) n.focus();},50);
+}
+function partyQuickAddClose(){ var o=document.getElementById('party-qa-ov'); if(o) o.remove(); }
+
+async function partyQuickAddSave(){
+  var type=(document.getElementById('pqa-type')||{}).value||'';
+  var name=((document.getElementById('pqa-name')||{}).value||'').trim();
+  var contact=((document.getElementById('pqa-contact')||{}).value||'').trim()||null;
+  var phone=((document.getElementById('pqa-phone')||{}).value||'').trim()||null;
+  var gst=((document.getElementById('pqa-gst')||{}).value||'').trim()||null;
+  if(!type){toast('Select party type','warning');return;}
+  if(!name){toast('Party name is required','warning');return;}
+  var btn=document.getElementById('pqa-save'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    var res;
+    if(type==='vendor'||type==='machinery'){
+      res=await sbInsert('vendors',{vendor_id:'VND-'+String((typeof VENDORS!=='undefined'?VENDORS.length:0)+1).padStart(3,'0'),name:name,category:type==='machinery'?'machinery':'general',status:'active',gst:gst,contact_person:contact,phone:phone,total_orders:0,total_value:0});
+      if(res&&res[0]&&typeof VENDORS!=='undefined'&&typeof mapVendor==='function') VENDORS.unshift(mapVendor(res[0]));
+    }else if(type==='sc'||type==='labour_contractor'){
+      res=await sbInsert('subcontractors',{sc_id:'SC-REG-'+String((typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS.length:0)+1).padStart(3,'0'),name:name,trade:type==='labour_contractor'?'labour contractor':'general',gst:gst,contact_person:contact,phone:phone,workers:0,pbg_available:false,emd_available:false,status:'active'});
+      if(res&&res[0]&&typeof SUBCONTRACTORS!=='undefined'&&typeof mapSC==='function') SUBCONTRACTORS.unshift(mapSC(res[0]));
+    }else{
+      res=await sbInsert('labourers',{name:name,skill:'',type:'',phone:phone||'',daily_rate:0,status:'active'});
+      if(res&&res[0]&&typeof LABOURERS!=='undefined'&&typeof mapLabour==='function') LABOURERS.unshift(mapLabour(res[0]));
+    }
+    if(!(res&&res[0])) throw new Error('Nothing was saved');
+    partyQuickAddClose();
+    toast(name+' added','success');
+    // Put the new party into the dropdown that opened this window
+    var sel=PARTY_QA_TARGET;
+    if(sel&&document.body.contains(sel)){
+      // If the type here differs from the one chosen, switch the type first
+      var tsel=(sel.id==='wa-party-name')?document.getElementById('wa-party-type'):null;
+      if(tsel && tsel.value!==type){ tsel.value=type; }
+      if(sel.id==='wa-party-name' && typeof waLoadPartyNames==='function') await waLoadPartyNames(type);
+      else if(sel.closest('.wa-res-row')){
+        var row=sel.closest('.wa-res-row'), rt=row.querySelector('select[onchange*="waTypeChangeFor"]');
+        if(rt && rt.value!==type) rt.value=type;
+        await waTypeChangeFor(row.getAttribute('data-res-id'),type);
+      }else if(typeof waTypeChange==='function' && document.getElementById('wa-type')){
+        var wt=document.getElementById('wa-type'); if(wt.value!==type) wt.value=type;
+        await waTypeChange();
+      }
+      var opt=Array.prototype.find.call(sel.options,function(o){return o.value===name;});
+      if(opt) sel.value=name;
+    }
+  }catch(e){
+    console.error('partyQuickAddSave',e);
+    toast('Could not save party: '+(e.message||e),'error');
+    if(btn){btn.disabled=false;btn.textContent='Save Party';}
+  }
 }
