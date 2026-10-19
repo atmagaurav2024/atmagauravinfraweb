@@ -4535,6 +4535,13 @@ async function doCompanySignup(){
         console.error('Pre-filling company_details failed:', e);
         toast('Company created, but pre-filling Company Details failed ('+e.message+') — you can fill it in manually','warning');
       }
+      // The founding admin is saved with access level 'admin' and designation
+      // 'Admin'. Master Registry has no built-in roles any more, so create the
+      // matching 'Admin' role entry — otherwise the Role dropdown has no Admin
+      // option and editing this user could not show or keep it.
+      try{
+        await sbInsert('categories',{type:'role',name:'Admin',icon:'&#128101;',description:'Full access',color:'#6A1B9A',active:true});
+      }catch(e){ console.warn('Creating default Admin role failed:', e); }
     }
   }catch(e){
     console.error(e);
@@ -29443,8 +29450,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019e"></script>
-<script src="js/employee.js?v=20261019e"></script>
-<script src="js/projects.js?v=20261019e"></script>
-<script src="js/finance.js?v=20261019e"></script>
+<script src="js/registry.js?v=20261019f"></script>
+<script src="js/employee.js?v=20261019f"></script>
+<script src="js/projects.js?v=20261019f"></script>
+<script src="js/finance.js?v=20261019f"></script>
 </html>
