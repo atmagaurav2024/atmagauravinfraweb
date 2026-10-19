@@ -1985,8 +1985,9 @@ async function planTurnkeyPrompt(){
       '<input type="checkbox" id="plan-tk-custrate" onchange="document.getElementById(\'plan-tk-rate-row\').style.display=this.checked?\'block\':\'none\';"> Use one rate for all items instead of each item\'s own BOQ rate'+
     '</label>'+
     '<div id="plan-tk-rate-row" style="display:none;margin-bottom:8px;">'+
-      '<label class="flbl">Rate (\u20b9) for all items</label>'+
-      '<input type="number" step="0.01" id="plan-tk-rate" class="finp" placeholder="0">'+
+      '<label class="flbl">Rate (\u20b9) per unit, for all items</label>'+
+      '<input type="number" step="any" id="plan-tk-rate" class="finp" placeholder="0">'+
+      '<div style="font-size:10.5px;color:#B45309;font-weight:700;margin-top:4px;">This is a rate per unit &mdash; it is multiplied by each item\'s quantity, so every item gets the same rate. To fix one total amount for the whole group, leave this off and use "Lumpsum for whole group" when allotting.</div>'+
     '</div>'+
     '<label style="font-size:11px;font-weight:800;color:#C62828;display:block;margin-bottom:4px;">Re-enter your login password to confirm *</label>'+
     '<input type="password" id="plan-tk-pass" autocomplete="new-password" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
