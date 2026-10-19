@@ -15339,7 +15339,7 @@ var PC_IN=[], PC_EXP=[], PC_EMPS=[], PC_PROJS=[], PC_ACTIVE=null, PC_CAT='all';
 var PC_SITE_TAB='all';
 var PC_EMP_FILTER='all'; // 'all' or empId
 
-var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
+var PC_CATS=[]; // no built-in heads: they come from Master Registry
 function execPrintOrderCombined(docType, docNum){
   var orders=WA_ORDERS.filter(function(o){return o.doc_type===docType&&(o.doc_number||'?')===String(docNum);});
   if(!orders.length){toast('No orders found','warning');return;}

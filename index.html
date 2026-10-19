@@ -8066,85 +8066,9 @@ function closeSheet(o,s){
 
 // ── CATEGORY DATA (editable) ──────────────────────────────────────────
 var CAT_DATA={
-  vendor:[
-    {id:'vc-1',icon:'&#129493;',name:'Steel',desc:'TMT bars, structural steel, flat products',color:'#C62828',count:2,active:true},
-    {id:'vc-2',icon:'&#129521;',name:'Cement',desc:'OPC, PPC, GGBS, White cement',color:'#37474F',count:2,active:true},
-    {id:'vc-3',icon:'&#9898;',name:'Aggregate',desc:'Coarse aggregate, stone chips, grit',color:'#795548',count:1,active:true},
-    {id:'vc-4',icon:'&#128167;',name:'Sand',desc:'River sand, M-sand, plaster sand',color:'#FF8F00',count:1,active:true},
-    {id:'vc-5',icon:'&#128296;',name:'Formwork',desc:'H-frame, table form, climbing shuttering',color:'#1565C0',count:1,active:true},
-    {id:'vc-6',icon:'&#9889;',name:'Electrical',desc:'DG sets, cables, switchgear, panels',color:'#F57F17',count:1,active:true},
-    {id:'vc-7',icon:'&#128167;',name:'Waterproofing',desc:'Membrane, crystalline, injection systems',color:'#6A1B9A',count:1,active:true},
-    {id:'vc-8',icon:'&#9881;&#65039;',name:'Plant Hire',desc:'Excavators, cranes, transit mixers',color:'#00838F',count:1,active:true},
-    {id:'vc-9',icon:'&#129521;',name:'Ready Mix Concrete',desc:'Batching plant supply, all grades',color:'#455A64',count:1,active:true},
-    {id:'vc-10',icon:'&#9973;&#65039;',name:'Safety PPE',desc:'Helmets, harness, gloves, boots',color:'#E65100',count:0,active:true},
-    {id:'vc-11',icon:'&#128239;',name:'Fuel & Lubricants',desc:'HSD diesel, engine oil, grease',color:'#212121',count:0,active:true},
-    {id:'vc-12',icon:'&#128230;',name:'Other',desc:'Miscellaneous materials & services',color:'#94A3B8',count:1,active:false},
-  ],
-  material:[
-    {id:'mc-1',icon:'&#127959;',name:'Structural',desc:'Steel bars, beams, fasteners',color:'#C62828',count:3,active:true},
-    {id:'mc-2',icon:'&#129521;',name:'Concrete',desc:'Cement, aggregates, admixtures, RMC',color:'#37474F',count:4,active:true},
-    {id:'mc-3',icon:'&#127775;',name:'Finishing',desc:'Paint, tiles, plaster, waterproofing',color:'#E65100',count:2,active:true},
-    {id:'mc-4',icon:'&#9889;',name:'MEP Electrical',desc:'Conduit, cables, fixtures, DBs',color:'#F57F17',count:1,active:true},
-    {id:'mc-5',icon:'&#128167;',name:'MEP Plumbing',desc:'Pipes, fittings, sanitary ware',color:'#1565C0',count:0,active:true},
-    {id:'mc-6',icon:'&#128739;',name:'Road Works',desc:'GSB, WMM, bitumen, kerb stones',color:'#795548',count:2,active:true},
-    {id:'mc-7',icon:'&#9973;&#65039;',name:'Safety',desc:'PPE, signage, barriers, nets',color:'#2E7D32',count:2,active:true},
-    {id:'mc-8',icon:'&#128296;',name:'Formwork',desc:'Shuttering panels, props, clamps',color:'#1565C0',count:1,active:true},
-    {id:'mc-9',icon:'&#128239;',name:'Fuel & Oil',desc:'Diesel, lubricants, coolant',color:'#212121',count:0,active:true},
-    {id:'mc-10',icon:'&#127807;',name:'Soil / Earth',desc:'Borrow material, granular fill',color:'#FF8F00',count:0,active:false},
-  ],
-  sc:[
-    {id:'sc-1',icon:'&#127955;',name:'Civil — Earthwork',desc:'Excavation, embankment, grading',color:'#795548',count:2,active:true},
-    {id:'sc-2',icon:'&#127959;',name:'Civil — Structural',desc:'RCC frames, slabs, columns',color:'#1565C0',count:2,active:true},
-    {id:'sc-3',icon:'&#128296;',name:'Civil — Finishing',desc:'Plaster, tile, painting, flooring',color:'#E65100',count:1,active:true},
-    {id:'sc-4',icon:'&#128739;',name:'Road Works',desc:'GSB, WMM, bituminous layers',color:'#37474F',count:1,active:true},
-    {id:'sc-5',icon:'&#9889;',name:'MEP — Electrical',desc:'HT/LT wiring, panels, earthing',color:'#F57F17',count:1,active:true},
-    {id:'sc-6',icon:'&#128167;',name:'MEP — Plumbing',desc:'Water supply, drainage, sanitary',color:'#00838F',count:1,active:true},
-    {id:'sc-7',icon:'&#128167;',name:'Waterproofing',desc:'Membrane, crystalline, grouting',color:'#6A1B9A',count:1,active:true},
-    {id:'sc-8',icon:'&#9881;&#65039;',name:'Fabrication',desc:'Structural steel, misc metalwork',color:'#C62828',count:0,active:true},
-    {id:'sc-9',icon:'&#127775;',name:'Painting',desc:'Interior, exterior, anti-corrosion',color:'#E65100',count:0,active:false},
-  ],
-  role:[
-    {id:'r-1',icon:'&#128101;',name:'Admin',desc:'Full system access, settings & approvals',color:'#6A1B9A',count:2,active:true},
-    {id:'r-2',icon:'&#128203;',name:'Project Manager',desc:'Project planning, scheduling, reporting',color:'#2E7D32',count:2,active:true},
-    {id:'r-3',icon:'&#127959;',name:'Site Engineer',desc:'Site execution, daily progress, QC',color:'#1565C0',count:3,active:true},
-    {id:'r-4',icon:'&#128296;',name:'Junior Engineer',desc:'Field supervision, measurements',color:'#1565C0',count:2,active:true},
-    {id:'r-5',icon:'&#9989;',name:'QC Engineer',desc:'Quality checks, material testing, IS codes',color:'#00838F',count:1,active:true},
-    {id:'r-6',icon:'&#9973;&#65039;',name:'Safety Officer',desc:'HSE compliance, toolbox talks, audits',color:'#E65100',count:1,active:true},
-    {id:'r-7',icon:'&#128200;',name:'Finance / Accounts',desc:'Billing, payments, cost tracking',color:'#C62828',count:2,active:true},
-    {id:'r-8',icon:'&#128101;',name:'HR / Admin',desc:'HR, attendance, staff management',color:'#880E4F',count:1,active:true},
-    {id:'r-9',icon:'&#128065;',name:'Viewer (Read Only)',desc:'View-only access across modules',color:'#37474F',count:1,active:true},
-    {id:'r-10',icon:'&#128101;',name:'Client Viewer',desc:'External client with limited view',color:'#455A64',count:1,active:true},
-  ],
-  dept:[
-    {id:'d-1',icon:'&#127968;',name:'Management',desc:'Directors, PMs, senior leadership',color:'#6A1B9A',count:3,active:true},
-    {id:'d-2',icon:'&#127959;',name:'Engineering',desc:'Site engineers, JEs, design team',color:'#1565C0',count:6,active:true},
-    {id:'d-3',icon:'&#9989;',name:'QHSE',desc:'Quality, Health, Safety & Environment',color:'#2E7D32',count:2,active:true},
-    {id:'d-4',icon:'&#128200;',name:'Finance',desc:'Accounts, billing, procurement finance',color:'#C62828',count:2,active:true},
-    {id:'d-5',icon:'&#128101;',name:'HR / Admin',desc:'Human resources, payroll, admin',color:'#880E4F',count:1,active:true},
-    {id:'d-6',icon:'&#128065;',name:'External — Client',desc:'Client representatives, consultants',color:'#37474F',count:1,active:true},
-  ],
-  leave:[
-    {id:'lv-1',icon:'&#127958;',name:'Casual Leave (CL)',desc:'Short personal leave',color:'#1565C0',count:0,active:true},
-    {id:'lv-2',icon:'&#127973;',name:'Sick Leave (SL)',desc:'Medical / health leave',color:'#C62828',count:0,active:true},
-    {id:'lv-3',icon:'&#127796;',name:'Earned Leave (EL)',desc:'Accrued/annual leave',color:'#2E7D32',count:0,active:true},
-    {id:'lv-4',icon:'&#128337;',name:'Comp Off',desc:'Compensatory off for extra work',color:'#F57F17',count:0,active:true},
-    {id:'lv-5',icon:'&#128176;',name:'Loss of Pay (LOP)',desc:'Unpaid leave',color:'#795548',count:0,active:true},
-  ],
-  uom:[
-    {id:'u-1',icon:'&#9883;',name:'MT',desc:'Metric Tonne — steel, bulk materials',color:'#C62828',count:0,active:true},
-    {id:'u-2',icon:'&#128230;',name:'Bags',desc:'50 kg bags — cement, microsilica',color:'#37474F',count:0,active:true},
-    {id:'u-3',icon:'&#128203;',name:'m³',desc:'Cubic metres — concrete, earthwork',color:'#1565C0',count:0,active:true},
-    {id:'u-4',icon:'&#128203;',name:'m²',desc:'Square metres — formwork, flooring',color:'#2E7D32',count:0,active:true},
-    {id:'u-5',icon:'&#128203;',name:'RMT',desc:'Running metres — pipes, kerbs, cable',color:'#6A1B9A',count:0,active:true},
-    {id:'u-6',icon:'&#128203;',name:'nos',desc:'Numbers — items counted individually',color:'#00838F',count:0,active:true},
-    {id:'u-7',icon:'&#128203;',name:'kg',desc:'Kilogram — binding wire, admixtures',color:'#795548',count:0,active:true},
-    {id:'u-8',icon:'&#128203;',name:'Litres',desc:'Liquid materials — admixtures, fuel',color:'#F57F17',count:0,active:true},
-    {id:'u-9',icon:'&#128203;',name:'Rolls',desc:'Rolls — waterproof membrane, mesh',color:'#E65100',count:0,active:true},
-    {id:'u-10',icon:'&#128203;',name:'LS',desc:'Lump Sum — contract items',color:'#37474F',count:0,active:true},
-    {id:'u-11',icon:'&#128203;',name:'Sets',desc:'Sets — door frames, fixtures',color:'#880E4F',count:0,active:true},
-  ],
-  labour:[],
-  resource:[]
+  // No built-in defaults: every list starts empty and is built by the company
+  // in Master Registry.
+  vendor:[], material:[], sc:[], role:[], dept:[], uom:[], labour:[], resource:[], leave:[], pettycash:[]
 };
 
 
@@ -19622,7 +19546,7 @@ var PC_EMP_FILTER='all'; // 'all' or empId
 
 // Seed list only — the live categories come from the Master Registry via
 // pcCats(), so a new head can be added without touching code.
-var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
+var PC_CATS=[]; // no built-in heads: they come from Master Registry
 function pcCats(){
   if(typeof CAT_DATA!=='undefined' && CAT_DATA && Array.isArray(CAT_DATA.pettycash)){
     var live=CAT_DATA.pettycash.filter(function(c){return c.active;}).map(function(c){return c.name;});
@@ -19643,7 +19567,7 @@ var PC_EMP_FILTER='all'; // 'all' or empId
 
 // Seed list only — the live categories come from the Master Registry via
 // pcCats(), so a new head can be added without touching code.
-var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
+var PC_CATS=[]; // no built-in heads: they come from Master Registry
 function pcCats(){
   if(typeof CAT_DATA!=='undefined' && CAT_DATA && Array.isArray(CAT_DATA.pettycash)){
     var live=CAT_DATA.pettycash.filter(function(c){return c.active;}).map(function(c){return c.name;});
@@ -29519,8 +29443,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261019d"></script>
-<script src="js/employee.js?v=20261019d"></script>
-<script src="js/projects.js?v=20261019d"></script>
-<script src="js/finance.js?v=20261019d"></script>
+<script src="js/registry.js?v=20261019e"></script>
+<script src="js/employee.js?v=20261019e"></script>
+<script src="js/projects.js?v=20261019e"></script>
+<script src="js/finance.js?v=20261019e"></script>
 </html>

@@ -70,7 +70,7 @@ function pcStartPayoutPoll(){
 
 // Seed list only — live categories come from the Master Registry via
 // pcCats(), so a new head can be added without a code change.
-var PC_CATS=['Fuel & Transport','Site Materials','Labour Wages','Food & Refreshment','Office Expenses','Equipment Repair','Safety Items','Utilities','Medical','Miscellaneous'];
+var PC_CATS=[]; // no built-in heads: they come from Master Registry
 function pcCats(){
   if(typeof CAT_DATA!=='undefined' && CAT_DATA && Array.isArray(CAT_DATA.pettycash)){
     var live=CAT_DATA.pettycash.filter(function(c){return c.active;}).map(function(c){return c.name;});

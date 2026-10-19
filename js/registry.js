@@ -12,86 +12,9 @@ var _syncInterval=null, _deletedIds={};
 var ROLE_IC={admin:'&#128084;',pm:'&#127959;',engineer:'&#9881;&#65039;',qhse:'&#128203;',finance:'&#128178;',viewer:'&#128065;'};
 
 var CAT_DATA={
-  vendor:[
-    {id:'vc-1',icon:'&#129493;',name:'Steel',desc:'TMT bars',color:'#C62828',count:0,active:true},
-    {id:'vc-2',icon:'&#129521;',name:'Cement',desc:'OPC, PPC',color:'#37474F',count:0,active:true},
-    {id:'vc-3',icon:'&#9898;',name:'Aggregate',desc:'Coarse aggregate',color:'#795548',count:0,active:true},
-    {id:'vc-4',icon:'&#128167;',name:'Sand',desc:'River sand, M-sand',color:'#FF8F00',count:0,active:true},
-    {id:'vc-5',icon:'&#128296;',name:'Formwork',desc:'H-frame, table form',color:'#1565C0',count:0,active:true},
-    {id:'vc-6',icon:'&#9889;',name:'Electrical',desc:'DG sets, cables',color:'#F57F17',count:0,active:true},
-    {id:'vc-7',icon:'&#128167;',name:'Waterproofing',desc:'Membrane, crystalline',color:'#6A1B9A',count:0,active:true},
-    {id:'vc-8',icon:'&#9881;&#65039;',name:'Plant Hire',desc:'Excavators, cranes',color:'#00838F',count:0,active:true},
-    {id:'vc-9',icon:'&#9973;&#65039;',name:'Safety PPE',desc:'Helmets, harness',color:'#E65100',count:0,active:true},
-    {id:'vc-10',icon:'&#128230;',name:'Other',desc:'Miscellaneous',color:'#94A3B8',count:0,active:true},
-  ],
-  material:[
-    {id:'mc-1',icon:'&#127959;',name:'Structural',desc:'Steel bars, beams',color:'#C62828',count:0,active:true},
-    {id:'mc-2',icon:'&#129521;',name:'Concrete',desc:'Cement, aggregates',color:'#37474F',count:0,active:true},
-    {id:'mc-3',icon:'&#127775;',name:'Finishing',desc:'Paint, tiles, plaster',color:'#E65100',count:0,active:true},
-    {id:'mc-4',icon:'&#9889;',name:'MEP Electrical',desc:'Conduit, cables',color:'#F57F17',count:0,active:true},
-    {id:'mc-5',icon:'&#128739;',name:'Road Works',desc:'GSB, WMM, bitumen',color:'#795548',count:0,active:true},
-    {id:'mc-6',icon:'&#9973;&#65039;',name:'Safety',desc:'PPE, signage',color:'#2E7D32',count:0,active:true},
-  ],
-  sc:[
-    {id:'sc-1',icon:'&#127955;',name:'Civil',desc:'Earthwork, RCC',color:'#1565C0',count:0,active:true},
-    {id:'sc-2',icon:'&#9889;',name:'MEP',desc:'Electrical, plumbing',color:'#F57F17',count:0,active:true},
-    {id:'sc-3',icon:'&#127775;',name:'Finishing',desc:'Plaster, tile, painting',color:'#E65100',count:0,active:true},
-    {id:'sc-4',icon:'&#128739;',name:'Road',desc:'GSB, WMM, bituminous',color:'#37474F',count:0,active:true},
-    {id:'sc-5',icon:'&#128167;',name:'Waterproofing',desc:'Membrane, grouting',color:'#6A1B9A',count:0,active:true},
-  ],
-  role:[
-    {id:'r-1',icon:'&#128101;',name:'Admin',desc:'Full access',color:'#6A1B9A',count:0,active:true},
-    {id:'r-2',icon:'&#128203;',name:'Project Manager',desc:'Project planning',color:'#2E7D32',count:0,active:true},
-    {id:'r-3',icon:'&#127959;',name:'Site Engineer',desc:'Site execution',color:'#1565C0',count:0,active:true},
-    {id:'r-4',icon:'&#128296;',name:'Junior Engineer',desc:'Field supervision',color:'#1565C0',count:0,active:true},
-    {id:'r-5',icon:'&#9989;',name:'QC Engineer',desc:'Quality checks',color:'#00838F',count:0,active:true},
-    {id:'r-6',icon:'&#9973;&#65039;',name:'Safety Officer',desc:'HSE compliance',color:'#E65100',count:0,active:true},
-    {id:'r-7',icon:'&#128200;',name:'Finance / Accounts',desc:'Billing, payments',color:'#C62828',count:0,active:true},
-    {id:'r-8',icon:'&#128101;',name:'HR / Admin',desc:'HR, attendance',color:'#880E4F',count:0,active:true},
-    {id:'r-9',icon:'&#128065;',name:'Viewer (Read Only)',desc:'View-only access',color:'#37474F',count:0,active:true},
-    {id:'r-10',icon:'&#128101;',name:'Client Viewer',desc:'External client view',color:'#455A64',count:0,active:true},
-  ],
-  dept:[
-    {id:'d-1',icon:'&#127968;',name:'Management',desc:'Directors, PMs',color:'#6A1B9A',count:0,active:true},
-    {id:'d-2',icon:'&#127959;',name:'Engineering',desc:'Site engineers, JEs',color:'#1565C0',count:0,active:true},
-    {id:'d-3',icon:'&#9989;',name:'QHSE',desc:'Quality, Safety',color:'#2E7D32',count:0,active:true},
-    {id:'d-4',icon:'&#128200;',name:'Finance',desc:'Accounts, billing',color:'#C62828',count:0,active:true},
-    {id:'d-5',icon:'&#128101;',name:'HR / Admin',desc:'Human resources',color:'#880E4F',count:0,active:true},
-  ],
-  uom:[
-    {id:'u-1',icon:'',name:'MT',desc:'Metric Tonne',color:'#C62828',count:0,active:true},
-    {id:'u-2',icon:'',name:'Bags',desc:'50 kg bags',color:'#37474F',count:0,active:true},
-    {id:'u-3',icon:'',name:'m³',desc:'Cubic metres',color:'#1565C0',count:0,active:true},
-    {id:'u-4',icon:'',name:'m²',desc:'Square metres',color:'#2E7D32',count:0,active:true},
-    {id:'u-5',icon:'',name:'RMT',desc:'Running metres',color:'#6A1B9A',count:0,active:true},
-    {id:'u-6',icon:'',name:'nos',desc:'Numbers',color:'#00838F',count:0,active:true},
-    {id:'u-7',icon:'',name:'kg',desc:'Kilogram',color:'#795548',count:0,active:true},
-    {id:'u-8',icon:'',name:'Litres',desc:'Liquid materials',color:'#F57F17',count:0,active:true},
-    {id:'u-9',icon:'',name:'LS',desc:'Lump Sum',color:'#37474F',count:0,active:true},
-  ],
-  labour:[], resource:[],
-  leave:[
-    {id:'lv-1',icon:'&#127958;',name:'Casual Leave (CL)',desc:'Short personal leave',color:'#1565C0',count:0,active:true},
-    {id:'lv-2',icon:'&#127973;',name:'Sick Leave (SL)',desc:'Medical / health leave',color:'#C62828',count:0,active:true},
-    {id:'lv-3',icon:'&#127796;',name:'Earned Leave (EL)',desc:'Accrued/annual leave',color:'#2E7D32',count:0,active:true},
-    {id:'lv-4',icon:'&#128337;',name:'Comp Off',desc:'Compensatory off for extra work',color:'#F57F17',count:0,active:true},
-    {id:'lv-5',icon:'&#128176;',name:'Loss of Pay (LOP)',desc:'Unpaid leave',color:'#795548',count:0,active:true},
-  ],
-  // Petty cash expense heads. Editable here rather than hardcoded, so a new
-  // head can be added without a code change. Each maps to a GL account via
-  // ACC_PETTY_CAT_CODES; anything unmapped posts to Miscellaneous.
-  pettycash:[
-    {id:'pc-1',icon:'&#9981;',name:'Fuel & Transport',desc:'Vehicle fuel, hire, travel',color:'#E65100',count:0,active:true},
-    {id:'pc-2',icon:'&#129521;',name:'Site Materials',desc:'Small material purchases',color:'#2E7D32',count:0,active:true},
-    {id:'pc-3',icon:'&#128119;',name:'Labour Wages',desc:'Casual labour paid in cash',color:'#1565C0',count:0,active:true},
-    {id:'pc-4',icon:'&#127859;',name:'Food & Refreshment',desc:'Site food and refreshments',color:'#6A1B9A',count:0,active:true},
-    {id:'pc-5',icon:'&#128196;',name:'Office Expenses',desc:'Stationery, printing, sundries',color:'#00695C',count:0,active:true},
-    {id:'pc-6',icon:'&#128295;',name:'Equipment Repair',desc:'Tool and plant repairs',color:'#795548',count:0,active:true},
-    {id:'pc-7',icon:'&#129686;',name:'Safety Items',desc:'PPE and site safety',color:'#F57F17',count:0,active:true},
-    {id:'pc-8',icon:'&#128161;',name:'Utilities',desc:'Electricity, water, connections',color:'#0277BD',count:0,active:true},
-    {id:'pc-9',icon:'&#127973;',name:'Medical',desc:'First aid and medical costs',color:'#C62828',count:0,active:true},
-    {id:'pc-10',icon:'&#128230;',name:'Miscellaneous',desc:'Anything not covered above',color:'#546E7A',count:0,active:true},
-  ]
+  // No built-in defaults: every list starts empty and is built by the company
+  // in Master Registry.
+  vendor:[], material:[], sc:[], role:[], dept:[], uom:[], labour:[], resource:[], leave:[], pettycash:[]
 };
 
 var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats'};
@@ -502,33 +425,7 @@ async function saveNewCat(type){
 async function loadCategories(){
   try{
     var data=await sbFetch('categories',{select:'*',order:'created_at.asc'});
-    if(!data||!data.length){
-      // First load for this company: the registry shows built-in defaults that
-      // were never stored, so deletes/edits acted on phantom rows and the
-      // Employee form (which reads the database) saw nothing. Save the defaults
-      // once so everything works from the same list.
-      try{
-        var seedRows=[],seedRefs=[];
-        Object.keys(catSectionMap).forEach(function(type){
-          (CAT_DATA[type]||[]).forEach(function(c){
-            seedRows.push({type:type,name:c.name,icon:c.icon||'📦',description:c.desc||'',color:c.color||'#37474F',active:c.active!==false});
-            seedRefs.push(c);
-          });
-        });
-        if(seedRows.length){
-          var saved=await sbInsert('categories',seedRows);
-          if(Array.isArray(saved)&&saved.length===seedRefs.length){
-            // rows may come back in any order: match on type+name
-            saved.forEach(function(r){
-              var ref=seedRefs.find(function(c,ix){return seedRows[ix].type===r.type&&seedRows[ix].name===r.name&&!c._seeded;});
-              if(ref){ ref.id=r.id; ref._seeded=true; }
-            });
-            Object.keys(catSectionMap).forEach(function(type){renderCatSection(type,catSectionMap[type]);});
-          }
-        }
-      }catch(e){console.warn('Seeding default categories failed:',e);}
-      return;
-    }
+    if(!data||!data.length)return;
     // Derived from catSectionMap rather than a second hardcoded list — the
     // two had already drifted, so a new type saved to the database but was
     // dropped on reload.
