@@ -1722,7 +1722,7 @@ function planRender(){
       return '<div style="background:var(--card-bg);border-radius:14px;border:1px solid var(--border);margin-bottom:10px;overflow:hidden;">'+
         '<div style="padding:10px 14px;background:var(--bg);display:flex;justify-content:space-between;align-items:center;">'+
           '<div><div style="font-size:13px;font-weight:800;color:var(--text);">'+(g.group_name||g.party_name)+'</div>'+
-          '<div style="font-size:10px;color:var(--text2);">'+(g.party_name||'Party not yet assigned')+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined \u00b7 '+(g.rate_mode==='custom'?'flat rate':'BOQ rates')+'</div></div>'+
+          '<div style="font-size:10px;color:var(--text2);">'+(g.party_name||'Party not yet assigned')+' \u00b7 '+gItems.length+' item'+(gItems.length!==1?'s':'')+' combined \u00b7 '+(g.rate_mode==='custom'?'one total amount':'BOQ rates')+'</div></div>'+
           '<div style="text-align:right;"><div style="font-size:13px;font-weight:900;color:#1565C0;">'+fmtINR(total)+'</div>'+
           '<span onclick="planDeleteCombinedGroup(\''+g.id+'\')" style="font-size:10px;color:#C62828;cursor:pointer;text-decoration:underline;">Delete group</span></div>'+
         '</div>'+
@@ -1982,12 +1982,12 @@ async function planTurnkeyPrompt(){
     '<label style="font-size:11px;font-weight:800;color:var(--text);display:block;margin-bottom:4px;">Resource Category (optional)</label>'+
     '<select id="plan-tk-cat" class="fsel" style="margin-bottom:8px;" onchange="if(!catSelectChanged(this,\'resource\'))catRememberValue(this);">'+buildResourceCatOpts('')+'</select>'+
     '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--text);margin-bottom:10px;cursor:pointer;">'+
-      '<input type="checkbox" id="plan-tk-custrate" onchange="document.getElementById(\'plan-tk-rate-row\').style.display=this.checked?\'block\':\'none\';"> Use one rate for all items instead of each item\'s own BOQ rate'+
+      '<input type="checkbox" id="plan-tk-custrate" onchange="document.getElementById(\'plan-tk-rate-row\').style.display=this.checked?\'block\':\'none\';"> Use one total amount for all items instead of each item\'s own BOQ rate'+
     '</label>'+
     '<div id="plan-tk-rate-row" style="display:none;margin-bottom:8px;">'+
-      '<label class="flbl">Rate (\u20b9) per unit, for all items</label>'+
+      '<label class="flbl">Total Amount (\u20b9) for all selected items</label>'+
       '<input type="number" step="any" id="plan-tk-rate" class="finp" placeholder="0">'+
-      '<div style="font-size:10.5px;color:#B45309;font-weight:700;margin-top:4px;">This is a rate per unit &mdash; it is multiplied by each item\'s quantity, so every item gets the same rate. To fix one total amount for the whole group, leave this off and use "Lumpsum for whole group" when allotting.</div>'+
+      '<div style="font-size:10.5px;color:var(--text2);margin-top:4px;">One amount for the whole group. It is shared across the items in proportion to their quantity \u00d7 BOQ rate (by quantity if BOQ rates are blank), and each item gets its own rate from its share.</div>'+
     '</div>'+
     '<label style="font-size:11px;font-weight:800;color:#C62828;display:block;margin-bottom:4px;">Re-enter your login password to confirm *</label>'+
     '<input type="password" id="plan-tk-pass" autocomplete="new-password" placeholder="Password" style="width:100%;padding:8px;border:1.5px solid #C62828;border-radius:8px;font-size:12px;margin-bottom:12px;font-family:Nunito,sans-serif;">'+
@@ -2015,7 +2015,7 @@ async function planTurnkeyConfirm(){
   if(!pass){ setMsg('Enter your password to confirm'); return; }
   var useCustRate=(document.getElementById('plan-tk-custrate')||{}).checked;
   var custRate=useCustRate?(parseFloat((document.getElementById('plan-tk-rate')||{}).value)||0):null;
-  if(useCustRate&&!custRate){ setMsg('Enter a rate for all items, or uncheck the custom rate option'); return; }
+  if(useCustRate&&!custRate){ setMsg('Enter the total amount for all items, or uncheck the one-amount option'); return; }
   var cat=(document.getElementById('plan-tk-cat')||{value:''}).value||null;
 
   var projId=(document.getElementById('plan-proj-sel')||{}).value||'';
@@ -2071,10 +2071,19 @@ async function planTurnkeyConfirm(){
   }
   if(!groupId){ setMsg('Could not create the group'); if(go){go.disabled=false;go.style.opacity='1';} return; }
 
+  // One total amount for the group: share it across items by qty x BOQ rate
+  // (by qty if no BOQ rates), then each item's rate = its share / its qty.
+  var amtShareByItem={};
+  if(useCustRate){
+    var wts=eligible.map(function(x){ return (parseFloat(x.planQty)||0)*(parseFloat(x.item.rate)||0); });
+    var wSum=wts.reduce(function(a,b){return a+b;},0);
+    if(wSum<=0){ wts=eligible.map(function(x){return parseFloat(x.planQty)||0;}); wSum=wts.reduce(function(a,b){return a+b;},0); }
+    eligible.forEach(function(x,k){ amtShareByItem[k]=wSum>0?custRate*wts[k]/wSum:0; });
+  }
   var lineItems=[];
   for(var i=0;i<eligible.length;i++){
     var x=eligible[i];
-    var rate=useCustRate?custRate:(parseFloat(x.item.rate)||0);
+    var rate=useCustRate?(x.planQty>0?parseFloat((amtShareByItem[i]/x.planQty).toFixed(10)):0):(parseFloat(x.item.rate)||0);
     // Distribute the (possibly edited, possibly partial) planned qty
     // across this item's JMs sequentially - but first account for
     // whatever's already been consumed from each specific JM by any
