@@ -1268,7 +1268,7 @@ function boqParseImportRows(rows){
     var code=colCode?String(r[colCode]||'').trim():'';
     var desc=colDesc?String(r[colDesc]||'').trim():'';
     var qty=colQty?boqR10(r[colQty]):NaN;
-    if(!code||!desc||!qty){invalid++;return;}
+    if(!code||!desc||isNaN(qty)||qty<0){invalid++;return;} // qty 0 is allowed; only blank/non-numeric/negative is skipped
     valid.push({
       item_code:code, description:desc,
       short_name:colShort?(String(r[colShort]||'').trim()||null):null,
@@ -1290,7 +1290,7 @@ function boqParseImportRows(rows){
   }).join('');
   preview.innerHTML=
     '<div style="padding:10px 12px;background:'+(invalid?'#FFF3E0':'#E8F5E9')+';border-radius:8px;margin-bottom:10px;font-size:12px;color:'+(invalid?'#8A5A00':'#1B5E20')+';">'+
-      '<b>'+valid.length+' item'+(valid.length===1?'':'s')+' ready to import</b>'+(invalid?' &mdash; '+invalid+' row'+(invalid===1?'':'s')+' skipped (missing code, description or qty)':'')+
+      '<b>'+valid.length+' item'+(valid.length===1?'':'s')+' ready to import</b>'+(invalid?' &mdash; '+invalid+' row'+(invalid===1?'':'s')+' skipped (missing code, description or a valid qty)':'')+
     '</div>'+
     (valid.length?
       '<div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">'+
@@ -1347,7 +1347,7 @@ async function boqOpenAddItem(editItem){
 function boqEditItem(id){var item=BOQ_ITEMS.find(function(i){return i.id===id;});if(!item)return;closeBOQSheet();setTimeout(function(){boqOpenAddItem(item);},320);}
 async function boqSaveItem(editId){
   var code=gv('bi-code'),desc=gv('bi-desc'),qty=boqR10(gv('bi-qty'));
-  if(!code||!desc||!qty){toast('Code, description and qty required','warning');return;}
+  if(!code||!desc||isNaN(qty)||qty<0){toast('Code, description and a valid qty (0 or more) required','warning');return;}
   var projId=(document.getElementById('boq-proj-sel')||{}).value||'';
   var data={project_id:projId,item_code:code,description:desc,short_name:gv('bi-short')||null,unit:(document.getElementById('bi-unit')||{value:'Nos'}).value,boq_qty:qty,rate:boqR10(gv('bi-rate')),remarks:gv('bi-remarks')||null};
   try{toast('Saving...','info');
