@@ -1274,7 +1274,7 @@ function boqParseImportRows(rows){
       short_name:colShort?(String(r[colShort]||'').trim()||null):null,
       unit:colUnit?(String(r[colUnit]||'').trim()||'Nos'):'Nos',
       boq_qty:qty,
-      rate:colRate?boqR10(r[colRate]):0,
+      rate:colRate?(boqR10(r[colRate])||0):0, // blank/0 rate imports as 0
       remarks:colRemarks?(String(r[colRemarks]||'').trim()||null):null
     });
   });
@@ -1349,7 +1349,7 @@ async function boqSaveItem(editId){
   var code=gv('bi-code'),desc=gv('bi-desc'),qty=boqR10(gv('bi-qty'));
   if(!code||!desc||isNaN(qty)||qty<0){toast('Code, description and a valid qty (0 or more) required','warning');return;}
   var projId=(document.getElementById('boq-proj-sel')||{}).value||'';
-  var data={project_id:projId,item_code:code,description:desc,short_name:gv('bi-short')||null,unit:(document.getElementById('bi-unit')||{value:'Nos'}).value,boq_qty:qty,rate:boqR10(gv('bi-rate')),remarks:gv('bi-remarks')||null};
+  var data={project_id:projId,item_code:code,description:desc,short_name:gv('bi-short')||null,unit:(document.getElementById('bi-unit')||{value:'Nos'}).value,boq_qty:qty,rate:(boqR10(gv('bi-rate'))||0),remarks:gv('bi-remarks')||null};
   try{toast('Saving...','info');
     if(editId){await sbUpdate('boq_items',editId,data);var idx=BOQ_ITEMS.findIndex(function(i){return i.id===editId;});if(idx>-1)BOQ_ITEMS[idx]=Object.assign(BOQ_ITEMS[idx],data);toast('Updated!','success');}
     else{var res=await sbInsert('boq_items',data);if(res&&res[0])BOQ_ITEMS.push(res[0]);toast('Added!','success');}
