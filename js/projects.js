@@ -8263,12 +8263,16 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
     '</div>'+
 
     // Signature block — issuer (left) / party acceptance (right)
-    '<div class="sig-grid">'+
+    (function(){
+      var _sg=pdfSignBlocks(isPO?'po':'wo',{party:partyLabel,company:co.name||'Company'});
+      if(_sg) return pdfSignGridLine(_sg);
+      return '<div class="sig-grid">'+
       '<div class="sig-space"></div>'+
       '<div class="sig-space"></div>'+
       '<div class="sig-line"><div class="sig-name">For '+(co.name||'Company')+'</div><div class="sig-role">Authorized Signatory</div></div>'+
       '<div class="sig-line"><div class="sig-name">'+partyLabel+'</div><div class="sig-role">Signature &amp; Date</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
 
     '<div class="footer-note">'+fullDocNo+' &middot; Generated on '+fmtD(today)+'</div>'+
 
@@ -13831,12 +13835,16 @@ function execDownloadBillPDF(billId){
       '</table>'
     :'')+
 
-    // Signatures
-    '<div class="sig-grid">'+
+    // Signatures (customisable in Master Registry ▸ PDF Signatures)
+    (function(){
+      var _sg=pdfSignBlocks('bill',{party:b.party_name,company:co.name||'Management'});
+      if(_sg) return pdfSignGridBox(_sg);
+      return '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+b.party_name+'</div><div>Party Signature</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Site Engineer</div><div>Verified By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Authorized By</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
   '</body></html>';
 
   openPDF(html);
@@ -16497,3 +16505,154 @@ async function catDeleteBlocked(type,cat){
   if(!P) return false;
   return delGuardCheck('"'+(cat.name||'this entry')+'"',P,'Move those to another entry, or switch this one off (inactive) instead.');
 }
+
+// ───────────────────────────────────────────────────────────────────
+// PDF signature blocks — set up in Master Registry ▸ PDF Signatures.
+// Each row = one signature box: a title (e.g. "Verified By"), who signs
+// (the document's party / the company / a registry role / custom text)
+// and which documents it appears on (Bill, Work Order, Purchase Order).
+// A document with no rows set up keeps its original signature blocks.
+// Stored in `categories` (type 'pdfsign'): name = title,
+// description = 'docs:bill,wo,po|who:party|company|role:<name>|text:<free>'.
+// ───────────────────────────────────────────────────────────────────
+var PDFSIGN_DOCS=[['bill','Bill'],['wo','Work Order'],['po','Purchase Order']];
+var PDF_SIGN=[];
+function pdfSignEncode(docs,who){ return 'docs:'+docs.join(',')+'|who:'+who; }
+function pdfSignDecode(desc){
+  var o={docs:[],who:'party'};
+  String(desc||'').split('|').forEach(function(p){
+    var i=p.indexOf(':'); if(i<0) return;
+    var k=p.slice(0,i), v=p.slice(i+1);
+    if(k==='docs') o.docs=v.split(',').filter(Boolean);
+    else if(k==='who') o.who=v||'party';
+  });
+  return o;
+}
+function pdfSignWhoText(who){
+  if(who==='party') return 'The party on the document';
+  if(who==='company') return 'Company (authorised signatory)';
+  if(who.indexOf('role:')===0) return 'Role: '+who.slice(5);
+  if(who.indexOf('text:')===0) return 'Text: '+who.slice(5);
+  return who;
+}
+function pdfSignDescText(desc){
+  var o=pdfSignDecode(desc);
+  var names=PDFSIGN_DOCS.filter(function(d){return o.docs.indexOf(d[0])>-1;}).map(function(d){return d[1];});
+  return 'On: '+(names.join(', ')||'none')+' · Signer: '+pdfSignWhoText(o.who);
+}
+async function pdfSignLoad(force){
+  try{
+    var rows=await sbFetch('categories',{select:'*',filter:'type=eq.pdfsign',order:'created_at.asc'});
+    PDF_SIGN=(Array.isArray(rows)?rows:[]).filter(function(r){return r.active!==false;}).map(function(r){
+      var o=pdfSignDecode(r.description); return {id:r.id,title:r.name,docs:o.docs,who:o.who};
+    });
+  }catch(e){ console.warn('pdfSignLoad',e); }
+  return PDF_SIGN;
+}
+function pdfSignEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Returns [{name,title}] for a document, or null when nothing is set up (use the built-in blocks)
+function pdfSignBlocks(docType,ctx){
+  var rows=PDF_SIGN.filter(function(s){return s.docs.indexOf(docType)>-1;});
+  if(!rows.length) return null;
+  ctx=ctx||{};
+  return rows.map(function(s){
+    var name='';
+    if(s.who==='party') name=ctx.party||'';
+    else if(s.who==='company') name=ctx.company||'';
+    else if(s.who.indexOf('role:')===0) name=s.who.slice(5);
+    else if(s.who.indexOf('text:')===0) name=s.who.slice(5);
+    return {name:pdfSignEsc(name),title:pdfSignEsc(s.title)};
+  });
+}
+// Bill-style boxes
+function pdfSignGridBox(blocks){
+  var n=Math.min(blocks.length,4);
+  return '<div class="sig-grid" style="grid-template-columns:repeat('+n+',1fr);">'+
+    blocks.map(function(b){
+      return '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+b.name+'</div><div>'+b.title+'</div></div>';
+    }).join('')+'</div>';
+}
+// WO/PO-style (space row + line row)
+function pdfSignGridLine(blocks){
+  var n=Math.min(blocks.length,4);
+  return '<div class="sig-grid" style="grid-template-columns:repeat('+n+',1fr);">'+
+    blocks.map(function(){return '<div class="sig-space"></div>';}).join('')+
+    blocks.map(function(b){
+      return '<div class="sig-line"><div class="sig-name">'+(b.name||'&nbsp;')+'</div><div class="sig-role">'+b.title+'</div></div>';
+    }).join('')+'</div>';
+}
+
+// Registry UI
+function pdfSignAddOpen(){
+  var old=document.getElementById('pdfsign-add-ov'); if(old) old.remove();
+  var roles=(typeof CAT_DATA!=='undefined'&&CAT_DATA.role||[]).filter(function(r){return r.active!==false;});
+  var ov=document.createElement('div');
+  ov.id='pdfsign-add-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100001;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML=
+    '<div style="background:var(--card-bg);border-radius:16px;width:100%;max-width:420px;max-height:90vh;overflow:auto;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);">'+
+      '<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:12px;">Add PDF Signature</div>'+
+      '<label class="flbl">Title under the signature line *</label><input id="pds-title" class="finp" placeholder="e.g. Verified By, Authorised Signatory, Accepted By">'+
+      '<label class="flbl">Who signs *</label><select id="pds-who" class="fsel" onchange="pdfSignWhoChanged()">'+
+        '<option value="party">The party on the document (name printed)</option>'+
+        '<option value="company">Company (authorised signatory)</option>'+
+        '<option value="role">A role from the Roles list</option>'+
+        '<option value="text">Custom text (e.g. Site Engineer)</option></select>'+
+      '<div id="pds-role-wrap" style="display:none;"><label class="flbl">Role *</label><select id="pds-role" class="fsel">'+
+        (roles.length?roles.map(function(r){return '<option value="'+pdfSignEsc(r.name)+'">'+pdfSignEsc(r.name)+'</option>';}).join(''):'<option value="">(no roles in registry)</option>')+'</select></div>'+
+      '<div id="pds-text-wrap" style="display:none;"><label class="flbl">Text to print *</label><input id="pds-text" class="finp" placeholder="e.g. Site Engineer"></div>'+
+      '<label class="flbl" style="margin-top:8px;">Show on *</label>'+
+      '<div style="display:flex;flex-direction:column;gap:6px;margin:4px 0 12px;">'+
+        PDFSIGN_DOCS.map(function(d){return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" class="pds-doc" value="'+d[0]+'" checked> '+d[1]+'</label>';}).join('')+
+      '</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">Signatures print in the order they were added. A document with none set up keeps its standard signature blocks.</div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">'+
+        '<button class="btn btn-outline" onclick="pdfSignAddClose()">Cancel</button>'+
+        '<button id="pds-save" class="btn btn-navy" onclick="pdfSignAddSave()">Save</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  setTimeout(function(){var n=document.getElementById('pds-title'); if(n) n.focus();},50);
+}
+function pdfSignWhoChanged(){
+  var v=(document.getElementById('pds-who')||{}).value;
+  var r=document.getElementById('pds-role-wrap'), t=document.getElementById('pds-text-wrap');
+  if(r) r.style.display=v==='role'?'':'none';
+  if(t) t.style.display=v==='text'?'':'none';
+}
+function pdfSignAddClose(){ var o=document.getElementById('pdfsign-add-ov'); if(o) o.remove(); }
+async function pdfSignAddSave(){
+  var title=((document.getElementById('pds-title')||{}).value||'').trim();
+  var whoSel=(document.getElementById('pds-who')||{}).value||'party';
+  var who=whoSel;
+  if(whoSel==='role'){
+    var rv=((document.getElementById('pds-role')||{}).value||'').trim();
+    if(!rv){ toast('Pick a role (add roles in Master Registry first)','warning'); return; }
+    who='role:'+rv;
+  } else if(whoSel==='text'){
+    var tv=((document.getElementById('pds-text')||{}).value||'').trim();
+    if(!tv){ toast('Enter the text to print','warning'); return; }
+    who='text:'+tv.replace(/[|]/g,' ');
+  }
+  var docs=[].slice.call(document.querySelectorAll('.pds-doc:checked')).map(function(c){return c.value;});
+  if(!title){ toast('Enter a title','warning'); return; }
+  if(!docs.length){ toast('Pick at least one document','warning'); return; }
+  var btn=document.getElementById('pds-save'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  try{
+    var desc=pdfSignEncode(docs,who);
+    var res=await sbInsert('categories',{type:'pdfsign',name:title.replace(/[|]/g,' '),icon:'✍️',description:desc,color:'#37474F',active:true});
+    var id=(res&&res[0]&&res[0].id)||('pdfsign-'+Date.now());
+    if(typeof CAT_DATA!=='undefined'){
+      (CAT_DATA.pdfsign=CAT_DATA.pdfsign||[]).push({id:id,icon:'✍️',name:title,desc:desc,color:'#37474F',count:0,active:true});
+      if(typeof renderCatSection==='function') renderCatSection('pdfsign','pdfsign-cats');
+    }
+    await pdfSignLoad(true);
+    pdfSignAddClose();
+    toast('Signature added','success');
+  }catch(e){
+    console.error('pdfSignAddSave',e);
+    toast('Could not save: '+(e.message||e),'error');
+    if(btn){btn.disabled=false;btn.textContent='Save';}
+  }
+}
+try{ setTimeout(function(){ if(typeof sbFetch==='function' && typeof currentUser!=='undefined' && currentUser) pdfSignLoad(); },3500); }catch(e){}
