@@ -9298,6 +9298,29 @@ async function execSaveDailyEntry(projId,itemId){
 async function execDelDaily(id){
   var entry=WA_DAILY.find(function(d){return d.id===id;});
   if(!entry)return;
+  // Bills are generated from the quantity done against an allotment. If a bill
+  // already covers any allotment this entry worked on, deleting the entry would
+  // leave the bill with no progress behind it, so it is blocked.
+  try{
+    var fresh=await sbFetch('work_daily_progress',{select:'id,project_id,resources_used',filter:'id=eq.'+id});
+    var row=(Array.isArray(fresh)&&fresh[0])||entry;
+    var ru=row.resources_used, list=[];
+    try{ list=typeof ru==='string'?JSON.parse(ru):(ru||[]); }catch(e){ list=[]; }
+    var allotIds=(Array.isArray(list)?list:[]).map(function(r){return r&&r.allot_id;}).filter(Boolean);
+    if(allotIds.length){
+      var bills=await sbFetch('work_bills',{select:'id,bill_ref,selected_items',filter:'project_id=eq.'+(row.project_id||entry.project_id)});
+      var hit=[];
+      (Array.isArray(bills)?bills:[]).forEach(function(b){
+        var v=b.selected_items; if(v==null) return;
+        var txt=typeof v==='string'?v:JSON.stringify(v);
+        if(allotIds.some(function(a){return txt.indexOf(a)>-1;})) hit.push(b.bill_ref||b.id);
+      });
+      if(hit.length){
+        alert('Cannot delete this daily progress entry — bills already exist for the work it belongs to ('+hit.slice(0,4).join(', ')+(hit.length>4?', …':'')+').\nDelete those bills first, then delete this entry.');
+        return;
+      }
+    }
+  }catch(e){ toast('Could not check bills for this entry: '+(e.message||e)+' — nothing deleted','error'); return; }
   // Find linked issue logs — those whose daily_progress_id matches or whose status changed due to this entry
   var linkedLogs=STORE_ISSUE_LOG.filter(function(l){return l.daily_progress_id===id;});
   var msg='Delete this daily progress entry?';
