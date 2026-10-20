@@ -7836,9 +7836,9 @@ function catRenderQuickEdit(){
   var ov=document.getElementById('cat-quick-ov'); if(!ov) return;
   var type=CAT_QUICK_TYPE;
   var list=(CAT_DATA[type]||[]);
-  ov.innerHTML='<div style="background:white;border-radius:16px;max-width:440px;width:100%;max-height:80vh;display:flex;flex-direction:column;font-family:Nunito,sans-serif;overflow:hidden;">'+
+  ov.innerHTML='<div style="background:var(--card-bg);color:var(--text);border-radius:16px;max-width:440px;width:100%;max-height:80vh;display:flex;flex-direction:column;font-family:Nunito,sans-serif;overflow:hidden;">'+
     '<div style="padding:14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">'+
-      '<div style="flex:1;"><div style="font-size:14px;font-weight:800;color:var(--navy);">'+(CAT_TYPE_LABELS[type]||type)+'</div>'+
+      '<div style="flex:1;"><div style="font-size:14px;font-weight:800;color:var(--text);">'+(CAT_TYPE_LABELS[type]||type)+'</div>'+
       '<div style="font-size:10.5px;color:var(--text3);">Changes apply everywhere this list is used</div></div>'+
       '<span onclick="catCloseQuickEdit()" style="font-size:20px;cursor:pointer;color:var(--text3);">&#10005;</span>'+
     '</div>'+
@@ -29533,8 +29533,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261020q"></script>
-<script src="js/employee.js?v=20261020q"></script>
-<script src="js/projects.js?v=20261020q"></script>
-<script src="js/finance.js?v=20261020q"></script>
+<script src="js/registry.js?v=20261020r"></script>
+<script src="js/employee.js?v=20261020r"></script>
+<script src="js/projects.js?v=20261020r"></script>
+<script src="js/finance.js?v=20261020r"></script>
 </html>
