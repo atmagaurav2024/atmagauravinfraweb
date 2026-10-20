@@ -12257,7 +12257,10 @@ async function execOpenBill(partyKey,projId){
     var _isComb=!!(a.combined_rr_item_id||a.combined_rr_group_id);
     if(_isComb){
       var _bi=(typeof WA_ITEMS!=='undefined'?WA_ITEMS:[]).find(function(x){return x.id===a.boq_item_id;})||{};
-      if(_bi.item_code||_bi.short_name||_bi.description) resName+=' \u2014 ['+(_bi.item_code||'')+'] '+(_bi.short_name||_bi.description||'');
+      var _lbl=(_bi.item_code||_bi.short_name||_bi.description)?('['+(_bi.item_code||'')+'] '+(_bi.short_name||_bi.description||'')):'';
+      // never lead with the party's own name — the bill is already addressed to them
+      var _base=(resName&&resName!==a.party_name)?resName:(planRes.resource_category&&planRes.resource_category!==a.party_name?planRes.resource_category:'');
+      resName=_lbl?(_base?_base+' \u2014 '+_lbl:_lbl):(_base||resName);
     }
     var allotRate=parseFloat(a.rate)||0;
     var allotQty=parseFloat(a.qty)||0;
@@ -13602,6 +13605,8 @@ function execDownloadBillPDF(billId){
         var allot=WA_ALLOT.find(function(a){return a.id===si.allot_id;})||{};
         var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
         var resName=planRes.party_name||planRes.resource_category||si.res_name||'';
+        // the party's own name is not an item name: prefer the saved item label
+        if(resName&&resName===b.party_name) resName=(si.res_name&&si.res_name!==b.party_name)?si.res_name:(planRes.resource_category||'');
         var boqItem=WA_ITEMS.find(function(x){return x.id===allot.boq_item_id;})||{};
         return '<tr><td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+(i+1)+'</td>'+
           '<td style="padding:7px 10px;border-bottom:1px solid #EEE;font-weight:700;">'+(resName||si.res_name||'—')+'<br>'+
@@ -14029,7 +14034,10 @@ async function execEditBill(billId){
     var _isComb=!!(a.combined_rr_item_id||a.combined_rr_group_id);
     if(_isComb){
       var _bi=(typeof WA_ITEMS!=='undefined'?WA_ITEMS:[]).find(function(x){return x.id===a.boq_item_id;})||{};
-      if(_bi.item_code||_bi.short_name||_bi.description) resName+=' \u2014 ['+(_bi.item_code||'')+'] '+(_bi.short_name||_bi.description||'');
+      var _lbl=(_bi.item_code||_bi.short_name||_bi.description)?('['+(_bi.item_code||'')+'] '+(_bi.short_name||_bi.description||'')):'';
+      // never lead with the party's own name — the bill is already addressed to them
+      var _base=(resName&&resName!==a.party_name)?resName:(planRes.resource_category&&planRes.resource_category!==a.party_name?planRes.resource_category:'');
+      resName=_lbl?(_base?_base+' \u2014 '+_lbl:_lbl):(_base||resName);
     }
     var allotRate=parseFloat(a.rate)||0;
     var allotQty=parseFloat(a.qty)||0;
