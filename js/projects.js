@@ -1356,24 +1356,50 @@ async function boqSaveItem(editId){
     closeBOQSheet();boqRender();
   }catch(e){toast('Error: '+e.message,'error');}
 }
+// A BOQ item can only be deleted while nothing has been made from it.
+// Checked in the database; each probe is [table, label, extra filter].
+var BOQ_DOWNSTREAM_PROBES=[
+  ['boq_jm','measurements (JM)',''],
+  ['boq_subitems','activities',''],
+  ['boq_exec_resources','planned resources','&exec_type=eq.planned'],
+  ['boq_exec_resources','allotments','&exec_type=neq.planned'],
+  ['combined_plan_items','combined planning',''],
+  ['combined_rr_items','combined RR',''],
+  ['resource_requisitions','RR',''],
+  ['work_daily_progress','daily progress',''],
+  ['work_orders','WO/PO',''],
+  ['subcontract_scope_items','subcontract scope','']
+];
+async function boqDownstreamFor(id){
+  var found=[];
+  for(var k=0;k<BOQ_DOWNSTREAM_PROBES.length;k++){
+    var pr=BOQ_DOWNSTREAM_PROBES[k];
+    try{
+      var rows=await sbFetch(pr[0],{select:'id',filter:'boq_item_id=eq.'+id+pr[2]+'&limit=1'});
+      if(Array.isArray(rows)&&rows.length) found.push(pr[1]);
+    }catch(e){
+      var m=String(e&&e.message||e);
+      // A table/column this install does not have simply has nothing in it;
+      // any other failure (network etc.) must stop the delete.
+      if(/does not exist|could not find|42P01|42703|PGRST20[0-9]|404/i.test(m)) continue;
+      throw e;
+    }
+  }
+  return found;
+}
 async function boqDeleteItem(id){
-  if(!confirm('Delete this BOQ item?\nThis will also delete all planned resources, allotments and WO/POs under it.'))return;
-  // Delete WO/POs for resources under this item
-  var relOrders=WA_ORDERS.filter(function(o){return o.boq_item_id===id;});
-  for(var i=0;i<relOrders.length;i++) try{await sbDelete('work_orders',relOrders[i].id);}catch(e){}
-  WA_ORDERS=WA_ORDERS.filter(function(o){return o.boq_item_id!==id;});
-  // Delete allotments
-  var relAllot=WA_ALLOT.filter(function(a){return a.boq_item_id===id;});
-  for(var j=0;j<relAllot.length;j++) try{await sbDelete('boq_exec_resources',relAllot[j].id);}catch(e){}
-  WA_ALLOT=WA_ALLOT.filter(function(a){return a.boq_item_id!==id;});
-  // Delete planned resources
-  var relPlan=WA_PLANNED.filter(function(r){return r.boq_item_id===id;});
-  for(var k=0;k<relPlan.length;k++) try{await sbDelete('boq_exec_resources',relPlan[k].id);}catch(e){}
-  WA_PLANNED=WA_PLANNED.filter(function(r){return r.boq_item_id!==id;});
+  try{
+    var dn=await boqDownstreamFor(id);
+    if(dn.length){
+      alert('Cannot delete this BOQ item — it already has: '+dn.join(', ')+'.\nDelete those first (starting from the latest stage), then delete the BOQ item.');
+      return;
+    }
+  }catch(e){ toast('Could not check what depends on this BOQ item: '+(e.message||e)+' — nothing deleted','error'); return; }
+  if(!confirm('Delete this BOQ item?'))return;
+  try{await sbDelete('boq_items',id);}catch(e){console.error(e);toast('Could not delete: '+(e.message||e),'error');return;}
   BOQ_ITEMS=BOQ_ITEMS.filter(function(i){return i.id!==id;});
   boqRender();
-  try{await sbDelete('boq_items',id);}catch(e){console.error(e);}
-  toast('BOQ item and all related records deleted','success');
+  toast('BOQ item deleted','success');
 }
 
 // ════ JM ════════════════════════════════════════════════
