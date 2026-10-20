@@ -194,12 +194,12 @@ function projModRenderNav(){
 
   // ── Main tab row ──
   // Non-project tabs only shown when a project is selected
-  var mainRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 10px;gap:4px;background:var(--card-bg);">'+
+  var mainRow='<div style="display:flex;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;padding:6px 10px;gap:4px;background:var(--card-bg);">'+
     mainTabs.map(function(t){
       var isActive=(PROJ_MOD_TAB===t.id)||(t.group&&activeGroup===t.id);
       // Hide non-project tabs when no project selected OR when on Projects tab
       if(t.id!=='projects'&&(onProjects||!hasProjId)) return '';
-      return '<button id="pmt-'+t.id+'" '+
+      return '<button id="pmt-'+t.id+'" '+(isActive?'data-act="1" ':'')+
         'onclick="projModTab(\''+t.id+'\')" '+
         'style="flex-shrink:0;padding:7px 14px;font-size:12px;font-weight:800;border:none;border-radius:8px;'+
         'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
@@ -220,11 +220,11 @@ function projModRenderNav(){
         if(PROJ_MOD_TAB==='schh'||PROJ_MOD_TAB==='schb'){ PROJ_MOD_TAB='boq'; }
       }
     }
-    subRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;'+
-      'padding:0 10px 8px;gap:4px;background:var(--card-bg);border-top:1px solid #F3F4F6;">'+
+    subRow='<div style="display:flex;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;'+
+      'padding:0 10px 8px;gap:4px;background:var(--card-bg);border-top:1px solid var(--border);">'+
       subTabIds.map(function(s){
         var sa=PROJ_MOD_TAB===s;
-        return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
+        return '<button id="pmt-'+s+'" '+(sa?'data-act="1" ':'')+'onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
           'style="flex-shrink:0;padding:5px 12px;font-size:11px;font-weight:800;border:none;border-radius:7px;'+
           'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
           'background:'+(sa?'#111827':'transparent')+';'+
@@ -235,6 +235,8 @@ function projModRenderNav(){
   }
 
   bar.innerHTML=mainRow+subRow;
+  // Keep the active tab in view in each sliding row (matters on a phone)
+  try{ [].slice.call(bar.children).forEach(function(row){ var act=row.querySelector('button[data-act="1"]'); if(act&&act.scrollIntoView) act.scrollIntoView({inline:'center',block:'nearest'}); }); }catch(e){}
 
   // Badge
   var badge=document.getElementById('proj-mod-sel-badge');
@@ -16764,3 +16766,51 @@ function pdfSignGridSig(blocks){
   return '<div class="footer" style="display:grid;grid-template-columns:repeat('+n+',1fr);gap:24px;">'+
     blocks.map(function(b){return '<div><div class="sig">'+b.title+'<br><br>'+b.name+'</div></div>';}).join('')+'</div>';
 }
+
+// ── Phone: wide tables inside the Project module slide sideways ──
+// Wraps any table with 5+ columns in a horizontally scrolling box (once), as content renders.
+(function(){
+  function wrapWide(root){
+    [].slice.call(root.querySelectorAll('table')).forEach(function(t){
+      if(t.getAttribute('data-sw')) return;
+      t.setAttribute('data-sw','1');
+      if(t.closest('.sw-wrap')) return;
+      var cols=t.querySelectorAll('thead th').length||((t.rows[0]&&t.rows[0].cells.length)||0);
+      if(cols<5) return;
+      var par=t.parentNode; if(!par) return;
+      var w=document.createElement('div');
+      w.className='sw-wrap';
+      w.style.cssText='overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;';
+      par.insertBefore(w,t); w.appendChild(t);
+      t.style.minWidth=Math.max(520,cols*70)+'px';
+    });
+  }
+  // Rows of 3+ buttons (inner sub-tabs) must slide instead of squashing or clipping
+  function slideRows(root){
+    [].slice.call(root.querySelectorAll('div')).forEach(function(d){
+      if(d.getAttribute('data-sr')) return;
+      var kids=d.children; if(kids.length<3) return;
+      for(var i=0;i<kids.length;i++) if(kids[i].tagName!=='BUTTON') return;
+      d.setAttribute('data-sr','1');
+      d.style.overflowX='auto'; d.style.webkitOverflowScrolling='touch'; d.style.scrollbarWidth='none';
+      for(var j=0;j<kids.length;j++){ kids[j].style.flexShrink='0'; kids[j].style.whiteSpace='nowrap'; }
+      var act=null; for(var k=0;k<kids.length;k++){ if(kids[k].getAttribute('data-act')==='1'){ act=kids[k]; break; } }
+      if(act&&act.scrollIntoView) try{ act.scrollIntoView({inline:'center',block:'nearest'}); }catch(e){}
+    });
+  }
+  function start(){
+    var c=document.getElementById('proj-mod-content'); if(!c||c.__swObs) return;
+    c.__swObs=true;
+    var pending=false;
+    new MutationObserver(function(){
+      if(pending) return; pending=true;
+      requestAnimationFrame(function(){ pending=false; wrapWide(c); slideRows(c); });
+    }).observe(c,{childList:true,subtree:true});
+    wrapWide(c); slideRows(c);
+  }
+  var st=document.createElement('style');
+  st.textContent='#proj-mod-content .sw-wrap table th,#proj-mod-content .sw-wrap table td{white-space:nowrap;}';
+  document.head.appendChild(st);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
+  setInterval(start,2000);
+})();

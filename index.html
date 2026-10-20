@@ -13619,12 +13619,12 @@ function projModRenderNav(){
 
   // ── Main tab row ──
   // Non-project tabs only shown when a project is selected
-  var mainRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:6px 10px;gap:4px;background:white;">'+
+  var mainRow='<div style="display:flex;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;padding:6px 10px;gap:4px;background:var(--card-bg);">'+
     mainTabs.map(function(t){
       var isActive=(PROJ_MOD_TAB===t.id)||(t.group&&activeGroup===t.id);
       // Hide non-project tabs when no project selected OR when on Projects tab
       if(t.id!=='projects'&&(onProjects||!hasProjId)) return '';
-      return '<button id="pmt-'+t.id+'" '+
+      return '<button id="pmt-'+t.id+'" '+(isActive?'data-act="1" ':'')+
         'onclick="projModTab(\''+t.id+'\')" '+
         'style="flex-shrink:0;padding:7px 14px;font-size:12px;font-weight:800;border:none;border-radius:8px;'+
         'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
@@ -13637,11 +13637,11 @@ function projModRenderNav(){
   // ── Sub-tab row ──
   var subRow='';
   if(hasProjId&&activeGroup&&!onProjects){
-    subRow='<div style="display:flex;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;'+
-      'padding:0 10px 8px;gap:4px;background:white;border-top:1px solid #F3F4F6;">'+
+    subRow='<div style="display:flex;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;'+
+      'padding:0 10px 8px;gap:4px;background:var(--card-bg);border-top:1px solid var(--border);">'+
       PMT_GROUPS[activeGroup].map(function(s){
         var sa=PROJ_MOD_TAB===s;
-        return '<button id="pmt-'+s+'" onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
+        return '<button id="pmt-'+s+'" '+(sa?'data-act="1" ':'')+'onclick="projModSubTab(\''+activeGroup+'\',\''+s+'\')" '+
           'style="flex-shrink:0;padding:5px 12px;font-size:11px;font-weight:800;border:none;border-radius:7px;'+
           'font-family:Nunito,sans-serif;white-space:nowrap;cursor:pointer;transition:all .15s;'+
           'background:'+(sa?'#111827':'transparent')+';'+
@@ -13652,6 +13652,8 @@ function projModRenderNav(){
   }
 
   bar.innerHTML=mainRow+subRow;
+  // Keep the active tab in view in each sliding row (matters on a phone)
+  try{ [].slice.call(bar.children).forEach(function(row){ var act=row.querySelector('button[data-act="1"]'); if(act&&act.scrollIntoView) act.scrollIntoView({inline:'center',block:'nearest'}); }); }catch(e){}
 
   // Badge
   var badge=document.getElementById('proj-mod-sel-badge');
@@ -29537,8 +29539,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261020s"></script>
-<script src="js/employee.js?v=20261020s"></script>
-<script src="js/projects.js?v=20261020s"></script>
-<script src="js/finance.js?v=20261020s"></script>
+<script src="js/registry.js?v=20261020t"></script>
+<script src="js/employee.js?v=20261020t"></script>
+<script src="js/projects.js?v=20261020t"></script>
+<script src="js/finance.js?v=20261020t"></script>
 </html>
