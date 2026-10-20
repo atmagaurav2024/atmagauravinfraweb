@@ -5292,13 +5292,79 @@ async function execUpdateAllotted(id){
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
+// ── Delete guard for Work Allotment ───────────────────────────────────
+// An allotment can only be deleted while nothing has been recorded against it
+// (WO/PO, advances, GRN, store issues, daily progress, bills, lumpsum scope
+// progress). Checked in the database.
+async function allotDownstreamFor(allotIds, projId, batchKeys){
+  var found=[];
+  var add=function(l){ if(found.indexOf(l)<0) found.push(l); };
+  var ids=(allotIds||[]).filter(Boolean);
+  if(!ids.length) return found;
+  var inIds='in.('+ids.join(',')+')';
+  var tables=[['work_orders','WO/PO'],['work_advances','advances'],['grn_entries','GRN'],['store_issue_log','store issues']];
+  for(var k=0;k<tables.length;k++){
+    try{
+      var rows=await sbFetch(tables[k][0],{select:'id',filter:'allot_id='+inIds+'&limit=1'});
+      if(Array.isArray(rows)&&rows.length) add(tables[k][1]);
+    }catch(e){
+      if(/does not exist|could not find|42P01|42703|PGRST20[0-9]|404/i.test(String(e&&e.message||e))) continue;
+      throw e;
+    }
+  }
+  // Daily progress and bills keep the allotment inside a JSON column: scan the project's rows
+  var scans=[['work_daily_progress','resources_used','daily progress'],['work_bills','selected_items','bills']];
+  for(var m=0;m<scans.length;m++){
+    try{
+      var flt=projId?('project_id=eq.'+projId):'';
+      var rs=await sbFetch(scans[m][0],{select:'id,'+scans[m][1],filter:flt});
+      (Array.isArray(rs)?rs:[]).some(function(r){
+        var v=r[scans[m][1]]; if(v==null) return false;
+        var txt=typeof v==='string'?v:JSON.stringify(v);
+        for(var q=0;q<ids.length;q++) if(txt.indexOf(ids[q])>-1){ add(scans[m][2]); return true; }
+        return false;
+      });
+    }catch(e){
+      if(/does not exist|could not find|42P01|42703|PGRST20[0-9]|404/i.test(String(e&&e.message||e))) continue;
+      throw e;
+    }
+  }
+  // Lumpsum allotment: progress logged against the auto-created subcontract scopes
+  for(var b=0;b<(batchKeys||[]).length;b++){
+    try{
+      var subs=await sbFetch('subcontracts',{select:'id',filter:'source_batch_id=eq.'+batchKeys[b]});
+      if(Array.isArray(subs)&&subs.length){
+        var scopes=await sbFetch('subcontract_scopes',{select:'id',filter:'subcontract_id=in.('+subs.map(function(x){return x.id;}).join(',')+')'});
+        if(Array.isArray(scopes)&&scopes.length){
+          var prog=await sbFetch('subcontract_scope_progress',{select:'id',filter:'scope_id=in.('+scopes.map(function(x){return x.id;}).join(',')+')&limit=1'});
+          if(Array.isArray(prog)&&prog.length) add('lumpsum scope progress');
+        }
+      }
+    }catch(e){
+      if(/does not exist|could not find|42P01|42703|PGRST20[0-9]|404/i.test(String(e&&e.message||e))) continue;
+      throw e;
+    }
+  }
+  return found;
+}
+async function allotBlockCheck(allotIds, projId, batchKeys){
+  try{
+    var dn=await allotDownstreamFor(allotIds, projId, batchKeys);
+    if(dn.length){
+      alert('Cannot delete this allotment — it already has: '+dn.join(', ')+'.\nDelete those first (starting from the latest stage), then delete the allotment.');
+      return true;
+    }
+    return false;
+  }catch(e){
+    toast('Could not check what depends on this allotment: '+(e.message||e)+' — nothing deleted','error');
+    return true;
+  }
+}
+
 async function execDelAllotted(id){
   var allot=WA_ALLOT.find(function(a){return a.id===id;})||{};
-  var hasOrder=WA_ORDERS.some(function(o){return o.allot_id===id;});
-  var msg=hasOrder
-    ? 'This allotment has WO/PO(s) generated.\nDeleting will also delete those order records.\n\nDelete allotment and related orders?'
-    : 'Delete this allotment?';
-  if(!confirm(msg)) return;
+  if(await allotBlockCheck([id], allot.project_id, allot.batch_id?[allot.batch_id]:[])) return;
+  if(!confirm('Delete this allotment?')) return;
   var relOrds=WA_ORDERS.filter(function(o){return o.allot_id===id;});
   for(var i=0;i<relOrds.length;i++) try{await sbDelete('work_orders',relOrds[i].id);}catch(e){}
   WA_ORDERS=WA_ORDERS.filter(function(o){return o.allot_id!==id;});
@@ -5322,6 +5388,7 @@ async function execDelBatch(batchKey){
   var items=WA_ALLOT.filter(function(a){return (a.batch_id||('solo-'+a.id))===batchKey;});
   if(!items.length){toast('Batch not found','warning');return;}
   var itemIds=items.map(function(a){return a.id;});
+  if(await allotBlockCheck(itemIds, items[0].project_id, items[0].batch_id?[items[0].batch_id]:[])) return;
   var hasOrder=WA_ORDERS.some(function(o){return itemIds.indexOf(o.allot_id)!==-1;});
   var msg=hasOrder
     ? 'This batch has WO/PO(s) generated across '+items.length+' item'+(items.length!==1?'s':'')+'.\nDeleting will also delete those order records.\n\nDelete this whole batch?'
@@ -5388,9 +5455,8 @@ async function execDelBatch(batchKey){
 
 async function execDelAllot(id){
   var allot=WA_ALLOT.find(function(a){return a.id===id;})||{};
-  if(!confirm('Delete this allotment?\n'+(WA_ORDERS.some(function(o){return o.allot_id===id;})
-    ?'Related WO/PO records will also be deleted.':'')
-  )) return;
+  if(await allotBlockCheck([id], allot.project_id, allot.batch_id?[allot.batch_id]:[])) return;
+  if(!confirm('Delete this allotment?')) return;
   var relOrds=WA_ORDERS.filter(function(o){return o.allot_id===id;});
   for(var i=0;i<relOrds.length;i++) try{await sbDelete('work_orders',relOrds[i].id);}catch(e){}
   WA_ORDERS=WA_ORDERS.filter(function(o){return o.allot_id!==id;});
