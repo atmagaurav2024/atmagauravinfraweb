@@ -1234,6 +1234,10 @@ input,select,textarea{font-size:16px !important;}
 /* Table */
 #app-attendance .table-card{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 #app-attendance .table-card .att-table{min-width:620px;}
+/* Accounts tables (TDS, GST, vouchers…) scroll sideways on a phone instead of being clipped */
+#app-accounts .table-card{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+#app-accounts .table-card .att-table{min-width:560px;}
+#app-accounts .table-card .att-table th,#app-accounts .table-card .att-table td{white-space:nowrap;}
 #app-attendance .table-card .att-table th,#app-attendance .table-card .att-table td{white-space:nowrap;}
 #app-attendance .table-card-header{flex-wrap:wrap;gap:8px;padding:12px !important;}
 #app-attendance .tch-actions{flex-wrap:wrap;gap:6px;width:100%;}
@@ -29533,8 +29537,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261020r"></script>
-<script src="js/employee.js?v=20261020r"></script>
-<script src="js/projects.js?v=20261020r"></script>
-<script src="js/finance.js?v=20261020r"></script>
+<script src="js/registry.js?v=20261020s"></script>
+<script src="js/employee.js?v=20261020s"></script>
+<script src="js/projects.js?v=20261020s"></script>
+<script src="js/finance.js?v=20261020s"></script>
 </html>
