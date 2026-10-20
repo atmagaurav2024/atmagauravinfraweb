@@ -1903,7 +1903,51 @@ function planDownloadPDF(){
   openPDF(html);
 }
 
+// ── Delete guards for Planning ────────────────────────────────────────
+// Nothing in Planning is deleted while something was made from it (RR,
+// allotment). Checked against the database, not the screen's cached lists.
+async function planDownstreamFor(opts){
+  var out={rr:[],allot:[]};
+  var resIds=(opts.resIds||[]).filter(Boolean);
+  var planItemIds=(opts.planItemIds||[]).filter(Boolean);
+  if(resIds.length){
+    var inRes='in.('+resIds.join(',')+')';
+    var rrs=await sbFetch('resource_requisitions',{select:'id,rr_number',filter:'plan_res_id='+inRes});
+    (Array.isArray(rrs)?rrs:[]).forEach(function(r){ out.rr.push(r.rr_number||r.id); });
+    var al=await sbFetch('boq_exec_resources',{select:'id,party_name',filter:'boq_exec_resource_id='+inRes});
+    (Array.isArray(al)?al:[]).forEach(function(a){ out.allot.push(a.party_name||a.id); });
+  }
+  if(opts.subId){
+    var al3=await sbFetch('boq_exec_resources',{select:'id,party_name',filter:'boq_subitem_id=eq.'+opts.subId+'&exec_type=neq.planned'});
+    (Array.isArray(al3)?al3:[]).forEach(function(a){ out.allot.push(a.party_name||a.id); });
+  }
+  if(planItemIds.length){
+    var cri=await sbFetch('combined_rr_items',{select:'id,group_id',filter:'plan_item_id=in.('+planItemIds.join(',')+')'});
+    cri=Array.isArray(cri)?cri:[];
+    if(cri.length){
+      var gids=Array.from(new Set(cri.map(function(x){return x.group_id;})));
+      var grps=await sbFetch('combined_rr_groups',{select:'id,rr_number',filter:'id=in.('+gids.join(',')+')'});
+      (Array.isArray(grps)?grps:[]).forEach(function(g){ out.rr.push(g.rr_number||g.id); });
+      var al2=await sbFetch('boq_exec_resources',{select:'id,party_name',filter:'combined_rr_item_id=in.('+cri.map(function(x){return x.id;}).join(',')+')'});
+      (Array.isArray(al2)?al2:[]).forEach(function(a){ out.allot.push(a.party_name||a.id); });
+    }
+  }
+  out.rr=Array.from(new Set(out.rr)); out.allot=Array.from(new Set(out.allot));
+  return out;
+}
+function planBlockedMessage(what, d){
+  var parts=[];
+  if(d.rr.length) parts.push(d.rr.length+' RR ('+d.rr.slice(0,4).join(', ')+(d.rr.length>4?', …':'')+')');
+  if(d.allot.length) parts.push('allotment to '+d.allot.slice(0,3).join(', ')+(d.allot.length>3?', …':''));
+  return 'Cannot delete '+what+' — it already has '+parts.join(' and ')+'. Delete those first (starting from the latest stage), then delete this.';
+}
+
 async function planDeleteCombinedGroup(groupId){
+  try{
+    var gi=await sbFetch('combined_plan_items',{select:'id',filter:'group_id=eq.'+groupId});
+    var dn=await planDownstreamFor({planItemIds:(Array.isArray(gi)?gi:[]).map(function(x){return x.id;})});
+    if(dn.rr.length||dn.allot.length){ alert(planBlockedMessage('this combined planning group',dn)); return; }
+  }catch(e){ toast('Could not check linked RR / allotments: '+e.message+' — nothing deleted','error'); return; }
   if(!confirm('Delete this combined planning group? This removes the assignment for every item in it.')) return;
   try{
     await sbDelete('combined_plan_groups', groupId);
@@ -2521,7 +2565,12 @@ async function planUpdateRes(resId){
 }
 
 async function planDelSub(id){
-  if(!confirm('Delete this activity?\nThis will also delete all resources, allotments and WO/POs under it.'))return;
+  try{
+    var resIds=PLAN_RES.filter(function(r){return r.boq_subitem_id===id;}).map(function(r){return r.id;});
+    var dn=await planDownstreamFor({resIds:resIds,subId:id});
+    if(dn.rr.length||dn.allot.length){ alert(planBlockedMessage('this activity',dn)); return; }
+  }catch(e){ toast('Could not check linked RR / allotments: '+e.message+' — nothing deleted','error'); return; }
+  if(!confirm('Delete this activity?\nThis will also delete all resources planned under it.'))return;
   // Delete WO/POs for allotments under this sub-activity
   var subAllots=WA_ALLOT.filter(function(a){return a.boq_subitem_id===id;});
   for(var i=0;i<subAllots.length;i++){
@@ -2541,7 +2590,11 @@ async function planDelSub(id){
   toast('Activity and all related records deleted','success');
 }
 async function planDelRes(id){
-  if(!confirm('Delete this resource?\nThis will also delete related allotments and WO/POs.'))return;
+  try{
+    var dn=await planDownstreamFor({resIds:[id]});
+    if(dn.rr.length||dn.allot.length){ alert(planBlockedMessage('this resource',dn)); return; }
+  }catch(e){ toast('Could not check linked RR / allotments: '+e.message+' — nothing deleted','error'); return; }
+  if(!confirm('Delete this resource?'))return;
   // Delete WO/POs for allotments linked to this planned resource
   var relAllots=WA_ALLOT.filter(function(a){return a.boq_exec_resource_id===id;});
   for(var i=0;i<relAllots.length;i++){
