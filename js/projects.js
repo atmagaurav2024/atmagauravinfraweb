@@ -7146,7 +7146,48 @@ async function execSaveSalesBill(){
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
+// ── Delete guard for bills ────────────────────────────────────────────
+// A bill can only be deleted while nothing has been settled against it:
+// no payments / receipts, no advance adjustments, and (purchase bills) no
+// lumpsum scope progress billed on it. Checked in the database.
+async function billDownstreamFor(kind, billId){
+  var found=[];
+  var isSales=(kind==='sales');
+  var payTable=isSales?'sales_payments':'work_payments';
+  var payCol=isSales?'sales_bill_id':'bill_id';
+  var billTable=isSales?'sales_bills':'work_bills';
+  try{
+    var pays=await sbFetch(payTable,{select:'id',filter:payCol+'=eq.'+billId+'&limit=1'});
+    if(Array.isArray(pays)&&pays.length) found.push(isSales?'receipts':'payments');
+  }catch(e){ if(!/does not exist|could not find|42P01|42703|PGRST20[0-9]|404/i.test(String(e&&e.message||e))) throw e; }
+  var rows=await sbFetch(billTable,{select:'id,deductions',filter:'id=eq.'+billId});
+  var ded=rows&&rows[0]&&rows[0].deductions, list=[];
+  try{ list=typeof ded==='string'?JSON.parse(ded):(ded||[]); }catch(e){ list=[]; }
+  if((Array.isArray(list)?list:[]).some(function(d){return d&&d.is_advance_adj;})) found.push('advance adjustments');
+  if(!isSales){
+    try{
+      var pr=await sbFetch('subcontract_scope_progress',{select:'id',filter:'work_bill_id=eq.'+billId+'&limit=1'});
+      if(Array.isArray(pr)&&pr.length) found.push('lumpsum scope progress billed on it');
+    }catch(e){ if(!/does not exist|could not find|42P01|42703|PGRST20[0-9]|404/i.test(String(e&&e.message||e))) throw e; }
+  }
+  return found;
+}
+async function billBlockCheck(kind, billId){
+  try{
+    var dn=await billDownstreamFor(kind, billId);
+    if(dn.length){
+      alert('Cannot delete this bill — it already has: '+dn.join(', ')+'.\nDelete those first (starting from the latest stage), then delete the bill.');
+      return true;
+    }
+    return false;
+  }catch(e){
+    toast('Could not check what depends on this bill: '+(e.message||e)+' — nothing deleted','error');
+    return true;
+  }
+}
+
 async function execDelSalesBill(id){
+  if(await billBlockCheck('sales', id)) return;
   // Mirrors execDelBill on the purchase side: itemizes what deleting this
   // bill will also do (delete its payments, reverse any advance
   // adjustments) before asking, rather than a plain confirm that silently
@@ -13919,6 +13960,7 @@ async function execDelAdvance(id){
   toast('Advance deleted','success');
 }
 async function execDelBill(id){
+  if(await billBlockCheck('purchase', id)) return;
   var fmtInr=function(n){ return '₹'+Math.round(n||0).toLocaleString('en-IN'); };
   var bill=WA_BILLS.find(function(b){return b.id===id;});
   var relPays=WA_PAYMENTS.filter(function(p){return p.bill_id===id;});
