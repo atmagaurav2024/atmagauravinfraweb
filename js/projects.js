@@ -12252,6 +12252,13 @@ async function execOpenBill(partyKey,projId){
   partyAllots.forEach(function(a){
     var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var resName=planRes.party_name||planRes.resource_category||a.party_name;
+    // Combined-RR allotments are one per BOQ item (each with its own rate): keep them as
+    // separate bill lines labelled with the BOQ item, instead of merging into one line.
+    var _isComb=!!(a.combined_rr_item_id||a.combined_rr_group_id);
+    if(_isComb){
+      var _bi=(typeof WA_ITEMS!=='undefined'?WA_ITEMS:[]).find(function(x){return x.id===a.boq_item_id;})||{};
+      if(_bi.item_code||_bi.short_name||_bi.description) resName+=' \u2014 ['+(_bi.item_code||'')+'] '+(_bi.short_name||_bi.description||'');
+    }
     var allotRate=parseFloat(a.rate)||0;
     var allotQty=parseFloat(a.qty)||0;
     var doneQty=0;
@@ -12265,7 +12272,7 @@ async function execOpenBill(partyKey,projId){
       var si=[];try{si=b.selected_items?JSON.parse(b.selected_items):[];}catch(e){}
       return s+si.filter(function(x){return x.allot_id===a.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
     },0);
-    var key=resName+'__'+(a.unit||'');
+    var key=resName+'__'+(a.unit||'')+'__'+allotRate+(_isComb?'__'+a.id:'');
     if(!wrkGroups[key]){
       wrkGroups[key]={resName:resName,unit:a.unit||'',allotIds:[],allotQty:0,allotRate:allotRate,doneQty:0,doneAmt:0,prevBilled:0,unbilled:0};
       wrkOrder.push(key);
@@ -14017,6 +14024,13 @@ async function execEditBill(billId){
   partyAllots.forEach(function(a){
     var planRes=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var resName=planRes.party_name||planRes.resource_category||a.party_name;
+    // Combined-RR allotments are one per BOQ item (each with its own rate): keep them as
+    // separate bill lines labelled with the BOQ item, instead of merging into one line.
+    var _isComb=!!(a.combined_rr_item_id||a.combined_rr_group_id);
+    if(_isComb){
+      var _bi=(typeof WA_ITEMS!=='undefined'?WA_ITEMS:[]).find(function(x){return x.id===a.boq_item_id;})||{};
+      if(_bi.item_code||_bi.short_name||_bi.description) resName+=' \u2014 ['+(_bi.item_code||'')+'] '+(_bi.short_name||_bi.description||'');
+    }
     var allotRate=parseFloat(a.rate)||0;
     var allotQty=parseFloat(a.qty)||0;
     var doneQty=0;
@@ -14031,7 +14045,7 @@ async function execEditBill(billId){
       var si=[];try{si=bl.selected_items?JSON.parse(bl.selected_items):[];}catch(e){}
       return s+si.filter(function(x){return x.allot_id===a.id;}).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
     },0);
-    var key=resName+'__'+(a.unit||'');
+    var key=resName+'__'+(a.unit||'')+'__'+allotRate+(_isComb?'__'+a.id:'');
     if(!wrkGroups[key]){
       wrkGroups[key]={resName:resName,unit:a.unit||'',allotIds:[],allotQty:0,allotRate:allotRate,doneQty:0,doneAmt:0,prevBilled:0,unbilled:0};
       wrkOrder.push(key);
