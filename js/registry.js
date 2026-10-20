@@ -366,9 +366,10 @@ function renderCatSection(type,containerId){
   }).join('');
 }
 
-function deleteCat(type,i){
+async function deleteCat(type,i){
   var cat=CAT_DATA[type][i];
   if(type==='role' && String(cat.name||'').trim().toLowerCase()==='admin'){ toast('The Admin role is required and cannot be deleted','warning'); return; }
+  if(typeof catDeleteBlocked==='function' && await catDeleteBlocked(type,cat)) return;
   if(!confirm('Delete category "'+cat.name+'"?')) return;
   CAT_DATA[type].splice(i,1);
   renderCatSection(type,catSectionMap[type]);

@@ -7418,6 +7418,8 @@ function execPrintOrder(orderId){
 }
 
 async function execDeleteOrder(id){
+  var _o=WA_ORDERS.find(function(o){return o.id===id;});
+  if(_o && await orderDeleteBlocked([_o])) return;
   if(!confirm('Delete this order record?\n(The printed document is not affected)'))return;
   WA_ORDERS=WA_ORDERS.filter(function(o){return o.id!==id;});
   execRenderOrders();
@@ -7428,6 +7430,7 @@ async function execDeleteOrder(id){
 async function execDeleteOrderGroup(docType, docNum){
   var orders=WA_ORDERS.filter(function(o){return o.doc_type===docType&&(o.doc_number||'?')===String(docNum);});
   if(!orders.length) return;
+  if(await orderDeleteBlocked(orders)) return;
   if(!confirm('Delete '+(docType==='wo'?'WO':'PO')+'-'+docNum+' and all its '+orders.length+' item(s)?\n(Printed documents are not affected)')) return;
   WA_ORDERS=WA_ORDERS.filter(function(o){return !(o.doc_type===docType&&(o.doc_number||'?')===String(docNum));});
   execRenderOrders();
@@ -15562,6 +15565,7 @@ async function storeDelete(itemId){
   if(!item)return;
   // Count linked issue logs
   var linkedLogs=STORE_ISSUE_LOG.filter(function(l){return l.store_id===itemId;});
+  if(await storeItemDeleteBlocked(itemId)) return;
   var msg='Delete store entry for "'+item.item_name+'"?';
   if(linkedLogs.length) msg+='\n\n'+linkedLogs.length+' issue log entry(s) will also be deleted.';
   msg+='\n\nThe GRN will remain.';
@@ -15798,6 +15802,7 @@ async function scSaveSubcontract(batchId, partyName){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 async function scDeleteSubcontract(id){
+  if(await scDeleteBlocked('sub',id)) return;
   if(!confirm('Delete this subcontract? This removes all its scopes and progress entries too.'))return;
   try{
     await sbDelete('subcontracts', id);
@@ -15929,6 +15934,7 @@ async function scSaveScope(subcontractId, editId){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 async function scDeleteScope(id){
+  if(await scDeleteBlocked('scope',id)) return;
   if(!confirm('Delete this scope? This also removes its progress/billing history.'))return;
   try{
     await sbDelete('subcontract_scopes', id);
@@ -16422,4 +16428,50 @@ async function grnDeleteBlocked(grn){
     }
     return found;
   },'Reverse the store issues first, then delete the GRN.');
+}
+
+// ── Second batch of delete guards: WO/PO, store items, subcontracts, schedules, accounts, categories ──
+async function orderDeleteBlocked(orders){
+  var ids=(orders||[]).map(function(o){return o.allot_id;}).filter(Boolean);
+  if(!ids.length) return false;
+  var proj=orders[0].project_id||'';
+  return delGuardCheck('this '+(orders[0].doc_type==='wo'?'WO':'PO'),async function(){
+    var f=await allotDownstreamFor(ids,proj,[]);
+    return f.filter(function(x){return x!=='WO/PO';});
+  },'Delete those first (latest stage first), then delete the order.');
+}
+async function storeItemDeleteBlocked(itemId){
+  return delGuardCheck('this store entry',[['store_issue_log','store issues','store_id=eq.'+itemId]],'Reverse the issues first, then delete the stock entry.');
+}
+async function scDeleteBlocked(kind,id){
+  return delGuardCheck(kind==='scope'?'this scope':'this subcontract',async function(){
+    var scopeIds=[id];
+    if(kind!=='scope'){
+      var sc=await sbFetch('subcontract_scopes',{select:'id',filter:'subcontract_id=eq.'+id});
+      scopeIds=(Array.isArray(sc)?sc:[]).map(function(x){return x.id;});
+    }
+    if(!scopeIds.length) return [];
+    var pr=await sbFetch('subcontract_scope_progress',{select:'id',filter:'scope_id=in.('+scopeIds.join(',')+')&limit=1'});
+    return (Array.isArray(pr)&&pr.length)?['progress / billing entries']:[];
+  },'Delete the progress entries first (they cannot be removed once billed).');
+}
+async function schhDeleteBlocked(id){
+  return delGuardCheck('this component',[['schedule_h','sub-components','parent_id=eq.'+id],['schedule_b','scope items linked to it','linked_schedule_h_id=eq.'+id]],'Delete or re-link those first.');
+}
+async function accDeleteBlocked(id){
+  return delGuardCheck('this account',[['vouchers','vouchers (debit side)','debit_account=eq.'+id],['vouchers','vouchers (credit side)','credit_account=eq.'+id]],'Re-post or delete those vouchers first.');
+}
+async function catDeleteBlocked(type,cat){
+  var nm=encodeURIComponent(cat.name||''), nl=encodeURIComponent(String(cat.name||'').toLowerCase());
+  var P={
+    vendor:[['vendors','vendors','category=eq.'+nm],['vendors','vendors','category=eq.'+nl]],
+    material:[['materials','materials','category=eq.'+nm],['materials','materials','category=eq.'+nl]],
+    sc:[['subcontractors','subcontractors','category=eq.'+nm],['subcontractors','subcontractors','category=eq.'+nl]],
+    labour:[['labourers','labourers','category=eq.'+nm],['labourers','labourers','category=eq.'+nl]],
+    role:[['employees','employees with this role','role=eq.'+nm],['employees','employees with this role','access=eq.'+nm]],
+    dept:[['employees','employees','department=eq.'+nm]],
+    designation:[['employees','employees','designation=eq.'+nm]]
+  }[type];
+  if(!P) return false;
+  return delGuardCheck('"'+(cat.name||'this entry')+'"',P,'Move those to another entry, or switch this one off (inactive) instead.');
 }

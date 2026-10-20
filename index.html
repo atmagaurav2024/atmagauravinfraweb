@@ -14378,6 +14378,7 @@ async function schhSave(editId, parentId){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 async function schhDelete(id){
+  if(await schhDeleteBlocked(id)) return;
   if(!confirm('Delete this component?\nAny sub-components under it will also be deleted.'))return;
   try{
     await sbDelete('schedule_h', id);
@@ -26221,6 +26222,7 @@ function accEditAccount(id){
 }
 
 async function accDelAccount(id){
+  if(await accDeleteBlocked(id)) return;
   if(!confirm('Delete this account?'))return;
   try{await sbDelete('chart_of_accounts',id);ACC_ACCOUNTS=ACC_ACCOUNTS.filter(function(a){return a.id!==id;});accCoa();toast('Deleted','success');}
   catch(e){toast('Error','error');}
@@ -29519,8 +29521,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261020h"></script>
-<script src="js/employee.js?v=20261020h"></script>
-<script src="js/projects.js?v=20261020h"></script>
-<script src="js/finance.js?v=20261020h"></script>
+<script src="js/registry.js?v=20261020i"></script>
+<script src="js/employee.js?v=20261020i"></script>
+<script src="js/projects.js?v=20261020i"></script>
+<script src="js/finance.js?v=20261020i"></script>
 </html>
