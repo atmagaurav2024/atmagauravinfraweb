@@ -13025,7 +13025,9 @@ async function execSaveBill(partyType,partyName,projId,billNo){
         res_name:w.resName,
         done_qty:w.doneQty,
         rate:w.allotRate,
-        amount:amt
+        amount:amt,
+        allot_qty:w.allotQty,
+        unit:w.unit||''
       };
       if(w.isScope){ item.scope_id=w.scopeId; item.is_scope=true; }
       selectedItems.push(item);
@@ -13639,24 +13641,57 @@ function execDownloadBillPDF(billId){
   var totalPaid=billPays.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
   var balDue=Math.max(0,netPayable-totalPaid-totalAdvAdj);
 
-  // Work items table rows
+  // Work items table rows — progressive statement: allotted / up to previous bill / this bill / up to date
+  var _prevBills=WA_BILLS.filter(function(x){
+    if(x.id===b.id||x.party_name!==b.party_name||x.party_type!==b.party_type) return false;
+    var xn=parseInt(x.bill_number)||0, bn=parseInt(b.bill_number)||0;
+    if(xn!==bn) return xn<bn;
+    return String(x.bill_date||'')<String(b.bill_date||'');
+  });
+  var _prevItems=[];
+  _prevBills.forEach(function(x){ try{ (x.selected_items?JSON.parse(x.selected_items):[]).forEach(function(it){_prevItems.push(it);}); }catch(e){} });
+  var _q3=function(n){ n=Number(n)||0; return (Math.round(n*1000)/1000).toLocaleString('en-IN',{maximumFractionDigits:3}); };
+  var _sumPrevAmt=0,_sumThisAmt=0;
+  var _td='padding:6px 6px;border-bottom:1px solid #EEE;font-size:9.5px;';
   var workRows=selItems.length
     ? selItems.map(function(si,i){
         var allot=WA_ALLOT.find(function(a){return a.id===si.allot_id;})||{};
         var planRes=WA_PLANNED.find(function(r){return r.id===allot.boq_exec_resource_id;})||{};
         var resName=planRes.party_name||planRes.resource_category||si.res_name||'';
-        // the party's own name is not an item name: prefer the saved item label
         if(resName&&resName===b.party_name) resName=(si.res_name&&si.res_name!==b.party_name)?si.res_name:(planRes.resource_category||'');
         var boqItem=WA_ITEMS.find(function(x){return x.id===allot.boq_item_id;})||{};
-        return '<tr><td style="padding:7px 10px;border-bottom:1px solid #EEE;">'+(i+1)+'</td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;font-weight:700;">'+(resName||si.res_name||'—')+'<br>'+
-            '<small style="font-weight:400;color:#555;">'+(boqItem.item_code?'['+boqItem.item_code+'] '+(boqItem.short_name||boqItem.description||''):'')+'</small></td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+( si.done_qty?si.done_qty.toFixed(2):'—')+'</td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;">'+inr(si.rate||0)+'</td>'+
-          '<td style="padding:7px 10px;border-bottom:1px solid #EEE;text-align:right;font-weight:800;">'+inr(si.amount)+'</td>'+
+        var itemNo=boqItem.item_code||String(i+1);
+        var itemName=(boqItem.short_name||boqItem.description)||resName||si.res_name||'—';
+        var rate=parseFloat(si.rate)||parseFloat(allot.rate)||0;
+        var allotQty=si.allot_qty!=null?parseFloat(si.allot_qty):(parseFloat(allot.qty)||0);
+        var unit=si.unit||allot.unit||'';
+        var same=function(it){ return si.is_scope ? (it.scope_id===si.scope_id) : (it.allot_id===si.allot_id); };
+        var prevAmt=_prevItems.filter(same).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
+        var thisAmt=parseFloat(si.amount)||0;
+        var toQty=function(a){ return rate>0?a/rate:0; };
+        var prevQty=toQty(prevAmt), thisQty=toQty(thisAmt);
+        _sumPrevAmt+=prevAmt; _sumThisAmt+=thisAmt;
+        return '<tr>'+
+          '<td style="'+_td+'">'+itemNo+'</td>'+
+          '<td style="'+_td+'font-weight:700;">'+itemName+(resName&&resName!==itemName&&!(boqItem.id)?'':'')+'</td>'+
+          '<td style="'+_td+'text-align:right;">'+_q3(allotQty)+'</td>'+
+          '<td style="'+_td+'text-align:center;">'+(unit||'—')+'</td>'+
+          '<td style="'+_td+'text-align:right;">'+inr(rate)+'</td>'+
+          '<td style="'+_td+'text-align:right;">'+_q3(prevQty)+'</td>'+
+          '<td style="'+_td+'text-align:right;">'+inr(prevAmt)+'</td>'+
+          '<td style="'+_td+'text-align:right;font-weight:700;">'+_q3(thisQty)+'</td>'+
+          '<td style="'+_td+'text-align:right;font-weight:800;">'+inr(thisAmt)+'</td>'+
+          '<td style="'+_td+'text-align:right;">'+_q3(prevQty+thisQty)+'</td>'+
+          '<td style="'+_td+'text-align:right;font-weight:800;">'+inr(prevAmt+thisAmt)+'</td>'+
         '</tr>';
       }).join('')
-    : '<tr><td colspan="5" style="padding:10px;color:#888;text-align:center;">No work items recorded</td></tr>';
+    : '<tr><td colspan="11" style="padding:10px;color:#888;text-align:center;">No work items recorded</td></tr>';
+  var workTotalRow=selItems.length
+    ? '<tr style="background:#EFF6FF;font-weight:900;"><td colspan="6" style="'+_td+'text-align:right;">Total</td>'+
+        '<td style="'+_td+'text-align:right;">'+inr(_sumPrevAmt)+'</td><td style="'+_td+'"></td>'+
+        '<td style="'+_td+'text-align:right;">'+inr(_sumThisAmt)+'</td><td style="'+_td+'"></td>'+
+        '<td style="'+_td+'text-align:right;">'+inr(_sumPrevAmt+_sumThisAmt)+'</td></tr>'
+    : '';
 
   // Additions rows
   var addRows=additions.length
@@ -13788,6 +13823,7 @@ function execDownloadBillPDF(billId){
       '.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #1565C0;padding-bottom:10px;margin-bottom:14px;}'+
       '.co-name{font-size:16px;font-weight:900;color:#1565C0;}.co-info{font-size:10px;color:#555;margin-top:3px;}'+
       '.bill-title{font-size:20px;font-weight:900;color:#1565C0;}.bill-no{font-size:12px;color:#555;margin-top:4px;}'+
+      '@page{size:A4 landscape;margin:10mm;}'+
       'table{width:100%;border-collapse:collapse;margin-bottom:14px;}'+
       'th{background:#1565C0;color:white;padding:7px 10px;font-size:10px;text-align:left;}'+
       '.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #DDD;border-radius:8px;overflow:hidden;margin-bottom:14px;}'+
@@ -13837,8 +13873,14 @@ function execDownloadBillPDF(billId){
     // Work items table
     '<div style="font-size:11px;font-weight:800;color:#333;margin-bottom:6px;">Work / Resource Details</div>'+
     '<table>'+
-      '<thead><tr><th style="width:30px;">#</th><th>Resource / Work</th><th style="text-align:right;width:80px;">Qty</th><th style="text-align:right;width:80px;">Rate</th><th style="text-align:right;width:100px;">Amount</th></tr></thead>'+
-      '<tbody>'+workRows+'</tbody>'+
+      '<thead><tr>'+
+        ['Item No','Item Name','Allotted Qty','UOM','Allotted Rate','Upto Prev. Bill Qty','Upto Prev. Bill Amount','This Bill Qty','This Bill Amount','Upto Date Qty','Upto Date Amount'].map(function(h,hi){
+          return '<th style="font-size:8.5px;padding:6px 5px;'+(hi<2?'':(hi===3?'text-align:center;':'text-align:right;'))+'">'+h+'</th>';
+        }).join('')+
+      '</tr></thead>'+
+      '<tbody>'+workRows+workTotalRow+'</tbody>'+
+    '</table>'+
+    '<table style="width:58%;margin-left:auto;">'+
       '<tfoot>'+
         (additions.length
           ? '<tr style="background:#EFF6FF;"><td colspan="4" style="padding:7px 10px;font-weight:800;text-align:right;">Work Sub-Total</td>'+
@@ -14382,7 +14424,7 @@ async function execSaveBillEdit(billId,partyType,partyName,projId,billNo){
     var amt=parseFloat(amtInp&&amtInp.value)||0;
     var w=window._blWorkRows&&window._blWorkRows[idx];
     if(w&&amt>0){
-      var editItem={allot_id:w.a.id,res_name:w.resName,done_qty:w.doneQty,rate:w.allotRate,amount:amt};
+      var editItem={allot_id:w.a.id,res_name:w.resName,done_qty:w.doneQty,rate:w.allotRate,amount:amt,allot_qty:w.allotQty,unit:w.unit||''};
       if(w.isScope){ editItem.scope_id=w.scopeId; editItem.is_scope=true; }
       selectedItems.push(editItem);
     }
