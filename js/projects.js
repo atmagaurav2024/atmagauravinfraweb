@@ -1055,6 +1055,7 @@ async function saveProjForm(editId){
 }
 
 async function deleteProjItem(id){
+  if(await projDeleteBlocked(id)) return;
   try{
     await sbDelete('projects',id);
     PROJ_DATA=PROJ_DATA.filter(function(p){return p.id!==id;});
@@ -11769,6 +11770,7 @@ async function execUpdateClientAdvance(advId){
 }
 
 async function execDelClientAdvance(id){
+  if(await advDeleteBlocked('client',id)) return;
   if(!confirm('Delete this advance received record?'))return;
   WA_CLIENT_ADVANCES=(WA_CLIENT_ADVANCES||[]).filter(function(a){return a.id!==id;});
   execRenderSales();
@@ -12224,6 +12226,7 @@ async function execUpdateAdvance(advId){
 }
 
 async function execDelAdvance(id){
+  if(await advDeleteBlocked('work',id)) return;
   if(!confirm('Delete this advance payment record?'))return;
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
   if(WA_SUBTAB==='orders')execRenderOrders();else execRenderAllotted();
@@ -13953,6 +13956,7 @@ async function execSaveAdvance(partyType,partyName,projId){
 }
 
 async function execDelAdvance(id){
+  if(await advDeleteBlocked('work',id)) return;
   if(!confirm('Delete this advance payment record?'))return;
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
   execRenderSubTab();
@@ -15003,6 +15007,7 @@ async function grnApprove(grnId){
 async function grnDelete(grnId){
   var grn=GRN_ITEMS.find(function(g){return g.id===grnId;});
   if(!grn)return;
+  if(await grnDeleteBlocked(grn)) return;
   var msg=grn.store_updated
     ? 'This GRN has been added to store.\nDeleting will also reverse the store quantity.\n\nDelete GRN and reverse store entry?'
     : 'Delete this GRN?';
@@ -16307,3 +16312,114 @@ async function partyTypeAddSave(){
 }
 // Load the list as soon as the app starts using it
 try{ setTimeout(function(){ if(typeof sbFetch==='function' && typeof currentUser!=='undefined' && currentUser) partyTypesLoad(); },3000); }catch(e){}
+
+// ───────────────────────────────────────────────────────────────────
+// Delete guards for records other things depend on. Nothing here is
+// deleted while something downstream exists; every check reads the
+// database, and a check that cannot run stops the delete.
+// Probe = [table, label, filter]; a table/column the install does not
+// have counts as "nothing there".
+// ───────────────────────────────────────────────────────────────────
+async function delGuardProbe(probes){
+  var found=[];
+  for(var k=0;k<probes.length;k++){
+    var pr=probes[k];
+    try{
+      var rows=await sbFetch(pr[0],{select:'id',filter:pr[2]+'&limit=1'});
+      if(Array.isArray(rows)&&rows.length&&found.indexOf(pr[1])<0) found.push(pr[1]);
+    }catch(e){
+      if(/does not exist|could not find|42P01|42703|PGRST20[0-9]|404/i.test(String(e&&e.message||e))) continue;
+      throw e;
+    }
+  }
+  return found;
+}
+// Returns true when the delete must stop
+async function delGuardCheck(what, probesOrFn, hint){
+  try{
+    var found=await (typeof probesOrFn==='function'?probesOrFn():delGuardProbe(probesOrFn));
+    if(found.length){
+      alert('Cannot delete '+what+' — it already has: '+found.join(', ')+'.\n'+(hint||'Delete those first (starting from the latest stage), then delete this.'));
+      return true;
+    }
+    return false;
+  }catch(e){
+    toast('Could not check what depends on '+what+': '+(e.message||e)+' — nothing deleted','error');
+    return true;
+  }
+}
+
+// Project
+async function projDeleteBlocked(id){
+  var f='project_id=eq.'+id;
+  return delGuardCheck('this project',[
+    ['boq_items','BOQ items',f],['boq_exec_resources','planning / allotments',f],
+    ['combined_plan_groups','combined planning',f],['resource_requisitions','RRs',f],
+    ['combined_rr_groups','combined RRs',f],['work_orders','WO/PO',f],
+    ['work_daily_progress','daily progress',f],['work_bills','bills',f],['sales_bills','sales bills',f],
+    ['work_advances','advances',f],['grn_entries','GRN',f],['store_inventory','store stock',f],
+    ['other_expenses','other expenses',f],['subcontracts','subcontracts',f]
+  ],'Remove those first, or close the project instead of deleting it.');
+}
+
+// Registry: vendor / subcontractor (by party name), material, employee
+function regDeleteBlockedProbes(type,item){
+  var nm=encodeURIComponent(item.name||'');
+  if(type==='vendor'||type==='sc'){
+    var f='party_name=eq.'+nm;
+    return [['boq_exec_resources','planning / allotments',f],['work_orders','WO/PO',f],['work_bills','bills',f],
+            ['work_advances','advances',f],['work_payments','payments',f]];
+  }
+  if(type==='material'){
+    return [['vendor_material_rates','vendor rates','material_id=eq.'+item.id],['store_inventory','store stock','item_name=eq.'+nm]];
+  }
+  if(type==='user'||type==='employee'){
+    var e=encodeURIComponent(item.empId||'');
+    var pr=[['employee_pay','pay records','employee_id=eq.'+item.id],['salary_records','salary records','employee_id=eq.'+item.id],
+            ['employee_orders','employee orders','employee_id=eq.'+item.id],['employee_advances','advances','employee_id=eq.'+item.id]];
+    if(item.empId) pr=pr.concat([['attendance_punches','attendance','emp_id=eq.'+e],['leave_requests','leave requests','emp_id=eq.'+e],
+            ['petty_cash_in','petty cash','emp_id=eq.'+e],['petty_cash_expenses','petty cash expenses','emp_id=eq.'+e]]);
+    return pr;
+  }
+  return [];
+}
+async function regDeleteBlocked(type,item){
+  var probes=regDeleteBlockedProbes(type,item);
+  if(!probes.length) return false;
+  var hint=(type==='user'||type==='employee')?'Mark the employee inactive instead of deleting.':'Make the record inactive instead of deleting.';
+  return delGuardCheck('"'+(item.name||'this record')+'"',probes,hint);
+}
+
+// Advances: cannot be deleted once adjusted against a bill
+async function advDeleteBlocked(kind,id){
+  var table=(kind==='client')?'client_advances':'work_advances';
+  return delGuardCheck('this advance',async function(){
+    var found=[];
+    var rows=await sbFetch(table,{select:'id,project_id,adjusted_amount',filter:'id=eq.'+id});
+    var r=rows&&rows[0]; if(!r) return found;
+    if((parseFloat(r.adjusted_amount)||0)>0) found.push('adjustments against bills');
+    else{
+      var bt=(kind==='client')?'sales_bills':'work_bills';
+      var bills=await sbFetch(bt,{select:'id,deductions',filter:'project_id=eq.'+r.project_id});
+      if((Array.isArray(bills)?bills:[]).some(function(b){ return b.deductions && String(typeof b.deductions==='string'?b.deductions:JSON.stringify(b.deductions)).indexOf(id)>-1; })) found.push('adjustments against bills');
+    }
+    return found;
+  },'Remove the adjustment from the bill first, then delete the advance.');
+}
+
+// GRN: cannot be deleted once any of that stock has been issued
+async function grnDeleteBlocked(grn){
+  return delGuardCheck('this GRN',async function(){
+    var found=[];
+    if(!grn.store_updated) return found;
+    var recs=await sbFetch('store_inventory',{select:'id,qty_in_hand,qty_in,qty_issued',filter:'project_id=eq.'+grn.project_id+'&grn_id=eq.'+grn.id});
+    (Array.isArray(recs)?recs:[]).forEach(function(s){
+      if((parseFloat(s.qty_issued)||0)>0) found.push('issued stock');
+    });
+    if(Array.isArray(recs)&&recs.length){
+      var logs=await sbFetch('store_issue_log',{select:'id',filter:'store_item_id=in.('+recs.map(function(x){return x.id;}).join(',')+')&limit=1'}).catch(function(){return [];});
+      if(Array.isArray(logs)&&logs.length&&found.indexOf('issued stock')<0) found.push('issued stock');
+    }
+    return found;
+  },'Reverse the store issues first, then delete the GRN.');
+}

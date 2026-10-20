@@ -3263,6 +3263,7 @@ function empClearPasswordFields(){
 async function empDeleteEmployee(id,name){
   var delEmp=EMP_LIST.find(function(x){return x.id===id;});
   if(empDeny(empStatusTab(delEmp),'delete','delete employees')) return;
+  if(delEmp && typeof regDeleteBlocked==='function' && await regDeleteBlocked('employee',{id:id,name:name,empId:delEmp.emp_id||delEmp.empId||''})) return;
   if(!confirm('Delete "'+name+'"? This cannot be undone.'))return;
   try{
     toast('Deleting...','info');

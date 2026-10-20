@@ -7378,6 +7378,12 @@ async function saveLabour(editId){
 }
 
 async function deleteLabour(id){
+  var lb=(LABOURERS||[]).find(function(l){return l.id===id;})||{};
+  if(typeof delGuardCheck==='function' && await delGuardCheck('"'+(lb.name||'this labourer')+'"',[
+    ['boq_exec_resources','planning / allotments','party_name=eq.'+encodeURIComponent(lb.name||'')],
+    ['work_daily_progress','daily progress','labour_id=eq.'+id],
+    ['work_bills','bills','party_name=eq.'+encodeURIComponent(lb.name||'')]
+  ],'Make the labourer inactive instead of deleting.')) return;
   if(!confirm('Delete this labourer record?')) return;
   try{
     await sbDelete('labourers',id);
@@ -29513,8 +29519,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261020g"></script>
-<script src="js/employee.js?v=20261020g"></script>
-<script src="js/projects.js?v=20261020g"></script>
-<script src="js/finance.js?v=20261020g"></script>
+<script src="js/registry.js?v=20261020h"></script>
+<script src="js/employee.js?v=20261020h"></script>
+<script src="js/projects.js?v=20261020h"></script>
+<script src="js/finance.js?v=20261020h"></script>
 </html>

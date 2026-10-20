@@ -550,6 +550,7 @@ async function deleteRecord(type,id){
   var idx=arr.findIndex(function(x){return x.id===id;});
   if(idx===-1)return;
   var name=arr[idx].name;
+  if(typeof regDeleteBlocked==='function' && await regDeleteBlocked(type,arr[idx])) return;
   _deletedIds[id]=true; arr.splice(idx,1);
   closeSheet('ov-det','sh-det');
   var renders={vendor:renderVendors,material:renderMaterials,sc:renderSC,user:renderUsers};
