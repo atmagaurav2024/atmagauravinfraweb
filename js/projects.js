@@ -5820,6 +5820,25 @@ async function execSaveSalesBillEdit(billId,adds,deds){
     });
     var idx=WA_SALES_BILLS.findIndex(function(x){return x.id===billId;});
     if(idx>-1) WA_SALES_BILLS[idx]=Object.assign(WA_SALES_BILLS[idx],{bill_date:date,bill_ref:ref||b.bill_ref,bill_amount:totalAmt,selected_items:JSON.stringify(updatedItems)});
+    // Re-post to Accounts: the work amount (and date/ref) changed, so drop what this
+    // bill posted before (work, additions, deductions, GST) and post fresh legs —
+    // the same cleanup-then-repost the purchase-bill edit does.
+    try{
+      if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(billId);
+      if(typeof accAutoPost==='function'){
+        var _pj=PROJ_DATA.find(function(p){return p.id===b.project_id;})||{};
+        var _party=_pj.client||_pj.name||'Client';
+        var _ref=ref||b.bill_ref||'';
+        var _acRef='Sales Bill '+_ref+(_pj.name?' \u2014 '+_pj.name:'');
+        var _advGst=(deds||[]).filter(function(d){return d.is_advance_adj&&d.adv_adj_head==='gst_amt';}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
+        var _dedPost=(deds||[]).filter(function(d){return !d.is_advance_adj;}).reduce(function(x,d){return x+(parseFloat(d.amount)||0);},0);
+        var _gstPost=Math.max(0,gstAmt-_advGst);
+        if(workAmt>0) accAutoPost({type:'Sales', date:date, partyName:_party, debitCode:'1201', creditCode:'3001', amount:workAmt, narration:_acRef, sourceType:'sales_bill', sourceId:billId});
+        if(addAmt>0) accAutoPost({type:'Sales', date:date, partyName:_party, debitCode:'1201', creditCode:'3002', amount:addAmt, narration:'Additions on '+_acRef, sourceType:'sales_bill_add', sourceId:billId});
+        if(_dedPost>0) accAutoPost({type:'Sales', date:date, partyName:_party, debitCode:'3003', creditCode:'1201', amount:_dedPost, narration:'Deductions on '+_acRef, sourceType:'sales_bill_ded', sourceId:billId});
+        if(_gstPost>0) accAutoPost({type:'Sales', date:date, partyName:_party, debitCode:'1201', creditCode:'2101', amount:_gstPost, narration:'GST on '+_acRef, sourceType:'sales_bill_gst', sourceId:billId});
+      }
+    }catch(e){ console.warn('sales bill edit repost failed',e); toast('Bill saved, but Accounts could not be refreshed — use Reconcile in Accounts','warning'); }
     toast('Bill updated','success');
     closeSheet('ov-exec','sh-exec');
     execRenderSales();
