@@ -3968,11 +3968,15 @@ async function rrGroupDownloadPDF(groupId, projName){
 
     (group.remarks?'<div style="margin-bottom:16px;"><div class="lbl">Purpose / Remarks</div><div style="font-size:11px;color:#333;margin-top:3px;">'+group.remarks+'</div></div>':'')+
 
-    '<div class="sig-grid">'+
+(function(){
+      var _sg=pdfSignBlocks('rr',{party:(isAllotted?(partyNames[0]||''):(group.requested_by||'')),company:co.name||'Management'});
+      if(_sg) return pdfSignGridBox(_sg);
+      return '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(group.requested_by||'Requester')+'</div><div>Requested By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Site Engineer / PM</div><div>Verified By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(isAllotted?(partyNames[0]||'Party'):(co.name||'Management'))+'</div><div>'+(isAllotted?'Accepted By':'Approved By')+'</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
 
     '</body></html>';
 
@@ -4228,11 +4232,15 @@ function rrDownloadPDF(rrId, projName){
 
     (rr.rejection_reason?'<div style="background:#FFEBEE;border-radius:8px;padding:12px 14px;margin-bottom:16px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="font-size:11px;margin-top:3px;color:#7A1F1F;">'+rr.rejection_reason+'</div></div>':'')+
 
-    '<div class="sig-grid">'+
+(function(){
+      var _sg=pdfSignBlocks('rr',{party:(rr.requested_by||''),company:co.name||'Management'});
+      if(_sg) return pdfSignGridBox(_sg);
+      return '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(rr.requested_by||'Requester')+'</div><div>Requested By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Site Engineer / PM</div><div>Verified By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Approved By</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
 
     '</body></html>';
 
@@ -5541,10 +5549,14 @@ function generateWorkOrder(allot){
         (allot.end_date?'End Date: <b>'+fmtD(allot.end_date)+'</b>':'')+
       '</div>':'')+
     (allot.scope?'<div style="background:#FFFDE7;border-radius:8px;padding:10px;margin:10px 0;font-size:11px;"><b>Scope of Work / Terms:</b><br>'+allot.scope+'</div>':'')+
-    '<div class="footer">'+
+(function(){
+      var _sg=pdfSignBlocks('wo',{party:(allot.party_name||''),company:co.name||''});
+      if(_sg) return pdfSignGridSig(_sg);
+      return '<div class="footer">'+
       '<div><div class="sig">Issued By<br><br>'+(co.name||'')+'</div></div>'+
       '<div><div class="sig">Accepted By<br><br>'+(allot.party_name||'')+'</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
     '</body></html>';
   openPDF(html);
 }
@@ -5607,10 +5619,14 @@ function generatePurchaseOrder(allot){
     '<div style="background:#FFFDE7;border-radius:8px;padding:10px;margin:10px 0;font-size:10px;color:#666;">'+
       'Please supply the above items as per specifications. Delivery receipt (GRN) required at site.'+
     '</div>'+
-    '<div class="footer">'+
+(function(){
+      var _sg=pdfSignBlocks('po',{party:(allot.party_name||''),company:co.name||''});
+      if(_sg) return pdfSignGridSig(_sg);
+      return '<div class="footer">'+
       '<div><div class="sig">Authorized Signatory<br><br>'+(co.name||'')+'</div></div>'+
       '<div><div class="sig">Vendor Acknowledgement<br><br>'+(allot.party_name||'')+'</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
     '</body></html>';
   openPDF(html);
 }
@@ -6028,10 +6044,14 @@ function execGenerateSalesBillInvoice(billId,mode,civilHsn,civilDesc){
         '<div style="font-size:11px;">A/c No: '+esc2(co.bank_acc||'')+' &nbsp;|&nbsp; IFSC: '+esc2(co.bank_ifsc||'')+'</div>'+
       '</div>':'')+
     '<div style="font-size:10px;color:#888;">Declaration: We certify that the particulars given above are true and correct, and the amount indicated represents the price actually charged, and there is no additional consideration flowing directly or indirectly from the buyer.</div>'+
-    '<div class="footer">'+
+(function(){
+      var _sg=pdfSignBlocks('sales',{party:(proj.client||''),company:co.name||''});
+      if(_sg) return pdfSignGridSig(_sg);
+      return '<div class="footer">'+
       '<div><div class="sig">Received By / Client Signature</div></div>'+
       '<div style="text-align:right;"><div class="sig" style="text-align:right;">For '+esc2(co.name||'')+'<br><br>Authorized Signatory</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
     '</body></html>';
   openPDF(html);
 }
@@ -7815,8 +7835,12 @@ async function execGenPartyDoc(partyKey, docType){
         '<div style="font-size:10px;color:#666;">'+(proj.location||proj.code||'')+'</div></div></div>'+
     '<table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>'+
     rows+'<tr class="tr"><td colspan="4" style="text-align:right;font-weight:900;">Total Amount</td><td>'+inr(total)+'</td></tr></table>'+
-    '<div class="ft"><div><div class="sg">Issued By<br><br>'+(co.name||'')+'<br>Authorized Signatory</div></div>'+
-    '<div><div class="sg">Accepted By<br><br>'+partyName+'</div></div></div>'+
+(function(){
+      var _sg=pdfSignBlocks(docType==='po'?'po':'wo',{party:partyName,company:co.name||''});
+      if(_sg) return '<div class="ft" style="grid-template-columns:repeat('+Math.min(_sg.length,4)+',1fr);">'+_sg.map(function(b){return '<div><div class="sg">'+b.title+'<br><br>'+b.name+'</div></div>';}).join('')+'</div>';
+      return '<div class="ft"><div><div class="sg">Issued By<br><br>'+(co.name||'')+'<br>Authorized Signatory</div></div>'+
+    '<div><div class="sg">Accepted By<br><br>'+partyName+'</div></div></div>';
+    })()+
     '</body></html>';
 
   openPDF(html);
@@ -11703,10 +11727,14 @@ function execClientAdvanceReceipt(advId){
 
     (adv.purpose?'<div class="purpose-box"><div class="lbl" style="margin-bottom:4px;">Purpose / Remarks</div><div style="font-size:11px;">'+adv.purpose+'</div></div>':'')+
 
-    '<div class="sig-grid">'+
+(function(){
+      var _sg=pdfSignBlocks('advance',{party:partyName,company:co.name||'Company'});
+      if(_sg) return pdfSignGridBox(_sg);
+      return '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+partyName+'</div><div>Paid By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Company')+'</div><div>Received By / Authorized</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
   '</body></html>';
 
   openPDF(html);
@@ -12132,10 +12160,14 @@ function execAdvanceReceipt(advId,resName,allotAmt){
 
     (adv.purpose?'<div class="purpose-box"><div class="lbl" style="margin-bottom:4px;">Purpose / Remarks</div><div style="font-size:11px;">'+adv.purpose+'</div></div>':'')+
 
-    '<div class="sig-grid">'+
+(function(){
+      var _sg=pdfSignBlocks('advance',{party:adv.party_name,company:co.name||'Company'});
+      if(_sg) return pdfSignGridBox(_sg);
+      return '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Company')+'</div><div>Paid By / Authorized</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+adv.party_name+'</div><div>Received By</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
   '</body></html>';
 
   openPDF(html);
@@ -13197,10 +13229,14 @@ function billDownloadAdvReceipt(billId, dedId){
       }).join('')+
       '</tbody></table>':'')+
 
-    '<div class="sig-grid">'+
+(function(){
+      var _sg=pdfSignBlocks('advance',{party:bill.party_name,company:co.name||'Company'});
+      if(_sg) return pdfSignGridBox(_sg);
+      return '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Company')+'</div><div>Authorised Signatory</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+bill.party_name+'</div><div>Acknowledged By</div></div>'+
-    '</div>'+
+    '</div>';
+    })()+
   '</body></html>';
 
   openPDF(html);
@@ -15126,11 +15162,15 @@ function grnDownloadPDF(grnId){
     '</div>'+
     (grn.remarks?'<div style="margin-bottom:12px;padding:10px 14px;background:#F8FAFC;border-radius:8px;"><div class="lbl">Quality Remarks</div><div style="margin-top:4px;">'+grn.remarks+'</div></div>':'')+
     (grn.rejection_reason?'<div style="margin-bottom:12px;padding:10px 14px;background:#FFEBEE;border-radius:8px;border-left:4px solid #C62828;"><div class="lbl" style="color:#C62828;">Rejection Reason</div><div style="margin-top:4px;color:#7A1F1F;">'+grn.rejection_reason+'</div></div>':'')+
-    '<div class="sig-grid">'+
+    (function(){
+      var _sg=pdfSignBlocks('grn',{party:(grn.party_name||grn.vendor_name||grn.supplier||''),company:co.name||'Management'});
+      if(_sg) return pdfSignGridBox(_sg);
+      return '<div class="sig-grid">'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(grn.created_by||'Store Keeper')+'</div><div>GRN Created By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">Quality Inspector</div><div>Inspected By</div></div>'+
       '<div class="sig-box"><div style="height:40px;"></div><div style="font-weight:800;">'+(co.name||'Management')+'</div><div>Authorized By</div></div>'+
-    '</div></body></html>';
+    '</div>';
+    })()+'</body></html>';
 
   openPDF(html);
 }
@@ -16515,7 +16555,7 @@ async function catDeleteBlocked(type,cat){
 // Stored in `categories` (type 'pdfsign'): name = title,
 // description = 'docs:bill,wo,po|who:party|company|role:<name>|text:<free>'.
 // ───────────────────────────────────────────────────────────────────
-var PDFSIGN_DOCS=[['bill','Bill'],['wo','Work Order'],['po','Purchase Order']];
+var PDFSIGN_DOCS=[['bill','Bill'],['wo','Work Order'],['po','Purchase Order'],['rr','Requisition (RR / Combined RR)'],['grn','GRN'],['advance','Advance Receipt'],['sales','Sales Invoice']];
 var PDF_SIGN=[];
 function pdfSignEncode(docs,who){ return 'docs:'+docs.join(',')+'|who:'+who; }
 function pdfSignDecode(desc){
@@ -16656,3 +16696,10 @@ async function pdfSignAddSave(){
   }
 }
 try{ setTimeout(function(){ if(typeof sbFetch==='function' && typeof currentUser!=='undefined' && currentUser) pdfSignLoad(); },3500); }catch(e){}
+
+// Older print layouts (class "footer" / "sig")
+function pdfSignGridSig(blocks){
+  var n=Math.min(blocks.length,4);
+  return '<div class="footer" style="display:grid;grid-template-columns:repeat('+n+',1fr);gap:24px;">'+
+    blocks.map(function(b){return '<div><div class="sig">'+b.title+'<br><br>'+b.name+'</div></div>';}).join('')+'</div>';
+}
