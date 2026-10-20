@@ -1698,7 +1698,41 @@ async function jmCompleteAllConfirm(){
   else toast('All items completed — '+ok+' JM'+(ok!==1?'s':'')+' created','success');
 }
 
-async function jmDelete(id){if(!confirm('Delete?'))return;JM_JMS=JM_JMS.filter(function(j){return j.id!==id;});jmRender();try{await sbDelete('boq_jm',id);}catch(e){console.error(e);}}
+// A JM entry can only be deleted while no plan uses it (planning draws its
+// quantity from JM entries, via jm_id / jm_links). Checked in the database.
+async function jmDownstreamFor(id){
+  var probes=[
+    ['boq_exec_resources','planned resources','jm_id=eq.'+id],
+    ['boq_exec_resources','planned resources','jm_links=like.*'+id+'*'],
+    ['combined_plan_items','combined planning','jm_links=like.*'+id+'*']
+  ];
+  var found=[];
+  for(var k=0;k<probes.length;k++){
+    try{
+      var rows=await sbFetch(probes[k][0],{select:'id',filter:probes[k][2]+'&limit=1'});
+      if(Array.isArray(rows)&&rows.length&&found.indexOf(probes[k][1])<0) found.push(probes[k][1]);
+    }catch(e){
+      var m=String(e&&e.message||e);
+      if(/does not exist|could not find|operator|42P01|42703|42883|PGRST20[0-9]|404/i.test(m)) continue;
+      throw e;
+    }
+  }
+  return found;
+}
+async function jmDelete(id){
+  try{
+    var dn=await jmDownstreamFor(id);
+    if(dn.length){
+      alert('Cannot delete this JM entry — it is already used in: '+dn.join(', ')+'.\nRemove it from those first (delete the planning that uses it), then delete the JM entry.');
+      return;
+    }
+  }catch(e){ toast('Could not check where this JM entry is used: '+(e.message||e)+' — nothing deleted','error'); return; }
+  if(!confirm('Delete this JM entry?'))return;
+  try{await sbDelete('boq_jm',id);}catch(e){console.error(e);toast('Could not delete: '+(e.message||e),'error');return;}
+  JM_JMS=JM_JMS.filter(function(j){return j.id!==id;});
+  jmRender();
+  toast('JM entry deleted','success');
+}
 
 // ════ PLANNING ════════════════════════════════════════════
 var PLAN_ITEMS=[],PLAN_SUBS=[],PLAN_RES=[],PLAN_COMBINED_GROUPS=[],PLAN_COMBINED_ITEMS=[];
