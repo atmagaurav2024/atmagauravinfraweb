@@ -3479,11 +3479,15 @@ async function rrGroupReject(groupId){
 async function rrGroupDelete(groupId){
   var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
   if(!group) return;
-  if(group.status==='allotted'){
-    if(!confirm('This combined RR has been allotted. Deleting will NOT remove the allotment from Work Allotment tab.\nDelete this RR record only?')) return;
-  } else {
-    if(!confirm('Delete this combined RR? This removes it for every item in the group.')) return;
-  }
+  // A combined RR that has been allotted cannot be deleted: delete the allotment first.
+  try{
+    var al=await sbFetch('boq_exec_resources',{select:'id,party_name',filter:'combined_rr_group_id=eq.'+groupId+'&limit=1'});
+    if(Array.isArray(al)&&al.length){
+      alert('Cannot delete '+(group.rr_number||'this combined RR')+' — it has already been allotted'+(al[0].party_name?' to '+al[0].party_name:'')+'.\nDelete the allotment first (Work Allotment), then delete the RR.');
+      return;
+    }
+  }catch(e){ toast('Could not check whether this combined RR has been allotted: '+(e.message||e)+' — nothing deleted','error'); return; }
+  if(!confirm('Delete this combined RR? This removes it for every item in the group.')) return;
   try{
     await sbDelete('combined_rr_groups', groupId);
     toast('Deleted','success');
@@ -4144,15 +4148,23 @@ async function rrAllot(rrId, projId){
 async function rrDelete(rrId){
   var rr=RR_ITEMS.find(function(r){return r.id===rrId;});
   if(!rr) return;
-  if(rr.status==='allotted'){
-    if(!confirm('This RR has been allotted. Deleting will NOT remove the allotment from Work Allotment tab.\nDelete RR record only?')) return;
-  } else {
-    if(!confirm('Delete this RR?')) return;
-  }
+  // An RR that has been allotted cannot be deleted: delete the allotment first.
+  try{
+    var fresh=await sbFetch('resource_requisitions',{select:'id,rr_number,status,allotment_id',filter:'id=eq.'+rrId});
+    var cur=(Array.isArray(fresh)&&fresh[0])||rr;
+    var al=[];
+    if(cur.allotment_id) al=await sbFetch('boq_exec_resources',{select:'id,party_name',filter:'id=eq.'+cur.allotment_id});
+    if(Array.isArray(al)&&al.length){
+      alert('Cannot delete '+(cur.rr_number||'this RR')+' — it has already been allotted'+(al[0].party_name?' to '+al[0].party_name:'')+'.\nDelete the allotment first (Work Allotment), then delete the RR.');
+      return;
+    }
+  }catch(e){ toast('Could not check whether this RR has been allotted: '+(e.message||e)+' — nothing deleted','error'); return; }
+  if(!confirm('Delete this RR?')) return;
+  try{ await sbDelete('resource_requisitions',rrId); }catch(e){ console.error(e); toast('Could not delete: '+(e.message||e),'error'); return; }
   RR_ITEMS=RR_ITEMS.filter(function(r){return r.id!==rrId;});
   WA_APPROVED_RRS=WA_APPROVED_RRS.filter(function(r){return r.id!==rrId;});
   rrRender();
-  try{await sbDelete('resource_requisitions',rrId);}catch(e){console.error(e);}
+  toast('RR deleted','success');
 }
 
 function rrDownloadPDF(rrId, projName){
