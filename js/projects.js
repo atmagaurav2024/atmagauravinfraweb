@@ -13664,7 +13664,7 @@ function execDownloadBillPDF(billId){
         var itemName=(boqItem.short_name||boqItem.description)||resName||si.res_name||'—';
         var rate=parseFloat(si.rate)||parseFloat(allot.rate)||0;
         var allotQty=si.allot_qty!=null?parseFloat(si.allot_qty):(parseFloat(allot.qty)||0);
-        var unit=si.unit||allot.unit||'';
+        var unit=si.unit||allot.unit||planRes.unit||boqItem.unit||boqItem.uom||'';
         var same=function(it){ return si.is_scope ? (it.scope_id===si.scope_id) : (it.allot_id===si.allot_id); };
         var prevAmt=_prevItems.filter(same).reduce(function(s2,x){return s2+(parseFloat(x.amount)||0);},0);
         var thisAmt=parseFloat(si.amount)||0;
