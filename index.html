@@ -3463,7 +3463,19 @@ async function loadDashboardInsights(filterProjId){
     var pendingBillsAmountByProj = {}, pendingBillsCountByProj = {};
     workBills.forEach(function(b){
       var paid = paidByBillId[b.id] || 0;
-      var outstanding = (parseFloat(b.bill_amount)||0) - paid;
+      // What is really owed to the party: the bill amount is gross (before deductions), so take
+      // off its active deductions (TDS, retention...) and any advance already adjusted in cash,
+      // same as Balance Due on the bill itself. Otherwise a fully paid bill with TDS keeps
+      // showing the TDS as "pending".
+      var _deds=[]; try{ var _dv=b.deductions; _deds=typeof _dv==='string'?JSON.parse(_dv||'[]'):(_dv||[]); if(typeof _deds==='string') _deds=JSON.parse(_deds); }catch(e){ _deds=[]; }
+      if(!Array.isArray(_deds)) _deds=[];
+      var _ded=0, _adv=0;
+      _deds.forEach(function(d){
+        if(!d||d.released) return;
+        var amt=parseFloat(d.amount)||0;
+        if(d.is_advance_adj){ if(!d.non_cash) _adv+=amt; } else _ded+=amt;
+      });
+      var outstanding = (parseFloat(b.bill_amount)||0) - _ded - _adv - paid;
       if(outstanding > 0.5){ // ignore rounding dust
         pendingBillsCount++;
         pendingBillsAmount += outstanding;
@@ -29539,8 +29551,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261021a"></script>
-<script src="js/employee.js?v=20261021a"></script>
-<script src="js/projects.js?v=20261021a"></script>
-<script src="js/finance.js?v=20261021a"></script>
+<script src="js/registry.js?v=20261021b"></script>
+<script src="js/employee.js?v=20261021b"></script>
+<script src="js/projects.js?v=20261021b"></script>
+<script src="js/finance.js?v=20261021b"></script>
 </html>
