@@ -4,20 +4,24 @@
 with adv as (
   select 'Work advance (paid)'::text as kind, a.id::text as id, a.adv_ref::text as ref, a.date::text as dt,
          a.party_name::text as party, a.amount::numeric as amount,
-         coalesce((select sum((d->>'amount')::numeric) from jsonb_array_elements(coalesce(nullif(a.deductions::text,'')::jsonb,'[]'::jsonb)) d
-                   where coalesce((d->>'is_tds')::boolean,false)),0) as tds_rec,
-         coalesce((select sum((g->>'amount')::numeric) from jsonb_array_elements(coalesce(nullif(a.gst::text,'')::jsonb,'[]'::jsonb)) g),0) as gst_rec,
+         coalesce((select sum(coalesce(nullif(d->>'amount',''),'0')::numeric) from jsonb_array_elements(nd.arr) d
+                   where coalesce(d->>'is_tds','false') = 'true'),0) as tds_rec,
+         coalesce((select sum(coalesce(nullif(g->>'amount',''),'0')::numeric) from jsonb_array_elements(ng.arr) g),0) as gst_rec,
          'work_advance_tds'::text as tds_src, 'work_advance_gst'::text as gst_src,
          a.deductions::text as raw_deductions, a.gst::text as raw_gst
   from work_advances a
+  cross join lateral (select case jsonb_typeof(q.j) when 'array' then q.j when 'string' then (case when (q.j #>> '{}') ~ '^\s*\[' then (q.j #>> '{}')::jsonb else '[]'::jsonb end) else '[]'::jsonb end as arr from (select nullif(a.deductions::text,'')::jsonb as j) q) nd
+  cross join lateral (select case jsonb_typeof(q.j) when 'array' then q.j when 'string' then (case when (q.j #>> '{}') ~ '^\s*\[' then (q.j #>> '{}')::jsonb else '[]'::jsonb end) else '[]'::jsonb end as arr from (select nullif(a.gst::text,'')::jsonb as j) q) ng
   union all
   select 'Client advance (received)', c.id::text, c.adv_ref::text, c.date::text, null::text, c.amount::numeric,
-         coalesce((select sum((d->>'amount')::numeric) from jsonb_array_elements(coalesce(nullif(c.deductions::text,'')::jsonb,'[]'::jsonb)) d
-                   where coalesce((d->>'is_tds')::boolean,false)),0),
-         coalesce((select sum((g->>'amount')::numeric) from jsonb_array_elements(coalesce(nullif(c.gst::text,'')::jsonb,'[]'::jsonb)) g),0),
+         coalesce((select sum(coalesce(nullif(d->>'amount',''),'0')::numeric) from jsonb_array_elements(nd.arr) d
+                   where coalesce(d->>'is_tds','false') = 'true'),0),
+         coalesce((select sum(coalesce(nullif(g->>'amount',''),'0')::numeric) from jsonb_array_elements(ng.arr) g),0),
          'client_advance_tds', 'client_advance_gst',
          c.deductions::text, c.gst::text
   from client_advances c
+  cross join lateral (select case jsonb_typeof(q.j) when 'array' then q.j when 'string' then (case when (q.j #>> '{}') ~ '^\s*\[' then (q.j #>> '{}')::jsonb else '[]'::jsonb end) else '[]'::jsonb end as arr from (select nullif(c.deductions::text,'')::jsonb as j) q) nd
+  cross join lateral (select case jsonb_typeof(q.j) when 'array' then q.j when 'string' then (case when (q.j #>> '{}') ~ '^\s*\[' then (q.j #>> '{}')::jsonb else '[]'::jsonb end) else '[]'::jsonb end as arr from (select nullif(c.gst::text,'')::jsonb as j) q) ng
   union all
   select 'Client receipt on sales bill', p.id::text, p.reference::text, p.payment_date::text, null::text, p.amount::numeric,
          coalesce(p.tds_amount,0)::numeric, 0::numeric,
