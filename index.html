@@ -3422,13 +3422,24 @@ async function loadDashboardInsights(filterProjId){
     // precise engineering measure, just billed-vs-cost ratio blended with
     // schedule stage, since there's no separate "planned % complete by
     // today" baseline stored anywhere to compare actual progress against.
+    // Expense shown per project = base value of its purchase/work bills: the bill amount before any
+    // deduction (so TDS is not taken off) and without GST. Advances paid are not expenses, and
+    // advance adjustments are not subtracted.
+    var billExpenseByProj={};
+    workBills.forEach(function(b){
+      if(!b.project_id) return;
+      var add=[]; try{ var _av=b.additions; add=typeof _av==='string'?JSON.parse(_av||'[]'):(_av||[]); if(typeof add==='string') add=JSON.parse(add); }catch(e){ add=[]; }
+      if(!Array.isArray(add)) add=[];
+      var gstAmt=add.filter(function(a){return a&&a.is_gst;}).reduce(function(s,a){return s+(parseFloat(a.amount)||0);},0);
+      billExpenseByProj[b.project_id]=(billExpenseByProj[b.project_id]||0)+Math.max(0,(parseFloat(b.bill_amount)||0)-gstAmt);
+    });
     var projHealthRows=projects.map(function(p){
       var pl=plByProj[p.id]||{revenue:0,cost:0};
       var pctDone = pl.revenue>0 && parseFloat(p.contract_value)>0 ? Math.min(100,Math.round(pl.revenue/parseFloat(p.contract_value)*100)) : 0;
       var costRatio = pl.revenue>0 ? pl.cost/pl.revenue : 0;
       var health = costRatio>0.95 ? 'At Risk' : costRatio>0.85 ? 'Average' : 'Good';
       var healthColor = health==='Good'?['#D1FAE5','#047857']:health==='Average'?['#FEF3C7','#B45309']:['#FFE4E6','#E11D48'];
-      return {name:(p.short_name||p.name), pct:pctDone, billing:pl.revenue, expense:pl.cost, health:health, healthColor:healthColor};
+      return {name:(p.short_name||p.name), pct:pctDone, billing:pl.revenue, expense:(billExpenseByProj[p.id]||0), health:health, healthColor:healthColor};
     }).sort(function(a,b){return b.billing-a.billing;}).slice(0,3);
 
     // ── Recent activity feed, from the app-wide activity log ────────────
@@ -29551,8 +29562,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261021b"></script>
-<script src="js/employee.js?v=20261021b"></script>
-<script src="js/projects.js?v=20261021b"></script>
-<script src="js/finance.js?v=20261021b"></script>
+<script src="js/registry.js?v=20261021c"></script>
+<script src="js/employee.js?v=20261021c"></script>
+<script src="js/projects.js?v=20261021c"></script>
+<script src="js/finance.js?v=20261021c"></script>
 </html>
