@@ -5,13 +5,13 @@
 --                 GST = additions marked is_gst, less GST matched to an advance.
 -- Sales bills:    GST only (no TDS leg on the bill itself), same advance exclusion.
 with wb as (
-  select 'Purchase'::text as kind, b.id, b.bill_ref, b.bill_date, b.party_name as party, b.project_id,
+  select 'Purchase'::text as kind, b.id::text as id, b.bill_ref::text as bill_ref, b.bill_date::text as bill_date, b.party_name::text as party, b.project_id::text as project_id,
          nullif(b.additions::text,'')::jsonb   as adds,
          nullif(b.deductions::text,'')::jsonb  as deds
   from work_bills b
 ),
 sb as (
-  select 'Sales'::text, b.id, b.bill_ref, b.bill_date, null::text, b.project_id,
+  select 'Sales'::text, b.id::text, b.bill_ref::text, b.bill_date::text, null::text, b.project_id::text,
          nullif(b.additions::text,'')::jsonb,
          nullif(b.deductions::text,'')::jsonb
   from sales_bills b
@@ -64,7 +64,7 @@ select e.kind, e.bill_ref, e.bill_date, e.party,
              and coalesce(p.tds_vouchers,0) <= 1 and coalesce(p.gst_vouchers,0) <= 1
             then 'OK' else 'MISMATCH' end as flag
 from exp e
-left join posted p on p.sid = e.id::text
+left join posted p on p.sid = e.id
 where e.tds_expected > 0 or e.gst_expected > 0 or p.sid is not null
 order by (case when round(e.tds_expected) = round(coalesce(p.tds_posted,0))
                 and round(e.gst_expected) = round(coalesce(p.gst_posted,0))
