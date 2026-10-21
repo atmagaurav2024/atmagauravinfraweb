@@ -781,3 +781,57 @@ async function saveMaterial(){toast('Save material — implement in registry.js'
 async function saveSC(){toast('Save SC — implement in registry.js','info');}
 async function saveUser(){toast('Save user — implement in registry.js','info');}
 async function saveLabour(editId){toast('Save labour — implement in registry.js','info');}
+
+// ───────────────────────────────────────────────────────────────────
+// Date fields always read dd/mm/yyyy. The browser draws <input type="date"> in the
+// phone/computer's own region format (mm/dd/yyyy on a US-style device) and a web page
+// cannot change that, so the native text is hidden and a dd/mm/yyyy label is painted over it.
+// Tapping still opens the normal date picker and the stored value is unchanged (yyyy-mm-dd).
+// ───────────────────────────────────────────────────────────────────
+(function(){
+  var ua=navigator.userAgent||'';
+  if(/Firefox|iPhone|iPad|iPod/.test(ua)) return;           // those draw date fields differently; leave native
+  var css=document.createElement('style');
+  css.textContent='input.dt-fmt::-webkit-datetime-edit,input.dt-fmt::-webkit-datetime-edit-fields-wrapper,'+
+    'input.dt-fmt::-webkit-datetime-edit-day-field,input.dt-fmt::-webkit-datetime-edit-month-field,'+
+    'input.dt-fmt::-webkit-datetime-edit-year-field,input.dt-fmt::-webkit-datetime-edit-text{color:transparent !important;}';
+  document.head.appendChild(css);
+
+  function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+  function paint(el){
+    if(!el||el.tagName!=='INPUT'||el.type!=='date') return;
+    if(!el.classList.contains('dt-fmt')) el.classList.add('dt-fmt');
+    var v=el.value, m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v||'');
+    var txt=m?(m[3]+'/'+m[2]+'/'+m[1]):'dd/mm/yyyy';
+    var cs=getComputedStyle(el);
+    var fs=parseFloat(cs.fontSize)||14;
+    var col=m?cs.color:'rgba(128,128,128,.75)';
+    var w=Math.ceil(txt.length*fs*0.62)+4, h=Math.ceil(fs*1.5);
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'">'+
+      '<text x="0" y="'+Math.round(h*0.74)+'" font-family="Nunito,Arial,sans-serif" font-size="'+fs+'" font-weight="'+(cs.fontWeight||'400')+'" fill="'+col+'">'+esc(txt)+'</text></svg>';
+    el.style.backgroundImage='url("data:image/svg+xml;utf8,'+encodeURIComponent(svg)+'")';
+    el.style.backgroundRepeat='no-repeat';
+    el.style.backgroundSize=w+'px '+h+'px';
+    el.style.backgroundPosition=(parseFloat(cs.paddingLeft)||0)+'px center';
+  }
+  function paintAll(root){ [].slice.call((root||document).querySelectorAll('input[type="date"]')).forEach(paint); }
+  // programmatic .value = ... does not fire events, so hook the setter
+  try{
+    var d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+    Object.defineProperty(HTMLInputElement.prototype,'value',{
+      get:function(){ return d.get.call(this); },
+      set:function(x){ d.set.call(this,x); if(this.type==='date') paint(this); },
+      configurable:true
+    });
+  }catch(e){}
+  document.addEventListener('input',function(e){ if(e.target&&e.target.type==='date') paint(e.target); },true);
+  document.addEventListener('change',function(e){ if(e.target&&e.target.type==='date') paint(e.target); },true);
+  var pend=false;
+  function schedule(){ if(pend) return; pend=true; requestAnimationFrame(function(){ pend=false; paintAll(); }); }
+  function start(){
+    paintAll();
+    new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true});
+    new MutationObserver(function(){ paintAll(); }).observe(document.body,{attributes:true,attributeFilter:['class']});   // dark/light switch
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
+})();
