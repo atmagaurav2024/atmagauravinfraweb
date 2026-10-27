@@ -5487,9 +5487,9 @@ async function execDelAllot(id){
 
 function execGenCombinedDoc(t){var cc=Array.from(document.querySelectorAll(".wa-sel-chk:checked")).map(function(c){return c.getAttribute("data-allot-id");});if(!cc.length){toast("Check at least one resource row","warning");return;}var aa=cc.map(function(id){return WA_ALLOT.find(function(a){return a.id===id;});}).filter(Boolean);if(!aa.length)return;if(t==="wo")generateCombinedDoc(aa,"WORK ORDER","#E65100","#FFF3E0");else generateCombinedDoc(aa,"PURCHASE ORDER","#1565C0","#E3F2FD");}
 function generateCombinedDoc(allots,title,col,tbg){
-  if((!COMPANY_DATA||!COMPANY_DATA.name) && typeof preloadCompanyData==='function' && !window._coRetry){
+  if((!COMPANY_DATA||!COMPANY_DATA.name||!window._partyInfoLoaded) && typeof preloadCompanyData==='function' && !window._coRetry){
     window._coRetry=true; var _args=arguments, _self=generateCombinedDoc;
-    preloadCompanyData().catch(function(){}).then(function(){ window._coRetry=false; _self.apply(null,_args); }); return;
+    docPrep().catch(function(){}).then(function(){ window._coRetry=false; _self.apply(null,_args); }); return;
   }
 
   var proj=PROJ_DATA.find(function(p){return p.id===allots[0].project_id;})||{};
@@ -5498,12 +5498,49 @@ function generateCombinedDoc(allots,title,col,tbg){
     var projSel=document.getElementById('proj-mod-sel');
     if(projSel&&projSel.selectedIndex>=0) proj={name:projSel.options[projSel.selectedIndex].text};
   }
-  var co=COMPANY_DATA||{};var inr=function(n){return "\u20b9"+Number(n||0).toLocaleString("en-IN");};var fmtD=function(d){if(!d)return "";var p=d.split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};var tot=allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);var dn=(title==="WORK ORDER"?"WO":"PO")+"-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-4);var rows=allots.map(function(a,i){var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));return "<tr><td>"+(i+1)+"</td><td>"+a.party_name+(a.scope?"<br><small>"+a.scope+"</small>":"")+"</td><td>"+(a.qty||0)+" "+(a.unit||"")+"</td><td>"+inr(a.rate)+"</td><td>"+inr(amt)+"</td></tr>";}).join("");var html="<!DOCTYPE html><html><head><meta charset=UTF-8><title>"+title+"</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid "+col+";padding-bottom:10px;margin-bottom:12px;}.cn{font-size:17px;font-weight:900;color:"+col+";}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:"+col+";color:white;padding:7px 10px;text-align:left;font-size:11px;}td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:"+tbg+";}.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}@media print{button{display:none;}}</style></head><body><button onclick=\"window.print()\" style=\"background:"+col+";color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;\">Print/Save PDF</button><div class=hdr><div><div class=cn>"+(co.name||"Company")+"</div><div style=\"font-size:10px;color:#666\">"+[co.address,co.address2].filter(Boolean).join(", ")+"</div><div style=\"font-size:10px;color:#666\">"+(co.gstin?"GSTIN: "+co.gstin:"")+"</div></div><div style=\"text-align:right\"><div style=\"font-size:19px;font-weight:900;\">"+title+"</div><div style=\"color:#666\">"+dn+"</div><div style=\"color:#666\">Date: "+fmtD(new Date().toISOString().slice(0,10))+"</div><div style=\"color:#666\">Project: "+(proj.name||"")+"</div></div></div><table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>"+rows+"<tr class=tr><td colspan=4 style=\"text-align:right\">Total</td><td>"+inr(tot)+"</td></tr></table><div class=ft><div><div class=sg>Issued By<br><br>"+(co.name||"")+"</div></div><div><div class=sg>Authorized Signatory</div></div></div></body></html>";openPDF(html);}
+  var co=COMPANY_DATA||{};var inr=function(n){return "\u20b9"+Number(n||0).toLocaleString("en-IN");};var fmtD=function(d){if(!d)return "";var p=d.split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};var tot=allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);var dn=(title==="WORK ORDER"?"WO":"PO")+"-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-4);var rows=allots.map(function(a,i){var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));return "<tr><td>"+(i+1)+"</td><td>"+a.party_name+(partyInfoHtml(a.party_name,"font-size:9px;color:#666;"))+(a.scope?"<br><small>"+a.scope+"</small>":"")+"</td><td>"+(a.qty||0)+" "+(a.unit||"")+"</td><td>"+inr(a.rate)+"</td><td>"+inr(amt)+"</td></tr>";}).join("");var html="<!DOCTYPE html><html><head><meta charset=UTF-8><title>"+title+"</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid "+col+";padding-bottom:10px;margin-bottom:12px;}.cn{font-size:17px;font-weight:900;color:"+col+";}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:"+col+";color:white;padding:7px 10px;text-align:left;font-size:11px;}td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:"+tbg+";}.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}@media print{button{display:none;}}</style></head><body><button onclick=\"window.print()\" style=\"background:"+col+";color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;\">Print/Save PDF</button><div class=hdr><div><div class=cn>"+(co.name||"Company")+"</div><div style=\"font-size:10px;color:#666\">"+[co.address,co.address2].filter(Boolean).join(", ")+"</div><div style=\"font-size:10px;color:#666\">"+(co.gstin?"GSTIN: "+co.gstin:"")+"</div></div><div style=\"text-align:right\"><div style=\"font-size:19px;font-weight:900;\">"+title+"</div><div style=\"color:#666\">"+dn+"</div><div style=\"color:#666\">Date: "+fmtD(new Date().toISOString().slice(0,10))+"</div><div style=\"color:#666\">Project: "+(proj.name||"")+"</div></div></div><table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>"+rows+"<tr class=tr><td colspan=4 style=\"text-align:right\">Total</td><td>"+inr(tot)+"</td></tr></table><div class=ft><div><div class=sg>Issued By<br><br>"+(co.name||"")+"</div></div><div><div class=sg>Authorized Signatory</div></div></div></body></html>";openPDF(html);}
 
+// ── Party (contractor / vendor) address + GSTIN on order PDFs ──
+// Registry lists are only filled once the Registry screen has been opened, so the
+// details are fetched here directly. Vendors and subcontractors carry address + gst;
+// labourers only an address.
+var PARTY_INFO={};
+async function partyInfoEnsure(){
+  if(window._partyInfoLoaded) return;
+  var tabs=[['vendors','name,address,gst'],['subcontractors','name,address,gst'],['labourers','name,address']];
+  for(var i=0;i<tabs.length;i++){
+    try{
+      var rows=await sbFetch(tabs[i][0],{select:tabs[i][1]});
+      (Array.isArray(rows)?rows:[]).forEach(function(r){
+        var k=String(r.name||'').trim().toLowerCase(); if(!k) return;
+        var cur=PARTY_INFO[k]||{};
+        PARTY_INFO[k]={address:cur.address||r.address||'',gst:cur.gst||r.gst||''};
+      });
+    }catch(e){ console.warn('partyInfoEnsure',tabs[i][0],e); }
+  }
+  window._partyInfoLoaded=true;
+}
+async function docPrep(){
+  if(!COMPANY_DATA||!COMPANY_DATA.name){ try{await preloadCompanyData();}catch(e){} }
+  await partyInfoEnsure();
+}
+// Lines for a party box. names may be one name or a comma-separated list.
+function partyInfoHtml(names,style){
+  style=style||'font-size:10px;color:#666;';
+  var seen={}, out=[];
+  String(names||'').split(',').forEach(function(n){
+    n=n.trim(); var k=n.toLowerCase(); if(!k||seen[k]) return; seen[k]=1;
+    var p=PARTY_INFO[k]; if(!p||(!p.address&&!p.gst)) return;
+    var multi=String(names).indexOf(',')>-1;
+    out.push('<div style="'+style+'margin-top:2px;">'+(multi?'<b>'+n+':</b> ':'')+
+      [p.address,(p.gst?'GSTIN: '+p.gst:'')].filter(Boolean).join(' &nbsp;|&nbsp; ')+'</div>');
+  });
+  return out.join('');
+}
 function generateWorkOrder(allot){
-  if((!COMPANY_DATA||!COMPANY_DATA.name) && typeof preloadCompanyData==='function' && !window._coRetry){
+  if((!COMPANY_DATA||!COMPANY_DATA.name||!window._partyInfoLoaded) && typeof preloadCompanyData==='function' && !window._coRetry){
     window._coRetry=true; var _args=arguments, _self=generateWorkOrder;
-    preloadCompanyData().catch(function(){}).then(function(){ window._coRetry=false; _self.apply(null,_args); }); return;
+    docPrep().catch(function(){}).then(function(){ window._coRetry=false; _self.apply(null,_args); }); return;
   }
   var proj=PROJ_DATA.find(function(p){return p.id===allot.project_id;})||{};
   var co=COMPANY_DATA||{};
@@ -5540,6 +5577,7 @@ function generateWorkOrder(allot){
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">TO</div>'+
         '<div style="font-weight:800;font-size:13px;">'+(allot.party_name||'')+'</div>'+
         '<div style="font-size:10px;color:#666;text-transform:uppercase;">'+allot.exec_type+'</div>'+
+        partyInfoHtml(allot.party_name)+
       '</div>'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">PROJECT</div>'+
@@ -5573,9 +5611,9 @@ function generateWorkOrder(allot){
 }
 
 function generatePurchaseOrder(allot){
-  if((!COMPANY_DATA||!COMPANY_DATA.name) && typeof preloadCompanyData==='function' && !window._coRetry){
+  if((!COMPANY_DATA||!COMPANY_DATA.name||!window._partyInfoLoaded) && typeof preloadCompanyData==='function' && !window._coRetry){
     window._coRetry=true; var _args=arguments, _self=generatePurchaseOrder;
-    preloadCompanyData().catch(function(){}).then(function(){ window._coRetry=false; _self.apply(null,_args); }); return;
+    docPrep().catch(function(){}).then(function(){ window._coRetry=false; _self.apply(null,_args); }); return;
   }
   var proj=PROJ_DATA.find(function(p){return p.id===allot.project_id;})||{};
   var co=COMPANY_DATA||{};
@@ -5611,6 +5649,7 @@ function generatePurchaseOrder(allot){
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">VENDOR / SUPPLIER</div>'+
         '<div style="font-weight:800;font-size:13px;">'+(allot.party_name||'')+'</div>'+
         '<div style="font-size:10px;color:#666;text-transform:uppercase;">'+allot.exec_type+'</div>'+
+        partyInfoHtml(allot.party_name)+
       '</div>'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">DELIVERY / SITE</div>'+
@@ -7803,7 +7842,7 @@ async function execGenPartyDoc(partyKey, docType){
 
   var total=items.reduce(function(s,i){return s+Math.round(i.qty*i.rate);},0);
   var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
-  if((!COMPANY_DATA||!COMPANY_DATA.name||!COMPANY_DATA.address) && typeof preloadCompanyData==='function'){ try{await preloadCompanyData();}catch(e){} }
+  try{await docPrep();}catch(e){}
   var co=COMPANY_DATA||{};
   var inr=function(n){return '&#8377;'+Number(n||0).toLocaleString('en-IN');};
   var fmtD=function(d){if(!d)return '';var p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;};
@@ -7863,7 +7902,7 @@ async function execGenPartyDoc(partyKey, docType){
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+(docType==='wo'?'CONTRACTOR / PARTY':'VENDOR / SUPPLIER')+'</div>'+
         '<div style="font-weight:800;font-size:14px;">'+partyName+'</div>'+
-        '<div style="font-size:10px;color:#666;text-transform:uppercase;">'+(tLbl[partyType]||partyType)+'</div></div>'+
+        '<div style="font-size:10px;color:#666;text-transform:uppercase;">'+(tLbl[partyType]||partyType)+'</div>'+partyInfoHtml(partyName)+'</div>'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">PROJECT / SITE</div>'+
         '<div style="font-weight:800;font-size:14px;">'+(proj.name||'')+'</div>'+
@@ -8091,9 +8130,9 @@ async function execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, 
 }
 
 function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, savedTerms){
-  if((!COMPANY_DATA||!COMPANY_DATA.name) && typeof preloadCompanyData==='function' && !window._coRetry2){
+  if((!COMPANY_DATA||!COMPANY_DATA.name||!window._partyInfoLoaded) && typeof preloadCompanyData==='function' && !window._coRetry2){
     window._coRetry2=true; var _a=arguments;
-    preloadCompanyData().catch(function(){}).then(function(){ window._coRetry2=false; execRenderBatchDoc.apply(null,_a); }); return;
+    docPrep().catch(function(){}).then(function(){ window._coRetry2=false; execRenderBatchDoc.apply(null,_a); }); return;
   }
   var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
   var co=COMPANY_DATA||{};
@@ -8276,6 +8315,7 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
         '<div class="lbl">'+(isPO?'Vendor / Supplier':'Contractor / Party')+'</div>'+
         '<div class="val">'+partyLabel+'</div>'+
         '<div class="sub">'+(tLbl[batchItems[0].exec_type]||batchItems[0].exec_type)+'</div>'+
+        partyInfoHtml(partyLabel,'font-size:10px;color:#555;')+
       '</div>'+
       '<div class="info-col">'+
         '<div class="lbl">Project</div>'+
