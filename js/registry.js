@@ -527,10 +527,10 @@ async function matQuickAddSave(){
   if(!name){toast('Material name is required','warning');return;}
   var btn=document.getElementById('mqa-save'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
   try{
-    var n=MATERIALS.length+1;
     var prefix=(cat||'MAT').replace(/[^a-zA-Z]/g,'').toUpperCase().slice(0,4)||'MAT';
-    var code=prefix+'-'+String(n).padStart(4,'0');
-    var res=await sbInsert('materials',{mat_id:'MAT-'+String(n).padStart(3,'0'),name:name,category:cat.toLowerCase(),code:code,unit:uom||null,uom:uom||null,spec:spec});
+    var res=await qaInsertWithCode('materials','mat_id','MAT-',3,function(matId,n){
+      return {mat_id:matId,name:name,category:cat.toLowerCase(),code:prefix+'-'+String(n).padStart(4,'0'),unit:uom||null,uom:uom||null,spec:spec};
+    });
     if(!(res&&res[0])) throw new Error('Nothing was saved');
     var mat=mapMaterial(res[0]);
     MATERIALS.unshift(mat);

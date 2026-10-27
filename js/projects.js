@@ -16227,6 +16227,28 @@ function partyQuickAddOpen(selEl){
   document.body.appendChild(ov);
   setTimeout(function(){var n=document.getElementById('pqa-name'); if(n) n.focus();},50);
 }
+// Next free running number for a registry code (VND-007...). Reads what is really in the table:
+// the in-memory lists are only filled once the registry screen has been opened, so counting them
+// gave VND-001 again on a phone and failed with "duplicate key".
+async function qaNextNum(table,col,prefix){
+  var max=0;
+  try{
+    var rows=await sbFetch(table,{select:col,filter:col+'=like.'+prefix+'*'});
+    (Array.isArray(rows)?rows:[]).forEach(function(r){
+      var m=/(\d+)\s*$/.exec(String(r[col]||'')); if(m) max=Math.max(max,parseInt(m[1],10));
+    });
+  }catch(e){ console.warn('qaNextNum',e); max=Date.now()%100000; }
+  return max+1;
+}
+function qaIsDuplicate(e){ return /duplicate|23505|unique/i.test(String(e&&e.message||e)); }
+async function qaInsertWithCode(table,col,prefix,width,build){
+  var n=await qaNextNum(table,col,prefix), lastErr;
+  for(var i=0;i<6;i++){
+    try{ return await sbInsert(table,build(prefix+String(n+i).padStart(width,'0'),n+i)); }
+    catch(e){ lastErr=e; if(!qaIsDuplicate(e)) throw e; }
+  }
+  throw lastErr;
+}
 function partyQuickAddClose(){ var o=document.getElementById('party-qa-ov'); if(o) o.remove(); }
 
 async function partyQuickAddSave(){
@@ -16242,10 +16264,10 @@ async function partyQuickAddSave(){
     var res;
     var psrc=partySourceOf(type), plabel=partyLabel(type);
     if(psrc==='vendor'||psrc==='machinery'){
-      res=await sbInsert('vendors',{vendor_id:'VND-'+String((typeof VENDORS!=='undefined'?VENDORS.length:0)+1).padStart(3,'0'),name:name,category:psrc==='machinery'?'machinery':'general',status:'active',gst:gst,contact_person:contact,phone:phone,total_orders:0,total_value:0});
+      res=await qaInsertWithCode('vendors','vendor_id','VND-',3,function(code){ return {vendor_id:code,name:name,category:psrc==='machinery'?'machinery':'general',status:'active',gst:gst,contact_person:contact,phone:phone,total_orders:0,total_value:0}; });
       if(res&&res[0]&&typeof VENDORS!=='undefined'&&typeof mapVendor==='function') VENDORS.unshift(mapVendor(res[0]));
     }else if(psrc==='sc'){
-      res=await sbInsert('subcontractors',{sc_id:'SC-REG-'+String((typeof SUBCONTRACTORS!=='undefined'?SUBCONTRACTORS.length:0)+1).padStart(3,'0'),name:name,trade:String(plabel||'general').toLowerCase(),gst:gst,contact_person:contact,phone:phone,workers:0,pbg_available:false,emd_available:false,status:'active'});
+      res=await qaInsertWithCode('subcontractors','sc_id','SC-REG-',3,function(code){ return {sc_id:code,name:name,trade:String(plabel||'general').toLowerCase(),gst:gst,contact_person:contact,phone:phone,workers:0,pbg_available:false,emd_available:false,status:'active'}; });
       if(res&&res[0]&&typeof SUBCONTRACTORS!=='undefined'&&typeof mapSC==='function') SUBCONTRACTORS.unshift(mapSC(res[0]));
     }else{
       res=await sbInsert('labourers',{name:name,skill:'',type:'',phone:phone||'',daily_rate:0,status:'active'});
