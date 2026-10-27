@@ -27436,34 +27436,36 @@ function companyHandleDoc(id, input){
   if(status){ status.style.display='block'; status.textContent = '\u2713 ' + input.files[0].name + ' \u2014 ready to upload'; }
 }
 
+// NOTE: the signup screen also has an input with id="co-name"; always read the
+// company form via #company-body so the hidden empty signup field is never picked.
 async function companySave(){
   var btn = document.querySelector('#app-company button[onclick="companySave()"]');
   if(btn){ btn.textContent = '\u23f3 Saving...'; btn.disabled=true; }
 
   try{
     var data = {
-      name:       (document.getElementById('co-name')||{}).value||null,
-      short_name: (document.getElementById('co-short_name')||{}).value||null,
-      type:       (document.getElementById('co-type')||{}).value||null,
-      address:    (document.getElementById('co-address')||{}).value||null,
-      address2:   (document.getElementById('co-address2')||{}).value||null,
-      email:      (document.getElementById('co-email')||{}).value||null,
-      phone:      (document.getElementById('co-phone')||{}).value||null,
-      website:    (document.getElementById('co-website')||{}).value||null,
-      cin:        (document.getElementById('co-cin')||{}).value||null,
-      pan:        (document.getElementById('co-pan')||{}).value||null,
-      gstin:      (document.getElementById('co-gstin')||{}).value||null,
-      tan:        (document.getElementById('co-tan')||{}).value||null,
-      udyam:      (document.getElementById('co-udyam')||{}).value||null,
-      shop_act:   (document.getElementById('co-shop_act')||{}).value||null,
-      esic_code:  (document.getElementById('co-esic_code')||{}).value||null,
-      pf_code:    (document.getElementById('co-pf_code')||{}).value||null,
-      msme:       (document.getElementById('co-msme')||{}).value||null,
-      bank_name:  (document.getElementById('co-bank_name')||{}).value||null,
-      bank_branch:(document.getElementById('co-bank_branch')||{}).value||null,
-      bank_acc:   (document.getElementById('co-bank_acc')||{}).value||null,
-      bank_ifsc:  (document.getElementById('co-bank_ifsc')||{}).value||null,
-      bank_acc_name:(document.getElementById('co-bank_acc_name')||{}).value||null,
+      name:       (document.querySelector('#company-body #co-name')||{}).value||null,
+      short_name: (document.querySelector('#company-body #co-short_name')||{}).value||null,
+      type:       (document.querySelector('#company-body #co-type')||{}).value||null,
+      address:    (document.querySelector('#company-body #co-address')||{}).value||null,
+      address2:   (document.querySelector('#company-body #co-address2')||{}).value||null,
+      email:      (document.querySelector('#company-body #co-email')||{}).value||null,
+      phone:      (document.querySelector('#company-body #co-phone')||{}).value||null,
+      website:    (document.querySelector('#company-body #co-website')||{}).value||null,
+      cin:        (document.querySelector('#company-body #co-cin')||{}).value||null,
+      pan:        (document.querySelector('#company-body #co-pan')||{}).value||null,
+      gstin:      (document.querySelector('#company-body #co-gstin')||{}).value||null,
+      tan:        (document.querySelector('#company-body #co-tan')||{}).value||null,
+      udyam:      (document.querySelector('#company-body #co-udyam')||{}).value||null,
+      shop_act:   (document.querySelector('#company-body #co-shop_act')||{}).value||null,
+      esic_code:  (document.querySelector('#company-body #co-esic_code')||{}).value||null,
+      pf_code:    (document.querySelector('#company-body #co-pf_code')||{}).value||null,
+      msme:       (document.querySelector('#company-body #co-msme')||{}).value||null,
+      bank_name:  (document.querySelector('#company-body #co-bank_name')||{}).value||null,
+      bank_branch:(document.querySelector('#company-body #co-bank_branch')||{}).value||null,
+      bank_acc:   (document.querySelector('#company-body #co-bank_acc')||{}).value||null,
+      bank_ifsc:  (document.querySelector('#company-body #co-bank_ifsc')||{}).value||null,
+      bank_acc_name:(document.querySelector('#company-body #co-bank_acc_name')||{}).value||null,
     };
 
     // Upload any pending documents
