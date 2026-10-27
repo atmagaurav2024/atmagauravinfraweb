@@ -835,3 +835,15 @@ async function saveLabour(editId){toast('Save labour — implement in registry.j
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
 })();
+
+// Registry lists (units, roles, expense heads...) are needed by forms all over the app, not only
+// the registry screen, so load them once after login instead of waiting for that screen to open.
+(function(){
+  var tries=0, t=setInterval(function(){
+    tries++;
+    if(typeof currentUser!=='undefined' && currentUser && typeof sbFetch==='function' && typeof loadCategories==='function'){
+      clearInterval(t);
+      loadCategories().catch(function(){});
+    } else if(tries>60) clearInterval(t);
+  },2000);
+})();

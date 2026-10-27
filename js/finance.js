@@ -83,6 +83,11 @@ async function initPettyCash(){
   var cont=document.getElementById('pc-main');if(!cont)return;
   cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">⏳ Loading...</div>';
   try{
+    // The expense categories come from Master Registry; they were only loaded when the registry
+    // screen was opened, so the dropdown was empty until then.
+    try{
+      if(typeof loadCategories==='function' && !(typeof CAT_DATA!=='undefined' && CAT_DATA && CAT_DATA.pettycash && CAT_DATA.pettycash.length)) await loadCategories();
+    }catch(e){ console.warn('categories not loaded',e); }
     var[cashIn,expenses,emps,projs]=await Promise.all([
       sbFetch('petty_cash_in',{select:'*',order:'created_at.desc'}),
       sbFetch('petty_cash_expenses',{select:'*',order:'date.desc'}),
