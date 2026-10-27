@@ -5498,7 +5498,7 @@ function generateCombinedDoc(allots,title,col,tbg){
     var projSel=document.getElementById('proj-mod-sel');
     if(projSel&&projSel.selectedIndex>=0) proj={name:projSel.options[projSel.selectedIndex].text};
   }
-  var co=COMPANY_DATA||{};var inr=function(n){return "\u20b9"+Number(n||0).toLocaleString("en-IN");};var fmtD=function(d){if(!d)return "";var p=d.split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};var tot=allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);var dn=(title==="WORK ORDER"?"WO":"PO")+"-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-4);var rows=allots.map(function(a,i){var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));return "<tr><td>"+(i+1)+"</td><td>"+a.party_name+(partyInfoHtml(a.party_name,"font-size:9px;color:#666;"))+(a.scope?"<br><small>"+a.scope+"</small>":"")+"</td><td>"+(a.qty||0)+" "+(a.unit||"")+"</td><td>"+inr(a.rate)+"</td><td>"+inr(amt)+"</td></tr>";}).join("");var html="<!DOCTYPE html><html><head><meta charset=UTF-8><title>"+title+"</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid "+col+";padding-bottom:10px;margin-bottom:12px;}.cn{font-size:17px;font-weight:900;color:"+col+";}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:"+col+";color:white;padding:7px 10px;text-align:left;font-size:11px;}td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:"+tbg+";}.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}@media print{button{display:none;}}</style></head><body><button onclick=\"window.print()\" style=\"background:"+col+";color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;\">Print/Save PDF</button><div class=hdr><div><div class=cn>"+(co.name||"Company")+"</div><div style=\"font-size:10px;color:#666\">"+[co.address,co.address2].filter(Boolean).join(", ")+"</div><div style=\"font-size:10px;color:#666\">"+(co.gstin?"GSTIN: "+co.gstin:"")+"</div></div><div style=\"text-align:right\"><div style=\"font-size:19px;font-weight:900;\">"+title+"</div><div style=\"color:#666\">"+dn+"</div><div style=\"color:#666\">Date: "+fmtD(new Date().toISOString().slice(0,10))+"</div><div style=\"color:#666\">Project: "+(proj.name||"")+"</div></div></div><table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>"+rows+"<tr class=tr><td colspan=4 style=\"text-align:right\">Total</td><td>"+inr(tot)+"</td></tr></table><div class=ft><div><div class=sg>Issued By<br><br>"+(co.name||"")+"</div></div><div><div class=sg>Authorized Signatory</div></div></div></body></html>";openPDF(html);}
+  var co=COMPANY_DATA||{};var inr=function(n){return "\u20b9"+Number(n||0).toLocaleString("en-IN");};var fmtD=function(d){if(!d)return "";var p=d.split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d;};var tot=allots.reduce(function(s,a){return s+Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));},0);var dn=(title==="WORK ORDER"?"WO":"PO")+"-"+new Date().getFullYear()+"-"+String(Date.now()).slice(-4);var rows=allots.map(function(a,i){var amt=Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));return "<tr><td>"+(i+1)+"</td><td>"+a.party_name+(partyInfoHtml(a.party_name,"font-size:9px;color:#666;"))+(a.scope?"<br><small>"+a.scope+"</small>":"")+"</td><td>"+(a.qty||0)+" "+(a.unit||"")+"</td><td>"+inr(a.rate)+"</td><td>"+inr(amt)+"</td></tr>";}).join("");var html="<!DOCTYPE html><html><head><meta charset=UTF-8><title>"+title+"</title><style>body{font-family:Arial,sans-serif;margin:0;padding:20px;font-size:12px;}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid "+col+";padding-bottom:10px;margin-bottom:12px;}.cn{font-size:17px;font-weight:900;color:"+col+";}table{width:100%;border-collapse:collapse;margin:10px 0;}th{background:"+col+";color:white;padding:7px 10px;text-align:left;font-size:11px;}td{padding:7px 10px;border-bottom:1px solid #EEE;}.tr td{font-weight:900;background:"+tbg+";}.ft{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:30px;}.sg{border-top:1.5px solid #333;padding-top:6px;font-size:11px;color:#666;margin-top:40px;}@media print{button{display:none;}}</style></head><body><button onclick=\"window.print()\" style=\"background:"+col+";color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;margin-bottom:16px;\">Print/Save PDF</button><div class=hdr><div><div class=cn>"+(co.name||"Company")+"</div><div style=\"font-size:10px;color:#666\">"+[co.address,co.address2].filter(Boolean).join(", ")+"</div><div style=\"font-size:10px;color:#666\">"+(co.gstin?"GSTIN: "+co.gstin:"")+"</div></div><div style=\"text-align:right\"><div style=\"font-size:19px;font-weight:900;\">"+title+"</div><div style=\"color:#666\">"+dn+"</div><div style=\"color:#666\">Date: "+fmtD(new Date().toISOString().slice(0,10))+"</div><div style=\"color:#666\">Project: "+projDocName(proj)+(proj.location?"<br><span style=\"font-size:10px\">"+proj.location+"</span>":"")+"</div></div></div><table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>"+rows+"<tr class=tr><td colspan=4 style=\"text-align:right\">Total</td><td>"+inr(tot)+"</td></tr></table><div class=ft><div><div class=sg>Issued By<br><br>"+(co.name||"")+"</div></div><div><div class=sg>Authorized Signatory</div></div></div></body></html>";openPDF(html);}
 
 // ── Party (contractor / vendor) address + GSTIN on order PDFs ──
 // Registry lists are only filled once the Registry screen has been opened, so the
@@ -5520,9 +5520,19 @@ async function partyInfoEnsure(){
   }
   window._partyInfoLoaded=true;
 }
+// Short project names for order PDFs (column may not exist on older databases).
+var PROJ_SHORT={};
+async function projShortEnsure(){
+  try{
+    var rows=await sbFetch('projects',{select:'id,short_name'});
+    (Array.isArray(rows)?rows:[]).forEach(function(r){ if(r.short_name) PROJ_SHORT[r.id]=r.short_name; });
+  }catch(e){ console.warn('projShortEnsure',e); }
+}
+function projDocName(p){ p=p||{}; return PROJ_SHORT[p.id]||p.short_name||p.name||''; }
 async function docPrep(){
   if(!COMPANY_DATA||!COMPANY_DATA.name){ try{await preloadCompanyData();}catch(e){} }
   await partyInfoEnsure();
+  await projShortEnsure();
 }
 // Lines for a party box. names may be one name or a comma-separated list.
 function partyInfoHtml(names,style){
@@ -5581,8 +5591,8 @@ function generateWorkOrder(allot){
       '</div>'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">PROJECT</div>'+
-        '<div style="font-weight:800;font-size:13px;">'+(proj.name||'')+'</div>'+
-        '<div style="font-size:10px;color:#666;">'+(proj.location||proj.code||'')+'</div>'+
+        '<div style="font-weight:800;font-size:13px;">'+projDocName(proj)+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(proj.location||'')+'</div>'+
       '</div>'+
     '</div>'+
     '<table>'+
@@ -5653,8 +5663,8 @@ function generatePurchaseOrder(allot){
       '</div>'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">DELIVERY / SITE</div>'+
-        '<div style="font-weight:800;font-size:13px;">'+(proj.name||'')+'</div>'+
-        '<div style="font-size:10px;color:#666;">'+(proj.location||proj.code||'')+'</div>'+
+        '<div style="font-weight:800;font-size:13px;">'+projDocName(proj)+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(proj.location||'')+'</div>'+
       '</div>'+
     '</div>'+
     '<table>'+
@@ -7897,7 +7907,7 @@ async function execGenPartyDoc(partyKey, docType){
       '<div style="text-align:right"><div style="font-size:20px;font-weight:900;">'+titleStr+'</div>'+
         '<div style="color:#666;">'+fullDocNo+'</div>'+
         '<div style="color:#666;">Date: '+fmtD(today)+'</div>'+
-        '<div style="color:#666;">Project: '+(proj.name||'')+'</div></div></div>'+
+        '<div style="color:#666;">Project: '+projDocName(proj)+(proj.location?'<br><span style="font-size:10px;">'+proj.location+'</span>':'')+'</div></div></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">'+(docType==='wo'?'CONTRACTOR / PARTY':'VENDOR / SUPPLIER')+'</div>'+
@@ -7905,8 +7915,8 @@ async function execGenPartyDoc(partyKey, docType){
         '<div style="font-size:10px;color:#666;text-transform:uppercase;">'+(tLbl[partyType]||partyType)+'</div>'+partyInfoHtml(partyName)+'</div>'+
       '<div style="background:#F8FAFC;border-radius:8px;padding:10px;">'+
         '<div style="font-size:10px;color:#666;font-weight:700;margin-bottom:4px;">PROJECT / SITE</div>'+
-        '<div style="font-weight:800;font-size:14px;">'+(proj.name||'')+'</div>'+
-        '<div style="font-size:10px;color:#666;">'+(proj.location||proj.code||'')+'</div></div></div>'+
+        '<div style="font-weight:800;font-size:14px;">'+projDocName(proj)+'</div>'+
+        '<div style="font-size:10px;color:#666;">'+(proj.location||'')+'</div></div></div>'+
     '<table><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr>'+
     rows+'<tr class="tr"><td colspan="4" style="text-align:right;font-weight:900;">Total Amount</td><td>'+inr(total)+'</td></tr></table>'+
 (function(){
@@ -8319,8 +8329,8 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
       '</div>'+
       '<div class="info-col">'+
         '<div class="lbl">Project</div>'+
-        '<div class="val">'+(proj.name||'—')+'</div>'+
-        '<div class="sub">'+(proj.location||proj.code||'')+
+        '<div class="val">'+(projDocName(proj)||'—')+'</div>'+
+        '<div class="sub">'+(proj.location||'')+
           ((commonStart||commonEnd)?(' &nbsp;|&nbsp; '+(fmtD(commonStart)||'—')+' to '+(fmtD(commonEnd)||'—')):'')+
         '</div>'+
       '</div>'+
