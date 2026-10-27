@@ -847,3 +847,38 @@ async function saveLabour(editId){toast('Save labour — implement in registry.j
     } else if(tries>60) clearInterval(t);
   },2000);
 })();
+
+// ───────────────────────────────────────────────────────────────────
+// Pop-up windows (add party / material / party type / PDF signature / Add-Edit list) on a phone:
+// when the keyboard opens the page does not shrink, so a centred window had its Save button
+// hidden behind the keyboard. Fit each such window to the part of the screen that is actually
+// visible, keep it scrollable, and do not pop the keyboard up on its own on touch screens.
+// ───────────────────────────────────────────────────────────────────
+(function(){
+  var IDS={'party-qa-ov':1,'mat-qa-ov':1,'ptype-add-ov':1,'pdfsign-add-ov':1,'cat-quick-ov':1};
+  function fit(ov){
+    var vv=window.visualViewport;
+    var h=vv?vv.height:window.innerHeight, top=vv?vv.offsetTop:0, left=vv?vv.offsetLeft:0, w=vv?vv.width:window.innerWidth;
+    ov.style.top=top+'px'; ov.style.left=left+'px'; ov.style.right='auto'; ov.style.bottom='auto';
+    ov.style.width=w+'px'; ov.style.height=h+'px'; ov.style.boxSizing='border-box';
+    var card=ov.firstElementChild;
+    if(card){ card.style.maxHeight=Math.max(200,h-24)+'px'; card.style.overflowY='auto'; card.style.webkitOverflowScrolling='touch'; }
+  }
+  function attach(ov){
+    if(ov.__fit) return; ov.__fit=true;
+    fit(ov);
+    var vv=window.visualViewport;
+    var on=function(){ if(!document.body.contains(ov)){ if(vv){ vv.removeEventListener('resize',on); vv.removeEventListener('scroll',on);} return; } fit(ov); };
+    if(vv){ vv.addEventListener('resize',on); vv.addEventListener('scroll',on); }
+    window.addEventListener('resize',on);
+    // On a touch screen the keyboard would cover half the window the moment it opens; let the person tap a field instead
+    try{
+      if(window.matchMedia&&matchMedia('(pointer:coarse)').matches){
+        var ae=document.activeElement; setTimeout(function(){ if(ae&&ae!==document.body&&ov.contains(document.activeElement)&&document.activeElement.blur) document.activeElement.blur(); },120);
+      }
+    }catch(e){}
+  }
+  new MutationObserver(function(muts){
+    muts.forEach(function(m){ [].slice.call(m.addedNodes).forEach(function(n){ if(n.nodeType===1&&IDS[n.id]) attach(n); }); });
+  }).observe(document.documentElement,{childList:true,subtree:true});
+})();
