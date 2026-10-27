@@ -20558,8 +20558,10 @@ function lnLoanStats(loanId, asOn){
   var loan=LN_LOANS.find(function(x){return x.id===loanId;})||{};
   var principal=parseFloat(loan.principal)||0;
   var accrued=lnAccruedInterest(loan, asOn);
-  return {principal:principal, repaid:repaid, interest:interest, outstanding:principal-repaid,
-    accrued:accrued, intDue:Math.max(0,accrued-interest), count:t.length};
+  // A closed loan (foreclosed / finally settled) owes nothing more, even if part was waived.
+  var isClosed=(loan.status==='closed' && !asOn);
+  return {principal:principal, repaid:repaid, interest:interest, outstanding:isClosed?0:principal-repaid,
+    accrued:accrued, intDue:isClosed?0:Math.max(0,accrued-interest), count:t.length};
 }
 
 var LN_OPEN_PARTY=null;
@@ -22662,6 +22664,10 @@ function lnOpenPaymentChooser(loanId){
         '<div style="font-weight:800;font-size:13px;color:#C62828;">&#128274; Foreclosure</div>'+
         '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Pay off the full outstanding balance and close the loan</div>'+
       '</button>'+
+      '<button type="button" onclick="lnOpenFinalSettlement(\''+loanId+'\')" style="text-align:left;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;">'+
+        '<div style="font-weight:800;font-size:13px;color:#2E7D32;">&#129309; Final Settlement</div>'+
+        '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Close the loan by paying one agreed total, even if less than principal + interest due</div>'+
+      '</button>'+
       '<button type="button" onclick="lnOpenPenaltyPayment(\''+loanId+'\')" style="text-align:left;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;">'+
         '<div style="font-weight:800;font-size:13px;color:#6A1B9A;">&#9888; Late Fees / Penalty Payment</div>'+
         '<div style="font-size:11px;color:var(--text3);margin-top:2px;">Record a late payment charge, separate from principal/interest</div>'+
@@ -22757,41 +22763,42 @@ function lnOpenForeclosure(loanId){
     '<button class="btn btn-navy" style="background:#C62828;" onclick="lnSaveForeclosure(\''+loanId+'\')">Close Loan (Foreclose)</button>';
   openSheet('ov-ln','sh-ln');
 }
-async function lnSaveForeclosure(loanId){
+async function lnSaveForeclosure(loanId,pfx){
+  pfx=pfx||'lf'; var tag=(pfx==='fs')?'Final settlement':'Foreclosure', tagL=(pfx==='fs')?'Loan settled':'Loan foreclosed';
   if(!lnCanEdit()){toast('No permission','warning');return;}
   var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
   var isTaken=(loan.direction==='taken');
-  var principal=parseFloat(gv('lf-principal'))||0, interest=parseFloat(gv('lf-interest'))||0;
+  var principal=parseFloat(gv(pfx+'-principal'))||0, interest=parseFloat(gv(pfx+'-interest'))||0;
   if(principal<=0 && interest<=0){toast('Enter a valid amount','warning');return;}
-  if(!confirm('Foreclose this loan? This marks it as closed and cannot be undone from here.')) return;
-  var date=gv('lf-date')||new Date().toISOString().slice(0,10);
-  var mode=gv('lf-mode')||'Bank';
-  var modeEmp=gv('lf-mode-emp')||null;
+  if(!confirm((pfx==='fs'?'Settle and close this loan? ':'Foreclose this loan? ')+'This marks it as closed and cannot be undone from here.')) return;
+  var date=gv(pfx+'-date')||new Date().toISOString().slice(0,10);
+  var mode=gv(pfx+'-mode')||'Bank';
+  var modeEmp=gv(pfx+'-mode-emp')||null;
   if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
-  var ref=gv('lf-ref')||null, remarks=gv('lf-remarks')||null;
+  var ref=gv(pfx+'-ref')||null, remarks=gv(pfx+'-remarks')||null;
   try{
     var cashCode=lnCashCode(mode);
     var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
     if(principal>0.005){
       var resP=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'repayment',amount:principal,
-        date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+'Foreclosure'});
+        date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+tag});
       var savedP=(resP&&resP[0])?resP[0]:null;
       if(savedP && typeof accAutoPost==='function'){
         LN_TXNS.unshift(savedP);
-        var oP=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Loan foreclosed \u2014 principal paid to '+pn}
-                      :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Loan foreclosed \u2014 principal recovered from '+pn};
+        var oP=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:tagL+' \u2014 principal paid to '+pn}
+                      :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:tagL+' \u2014 principal recovered from '+pn};
         accAutoPost({type:oP.type,date:date,partyName:pn,debitCode:oP.debitCode,creditCode:oP.creditCode,
           amount:principal,narration:oP.narration,sourceType:'loan_txn',sourceId:savedP.id});
       }
     }
     if(interest>0.005){
       var resI=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'interest',amount:interest,
-        date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+'Foreclosure'});
+        date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+tag});
       var savedI=(resI&&resI[0])?resI[0]:null;
       if(savedI && typeof accAutoPost==='function'){
         LN_TXNS.unshift(savedI);
-        var oI=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Loan foreclosed \u2014 interest paid to '+pn}
-                      :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:'Loan foreclosed \u2014 interest received from '+pn};
+        var oI=isTaken?{type:'Payment',debitCode:'4201',creditCode:cashCode,narration:tagL+' \u2014 interest paid to '+pn}
+                      :{type:'Receipt',debitCode:cashCode,creditCode:'3005',narration:tagL+' \u2014 interest received from '+pn};
         accAutoPost({type:oI.type,date:date,partyName:pn,debitCode:oI.debitCode,creditCode:oI.creditCode,
           amount:interest,narration:oI.narration,sourceType:'loan_txn',sourceId:savedI.id});
       }
@@ -22800,8 +22807,47 @@ async function lnSaveForeclosure(loanId){
     var idx=LN_LOANS.findIndex(function(l){return l.id===loanId;});
     if(idx>-1) LN_LOANS[idx].status='closed';
     closeSheet('ov-ln','sh-ln'); lnRender();
-    toast('Loan foreclosed and closed','success');
+    toast(pfx==='fs'?'Loan settled and closed':'Loan foreclosed and closed','success');
   }catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ── FINAL SETTLEMENT ────────────────────────────────────────────────
+// One agreed total closes the loan. The total is applied to principal first,
+// the rest to interest; whatever is not paid is treated as waived by the lender.
+function lnFsSplit(loanId){
+  var st=lnLoanStats(loanId), tot=parseFloat(gv('fs-total'))||0;
+  var p=Math.min(tot,st.outstanding), i=Math.max(0,Math.min(tot-p,st.intDue));
+  if(tot>st.outstanding+st.intDue) i=tot-p;
+  var pe=document.getElementById('fs-principal'), ie=document.getElementById('fs-interest'), w=document.getElementById('fs-waiver');
+  if(pe) pe.value=p.toFixed(2); if(ie) ie.value=i.toFixed(2);
+  if(w){ var due=st.outstanding+st.intDue, wv=Math.max(0,due-tot);
+    w.innerHTML=wv>0.005?('Waived by lender: <b>'+fmtINR(wv)+'</b>'):(tot>due+0.005?('Paid above dues: <b>'+fmtINR(tot-due)+'</b>'):'Full dues paid, nothing waived'); }
+}
+function lnOpenFinalSettlement(loanId){
+  var loan=LN_LOANS.find(function(l){return l.id===loanId;}); if(!loan) return;
+  var st=lnLoanStats(loanId), due=st.outstanding+st.intDue;
+  document.getElementById('ln-sheet-title').textContent='Final Settlement';
+  document.getElementById('ln-sheet-body').innerHTML=
+    '<div style="background:var(--bg);color:var(--text);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;">'+
+      '<b>'+lnPartyName(loan.party_id)+'</b><br>Outstanding principal: <b>'+fmtINR(st.outstanding)+'</b> \u00b7 Interest due: <b>'+fmtINR(st.intDue)+'</b> \u00b7 Total: <b>'+fmtINR(due)+'</b>'+
+      '<div style="color:#C62828;font-weight:700;margin-top:4px;">This closes the loan \u2014 no further payments can be recorded against it afterward.</div>'+
+    '</div>'+
+    '<label class="flbl">Total settlement amount (\u20b9) *</label><input class="finp" id="fs-total" type="number" step="0.01" value="'+due.toFixed(2)+'" oninput="lnFsSplit(\''+loanId+'\')">'+
+    '<div id="fs-waiver" style="font-size:11.5px;color:#2E7D32;margin:4px 0 8px;"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'+
+      '<div><label class="flbl">Towards principal (\u20b9)</label><input class="finp" id="fs-principal" type="number" step="0.01"></div>'+
+      '<div><label class="flbl">Towards interest (\u20b9)</label><input class="finp" id="fs-interest" type="number" step="0.01"></div>'+
+    '</div>'+
+    '<label class="flbl">Date *</label><input class="finp" id="fs-date" type="date" value="'+new Date().toISOString().slice(0,10)+'">'+
+    '<label class="flbl">Mode</label>'+lnModeOptionsHtml('fs-mode')+
+    '<label class="flbl">Reference</label><input class="finp" id="fs-ref">'+
+    '<label class="flbl">Remarks</label><input class="finp" id="fs-remarks">'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:6px;">The total is applied to principal first, then interest (split is editable). Example: principal 1,00,000 + interest 50,000 settled at 1,10,000 = 1,00,000 principal + 10,000 interest, 40,000 waived.</div>';
+  document.getElementById('ln-sheet-foot').innerHTML=
+    '<button class="btn btn-outline" onclick="lnOpenPaymentChooser(\''+loanId+'\')">\u2190 Back</button>'+
+    '<button class="btn btn-navy" style="background:#2E7D32;" onclick="lnSaveForeclosure(\''+loanId+'\',\'fs\')">Settle &amp; Close Loan</button>';
+  openSheet('ov-ln','sh-ln');
+  lnFsSplit(loanId);
 }
 
 // ── LATE FEES / PENALTY PAYMENT ─────────────────────────────────────
