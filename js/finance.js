@@ -227,9 +227,11 @@ function pcRefresh(){
     pcInF=pcInF.filter(inRange);
     pcExpF=pcExpF.filter(inRange);
   }
+  if(pcSiteOn()){ pcInF=[]; pcExpF=pcExpForSite(pcExpF); }
   var totalIn=pcInF.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
   var totalOut=pcExpF.reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);
   var balance=totalIn-totalOut;
+  var pcSiteMode=pcSiteOn();
 
   // Employee dropdown options — anyone with at least one transaction, PLUS
   // the logged-in viewer themselves even with zero transactions yet
@@ -273,13 +275,13 @@ function pcRefresh(){
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:16px;">'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#1B5E20,#2E7D32);border:none;min-width:0;padding:10px 6px;">'+
         '<div style="font-size:clamp(9.5px,2.8vw,11.5px);font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Funded</div>'+
-        '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(totalIn)+'</div></div>'+
+        '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(pcSiteMode?'—':pcFmt(totalIn))+'</div></div>'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#B71C1C,#C62828);border:none;min-width:0;padding:10px 6px;">'+
         '<div style="font-size:clamp(9.5px,2.8vw,11.5px);font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Total Spent</div>'+
         '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:white;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(totalOut)+'</div></div>'+
       '<div class="card" style="text-align:center;background:linear-gradient(135deg,#1565C0,#1E88E5);border:none;min-width:0;padding:10px 6px;">'+
         '<div style="font-size:clamp(9.5px,2.8vw,11.5px);font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Balance</div>'+
-        '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:'+(balance>=0?'white':'#FFCDD2')+';margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+pcFmt(balance)+'</div></div>'+
+        '<div style="font-size:clamp(13px,4vw,18px);font-weight:900;color:'+(balance>=0?'white':'#FFCDD2')+';margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+(pcSiteMode?'—':pcFmt(balance))+'</div></div>'+
     '</div>'+
     // Petty Cash has its own view/edit/delete permissions in Access
     // Control (same as every other module's canAccess checks), but this
@@ -351,7 +353,31 @@ function pcRenderSiteTabs(){
   }).join('');
 }
 
-function pcFilterSite(proj){PC_SITE_TAB=proj;pcRenderSiteTabs();pcRenderList();}
+function pcFilterSite(proj){PC_SITE_TAB=proj;pcRenderSiteTabs();pcRefresh();}
+
+// With a project (or Office) selected, Petty Cash shows ONLY that project's expenses: funding
+// is not project-wise, so it is left out of the cards, the list and the reports. An expense split
+// across several projects counts at that project's own share, not the whole amount.
+function pcSiteOn(){ return PC_SITE_TAB!=='all'; }
+function pcSiteShare(e){
+  var want=String(PC_SITE_TAB||'').trim().toLowerCase();
+  var allocs=[]; try{ allocs=e.project_allocations?(typeof e.project_allocations==='string'?JSON.parse(e.project_allocations):e.project_allocations):[]; }catch(x){ allocs=[]; }
+  if(Array.isArray(allocs)&&allocs.length>1){
+    var part=allocs.filter(function(a){return String(a.name||'').trim().toLowerCase()===want;})
+                   .reduce(function(t,a){return t+(parseFloat(a.amount)||0);},0);
+    return part;
+  }
+  return String(e.project||'').toLowerCase().indexOf(want)!==-1 ? (parseFloat(e.amount)||0) : 0;
+}
+function pcExpForSite(list){
+  return list.map(function(e){
+    var share=pcSiteShare(e);
+    if(!(share>0)) return null;
+    var c={}; for(var k in e) c[k]=e[k];
+    c._fullAmount=e.amount; c.amount=share;
+    return c;
+  }).filter(Boolean);
+}
 
 // ── DATE RANGE FILTER ───────────────────────────────────────────────
 // 'YYYY-MM-DD' in LOCAL time (not toISOString, which is UTC and can
@@ -450,10 +476,11 @@ function pcFilteredEntriesForReport(){
     pcInSrc.map(function(i){var c={};for(var k in i)c[k]=i[k];c._type='in';return c;}),
     pcExpSrc.map(function(e){var c={};for(var k in e)c[k]=e[k];c._type='exp';return c;})
   );
-  if(PC_SITE_TAB!=='all') list=list.filter(function(i){
-    if(i._type==='in') return true; // funding is never site-specific — same exemption pcRenderList gives it
-    return (i.project||'').toLowerCase().indexOf(PC_SITE_TAB.toLowerCase())!==-1;
-  });
+  if(pcSiteOn()){
+    // Project selected: only that project's expenses (funding is not project-wise)
+    var _exp=pcExpForSite(list.filter(function(i){return i._type==='exp';})).map(function(e){e._type='exp';return e;});
+    list=_exp;
+  }
   var range=pcDateRangeFor(PC_DATE_FILTER);
   if(range) list=list.filter(function(i){
     var ds=i.date||(i.created_at||'').slice(0,10);
@@ -597,7 +624,18 @@ function pcRenderList(){
 
     cont.innerHTML=allEmpIds.map(function(empId){
       var funded=PC_IN.filter(function(i){return i.emp_id===empId;}).reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
-      var spent=PC_EXP.filter(function(e){return e.emp_id===empId;}).reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);
+      var spentRows=PC_EXP.filter(function(e){return e.emp_id===empId;});
+      if(pcSiteOn()) spentRows=pcExpForSite(spentRows);
+      var spent=spentRows.reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);
+      if(pcSiteOn()){
+        if(spent===0) return '';   // nothing spent on this project by this employee
+        return '<div class="card" style="margin-bottom:8px;">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+            '<div style="font-weight:800;font-size:13px;">'+pcEmpName(empId)+'</div>'+
+            '<div style="font-weight:900;color:#C62828;font-size:16px;">'+pcFmt(spent)+'</div></div>'+
+          '<div style="font-size:11px;color:var(--text3);margin-top:5px;"><span style="color:#C62828;font-weight:700;">&#8595; Spent on '+PC_SITE_TAB+': '+pcFmt(spent)+'</span></div>'+
+        '</div>';
+      }
       var bal=funded-spent;
       if(funded===0&&spent===0) return ''; // skip employees with no transactions
       return '<div class="card" style="margin-bottom:8px;">'+
@@ -616,6 +654,10 @@ function pcRenderList(){
   }
   var pcInSrc  = PC_EMP_FILTER==='all'?PC_IN :PC_IN.filter(function(i){return i.emp_id===PC_EMP_FILTER;});
   var pcExpSrc = PC_EMP_FILTER==='all'?PC_EXP:PC_EXP.filter(function(e){return e.emp_id===PC_EMP_FILTER;});
+  if(pcSiteOn()){
+    if(tab==='cash-in'){ cont.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Cash in is not tracked project-wise.<br>Select <b>All</b> to see funding.</div>'; return; }
+    pcInSrc=[]; pcExpSrc=pcExpForSite(pcExpSrc);
+  }
   var list=tab==='cash-in'?pcInSrc:tab==='expenses'?pcExpSrc:[...pcInSrc.map(function(i){return Object.assign({},i,{_type:'in'});}),...pcExpSrc.map(function(e){return Object.assign({},e,{_type:'exp'});})];
   // Newest entry DATE first (not newest keyed-in first), so a back-dated
   // entry lands where its date belongs. Same-day entries then fall back to
@@ -626,7 +668,8 @@ function pcRenderList(){
     if(da!==db) return da<db?1:-1;
     return new Date(b.created_at||0)-new Date(a.created_at||0);
   });
-  if(PC_SITE_TAB!=='all')list=list.filter(function(i){
+  if(false)list=list.filter(function(i){
+    // (superseded: with a site selected, funding is dropped above and expenses are scoped by pcExpForSite)
     // Cash In (funding) entries are deliberately not tied to one project —
     // "money handed to an employee can be spent across any site" (see
     // pcSaveCashIn) — so they're always saved with project:'All Projects'.
