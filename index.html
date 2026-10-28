@@ -22181,11 +22181,21 @@ async function lnSaveLoan(dir, editId, onSaved){
       var cur=LN_LOANS[idx]||{};
       if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(editId);
       if(typeof accAutoPost==='function'){
-        var cc=cur.to_petty_cash?'1101':lnCashCode(mode);
+        // Same shape as a new loan: a taken loan passed to an employee / petty cash lands in the
+        // company Cash or Bank first (the onward transfer to petty cash is its own voucher, kept on
+        // the petty cash row and untouched here); otherwise straight to the chosen account.
+        var passThruE=isTaken&&(cur.to_petty_cash||lnIsEmpMode(mode));
+        var cc=passThruE?lnCompanyAcct(mode):lnCashCode(mode);
         accAutoPost({type:isTaken?'Receipt':'Payment', date:fields.start_date, partyName:lnPartyName(fields.party_id),
           debitCode:isTaken?cc:'1401', creditCode:isTaken?'2201':cc, amount:principal,
-          narration:(isTaken?'Loan taken from ':'Loan given to ')+lnPartyName(fields.party_id)+(fields.purpose?' \u2014 '+fields.purpose:''),
+          narration:(isTaken?'Loan taken from ':'Loan given to ')+lnPartyName(fields.party_id)+(fields.purpose?' \u2014 '+fields.purpose:'')+lnEmpVia(mode,modeEmp),
           sourceType:'loan', sourceId:editId});
+        if(passThruE && !cur.to_petty_cash){
+          accAutoPost({type:'Contra', date:fields.start_date, partyName:(modeEmp?lnEmpName(modeEmp):'Employee'),
+            debitCode:'1102', creditCode:cc, amount:principal,
+            narration:'Loan passed to employee'+(modeEmp?' \u2014 '+lnEmpName(modeEmp):'')+' \u00b7 from loan of '+lnPartyName(fields.party_id),
+            sourceType:'loan', sourceId:editId});
+        }
       }
       closeSheet('ov-ln','sh-ln'); lnRender(); toast('Loan updated','success');
       return;
@@ -29631,8 +29641,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261028k"></script>
-<script src="js/employee.js?v=20261028k"></script>
-<script src="js/projects.js?v=20261028k"></script>
-<script src="js/finance.js?v=20261028k"></script>
+<script src="js/registry.js?v=20261028l"></script>
+<script src="js/employee.js?v=20261028l"></script>
+<script src="js/projects.js?v=20261028l"></script>
+<script src="js/finance.js?v=20261028l"></script>
 </html>
