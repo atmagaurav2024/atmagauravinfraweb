@@ -20408,13 +20408,14 @@ function lnModeOptionsHtml(id){
     '<option value="Bank">Company Bank</option>'+
     '<option value="Cash">Company Cash</option>'+
     '<option value="EmpBank">Employee\'s Bank Account</option>'+
+    '<option value="EmpCash">Employee\'s Cash in Hand</option>'+
   '</select>'+
   '<div id="'+id+'-empwrap" style="display:none;">'+
     '<label class="flbl">Employee *</label><select class="fsel" id="'+id+'-emp">'+
       '<option value="">Select employee...</option>'+
       LN_EMPS.map(function(e){return '<option value="'+e.id+'">'+e.name+'</option>';}).join('')+
     '</select>'+
-    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">Received in the Company Bank, then passed to the employee \u2014 posted to <b>Funds with Employees</b> until settled.</div>'+
+    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;"><b>Employee\'s Bank Account:</b> received in the Company Bank, then passed to the employee. <b>Employee\'s Cash in Hand:</b> the employee received the loan in cash directly, so it goes straight to <b>Funds with Employees</b> (the company bank/cash is not touched). Either way it stays under Funds with Employees until settled.</div>'+
     '</div>'+
     (id==='ll-mode'?
       '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;">'+
@@ -20426,11 +20427,15 @@ function lnModeOptionsHtml(id){
 function lnToggleModeEmp(id){
   var v=(document.getElementById(id)||{}).value;
   var w=document.getElementById(id+'-empwrap');
-  if(w) w.style.display=(v==='EmpBank')?'':'none';
+  if(w) w.style.display=lnIsEmpMode(v)?'':'none';
 }
 function lnEmpName(id){ var e=LN_EMPS.find(function(x){return x.id===id;}); return e?e.name:'Employee'; }
 // Cash-side GL code for a given mode
-function lnCashCode(mode){ return mode==='Cash'?'1001':(mode==='EmpBank'?'1102':'1002'); }
+function lnIsEmpMode(m){ return m==='EmpBank'||m==='EmpCash'; }
+// Text used in narrations: ' (via Ravi\u2019s account)' / ' (via Ravi\u2019s cash)'
+function lnEmpVia(mode,empId){ return lnIsEmpMode(mode)?(' (via '+lnEmpName(empId)+(mode==='EmpCash'?'\u2019s cash)':'\u2019s account)')):''; }
+function lnModeShort(m,empId){ return m==='EmpBank'?(lnEmpName(empId)+'\u2019s a/c'):(m==='EmpCash'?(lnEmpName(empId)+'\u2019s cash'):(m||'')); }
+function lnCashCode(mode){ return mode==='Cash'?'1001':(lnIsEmpMode(mode)?'1102':'1002'); }
 
 function lnDaysBetween(a,b){
   var d1=new Date(String(a)+'T00:00:00'), d2=new Date(String(b)+'T00:00:00');
@@ -21568,7 +21573,7 @@ function lnPartyDetailHtml(pid, dir, isTaken, accent){
               ' <span class="ln-sub" style="font-family:Nunito,sans-serif;">\u00b7 '+fmtDate(l.start_date)+
               (l.interest_rate?' \u00b7 '+l.interest_rate+'% '+(LN_INT_TYPES[l.interest_type||'simple']||''):' \u00b7 Interest-free')+'</span></div>'+
             '<div class="ln-sub">'+(l.purpose||'\u2014')+(l.reference?' \u00b7 Ref: '+l.reference:'')+
-              (l.mode==='EmpBank'?' \u00b7 \ud83d\udc64 '+lnEmpName(l.mode_emp_id)+'\u2019s a/c'+(l.to_petty_cash?' \ud83d\udcb5':''):'')+'</div>'+
+              (lnIsEmpMode(l.mode)?' \u00b7 \ud83d\udc64 '+lnModeShort(l.mode,l.mode_emp_id)+(l.to_petty_cash?' \ud83d\udcb5':''):'')+'</div>'+
             '<div class="ln-sub ln-mono">Repaid <b style="color:#047857;">'+fmtINR(st.repaid)+'</b> \u00b7 outstanding <b>'+fmtINR(st.outstanding)+'</b> \u00b7 int due <b style="color:#B45309;">'+fmtINR(st.intDue)+'</b></div>'+
             (isTaken?(function(){
               var allocRows=LN_ALLOCATIONS.filter(function(a){return a.loan_id===l.id && a.status==='ACTIVE';});
@@ -21596,7 +21601,7 @@ function lnPartyDetailHtml(pid, dir, isTaken, accent){
           return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">'+
             '<span class="ln-badge '+tBadge+'">'+tl+'</span>'+
             '<div style="flex:1;"><div class="ln-mono" style="font-size:11.5px;font-weight:600;">'+fmtINR(parseFloat(t.amount)||0)+'</div>'+
-            '<div class="ln-sub">'+fmtDate(t.date)+(t.mode?' \u00b7 '+(t.mode==='EmpBank'?lnEmpName(t.mode_emp_id)+'\u2019s a/c':t.mode):'')+
+            '<div class="ln-sub">'+fmtDate(t.date)+(t.mode?' \u00b7 '+lnModeShort(t.mode,t.mode_emp_id):'')+
               (t.receipt_no?' \u00b7 '+t.receipt_no:'')+(t.reference?' \u00b7 Ref '+t.reference:'')+'</div></div>'+
             (lnCanDelete()?'<button onclick="lnDelTxn(\''+t.id+'\')" class="ln-btn-ghost" style="font-size:14px;">\u00d7</button>':'')+
           '</div>';
@@ -21662,7 +21667,7 @@ function lnRenderPayments(){
     '</div>'+
     (groups.length? groups.map(function(g,i){
       var isTaken=(g.dir==='taken');
-      var modeLabel=g.mode==='EmpBank'?(lnEmpName(g.modeEmp)+'\u2019s a/c'):(g.mode||'\u2014');
+      var modeLabel=lnIsEmpMode(g.mode)?lnModeShort(g.mode,g.modeEmp):(g.mode||'\u2014');
       return '<div style="background:var(--card-bg);border-radius:12px;border:1px solid var(--border);margin-bottom:8px;padding:10px 12px;">'+
         '<div style="display:flex;align-items:flex-start;gap:8px;">'+
           '<span style="background:'+(isTaken?'#C62828':'#2E7D32')+';color:white;font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;">'+(isTaken?'PAID':'RECEIVED')+'</span>'+
@@ -21697,7 +21702,7 @@ function lnPayExportData(){
       rows.push([g.receiptNo||'', fmtDate(g.date), (g.dir==='taken'?'Paid':'Received'), lnPartyName(g.partyId),
         fmtDate(l.loan.start_date), Math.round(parseFloat(l.loan.principal)||0), (l.loan.interest_rate||0),
         Math.round(l.interest), Math.round(l.principal), Math.round(l.interest+l.principal),
-        (g.mode==='EmpBank'?lnEmpName(g.modeEmp)+" a/c":(g.mode||'')), g.ref||'']);
+        (lnIsEmpMode(g.mode)?lnModeShort(g.mode,g.modeEmp):(g.mode||'')), g.ref||'']);
     });
   });
   var tI=groups.reduce(function(a,g){return a+g.interest;},0);
@@ -21869,7 +21874,7 @@ function lnRenderLedger(){
         return '<tr'+(r.kind==='interest'?' style="background:var(--bg);"':'')+'>'+
           '<td style="white-space:nowrap;">'+fmtDate(r.date)+'</td>'+
           '<td><span style="background:'+tag[0]+';color:'+tag[1]+';font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:4px;margin-right:4px;">'+tag[2]+'</span>'+r.particulars+
-            (r.mode?'<div style="font-size:9.5px;color:var(--text3);">'+(r.mode==='EmpBank'?lnEmpName(r.modeEmp)+'\u2019s a/c':r.mode)+'</div>':'')+'</td>'+
+            (r.mode?'<div style="font-size:9.5px;color:var(--text3);">'+lnModeShort(r.mode,r.modeEmp)+'</div>':'')+'</td>'+
           '<td style="font-size:10px;color:var(--text3);">'+(r.ref||'\u2014')+'</td>'+
           '<td style="text-align:right;color:#2E7D32;">'+(r.dr?fmtINR(r.dr):'\u2014')+'</td>'+
           '<td style="text-align:right;color:#C62828;">'+(r.cr?fmtINR(r.cr):'\u2014')+'</td>'+
@@ -22149,7 +22154,7 @@ async function lnSaveLoan(dir, editId, onSaved){
   var isTaken=(dir==='taken');
   var mode=gv('ll-mode')||'Bank';
   var modeEmp=gv('ll-mode-emp')||null;
-  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  if(lnIsEmpMode(mode)&&!modeEmp){toast('Select the employee who holds the money','warning');return;}
   // The clearing structure applies whenever a loan becomes petty cash,
   // not only when the mode is Employee's Account — the money still passes
   // through an intermediate before reaching the float.
@@ -22220,9 +22225,9 @@ async function lnSaveLoan(dir, editId, onSaved){
         // A loan taken and passed on to an employee (petty cash float, or held in the
         // employee's own account) is shown as received by the COMPANY BANK first and then
         // paid out to the employee, so Bank statement/balance reflect both steps.
-        var passThru=isTaken&&(toPetty||mode==='EmpBank');
+        var passThru=isTaken&&mode!=='EmpCash'&&(toPetty||mode==='EmpBank');
         var cashCode=passThru?'1002':lnCashCode(mode);
-        var via=(mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'';
+        var via=lnEmpVia(mode,modeEmp);
         accAutoPost({type:isTaken?'Receipt':'Payment', date:saved.start_date, partyName:lnPartyName(saved.party_id),
           debitCode:isTaken?cashCode:'1401', creditCode:isTaken?'2201':cashCode, amount:principal,
           narration:(isTaken?'Loan taken from ':'Loan given to ')+lnPartyName(saved.party_id)+(saved.purpose?' \u2014 '+saved.purpose:'')+via,
@@ -22398,7 +22403,7 @@ async function lnSavePartyTxn(pid,dir){
   if(amt<=0){toast('Enter a valid amount','warning');return;}
   var mode=gv('lpt-mode')||'Bank';
   var modeEmp=gv('lpt-mode-emp')||null;
-  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  if(lnIsEmpMode(mode)&&!modeEmp){toast('Select the employee who holds the money','warning');return;}
   var date=gv('lpt-date')||new Date().toISOString().slice(0,10);
   var a=lnAllocatePayment(pid,dir,amt,date);
   if(!a.rows.length){ toast('Nothing outstanding to apply this against as on '+fmtDate(date),'warning'); return; }
@@ -22447,7 +22452,7 @@ async function lnSavePartyTxn(pid,dir){
   // rather than a pair per loan. The Loans module already holds the per-loan
   // split; the ledger only needs what actually moved.
   if(savedCount && typeof accAutoPost==='function'){
-    var pnv=pn+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+    var pnv=pn+lnEmpVia(mode,modeEmp);
     if(a.totalInterest>0.5){
       var oi=isTaken
         ? {type:'Payment',debitCode:'4201',creditCode:cashCode,narration:'Interest paid to '+pnv}
@@ -22493,7 +22498,7 @@ function lnGenerateReceipt(d){
   var compAddr=typeof coAddr==='function'?coAddr():'';
   var compGST=typeof coGST==='function'?coGST():'';
   var total=d.totalInterest+d.totalPrincipal;
-  var modeLabel=d.mode==='EmpBank'?('Employee A/c \u2014 '+lnEmpName(d.modeEmp)):(d.mode==='Cash'?'Cash':'Bank');
+  var modeLabel=d.mode==='EmpBank'?('Employee A/c \u2014 '+lnEmpName(d.modeEmp)):(d.mode==='EmpCash'?('Employee cash \u2014 '+lnEmpName(d.modeEmp)):(d.mode==='Cash'?'Cash':'Bank'));
   var words=(typeof numToWordsINR==='function')?numToWordsINR(Math.round(total)):'';
 
   var anyInterest=d.lines.some(function(l){return l.interest>0.005;});
@@ -22616,7 +22621,7 @@ async function lnSaveTxn(loanId,type){
   }
   var mode=gv('lt-mode')||'Bank';
   var modeEmp=gv('lt-mode-emp')||null;
-  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  if(lnIsEmpMode(mode)&&!modeEmp){toast('Select the employee who holds the money','warning');return;}
   try{
     var res=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:type,amount:amt,
       date:gv('lt-date'),mode:mode,mode_emp_id:modeEmp,reference:gv('lt-ref')||null,remarks:gv('lt-remarks')||null});
@@ -22625,7 +22630,7 @@ async function lnSaveTxn(loanId,type){
       LN_TXNS.unshift(saved);
       if(typeof accAutoPost==='function'){
         var cashCode=lnCashCode(mode);
-        var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+        var pn=lnPartyName(loan.party_id)+lnEmpVia(mode,modeEmp);
         var o;
         if(isInt){
           // Interest paid is an expense; interest earned is income
@@ -22724,7 +22729,7 @@ async function lnSavePartPayment(loanId){
   var date=gv('lp2-date')||new Date().toISOString().slice(0,10);
   var mode=gv('lp2-mode')||'Bank';
   var modeEmp=gv('lp2-mode-emp')||null;
-  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  if(lnIsEmpMode(mode)&&!modeEmp){toast('Select the employee who holds the money','warning');return;}
   var remarks=gv('lp2-remarks')||'';
   try{
     var res=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'repayment',amount:amt,
@@ -22734,7 +22739,7 @@ async function lnSavePartPayment(loanId){
       LN_TXNS.unshift(saved);
       if(typeof accAutoPost==='function'){
         var cashCode=lnCashCode(mode);
-        var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+        var pn=lnPartyName(loan.party_id)+lnEmpVia(mode,modeEmp);
         var o=isTaken?{type:'Payment',debitCode:'2201',creditCode:cashCode,narration:'Part payment to '+pn}
                      :{type:'Receipt',debitCode:cashCode,creditCode:'1401',narration:'Part payment received from '+pn};
         accAutoPost({type:o.type,date:date,partyName:pn,debitCode:o.debitCode,creditCode:o.creditCode,
@@ -22785,11 +22790,11 @@ async function lnSaveForeclosure(loanId,pfx){
   var date=gv(pfx+'-date')||new Date().toISOString().slice(0,10);
   var mode=gv(pfx+'-mode')||'Bank';
   var modeEmp=gv(pfx+'-mode-emp')||null;
-  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  if(lnIsEmpMode(mode)&&!modeEmp){toast('Select the employee who holds the money','warning');return;}
   var ref=gv(pfx+'-ref')||null, remarks=gv(pfx+'-remarks')||null;
   try{
     var cashCode=lnCashCode(mode);
-    var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+    var pn=lnPartyName(loan.party_id)+lnEmpVia(mode,modeEmp);
     if(principal>0.005){
       var resP=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'repayment',amount:principal,
         date:date,mode:mode,mode_emp_id:modeEmp,reference:ref,remarks:(remarks?remarks+' \u2014 ':'')+tag});
@@ -22891,7 +22896,7 @@ async function lnSavePenaltyPayment(loanId){
   var date=gv('lpen-date')||new Date().toISOString().slice(0,10);
   var mode=gv('lpen-mode')||'Bank';
   var modeEmp=gv('lpen-mode-emp')||null;
-  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  if(lnIsEmpMode(mode)&&!modeEmp){toast('Select the employee who holds the money','warning');return;}
   try{
     var res=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'penalty',amount:amt,
       date:date,mode:mode,mode_emp_id:modeEmp,reference:gv('lpen-ref')||null,remarks:gv('lpen-remarks')||null});
@@ -22900,7 +22905,7 @@ async function lnSavePenaltyPayment(loanId){
       LN_TXNS.unshift(saved);
       if(typeof accAutoPost==='function'){
         var cashCode=lnCashCode(mode);
-        var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+        var pn=lnPartyName(loan.party_id)+lnEmpVia(mode,modeEmp);
         var o=isTaken?{type:'Payment',debitCode:'4204',creditCode:cashCode,narration:'Late fee/penalty paid to '+pn}
                      :{type:'Receipt',debitCode:cashCode,creditCode:'3006',narration:'Late fee/penalty received from '+pn};
         accAutoPost({type:o.type,date:date,partyName:pn,debitCode:o.debitCode,creditCode:o.creditCode,
@@ -22994,11 +22999,11 @@ async function lnSaveEmiPayment(loanId){
   var date=gv('le-date')||new Date().toISOString().slice(0,10);
   var mode=gv('le-mode')||'Bank';
   var modeEmp=gv('le-mode-emp')||null;
-  if(mode==='EmpBank'&&!modeEmp){toast('Select the employee whose account was used','warning');return;}
+  if(lnIsEmpMode(mode)&&!modeEmp){toast('Select the employee who holds the money','warning');return;}
   var ref=gv('le-ref')||null, remarks=gv('le-remarks')||null;
   try{
     var cashCode=lnCashCode(mode);
-    var pn=lnPartyName(loan.party_id)+((mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'');
+    var pn=lnPartyName(loan.party_id)+lnEmpVia(mode,modeEmp);
 
     if(principal>0.005){
       var resP=await sbInsert('loan_transactions',{loan_id:loanId,txn_type:'repayment',amount:principal,
@@ -24405,7 +24410,8 @@ async function accReconcile(){
       // debited Funds with Employees, so this leg only moves the money
       // from the employee's account into petty cash.
       var fromLoan=(p.funded_by_type==='loan'||p.loan_id||loanFunded[(p.emp_id||'')+'|'+(p.date||'')+'|'+Math.round(amt)]);
-      var srcCode=fromLoan?'1002':(p.funded_by_type==='cash'?'1001':'1002');
+      var _fl=fromLoan&&p.loan_id?loans.find(function(l){return l.id===p.loan_id;}):null;
+      var srcCode=fromLoan?((_fl&&_fl.mode==='EmpCash')?'1102':'1002'):(p.funded_by_type==='cash'?'1001':'1002');
       check('Petty cash funding','petty_cash_in',p.id,{type:'Contra',date:p.date,partyName:nm,
         debitCode:'1101',creditCode:srcCode,amount:amt,
         narration:(fromLoan?'Transfer to petty cash — '+nm+' · from loan':'Petty cash funded to '+nm)+(p.purpose?' — '+p.purpose:'')});
@@ -24441,7 +24447,7 @@ async function accReconcile(){
     });
     loans.forEach(function(l){
       var taken=(l.direction==='taken');
-      var cc=(taken&&(l.to_petty_cash||l.mode==='EmpBank'))?'1002':(l.to_petty_cash?'1102':(l.mode==='Cash'?'1001':(l.mode==='EmpBank'?'1102':'1002')));
+      var cc=(taken&&((l.to_petty_cash&&l.mode!=='EmpCash')||l.mode==='EmpBank'))?'1002':(l.to_petty_cash?'1102':(l.mode==='Cash'?'1001':(lnIsEmpMode(l.mode)?'1102':'1002')));
       var pn=partyName[l.party_id]||'Party';
       check('Loans','loan',l.id,{type:taken?'Receipt':'Payment',date:l.start_date,partyName:pn,
         debitCode:taken?cc:'1401',creditCode:taken?'2201':cc,amount:parseFloat(l.principal)||0,
@@ -24489,7 +24495,7 @@ async function accReconcile(){
     Object.keys(payGroups).forEach(function(k){
       var g=payGroups[k], l=g.loan;
       var taken=(l.direction==='taken'), pn=partyName[l.party_id]||'Party';
-      var cc=(g.mode==='Cash'?'1001':(g.mode==='EmpBank'?'1102':'1002'));
+      var cc=(g.mode==='Cash'?'1001':(lnIsEmpMode(g.mode)?'1102':'1002'));
       var tag=g.receipt?(' \u00b7 '+g.receipt):'';
       if(g.interest>0.5){
         checkGroup('loan_pay_interest', null,
@@ -29623,8 +29629,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261028i"></script>
-<script src="js/employee.js?v=20261028i"></script>
-<script src="js/projects.js?v=20261028i"></script>
-<script src="js/finance.js?v=20261028i"></script>
+<script src="js/registry.js?v=20261028j"></script>
+<script src="js/employee.js?v=20261028j"></script>
+<script src="js/projects.js?v=20261028j"></script>
+<script src="js/finance.js?v=20261028j"></script>
 </html>
