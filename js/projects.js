@@ -9430,6 +9430,7 @@ async function execSaveDailyEntry(projId,itemId){
   // ── Collect checked resources ──
   var resources=[];
   var resValid=true;
+  var pendingAllotIncreases=[];
   document.querySelectorAll('.dp-res-chk:checked').forEach(function(chk){
     var row=chk.closest('.dp-res-row');
     var allotId=chk.getAttribute('data-allot-id');
@@ -9458,9 +9459,12 @@ async function execSaveDailyEntry(projId,itemId){
         rr.forEach(function(r){if(r.allot_id===allotId&&r.qty)alreadyUsed+=parseFloat(r.qty)||0;});
       });
       var resRemaining=Math.max(0,allotQty-alreadyUsed);
-      if(resQty>resRemaining){
-        toast(resName+': qty ('+resQty+') exceeds allotted balance ('+resRemaining.toFixed(2)+' '+(resUnit||'')+')', 'warning');
-        resValid=false; return;
+      if(resQty>resRemaining+0.0001){
+        // More than allotted: offer to raise the allotment instead of just blocking.
+        var newAllotQty=Math.round((alreadyUsed+resQty)*10000)/10000;
+        if(confirm(resName+' ('+(allot.party_name||'party')+'): you entered '+resQty+' but only '+resRemaining.toFixed(2)+' '+(resUnit||'')+' is left of the allotted '+allotQty+'.\n\nIncrease the allotment from '+allotQty+' to '+newAllotQty+' '+(resUnit||'')+' and save this entry?\n(An already issued WO keeps its original quantity.)')){
+          pendingAllotIncreases.push({id:allotId,qty:newAllotQty});
+        } else { resValid=false; return; }
       }
     }
 
@@ -9474,6 +9478,12 @@ async function execSaveDailyEntry(projId,itemId){
   });
   if(!resValid) return;
   try{
+    for(var pi=0;pi<pendingAllotIncreases.length;pi++){
+      var inc=pendingAllotIncreases[pi];
+      await sbUpdate('boq_exec_resources',inc.id,{qty:inc.qty});
+      var ai=WA_ALLOT.findIndex(function(a){return a.id===inc.id;});
+      if(ai>-1) WA_ALLOT[ai].qty=inc.qty;
+    }
     var res=await sbInsert('work_daily_progress',{
       project_id:projId,
       boq_item_id:itemId,
@@ -9724,7 +9734,7 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
   }
 
   // Collect resources
-  var resources=[];var resValid=true;
+  var resources=[];var resValid=true;var pendingAllotInc2=[];
   document.querySelectorAll('.dp-res-chk:checked').forEach(function(chk){
     var row=chk.closest('.dp-res-row');
     var qtyInp=row&&row.querySelector('.dp-res-qty');
@@ -9742,7 +9752,12 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
         rr.forEach(function(r){if(r.allot_id===allotId&&r.qty)usedExcl+=parseFloat(r.qty)||0;});
       });
       var resRem=Math.max(0,allotQ-usedExcl);
-      if(resQty>resRem){toast(resName+': qty ('+resQty+') exceeds allotted balance ('+resRem.toFixed(2)+')','warning');resValid=false;return;}
+      if(resQty>resRem+0.0001){
+        var newAQ=Math.round((usedExcl+resQty)*10000)/10000;
+        if(confirm(resName+' ('+(allot.party_name||'party')+'): you entered '+resQty+' but only '+resRem.toFixed(2)+' is left of the allotted '+allotQ+'.\n\nIncrease the allotment from '+allotQ+' to '+newAQ+' and save this entry?\n(An already issued WO keeps its original quantity.)')){
+          pendingAllotInc2.push({id:allotId,qty:newAQ});
+        } else { resValid=false; return; }
+      }
     }
     resources.push({allot_id:allotId,name:resName,type:chk.getAttribute('data-type'),unit:resUnit,qty:resQty});
   });
@@ -9750,6 +9765,12 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
 
   var updateData={date:date,qty_done:qty,remarks:gv('dp-remarks')||null,resources_used:resources.length?JSON.stringify(resources):null};
   try{
+    for(var pj=0;pj<pendingAllotInc2.length;pj++){
+      var inc2=pendingAllotInc2[pj];
+      await sbUpdate('boq_exec_resources',inc2.id,{qty:inc2.qty});
+      var aj=WA_ALLOT.findIndex(function(a){return a.id===inc2.id;});
+      if(aj>-1) WA_ALLOT[aj].qty=inc2.qty;
+    }
     await sbUpdate('work_daily_progress',entryId,updateData);
     var idx=WA_DAILY.findIndex(function(d){return d.id===entryId;});
     if(idx>-1) WA_DAILY[idx]=Object.assign(WA_DAILY[idx],updateData);
