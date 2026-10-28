@@ -13749,6 +13749,106 @@ async function fundsCheck(mode,amount,date,addBack){
   }
   return true;
 }
+// ── Cash in Hand / Bank statement (opened from the dashboard cards) ──
+var FUNDS_STMT={cls:'cash',rows:[],opening:0,acc:null,from:'',to:''};
+async function fundsOpenStatement(cls){
+  FUNDS_STMT.cls=cls; FUNDS_STMT.from=''; FUNDS_STMT.to='';
+  var ov=document.getElementById('funds-stmt-ov');
+  if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='funds-stmt-ov';
+  ov.style.cssText='position:fixed;inset:0;z-index:100001;background:var(--bg,#f4f6f8);color:var(--text,#222);overflow:auto;-webkit-overflow-scrolling:touch;';
+  ov.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3);">Loading statement...</div>';
+  document.body.appendChild(ov);
+  try{
+    var accs=await sbFetch('chart_of_accounts',{select:'id,code,name,opening_balance',filter:'code=eq.'+(cls==='cash'?'1001':'1002')});
+    var a=accs&&accs[0]; if(!a) throw new Error('Account not found in Chart of Accounts');
+    var f='&or=(type.is.null,type.neq.Personal%20Sales)';
+    var dr=await fundsFetchAll('vouchers','id,date,created_at,vou_no,voucher_no,narration,party_name,amount,debit_account,credit_account,type','debit_account=eq.'+a.id+f);
+    var cr=await fundsFetchAll('vouchers','id,date,created_at,vou_no,voucher_no,narration,party_name,amount,debit_account,credit_account,type','credit_account=eq.'+a.id+f);
+    var seen={}, all=[];
+    dr.concat(cr).forEach(function(v){ if(seen[v.id]) return; seen[v.id]=1; v._in=(v.debit_account===a.id); all.push(v); });
+    all.sort(function(x,y){ var dx=String(x.date||''), dy=String(y.date||''); return dx!==dy?(dx<dy?-1:1):String(x.created_at||'').localeCompare(String(y.created_at||'')); });
+    FUNDS_STMT.acc=a; FUNDS_STMT.all=all; FUNDS_STMT.opening=parseFloat(a.opening_balance)||0;
+    fundsRenderStatement();
+  }catch(e){
+    ov.innerHTML='<div style="padding:30px;text-align:center;"><div style="color:#C62828;font-weight:800;">Could not load statement</div><div style="font-size:12px;margin:8px 0;">'+esc(e.message||e)+'</div><button class="btn btn-outline" onclick="fundsCloseStatement()">Close</button></div>';
+  }
+}
+function fundsCloseStatement(){ var ov=document.getElementById('funds-stmt-ov'); if(ov) ov.remove(); }
+function fundsStatementData(){
+  var S=FUNDS_STMT, from=S.from, to=S.to, bal=S.opening, rows=[];
+  var fd=function(d){ var p=String(d||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:(d||''); };
+  S.all.forEach(function(v){
+    var d=String(v.date||''), amt=parseFloat(v.amount)||0;
+    var delta=v._in?amt:-amt;
+    if(from && d<from){ bal+=delta; return; }   // earlier than the window: carry into opening
+    if(to && d>to) return;
+    rows.push({date:d,dateF:fd(d),vou:v.vou_no||v.voucher_no||'—',desc:[v.party_name,v.narration].filter(Boolean).join(' — ')||'—',rec:v._in?amt:0,pay:v._in?0:amt,delta:delta});
+  });
+  var open=bal, run=open;
+  rows.forEach(function(r){ run+=r.delta; r.bal=run; });
+  return {opening:open,rows:rows,closing:run};
+}
+function fundsRenderStatement(){
+  var ov=document.getElementById('funds-stmt-ov'); if(!ov) return;
+  var S=FUNDS_STMT, d=fundsStatementData();
+  var f=function(n){return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var title=(S.cls==='cash'?'Cash in Hand':'Bank')+' Statement';
+  var tot=d.rows.reduce(function(t,r){t.r+=r.rec;t.p+=r.pay;return t;},{r:0,p:0});
+  var td='padding:7px 8px;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;';
+  var rowsHtml=d.rows.slice().reverse().map(function(r){
+    return '<tr><td style="'+td+'white-space:nowrap;">'+r.dateF+'</td><td style="'+td+'white-space:nowrap;">'+esc(r.vou)+'</td><td style="'+td+'min-width:160px;">'+esc(r.desc)+'</td>'+
+      '<td style="'+td+'text-align:right;color:#2E7D32;">'+(r.rec?f(r.rec):'')+'</td><td style="'+td+'text-align:right;color:#C62828;">'+(r.pay?f(r.pay):'')+'</td>'+
+      '<td style="'+td+'text-align:right;font-weight:800;'+(r.bal<0?'color:#C62828;':'')+'">'+f(r.bal)+'</td></tr>';
+  }).join('') || '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">No entries in this period</td></tr>';
+  ov.innerHTML=
+    '<div style="position:sticky;top:0;z-index:2;background:var(--card-bg,#fff);border-bottom:1px solid var(--border,#e5e7eb);padding:10px 14px;display:flex;align-items:center;gap:10px;">'+
+      '<button onclick="fundsCloseStatement()" style="border:none;background:var(--bg,#eee);color:inherit;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer;">&larr; Back</button>'+
+      '<div style="font-size:15px;font-weight:900;flex:1;">'+title+'</div>'+
+      '<button onclick="fundsExportStatement(\'csv\')" style="border:none;background:#E8F5E9;color:#2E7D32;border-radius:8px;padding:7px 10px;font-weight:800;cursor:pointer;">Excel</button>'+
+      '<button onclick="fundsExportStatement(\'pdf\')" style="border:none;background:#FFEBEE;color:#C62828;border-radius:8px;padding:7px 10px;font-weight:800;cursor:pointer;">PDF</button>'+
+    '</div>'+
+    '<div style="padding:12px 14px;">'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">'+
+        '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">From</div><input id="fs-from" type="date" class="finp" value="'+(S.from||'')+'" onchange="FUNDS_STMT.from=this.value;fundsRenderStatement()"></div>'+
+        '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">To</div><input id="fs-to" type="date" class="finp" value="'+(S.to||'')+'" onchange="FUNDS_STMT.to=this.value;fundsRenderStatement()"></div>'+
+        ((S.from||S.to)?'<button class="btn btn-outline" onclick="FUNDS_STMT.from=\'\';FUNDS_STMT.to=\'\';fundsRenderStatement()">All time</button>':'')+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;">'+
+        [['Opening',d.opening,'var(--text)'],['Closing',d.closing,d.closing<0?'#C62828':'#1565C0'],['Total received',tot.r,'#2E7D32'],['Total paid',tot.p,'#C62828']].map(function(c){
+          return '<div style="background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:9px 12px;"><div style="font-size:10px;font-weight:700;color:var(--text3);">'+c[0]+'</div><div style="font-size:16px;font-weight:900;color:'+c[2]+';">'+f(c[1])+'</div></div>';
+        }).join('')+
+      '</div>'+
+      '<div style="background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
+        '<table style="width:100%;min-width:620px;border-collapse:collapse;"><thead><tr style="background:var(--bg,#f4f6f8);">'+
+          ['Date','Voucher','Particulars','Received','Paid','Balance'].map(function(h,i){return '<th style="padding:8px;font-size:10.5px;text-align:'+(i>2?'right':'left')+';color:var(--text3);">'+h+'</th>';}).join('')+
+        '</tr></thead><tbody>'+rowsHtml+
+        '<tr><td colspan="3" style="'+td+'font-weight:800;">Opening balance</td><td style="'+td+'"></td><td style="'+td+'"></td><td style="'+td+'text-align:right;font-weight:800;">'+f(d.opening)+'</td></tr>'+
+        '</tbody></table>'+
+      '</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-top:8px;">Latest first. Built from Accounts vouchers for '+esc(S.acc.code+' '+S.acc.name)+'.</div>'+
+    '</div>';
+}
+function fundsExportStatement(kind){
+  var S=FUNDS_STMT, d=fundsStatementData();
+  if(!d.rows.length){ toast('No entries to export','warning'); return; }
+  var title=(S.cls==='cash'?'Cash in Hand':'Bank')+' Statement';
+  var per=(S.from||S.to)?((S.from||'start')+' to '+(S.to||'today')):'All time';
+  var header=['Date','Voucher','Particulars','Received','Paid','Balance'];
+  var rows=[['','Opening balance','','','',Math.round(d.opening*100)/100]].concat(d.rows.map(function(r){
+    return [r.dateF,r.vou,r.desc,r.rec||'',r.pay||'',Math.round(r.bal*100)/100];
+  }));
+  if(kind==='csv'){
+    if(typeof accExportCSV!=='function'){ toast('Export not available','error'); return; }
+    accExportCSV(title.replace(/ /g,'_')+'_'+new Date().toISOString().slice(0,10)+'.csv',[[title],[per],['']].concat([header]).concat(rows));
+  } else {
+    if(typeof accExportPDF!=='function'){ toast('Export not available','error'); return; }
+    var fm=function(n){return n===''?'':'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});};
+    ACC_RPT_LABEL=per;
+    accExportPDF(title,header,rows.map(function(r){return [r[0],r[1],r[2],fm(r[3]),fm(r[4]),fm(r[5])];}));
+  }
+}
+
 // Dashboard strip: Cash in Hand + Bank Balance.
 async function dashRenderCashBank(){
   var grid=document.getElementById('dash-kpi-grid'); if(!grid) return;
@@ -13761,7 +13861,7 @@ async function dashRenderCashBank(){
   }
   var card=function(lbl,icon,val,col){
     var neg=val<0;
-    return '<div onclick="showApp(\'accounts\')" style="cursor:pointer;background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
+    return '<div onclick="fundsOpenStatement(\''+(lbl==='Cash in Hand'?'cash':'bank')+'\')" style="cursor:pointer;background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
       '<div style="font-size:11px;font-weight:800;color:var(--text3);">'+icon+' '+lbl+'</div>'+
       '<div style="font-size:20px;font-weight:900;margin-top:4px;color:'+(neg?'#C62828':col)+';">'+(val===null?'—':(neg?'-':'')+'₹'+Math.abs(Math.round(val)).toLocaleString('en-IN'))+'</div></div>';
   };
