@@ -2050,7 +2050,7 @@ function planCgAddSub(groupId){
 async function planCgAddRes(groupId,subId){
   var a=planCgAnchor(groupId); if(!a){toast('This group has no items','warning');return;}
   var aItem=(PLAN_ITEMS||[]).find(function(i){return i.id===a.boq_item_id;})||{};
-  await planAddRes(subId,a.boq_item_id,a.unit||aItem.unit||'');
+  await planAddRes(subId,a.boq_item_id,a.unit||aItem.unit||'',PLAN_COMBINED_ITEMS.filter(function(it){return it.group_id===groupId;}).map(function(it){return it.boq_item_id;}));
   var inp=document.getElementById('pr-name'); if(inp) inp.dataset.cg=groupId;
 }
 
@@ -2359,7 +2359,16 @@ function buildUomOpts(sel){
 }
 
 
-async function planAddRes(subId,itemId,unit){
+// JMs of every BOQ item in a combined group (ids), or just the one item. Tag shows which item a JM belongs to.
+function planJmItemIds(itemId,itemIds){ return (itemIds&&itemIds.length)?itemIds:[itemId]; }
+function planJmItemFilter(ids){ return ids.length>1?('boq_item_id=in.('+ids.join(',')+')'):('boq_item_id=eq.'+ids[0]); }
+function planJmItemTag(j,ids){
+  if(!ids||ids.length<2) return '';
+  var it=(PLAN_ITEMS||[]).find(function(i){return i.id===j.boq_item_id;});
+  return it?(' <span style="font-weight:600;color:var(--text3);font-size:10px;">\u00b7 '+esc(it.item_code||'')+' '+esc(it.short_name||it.description||'')+'</span>'):'';
+}
+async function planAddRes(subId,itemId,unit,itemIds){
+  var jmIds=planJmItemIds(itemId,itemIds);
   await loadUomIfNeeded();
   var uomOpts = buildUomOpts(unit);
 
@@ -2367,7 +2376,7 @@ async function planAddRes(subId,itemId,unit){
   var projId = (document.getElementById('plan-proj-sel')||{}).value||'';
   var itemJMs = [];
   try{
-    var jmRows = await sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId+'&boq_item_id=eq.'+itemId,order:'jm_number.asc'});
+    var jmRows = await sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId+'&'+planJmItemFilter(jmIds),order:'jm_number.asc'});
     itemJMs = Array.isArray(jmRows) ? jmRows : [];
   }catch(e){}
 
@@ -2380,7 +2389,7 @@ async function planAddRes(subId,itemId,unit){
     var planned = {};
     if(resName){
       PLAN_RES.filter(function(r){
-        return r.boq_item_id===itemId &&
+        return jmIds.indexOf(r.boq_item_id)>-1 &&
                r.party_name &&
                r.party_name.toLowerCase()===resName.toLowerCase();
       }).forEach(function(r){
@@ -2421,7 +2430,7 @@ async function planAddRes(subId,itemId,unit){
             '<input type="checkbox" id="jm-chk-'+j.id+'" data-jmid="'+j.id+'" data-jmqty="'+jmQty+'" data-jmno="'+j.jm_number+'" data-jmbal="'+bal+'" class="jm-plan-chk" style="width:16px;height:16px;accent-color:#1565C0;flex-shrink:0;">'+
 
             '<label for="jm-chk-'+j.id+'" style="flex:1;cursor:pointer;">'+
-              '<div style="font-size:12px;font-weight:800;">JM-'+j.jm_number+'</div>'+
+              '<div style="font-size:12px;font-weight:800;">JM-'+j.jm_number+planJmItemTag(j,jmIds)+'</div>'+
               '<div id="jm-lbl-'+j.id+'" style="font-size:10px;color:var(--text3);">Total: '+jmQty+' '+unit+' | Bal: <b style="color:#1565C0">'+balStr+'</b></div>'+
             '</label>'+
           '</div>'+
@@ -2510,15 +2519,20 @@ async function planEditRes(resId, subId, itemId){
   // Fetch JMs for this BOQ item
   var projId=(document.getElementById('plan-proj-sel')||{}).value||'';
   var itemJMs=[];
+  var jmIds=[itemId];
+  if(r.combined_plan_group_id){
+    var _gi=PLAN_COMBINED_ITEMS.filter(function(it){return it.group_id===r.combined_plan_group_id;}).map(function(it){return it.boq_item_id;});
+    if(_gi.length) jmIds=_gi;
+  }
   try{
-    var jmRows=await sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId+'&boq_item_id=eq.'+itemId,order:'jm_number.asc'});
+    var jmRows=await sbFetch('boq_jm',{select:'*',filter:'project_id=eq.'+projId+'&'+planJmItemFilter(jmIds),order:'jm_number.asc'});
     itemJMs=Array.isArray(jmRows)?jmRows:[];
   }catch(e){}
 
   // Calculate already-planned qty per JM for this resource (excluding self)
   var jmPlannedOthers={};
   PLAN_RES.filter(function(x){
-    return x.id!==resId && x.boq_item_id===itemId &&
+    return x.id!==resId && jmIds.indexOf(x.boq_item_id)>-1 &&
            x.party_name && r.party_name &&
            x.party_name.toLowerCase()===r.party_name.toLowerCase();
   }).forEach(function(x){
@@ -2544,7 +2558,7 @@ async function planEditRes(resId, subId, itemId){
           '<div style="display:flex;align-items:center;gap:8px;">'+
             '<input type="checkbox" id="jm-chk-'+j.id+'" data-jmid="'+j.id+'" data-jmqty="'+jmQty+'" data-jmno="'+j.jm_number+'" data-jmbal="'+bal+'" class="jm-plan-chk"'+(isChecked?' checked':'')+' style="width:16px;height:16px;accent-color:#1565C0;flex-shrink:0;">'+
             '<label for="jm-chk-'+j.id+'" style="flex:1;cursor:pointer;">'+
-              '<div style="font-size:12px;font-weight:800;">JM-'+j.jm_number+'</div>'+
+              '<div style="font-size:12px;font-weight:800;">JM-'+j.jm_number+planJmItemTag(j,jmIds)+'</div>'+
               '<div id="jm-lbl-'+j.id+'" style="font-size:10px;color:var(--text3);">Total: '+jmQty+' | My prev: '+myPlanned+' | Bal: <b style="color:#1565C0">'+balStr+'</b> ('+pct+'%)</div>'+
             '</label>'+
           '</div>'+
