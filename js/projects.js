@@ -1790,6 +1790,7 @@ function planRender(){
           '<span onclick="planDeleteCombinedGroup(\''+g.id+'\')" style="font-size:10px;color:#C62828;cursor:pointer;text-decoration:underline;">Delete group</span></div>'+
         '</div>'+
         '<div style="padding:8px 14px;">'+rows+'</div>'+
+        planCgActivitiesHtml(g,gItems)+
       '</div>';
     }).join('')
   ):'';
@@ -1797,8 +1798,8 @@ function planRender(){
   el.innerHTML='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;"><button onclick="planTurnkeyPrompt()" style="background:#1565C0;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128737; Combined Planning</button><button onclick="planDownloadExcel()" style="background:#2E7D32;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128202; Excel</button><button onclick="planDownloadPDF()" style="background:#C62828;color:white;border:none;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;">&#128196; PDF</button></div>'+
     combinedGroupsHtml+
     PLAN_ITEMS.map(function(item){
-    var iSubs=PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id;});
-    var iRes=PLAN_RES.filter(function(r){return r.boq_item_id===item.id;});
+    var iSubs=PLAN_SUBS.filter(function(s){return s.boq_item_id===item.id && !s.combined_plan_group_id;});
+    var iRes=PLAN_RES.filter(function(r){return r.boq_item_id===item.id && !r.combined_plan_group_id;});
     var totalPlan=iRes.reduce(function(s,r){return s+(parseFloat(r.qty)||0)*(parseFloat(r.rate)||0);},0);
     // Combined Planning has already claimed this item's entire BOQ qty \u2014
     // no more item-wise (Activity/Resource) planning should be added on
@@ -2005,10 +2006,59 @@ function planBlockedMessage(what, d){
   return 'Cannot delete '+what+' — it already has '+parts.join(' and ')+'. Delete those first (starting from the latest stage), then delete this.';
 }
 
+// ── Activities & Resources of a Combined Planning group ──
+// Stored as normal activities / planned resources tagged with the group (anchored on the
+// group's first BOQ item), so RR and Allotment treat them exactly like item-wise planning.
+function planCgActivitiesHtml(g,gItems){
+  var anchor=gItems[0]; if(!anchor) return '';
+  var aItem=(PLAN_ITEMS||[]).find(function(i){return i.id===anchor.boq_item_id;})||{};
+  var unit=(anchor.unit||aItem.unit||'');
+  var subs=PLAN_SUBS.filter(function(s){return s.combined_plan_group_id===g.id;});
+  var groupRes=PLAN_RES.filter(function(r){return r.combined_plan_group_id===g.id;});
+  var total=groupRes.reduce(function(t,r){return t+(parseFloat(r.qty)||0)*(parseFloat(r.rate)||0);},0);
+  var btn='border:none;border-radius:6px;padding:4px 9px;font-size:10px;font-weight:800;cursor:pointer;';
+  var subsHtml=subs.map(function(sub){
+    var sRes=groupRes.filter(function(r){return r.boq_subitem_id===sub.id;});
+    var rHtml=sRes.map(function(r){
+      return '<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--bg);border-radius:8px;margin-top:3px;">'+
+        '<div style="flex:1;font-size:11px;font-weight:600;color:var(--text);">'+esc(r.party_name||'')+(r.resource_category?'<span style="font-size:9px;background:#E3F2FD;color:#1565C0;padding:1px 5px;border-radius:3px;margin-left:4px;">'+esc(r.resource_category)+'</span>':'')+'</div>'+
+        '<div style="text-align:right;flex-shrink:0;"><div style="font-size:10px;color:var(--text2);">'+r.qty+' '+(r.unit||'')+' @ ₹'+r.rate+'</div><div style="font-size:11px;font-weight:800;color:#1565C0;">'+fmtINR((r.qty||0)*(r.rate||0))+'</div></div>'+
+        '<button onclick="planEditRes(\''+r.id+'\',\''+r.boq_subitem_id+'\',\''+r.boq_item_id+'\')" style="background:#E3F2FD;border:none;color:#1565C0;font-size:11px;border-radius:5px;padding:2px 7px;cursor:pointer;font-weight:800;">&#9998;</button>'+
+        '<button onclick="planDelRes(\''+r.id+'\')" style="background:none;border:none;color:#C62828;font-size:13px;cursor:pointer;">×</button></div>';
+    }).join('');
+    return '<div style="margin-bottom:6px;"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg);border-radius:8px;">'+
+      '<div style="font-size:11px;font-weight:800;color:var(--text);">'+esc(sub.name||'')+'</div><div style="display:flex;gap:4px;">'+
+        '<button onclick="planCgAddRes(\''+g.id+'\',\''+sub.id+'\')" style="'+btn+'background:#1565C0;color:white;">+ Resource</button>'+
+        '<button onclick="planEditSub(\''+sub.id+'\')" style="'+btn+'background:#E3F2FD;color:#1565C0;">&#9998;</button>'+
+        '<button onclick="planDelSub(\''+sub.id+'\')" style="'+btn+'background:#FFEBEE;color:#C62828;">×</button></div></div>'+rHtml+'</div>';
+  }).join('');
+  return '<div style="padding:8px 14px 12px;border-top:1px dashed var(--border);">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'+
+      '<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;">Activities &amp; Resources'+(groupRes.length?' · '+fmtINR(total):'')+'</div>'+
+      '<button onclick="planCgAddSub(\''+g.id+'\')" style="'+btn+'background:#00838F;color:white;">+ Activity</button></div>'+
+    (subsHtml||'<div style="font-size:11px;color:var(--text3);">No activities yet — add one, then add its resources.</div>')+'</div>';
+}
+function planCgAnchor(groupId){
+  var gItems=PLAN_COMBINED_ITEMS.filter(function(it){return it.group_id===groupId;});
+  return gItems[0]||null;
+}
+function planCgAddSub(groupId){
+  var a=planCgAnchor(groupId); if(!a){toast('This group has no items','warning');return;}
+  planAddSub(a.boq_item_id);
+  var inp=document.getElementById('ps-name'); if(inp) inp.dataset.cg=groupId;
+}
+async function planCgAddRes(groupId,subId){
+  var a=planCgAnchor(groupId); if(!a){toast('This group has no items','warning');return;}
+  var aItem=(PLAN_ITEMS||[]).find(function(i){return i.id===a.boq_item_id;})||{};
+  await planAddRes(subId,a.boq_item_id,a.unit||aItem.unit||'');
+  var inp=document.getElementById('pr-name'); if(inp) inp.dataset.cg=groupId;
+}
+
 async function planDeleteCombinedGroup(groupId){
   try{
     var gi=await sbFetch('combined_plan_items',{select:'id',filter:'group_id=eq.'+groupId});
-    var dn=await planDownstreamFor({planItemIds:(Array.isArray(gi)?gi:[]).map(function(x){return x.id;})});
+    var gResIds=PLAN_RES.filter(function(r){return r.combined_plan_group_id===groupId;}).map(function(r){return r.id;});
+    var dn=await planDownstreamFor({planItemIds:(Array.isArray(gi)?gi:[]).map(function(x){return x.id;}),resIds:gResIds});
     if(dn.rr.length||dn.allot.length){ alert(planBlockedMessage('this combined planning group',dn)); return; }
   }catch(e){ toast('Could not check linked RR / allotments: '+e.message+' — nothing deleted','error'); return; }
   if(!confirm('Delete this combined planning group? This removes the assignment for every item in it.')) return;
@@ -2241,7 +2291,7 @@ async function planTurnkeyConfirm(){
   else toast('All '+ok+' item'+(ok!==1?'s':'')+' combined into "'+groupName+'"','success');
 }
 function planAddSub(itemId){document.getElementById('plan-sheet-title').textContent='Add Work Activity';document.getElementById('plan-sheet-body').innerHTML='<label class="flbl">Activity Name *</label><input id="ps-name" class="finp" placeholder="e.g. Bar Bending, Shuttering...">';document.getElementById('plan-sheet-foot').innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-plan\',\'sh-plan\')">Cancel</button><button class="btn" style="background:#1565C0;color:white;" onclick="planSaveSub(\''+itemId+'\')">+ Add</button>';openSheet('ov-plan','sh-plan');}
-async function planSaveSub(itemId){var name=(document.getElementById('ps-name')||{value:''}).value.trim();if(!name){toast('Name required','warning');return;}var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var sortOrder=PLAN_SUBS.filter(function(s){return s.boq_item_id===itemId;}).length+1;try{var res=await sbInsert('boq_subitems',{project_id:projId,boq_item_id:itemId,name:name,sort_order:sortOrder});if(res&&res[0])PLAN_SUBS.push(res[0]);toast(name+' added','success');closeSheet('ov-plan','sh-plan');planRender();}catch(e){toast('Error: '+e.message,'error');}}
+async function planSaveSub(itemId){var name=(document.getElementById('ps-name')||{value:''}).value.trim();if(!name){toast('Name required','warning');return;}var projId=(document.getElementById('plan-proj-sel')||{}).value||'';var sortOrder=PLAN_SUBS.filter(function(s){return s.boq_item_id===itemId;}).length+1;try{var _cgS=(document.getElementById('ps-name')||{dataset:{}}).dataset.cg||''; var _subRow={project_id:projId,boq_item_id:itemId,name:name,sort_order:sortOrder}; if(_cgS) _subRow.combined_plan_group_id=_cgS; var res=await sbInsert('boq_subitems',_subRow);if(res&&res[0])PLAN_SUBS.push(res[0]);toast(name+' added','success');closeSheet('ov-plan','sh-plan');planRender();}catch(e){toast('Error: '+e.message,'error');}}
 
 function planEditSub(id){
   var sub=PLAN_SUBS.find(function(s){return s.id===id;});
@@ -2574,7 +2624,8 @@ async function planSaveRes(subId,itemId){
   var projId=(document.getElementById('plan-proj-sel')||{}).value||'';
   var primaryJmId=jmLinks.length?jmLinks[0].jm_id:null;
   try{
-    var res=await sbInsert('boq_exec_resources',{
+    var _cgR=(document.getElementById('pr-name')||{dataset:{}}).dataset.cg||'';
+    var _resRow={
       project_id:projId,boq_item_id:itemId,
       boq_subitem_id:subId||null,
       jm_id:primaryJmId,
@@ -2583,7 +2634,9 @@ async function planSaveRes(subId,itemId){
       exec_type:'planned',
       party_name:name,qty:qty,unit:unit,rate:rate,
       resource_category:cat
-    });
+    };
+    if(_cgR) _resRow.combined_plan_group_id=_cgR;
+    var res=await sbInsert('boq_exec_resources',_resRow);
     if(res&&res[0])PLAN_RES.push(res[0]);
     toast(name+' saved!','success');
     closeSheet('ov-plan','sh-plan');
