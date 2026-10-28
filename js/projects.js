@@ -7994,6 +7994,9 @@ async function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, doc
   // updates the existing work_orders rows in place instead of creating a
   // new document.
   var isUpdate = existingTerms!=null;
+  var _gstOrd = WA_ORDERS.find(function(o){return o.doc_type===docType && batchItems.some(function(a){return a.id===o.allot_id;}) && o.gst_pct;});
+  var _gstInit = _gstOrd?String(parseFloat(_gstOrd.gst_pct)):'';
+  var _gstCustom = _gstInit && ['5','12','18','28'].indexOf(_gstInit)<0;
   document.getElementById('exec-sheet-title').textContent=(isUpdate?'Edit Terms & Conditions — ':'Terms & Conditions — ')+fullDocNo;
   document.getElementById('exec-sheet-body').innerHTML=
     '<div style="background:#FFF3E0;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#E65100;">'+
@@ -8005,6 +8008,14 @@ async function execGenBatchDocOpenTermsPrompt(batchKey, docType, batchItems, doc
     '<div style="display:flex;gap:6px;margin-bottom:10px;">'+
       '<select id="wo-terms-template-sel" class="fsel" style="flex:1;"><option value="">&#9203; Loading...</option></select>'+
       '<button id="wo-terms-template-del" type="button" onclick="execDeleteTermsTemplate(\''+docType+'\')" style="display:none;background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:8px;padding:0 10px;cursor:pointer;font-size:16px;">&#215;</button>'+
+    '</div>'+
+    '<label class="flbl">GST on this order</label>'+
+    '<div style="display:flex;gap:6px;margin-bottom:10px;">'+
+      '<select id="wo-gst-sel" class="fsel" style="flex:1;" onchange="document.getElementById(\'wo-gst-custom\').style.display=(this.value===\'custom\'?\'block\':\'none\')">'+
+        ['','5','12','18','28'].map(function(v){return '<option value="'+v+'"'+(String(_gstInit)===v?' selected':'')+'>'+(v?('GST @ '+v+'% (added to total)'):'No GST')+'</option>';}).join('')+
+        '<option value="custom"'+(_gstCustom?' selected':'')+'>Other %...</option>'+
+      '</select>'+
+      '<input id="wo-gst-custom" class="finp" type="number" step="0.01" placeholder="%" value="'+(_gstCustom?_gstInit:'')+'" style="width:90px;display:'+(_gstCustom?'block':'none')+';">'+
     '</div>'+
     '<label class="flbl">Terms &amp; Conditions</label>'+
     '<textarea id="wo-terms-edit" class="ftxt" rows="9">'+esc(isUpdate?existingTerms:execDefaultTerms(docType))+'</textarea>'+
@@ -8101,6 +8112,10 @@ async function execDeleteTermsTemplate(docType){
 async function execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, fullDocNo, projId, isUpdate){
   var terms=(document.getElementById('wo-terms-edit')||{}).value||execDefaultTerms(docType);
   var today=new Date().toISOString().slice(0,10);
+  var _gsel=(document.getElementById('wo-gst-sel')||{}).value||'';
+  var gstPct=_gsel==='custom'?(parseFloat((document.getElementById('wo-gst-custom')||{}).value)||0):(parseFloat(_gsel)||0);
+  window._woGstOverride=gstPct;
+  var _gstColOk=true;
   try{
     if(isUpdate){
       // Editing an already-issued document's terms — update the existing
@@ -8111,16 +8126,17 @@ async function execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, 
       });
       for(var j=0;j<existingBatchOrders.length;j++){
         var o=existingBatchOrders[j];
-        await sbUpdate('work_orders', o.id, {terms:terms});
+        try{ await sbUpdate('work_orders', o.id, {terms:terms, gst_pct:gstPct||null}); }
+        catch(e1){ _gstColOk=false; await sbUpdate('work_orders', o.id, {terms:terms}); }
         var idx=WA_ORDERS.findIndex(function(x){return x.id===o.id;});
-        if(idx>-1) WA_ORDERS[idx].terms=terms;
+        if(idx>-1){ WA_ORDERS[idx].terms=terms; WA_ORDERS[idx].gst_pct=gstPct||null; }
       }
       toast('Terms updated for '+fullDocNo,'success');
     } else {
       toast('Generating '+fullDocNo+'...','info');
       for(var i=0;i<batchItems.length;i++){
         var a=batchItems[i];
-        var res=await sbInsert('work_orders',{
+        var woRow={
           project_id:projId,
           party_type:a.exec_type,
           party_name:a.party_name,
@@ -8133,11 +8149,17 @@ async function execGenBatchDocConfirm(batchKey, docType, batchItems, docNumber, 
           amount:Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0)),
           boq_item_id:a.boq_item_id||null,
           terms:terms
-        });
+        };
+        var res;
+        if(gstPct>0 && _gstColOk){
+          try{ res=await sbInsert('work_orders',Object.assign({gst_pct:gstPct},woRow)); }
+          catch(e2){ _gstColOk=false; res=await sbInsert('work_orders',woRow); }
+        } else res=await sbInsert('work_orders',woRow);
         if(res&&res[0]) WA_ORDERS.push(res[0]);
       }
       toast(fullDocNo+' saved!','success');
     }
+    if(gstPct>0 && !_gstColOk) toast('GST shown on this print only - run supabase/work_orders_gst.sql to save it with the order','warning');
   }catch(e){toast('Error: '+e.message,'error');console.error(e);return;}
   closeSheet('ov-exec','sh-exec');
   execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, terms);
@@ -8227,6 +8249,12 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   }).join('');
 
   var inrFull = function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2});};
+  // Optional GST on top of the order total (saved per order as gst_pct).
+  var _ordG = WA_ORDERS.find(function(o){return o.doc_type===docType && batchItems.some(function(a){return a.id===o.allot_id;}) && o.gst_pct;});
+  var gstPct = _ordG ? (parseFloat(_ordG.gst_pct)||0) : (window._woGstOverride||0);
+  window._woGstOverride=0;
+  var gstAmt = gstPct>0 ? Math.round(total*gstPct)/100 : 0;
+  var grandTotal = total + gstAmt;
   var amtWords = (function(n){
     // simple number to words for totals up to crores
     var a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
@@ -8241,7 +8269,7 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
     if(th)s+=h(th)+' Thousand ';
     if(rem)s+=h(rem);
     return s.trim()+' Only';
-  })(Math.round(total));
+  })(Math.round(grandTotal));
 
   // Clean, minimal A4 document — no letter prose (no "Dear Sir/Madam",
   // no Subject line, no closing paragraph). Just the facts, laid out like
@@ -8358,10 +8386,11 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
         '<th style="width:105px;text-align:right;">Amount (&#8377;)</th>'+
       '</tr></thead>'+
       '<tbody>'+rows+
-        '<tr class="total-row">'+
-          '<td colspan="4" style="text-align:right;">TOTAL</td>'+
-          '<td style="text-align:right;">'+inrFull(total)+'</td>'+
-        '</tr>'+
+        (gstPct>0
+          ? '<tr class="total-row"><td colspan="4" style="text-align:right;">Sub-Total (excl. GST)</td><td style="text-align:right;">'+inrFull(total)+'</td></tr>'+
+            '<tr><td colspan="4" style="text-align:right;font-weight:700;">GST @ '+gstPct+'%</td><td style="text-align:right;font-weight:700;">'+inrFull(gstAmt)+'</td></tr>'+
+            '<tr class="total-row"><td colspan="4" style="text-align:right;">TOTAL (incl. GST)</td><td style="text-align:right;">'+inrFull(grandTotal)+'</td></tr>'
+          : '<tr class="total-row"><td colspan="4" style="text-align:right;">TOTAL</td><td style="text-align:right;">'+inrFull(total)+'</td></tr>')+
       '</tbody>'+
     '</table>'+
 
