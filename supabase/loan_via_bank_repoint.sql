@@ -19,18 +19,24 @@ order by v.date;
 
 begin;
 
--- Step 1: loan received -> company bank instead of the clearing account
+-- Step 1: loan received -> company cash (if the loan was received in cash) or company bank,
+-- instead of the clearing account
 update vouchers v
-set debit_account = (select id from chart_of_accounts where code = '1002' limit 1)
-where v.source_type = 'loan'
-  and v.source_id in (select id from loans where to_petty_cash = true)
+set debit_account = (select id from chart_of_accounts
+                     where code = case when l.mode in ('Cash','EmpCash') then '1001' else '1002' end limit 1)
+from loans l
+where v.source_type = 'loan' and v.source_id = l.id
+  and l.to_petty_cash = true
   and v.debit_account = (select id from chart_of_accounts where code = '1102' limit 1);
 
--- Step 2: transfer to petty cash now comes out of the company bank
+-- Step 2: transfer to petty cash now comes out of the same company cash/bank account.
+-- Matched to its loan through the petty cash row (petty_cash_in.loan_id).
 update vouchers v
-set credit_account = (select id from chart_of_accounts where code = '1002' limit 1)
-where v.source_type = 'petty_cash_in'
-  and v.narration ilike '%from loan%'
+set credit_account = (select id from chart_of_accounts
+                      where code = case when l.mode in ('Cash','EmpCash') then '1001' else '1002' end limit 1)
+from petty_cash_in p, loans l
+where v.source_type = 'petty_cash_in' and v.source_id = p.id
+  and p.loan_id = l.id
   and v.credit_account = (select id from chart_of_accounts where code = '1102' limit 1);
 
 commit;

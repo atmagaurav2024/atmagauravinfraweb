@@ -20415,7 +20415,7 @@ function lnModeOptionsHtml(id){
       '<option value="">Select employee...</option>'+
       LN_EMPS.map(function(e){return '<option value="'+e.id+'">'+e.name+'</option>';}).join('')+
     '</select>'+
-    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;"><b>Employee\'s Bank Account:</b> received in the Company Bank, then passed to the employee. <b>Employee\'s Cash in Hand:</b> the employee received the loan in cash directly, so it goes straight to <b>Funds with Employees</b> (the company bank/cash is not touched). Either way it stays under Funds with Employees until settled.</div>'+
+    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;"><b>Employee\'s Bank Account:</b> first received in the Company Bank, then transferred to the employee. <b>Employee\'s Cash in Hand:</b> first received in the Company Cash in Hand, then transferred to the employee. Either way it then sits under <b>Funds with Employees</b> until settled.</div>'+
     '</div>'+
     (id==='ll-mode'?
       '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;">'+
@@ -20435,6 +20435,8 @@ function lnIsEmpMode(m){ return m==='EmpBank'||m==='EmpCash'; }
 // Text used in narrations: ' (via Ravi\u2019s account)' / ' (via Ravi\u2019s cash)'
 function lnEmpVia(mode,empId){ return lnIsEmpMode(mode)?(' (via '+lnEmpName(empId)+(mode==='EmpCash'?'\u2019s cash)':'\u2019s account)')):''; }
 function lnModeShort(m,empId){ return m==='EmpBank'?(lnEmpName(empId)+'\u2019s a/c'):(m==='EmpCash'?(lnEmpName(empId)+'\u2019s cash'):(m||'')); }
+// Company account a taken loan lands in first: cash modes -> Cash in Hand, bank modes -> Bank.
+function lnCompanyAcct(mode){ return (mode==='Cash'||mode==='EmpCash')?'1001':'1002'; }
 function lnCashCode(mode){ return mode==='Cash'?'1001':(lnIsEmpMode(mode)?'1102':'1002'); }
 
 function lnDaysBetween(a,b){
@@ -22225,8 +22227,8 @@ async function lnSaveLoan(dir, editId, onSaved){
         // A loan taken and passed on to an employee (petty cash float, or held in the
         // employee's own account) is shown as received by the COMPANY BANK first and then
         // paid out to the employee, so Bank statement/balance reflect both steps.
-        var passThru=isTaken&&mode!=='EmpCash'&&(toPetty||mode==='EmpBank');
-        var cashCode=passThru?'1002':lnCashCode(mode);
+        var passThru=isTaken&&(toPetty||lnIsEmpMode(mode));
+        var cashCode=passThru?lnCompanyAcct(mode):lnCashCode(mode);
         var via=lnEmpVia(mode,modeEmp);
         accAutoPost({type:isTaken?'Receipt':'Payment', date:saved.start_date, partyName:lnPartyName(saved.party_id),
           debitCode:isTaken?cashCode:'1401', creditCode:isTaken?'2201':cashCode, amount:principal,
@@ -22245,7 +22247,7 @@ async function lnSaveLoan(dir, editId, onSaved){
         }
         if(pettyRowId){
           accAutoPost({type:'Contra', date:saved.start_date, partyName:(modeEmp?lnEmpName(modeEmp):'Employee'),
-            debitCode:'1101', creditCode:(passThru?'1002':'1102'), amount:principal,
+            debitCode:'1101', creditCode:(passThru?lnCompanyAcct(mode):'1102'), amount:principal,
             narration:'Transfer to petty cash'+(modeEmp?' \u2014 '+lnEmpName(modeEmp):'')+' \u00b7 from loan of '+lnPartyName(saved.party_id),
             sourceType:'petty_cash_in', sourceId:pettyRowId});
         }
@@ -24411,7 +24413,7 @@ async function accReconcile(){
       // from the employee's account into petty cash.
       var fromLoan=(p.funded_by_type==='loan'||p.loan_id||loanFunded[(p.emp_id||'')+'|'+(p.date||'')+'|'+Math.round(amt)]);
       var _fl=fromLoan&&p.loan_id?loans.find(function(l){return l.id===p.loan_id;}):null;
-      var srcCode=fromLoan?((_fl&&_fl.mode==='EmpCash')?'1102':'1002'):(p.funded_by_type==='cash'?'1001':'1002');
+      var srcCode=fromLoan?lnCompanyAcct(_fl?_fl.mode:'Bank'):(p.funded_by_type==='cash'?'1001':'1002');
       check('Petty cash funding','petty_cash_in',p.id,{type:'Contra',date:p.date,partyName:nm,
         debitCode:'1101',creditCode:srcCode,amount:amt,
         narration:(fromLoan?'Transfer to petty cash — '+nm+' · from loan':'Petty cash funded to '+nm)+(p.purpose?' — '+p.purpose:'')});
@@ -24447,7 +24449,7 @@ async function accReconcile(){
     });
     loans.forEach(function(l){
       var taken=(l.direction==='taken');
-      var cc=(taken&&((l.to_petty_cash&&l.mode!=='EmpCash')||l.mode==='EmpBank'))?'1002':(l.to_petty_cash?'1102':(l.mode==='Cash'?'1001':(lnIsEmpMode(l.mode)?'1102':'1002')));
+      var cc=(taken&&(l.to_petty_cash||lnIsEmpMode(l.mode)))?lnCompanyAcct(l.mode):(l.to_petty_cash?'1102':(l.mode==='Cash'?'1001':(lnIsEmpMode(l.mode)?'1102':'1002')));
       var pn=partyName[l.party_id]||'Party';
       check('Loans','loan',l.id,{type:taken?'Receipt':'Payment',date:l.start_date,partyName:pn,
         debitCode:taken?cc:'1401',creditCode:taken?'2201':cc,amount:parseFloat(l.principal)||0,
@@ -29629,8 +29631,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261028j"></script>
-<script src="js/employee.js?v=20261028j"></script>
-<script src="js/projects.js?v=20261028j"></script>
-<script src="js/finance.js?v=20261028j"></script>
+<script src="js/registry.js?v=20261028k"></script>
+<script src="js/employee.js?v=20261028k"></script>
+<script src="js/projects.js?v=20261028k"></script>
+<script src="js/finance.js?v=20261028k"></script>
 </html>
