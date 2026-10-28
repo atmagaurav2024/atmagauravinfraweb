@@ -466,7 +466,7 @@ function pcCurrentFilterLabel(){
   var empLabel = PC_EMP_FILTER==='all' ? 'All Employees' : pcEmpName(PC_EMP_FILTER);
   var dateLabel = {all:'All Time',today:'Today',week:'This Week',month:'This Month',year:'This Year'}[PC_DATE_FILTER];
   if(!dateLabel) dateLabel = (PC_DATE_FILTER==='custom' && PC_DATE_FROM && PC_DATE_TO) ? (fmtDate(PC_DATE_FROM)+' to '+fmtDate(PC_DATE_TO)) : 'All Time';
-  var siteLabel = PC_SITE_TAB!=='all' ? (' · '+PC_SITE_TAB) : '';
+  var siteLabel = PC_SITE_TAB!=='all' ? (' · '+pcProjShort(PC_SITE_TAB)) : '';
   return empLabel+' — '+dateLabel+siteLabel;
 }
 
@@ -511,7 +511,7 @@ function pcDetailStatementData(list){
       fmtDate(item.date||(item.created_at||'').slice(0,10)),
       pcEmpName(item.emp_id),
       isIn?'Funded':'Spent',
-      isIn?'All Projects':(item.project||'—'),
+      isIn?'All Projects':(pcProjShort(item.project)||'—'),
       isIn?(item.funded_by_type==='emp'?'Transfer':'Company'):(item.category||'—'),
       isIn?(item.purpose||'—'):(item.description||'—'),
       isIn?Math.round(amt):'',
