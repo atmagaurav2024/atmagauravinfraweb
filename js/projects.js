@@ -9429,6 +9429,39 @@ async function execCreateExtraAllotment(allot, extraQty){
   if(saved) WA_ALLOT.push(saved);
   return saved;
 }
+// Asks what to do when the entry is above the allotted balance. Resolves 'new', 'modify' or null.
+function execAskExtraChoice(list){
+  return new Promise(function(resolve){
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100002;display:flex;align-items:center;justify-content:center;padding:16px;';
+    var done=function(v){ if(ov.parentNode) ov.parentNode.removeChild(ov); resolve(v); };
+    var box=document.createElement('div');
+    box.style.cssText='background:var(--card-bg,#fff);color:var(--text,#222);border-radius:14px;max-width:420px;width:100%;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.4);max-height:90vh;overflow:auto;';
+    box.innerHTML='<div style="font-size:14px;font-weight:900;margin-bottom:8px;">Quantity is above the allotment</div>'+
+      '<div style="font-size:12px;color:var(--text2,#555);margin-bottom:12px;">'+list.map(function(p){return '&bull; '+esc(p.label);}).join('<br>')+'</div>'+
+      '<button id="xc-new" style="display:block;width:100%;text-align:left;border:1px solid var(--border,#ddd);background:var(--bg,#f8f8f8);color:inherit;border-radius:10px;padding:10px;margin-bottom:8px;cursor:pointer;"><b>&#10133; Add a new allotment</b><br><span style="font-size:11px;opacity:.75;">For the extra quantity only, same party, rate and details, with its own Work Order. Original allotment and WO stay as they are.</span></button>'+
+      '<button id="xc-mod" style="display:block;width:100%;text-align:left;border:1px solid var(--border,#ddd);background:var(--bg,#f8f8f8);color:inherit;border-radius:10px;padding:10px;margin-bottom:8px;cursor:pointer;"><b>&#9998; Modify the existing allotment</b><br><span style="font-size:11px;opacity:.75;">Raise its quantity to cover this entry. The issued Work Order is updated to the new quantity and amount.</span></button>'+
+      '<button id="xc-no" style="width:100%;border:none;background:none;color:#C62828;font-weight:800;padding:8px;cursor:pointer;">Cancel</button>';
+    ov.appendChild(box); document.body.appendChild(ov);
+    box.querySelector('#xc-new').onclick=function(){done('new');};
+    box.querySelector('#xc-mod').onclick=function(){done('modify');};
+    box.querySelector('#xc-no').onclick=function(){done(null);};
+  });
+}
+// Raises an existing allotment's quantity and brings its issued WO/PO rows in line.
+async function execModifyAllotmentQty(allotId, newQty){
+  await sbUpdate('boq_exec_resources',allotId,{qty:newQty});
+  var ai=WA_ALLOT.findIndex(function(a){return a.id===allotId;});
+  var rate=ai>-1?(parseFloat(WA_ALLOT[ai].rate)||0):0;
+  if(ai>-1) WA_ALLOT[ai].qty=newQty;
+  var ords=WA_ORDERS.filter(function(o){return o.allot_id===allotId;});
+  for(var i=0;i<ords.length;i++){
+    var o=ords[i], amt=Math.round(newQty*(parseFloat(o.rate)||rate));
+    try{ await sbUpdate('work_orders',o.id,{qty:newQty,amount:amt}); o.qty=newQty; o.amount=amt; }
+    catch(e){ console.warn('work order update failed',e); }
+  }
+  return ords.length;
+}
 // Splits a progress entry's resource lines: up to the old allotment's balance stays on
 // it, the excess moves to the new extra allotment. Returns allotments needing a new WO.
 async function execApplyExtraAllotments(pending, resources){
@@ -9436,6 +9469,11 @@ async function execApplyExtraAllotments(pending, resources){
   for(var i=0;i<pending.length;i++){
     var p=pending[i];
     var orig=WA_ALLOT.find(function(a){return a.id===p.id;}); if(!orig) continue;
+    if(p.mode==='modify'){
+      var n=await execModifyAllotmentQty(p.id, p.newTotal);
+      toast('Allotment raised to '+p.newTotal+(n?' and its order updated':''),'success');
+      continue;
+    }
     var neu=await execCreateExtraAllotment(orig, p.extra);
     if(!neu) continue;
     var line=resources.find(function(r){return r.allot_id===p.id;});
@@ -9510,9 +9548,8 @@ async function execSaveDailyEntry(projId,itemId){
       if(resQty>resRemaining+0.0001){
         // More than allotted: offer to raise the allotment instead of just blocking.
         var extraQ=Math.round((resQty-resRemaining)*10000)/10000;
-        if(confirm(resName+' ('+(allot.party_name||'party')+'): you entered '+resQty+' but only '+resRemaining.toFixed(2)+' '+(resUnit||'')+' is left of the allotted '+allotQty+'.\n\nCreate a NEW allotment for the additional '+extraQ+' '+(resUnit||'')+' (same party, rate and details) with its own work order, and save this entry?')){
-          pendingAllotIncreases.push({id:allotId,extra:extraQ,base:resRemaining});
-        } else { resValid=false; return; }
+        pendingAllotIncreases.push({id:allotId,extra:extraQ,base:resRemaining,newTotal:Math.round((alreadyUsed+resQty)*10000)/10000,
+          label:resName+' ('+(allot.party_name||'party')+'): entered '+resQty+' '+(resUnit||'')+', only '+resRemaining.toFixed(2)+' left of allotted '+allotQty});
       }
     }
 
@@ -9525,6 +9562,11 @@ async function execSaveDailyEntry(projId,itemId){
     });
   });
   if(!resValid) return;
+  if(pendingAllotIncreases.length){
+    var ch1=await execAskExtraChoice(pendingAllotIncreases);
+    if(!ch1) return;
+    pendingAllotIncreases.forEach(function(p){p.mode=ch1;});
+  }
   try{
     var extraOrders=await execApplyExtraAllotments(pendingAllotIncreases, resources);
     var res=await sbInsert('work_daily_progress',{
@@ -9798,9 +9840,8 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
       var resRem=Math.max(0,allotQ-usedExcl);
       if(resQty>resRem+0.0001){
         var extraQ2=Math.round((resQty-resRem)*10000)/10000;
-        if(confirm(resName+' ('+(allot.party_name||'party')+'): you entered '+resQty+' but only '+resRem.toFixed(2)+' is left of the allotted '+allotQ+'.\n\nCreate a NEW allotment for the additional '+extraQ2+' (same party, rate and details) with its own work order, and save this entry?')){
-          pendingAllotInc2.push({id:allotId,extra:extraQ2,base:resRem});
-        } else { resValid=false; return; }
+        pendingAllotInc2.push({id:allotId,extra:extraQ2,base:resRem,newTotal:Math.round((usedExcl+resQty)*10000)/10000,
+          label:resName+' ('+(allot.party_name||'party')+'): entered '+resQty+', only '+resRem.toFixed(2)+' left of allotted '+allotQ});
       }
     }
     resources.push({allot_id:allotId,name:resName,type:chk.getAttribute('data-type'),unit:resUnit,qty:resQty});
@@ -9808,6 +9849,11 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
   if(!resValid)return;
 
   var updateData;
+  if(pendingAllotInc2.length){
+    var ch2=await execAskExtraChoice(pendingAllotInc2);
+    if(!ch2) return;
+    pendingAllotInc2.forEach(function(p){p.mode=ch2;});
+  }
   try{
     var extraOrders2=await execApplyExtraAllotments(pendingAllotInc2, resources);
     updateData={date:date,qty_done:qty,remarks:gv('dp-remarks')||null,resources_used:resources.length?JSON.stringify(resources):null};
