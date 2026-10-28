@@ -22147,6 +22147,20 @@ function lnOpenLoan(dir, editId){
     '<button class="btn btn-outline" onclick="closeSheet(\'ov-ln\',\'sh-ln\')">Cancel</button>'+
     '<button class="btn btn-navy" onclick="lnSaveLoan(\''+dir+'\''+(ex?',\''+ex.id+'\'':'')+')">'+(ex?'Update Loan':'Save Loan')+'</button>';
   openSheet('ov-ln','sh-ln');
+  if(ex){
+    // Show what was actually saved: received-via mode, employee, petty cash tick.
+    var _m=document.getElementById('ll-mode');
+    if(_m && ex.mode){ _m.value=ex.mode; lnToggleModeEmp('ll-mode'); }
+    var _e=document.getElementById('ll-mode-emp');
+    if(_e && ex.mode_emp_id) _e.value=ex.mode_emp_id;
+    var _p=document.getElementById('ll-topetty');
+    if(_p){
+      _p.checked=!!ex.to_petty_cash;
+      // The petty cash entry already exists; ticking/unticking here would not create or remove it.
+      _p.disabled=true;
+      var _lb=_p.parentNode; if(_lb) _lb.title='Set when the loan was created. Delete the petty cash funding entry to undo it.';
+    }
+  }
   lnUpdatePaymentType();
 }
 async function lnSaveLoan(dir, editId, onSaved){
@@ -22190,6 +22204,21 @@ async function lnSaveLoan(dir, editId, onSaved){
           debitCode:isTaken?cc:'1401', creditCode:isTaken?'2201':cc, amount:principal,
           narration:(isTaken?'Loan taken from ':'Loan given to ')+lnPartyName(fields.party_id)+(fields.purpose?' \u2014 '+fields.purpose:'')+lnEmpVia(mode,modeEmp),
           sourceType:'loan', sourceId:editId});
+        if(cur.to_petty_cash){
+          // Keep the petty cash funding row and its transfer voucher in step with the edited loan.
+          try{
+            var prows=await sbFetch('petty_cash_in',{select:'id',filter:'loan_id=eq.'+editId});
+            for(var pi=0;pi<(prows||[]).length;pi++){
+              var pr=prows[pi];
+              await sbUpdate('petty_cash_in',pr.id,{amount:principal,date:fields.start_date});
+              await accCleanupVouchersForSource(pr.id);
+              await accAutoPost({type:'Contra', date:fields.start_date, partyName:(modeEmp?lnEmpName(modeEmp):'Employee'),
+                debitCode:'1101', creditCode:cc, amount:principal,
+                narration:'Transfer to petty cash'+(modeEmp?' \u2014 '+lnEmpName(modeEmp):'')+' \u00b7 from loan of '+lnPartyName(fields.party_id),
+                sourceType:'petty_cash_in', sourceId:pr.id});
+            }
+          }catch(pe2){ console.warn('petty cash resync failed',pe2); }
+        }
         if(passThruE && !cur.to_petty_cash){
           accAutoPost({type:'Contra', date:fields.start_date, partyName:(modeEmp?lnEmpName(modeEmp):'Employee'),
             debitCode:'1102', creditCode:cc, amount:principal,
@@ -29641,8 +29670,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261028l"></script>
-<script src="js/employee.js?v=20261028l"></script>
-<script src="js/projects.js?v=20261028l"></script>
-<script src="js/finance.js?v=20261028l"></script>
+<script src="js/registry.js?v=20261028m"></script>
+<script src="js/employee.js?v=20261028m"></script>
+<script src="js/projects.js?v=20261028m"></script>
+<script src="js/finance.js?v=20261028m"></script>
 </html>
