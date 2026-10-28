@@ -12171,6 +12171,7 @@ async function execSaveAdvanceBatch(batchKey,partyType,partyName,projId,batchAmt
   if(amount>batchAmt){
     if(!confirm('Amount exceeds total batch value ('+'\u20b9'+batchAmt.toLocaleString('en-IN')+').\nContinue?'))return;
   }
+  if(!(await fundsCheck(gv('adva-mode'),amount,date))) return;
   try{
     var res=await sbInsert('work_advances',{
       project_id:projId,party_type:partyType,party_name:partyName,
@@ -12252,6 +12253,7 @@ async function execSaveAdvanceAllot(allotId,partyType,partyName,projId,resName,a
   if(amount>allotAmt){
     if(!confirm('Amount exceeds total allotted value ('+'\u20b9'+allotAmt.toLocaleString('en-IN')+').\nContinue?'))return;
   }
+  if(!(await fundsCheck(gv('adva-mode'),amount,date))) return;
   try{
     var res=await sbInsert('work_advances',{
       project_id:projId,party_type:partyType,party_name:partyName,
@@ -12459,6 +12461,8 @@ async function execUpdateAdvance(advId){
   var purpose=(document.getElementById('adva-purpose')||{value:''}).value.trim();
   if(!date||!bk.base_amount){toast('Date and base amount required','warning');return;}
   if(!purpose){toast('Purpose required','warning');return;}
+  // Editing: the old amount is already out of the balance, so add it back when the mode class is unchanged.
+  if(!(await fundsCheck(mode,amount,date,(fundsClass(existing.payment_mode)===fundsClass(mode))?(parseFloat(existing.amount)||0):0))) return;
 
   var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
   var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
@@ -13697,6 +13701,81 @@ function pyUpdateNet(){
     netEl.textContent=parts.join(' | ');
   }
 }
+// ── Cash in Hand / Bank balance (from Accounts vouchers) ──
+// Cash = account 1001, Bank = account 1002 (opening balance + receipts - payments).
+// Used for the dashboard strip and to refuse a payment the account can't cover.
+async function fundsFetchAll(table,select,filter){
+  var out=[], off=0;
+  for(var i=0;i<60;i++){
+    var rows=await sbFetch(table,{select:select,filter:filter+'&limit=1000&offset='+off});
+    if(!Array.isArray(rows)) break;
+    out=out.concat(rows);
+    if(rows.length<1000) break;
+    off+=1000;
+  }
+  return out;
+}
+async function fundsBalances(asOn){
+  var accs=await sbFetch('chart_of_accounts',{select:'id,code,opening_balance',filter:'code=in.(1001,1002)'});
+  var res={cash:0,bank:0,ok:true}, byCode={};
+  (Array.isArray(accs)?accs:[]).forEach(function(a){byCode[a.code]=a;});
+  var keys=[['cash','1001'],['bank','1002']];
+  for(var k=0;k<keys.length;k++){
+    var a=byCode[keys[k][1]]; if(!a){ res.ok=false; continue; }
+    var dateF=asOn?('&date=lte.'+asOn):'';
+    var typeF='&or=(type.is.null,type.neq.Personal%20Sales)';
+    var dr=await fundsFetchAll('vouchers','amount','debit_account=eq.'+a.id+dateF+typeF);
+    var cr=await fundsFetchAll('vouchers','amount','credit_account=eq.'+a.id+dateF+typeF);
+    var sum=function(l){return l.reduce(function(t,v){return t+(parseFloat(v.amount)||0);},0);};
+    res[keys[k][0]]=(parseFloat(a.opening_balance)||0)+sum(dr)-sum(cr);
+  }
+  return res;
+}
+function fundsClass(mode){ mode=String(mode||'').trim(); if(!mode) return null; return mode==='Cash'?'cash':'bank'; }
+// Returns true if the payment can go ahead. addBack = amount of an earlier payment being edited
+// (same mode class) so it is not counted twice. Network problems never block a payment.
+async function fundsCheck(mode,amount,date,addBack){
+  var cls=fundsClass(mode); amount=parseFloat(amount)||0;
+  if(!cls||amount<=0) return true;
+  var b;
+  try{ b=await fundsBalances(date||null); }catch(e){ console.warn('fundsCheck skipped',e); return true; }
+  if(!b.ok) return true;   // chart of accounts not set up
+  var avail=(b[cls]||0)+(parseFloat(addBack)||0);
+  if(amount>avail+0.005){
+    var nm=cls==='cash'?'Cash in Hand':'Bank balance';
+    var f=function(n){return '₹'+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});};
+    alert('Insufficient '+nm+'.\n\n'+nm+(date?' as on '+date:'')+': '+f(avail)+'\nThis payment: '+f(amount)+'\n\n'+(cls==='cash'?'Record cash received first (or pay by Bank), then try again.':'Record the bank receipt first (or pay by Cash), then try again.'));
+    return false;
+  }
+  return true;
+}
+// Dashboard strip: Cash in Hand + Bank Balance.
+async function dashRenderCashBank(){
+  var grid=document.getElementById('dash-kpi-grid'); if(!grid) return;
+  if(typeof canAccess==='function' && !canAccess('accounts','view')){ var o=document.getElementById('dash-cashbank'); if(o) o.remove(); return; }
+  var el=document.getElementById('dash-cashbank');
+  if(!el){
+    el=document.createElement('div'); el.id='dash-cashbank';
+    el.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;';
+    grid.parentNode.insertBefore(el,grid);
+  }
+  var card=function(lbl,icon,val,col){
+    var neg=val<0;
+    return '<div onclick="showApp(\'accounts\')" style="cursor:pointer;background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 14px;">'+
+      '<div style="font-size:11px;font-weight:800;color:var(--text3);">'+icon+' '+lbl+'</div>'+
+      '<div style="font-size:20px;font-weight:900;margin-top:4px;color:'+(neg?'#C62828':col)+';">'+(val===null?'—':(neg?'-':'')+'₹'+Math.abs(Math.round(val)).toLocaleString('en-IN'))+'</div></div>';
+  };
+  try{
+    var b=await fundsBalances();
+    el.innerHTML=card('Cash in Hand','&#128181;',b.ok?b.cash:null,'#2E7D32')+card('Bank Balance','&#127974;',b.ok?b.bank:null,'#1565C0');
+  }catch(e){ el.innerHTML=card('Cash in Hand','&#128181;',null,'#2E7D32')+card('Bank Balance','&#127974;',null,'#1565C0'); }
+}
+if(typeof loadDashboardInsights==='function' && !window._dashCbWrapped){
+  window._dashCbWrapped=true;
+  var _ldiOrig=loadDashboardInsights;
+  loadDashboardInsights=async function(){ var r=_ldiOrig.apply(this,arguments); try{ dashRenderCashBank(); }catch(e){} return r; };
+}
+
 async function execSavePaymentAdv(projId,balAmount){
   var billId=gv('py-bill-id');
   var partyType=gv('py-party-type');
@@ -13708,6 +13787,7 @@ async function execSavePaymentAdv(projId,balAmount){
   var remarks=gv('py-remarks')||null;
   if(!date){toast('Payment date required','warning');return;}
   if(cashAmt>0&&!ref){toast('Reference / UTR is required for cash/bank payment','warning');return;}
+  if(cashAmt>0 && !(await fundsCheck(mode,cashAmt,date))) return;
 
   var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
   var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
@@ -14259,6 +14339,7 @@ async function execSaveAdvance(partyType,partyName,projId){
   var utr=gv('adv-utr')||'';
   if(!date||!bk.base_amount){toast('Date and base amount required','warning');return;}
   if(!purpose){toast('Purpose/remarks required','warning');return;}
+  if(!(await fundsCheck(gv('adv-mode'),amount,date))) return;
   try{
     var res=await sbInsert('work_advances',{
       project_id:projId,
