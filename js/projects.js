@@ -5699,6 +5699,8 @@ function generatePurchaseOrder(allot){
 function execRegenDoc(allotId, docType){
   var allot=WA_ALLOT.find(function(a){return a.id===allotId;});
   if(!allot){toast('Allotment not found','warning');return;}
+  // Use the same batch document as the rest of the Allotted tab.
+  if(typeof execGenBatchDoc==='function'){ execGenBatchDoc(allot.batch_id||('solo-'+allot.id), docType); return; }
   if(docType==='wo') generateWorkOrder(allot);
   else generatePurchaseOrder(allot);
 }
@@ -7515,6 +7517,8 @@ function execPrintOrder(orderId){
   var o=WA_ORDERS.find(function(x){return x.id===orderId;});
   if(!o){toast('Order not found','warning');return;}
   var allot=WA_ALLOT.find(function(a){return a.id===o.allot_id;})||{};
+  // Print the whole document this order belongs to, in the same layout as the Allotted tab.
+  if(o.doc_number){ execPrintOrderCombined(o.doc_type, o.doc_number); return; }
   var merged=Object.assign({},allot,{qty:o.qty,rate:o.rate,unit:o.unit,party_name:o.party_name,exec_type:o.party_type,project_id:o.project_id,scope:allot.scope||''});
   if(o.doc_type==='wo') generateWorkOrder(merged);
   else generatePurchaseOrder(merged);
@@ -15809,8 +15813,17 @@ function execPrintOrderCombined(docType, docNum){
     var allot=WA_ALLOT.find(function(a){return a.id===o.allot_id;})||{};
     return Object.assign({},allot,{qty:o.qty,rate:o.rate,unit:o.unit,party_name:o.party_name,exec_type:o.party_type,project_id:o.project_id,scope:allot.scope||''});
   });
-  if(docType==='wo') generateCombinedDoc(allots,'WORK ORDER','#E65100','#FFF3E0');
-  else generateCombinedDoc(allots,'PURCHASE ORDER','#1565C0','#E3F2FD');
+  // Same document as the Allotted tab: render through execRenderBatchDoc so
+  // both tabs show an identical WO/PO (terms, lumpsum schedule, signatures).
+  var o0=orders[0];
+  var yr=String(o0.doc_date||'').slice(0,4)||String(new Date().getFullYear());
+  var prefix=docType==='wo'?'WO':'PO';
+  var docNo=o0.doc_number||docNum;
+  var projId=o0.project_id||(allots[0]&&allots[0].project_id)||PROJ_MOD_SEL_ID||'';
+  var batchItems=allots.map(function(a,i){
+    return Object.assign({},a,{batch_id:a.batch_id||o0.batch_id||('solo-'+a.id)});
+  });
+  execRenderBatchDoc(batchItems, docType, docNo, prefix+'-'+yr+'-'+docNo, projId, o0.terms||'');
 }
 
 // ═══════════════════════════════════════════════════════════════════
