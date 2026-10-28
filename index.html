@@ -20414,13 +20414,13 @@ function lnModeOptionsHtml(id){
       '<option value="">Select employee...</option>'+
       LN_EMPS.map(function(e){return '<option value="'+e.id+'">'+e.name+'</option>';}).join('')+
     '</select>'+
-    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">Held in the employee\'s account \u2014 posted to <b>Funds with Employees</b> until transferred to the company.</div>'+
+    '<div style="font-size:10px;color:var(--text3);margin:-6px 0 8px;">Received in the Company Bank, then passed to the employee \u2014 posted to <b>Funds with Employees</b> until settled.</div>'+
     '</div>'+
     (id==='ll-mode'?
       '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;">'+
         '<label class="flbl" style="display:flex;align-items:center;gap:6px;margin:0;color:var(--text);">'+
           '<input type="checkbox" id="ll-topetty" style="width:auto;margin:0;"> &#128181; Treat as petty cash float for this employee</label>'+
-        '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Creates the Fund Employee entry in Petty Cash automatically. Posted as two entries: the loan into <b>Loan Received (clearing)</b>, then a transfer from there into <b>Petty Cash in Hand</b> \u2014 so the trail is visible and the money is counted once.</div>'+
+        '<div style="font-size:10px;color:var(--text3);margin-top:4px;">Creates the Fund Employee entry in Petty Cash automatically. Posted as two entries: the loan received into the <b>Company Bank</b>, then paid on from the bank into <b>Petty Cash in Hand</b> \u2014 both show in the Bank statement and the money is counted once.</div>'+
       '</div>':'');
 }
 function lnToggleModeEmp(id){
@@ -22217,7 +22217,11 @@ async function lnSaveLoan(dir, editId, onSaved){
       if(typeof accAutoPost==='function'){
         // Leg 1 lands in the clearing account when the loan is destined for
         // petty cash, whatever route the money physically took.
-        var cashCode=toPetty?'1102':lnCashCode(mode);
+        // A loan taken and passed on to an employee (petty cash float, or held in the
+        // employee's own account) is shown as received by the COMPANY BANK first and then
+        // paid out to the employee, so Bank statement/balance reflect both steps.
+        var passThru=isTaken&&(toPetty||mode==='EmpBank');
+        var cashCode=passThru?'1002':lnCashCode(mode);
         var via=(mode==='EmpBank')?' (via '+lnEmpName(modeEmp)+'\u2019s account)':'';
         accAutoPost({type:isTaken?'Receipt':'Payment', date:saved.start_date, partyName:lnPartyName(saved.party_id),
           debitCode:isTaken?cashCode:'1401', creditCode:isTaken?'2201':cashCode, amount:principal,
@@ -22227,9 +22231,16 @@ async function lnSaveLoan(dir, editId, onSaved){
         // Leg 2: internal transfer from the employee's account into their
         // petty cash float. Keyed to the petty cash row so Petty Cash owns
         // this entry and deleting it removes the right voucher.
+        if(passThru && !pettyRowId){
+          // Held in the employee's own account (not petty cash): company bank -> Funds with Employees
+          accAutoPost({type:'Contra', date:saved.start_date, partyName:(modeEmp?lnEmpName(modeEmp):'Employee'),
+            debitCode:'1102', creditCode:'1002', amount:principal,
+            narration:'Loan passed to employee'+(modeEmp?' \u2014 '+lnEmpName(modeEmp):'')+' \u00b7 from loan of '+lnPartyName(saved.party_id),
+            sourceType:'loan', sourceId:saved.id});
+        }
         if(pettyRowId){
           accAutoPost({type:'Contra', date:saved.start_date, partyName:(modeEmp?lnEmpName(modeEmp):'Employee'),
-            debitCode:'1101', creditCode:'1102', amount:principal,
+            debitCode:'1101', creditCode:(passThru?'1002':'1102'), amount:principal,
             narration:'Transfer to petty cash'+(modeEmp?' \u2014 '+lnEmpName(modeEmp):'')+' \u00b7 from loan of '+lnPartyName(saved.party_id),
             sourceType:'petty_cash_in', sourceId:pettyRowId});
         }
@@ -24394,7 +24405,7 @@ async function accReconcile(){
       // debited Funds with Employees, so this leg only moves the money
       // from the employee's account into petty cash.
       var fromLoan=(p.funded_by_type==='loan'||p.loan_id||loanFunded[(p.emp_id||'')+'|'+(p.date||'')+'|'+Math.round(amt)]);
-      var srcCode=fromLoan?'1102':(p.funded_by_type==='cash'?'1001':'1002');
+      var srcCode=fromLoan?'1002':(p.funded_by_type==='cash'?'1001':'1002');
       check('Petty cash funding','petty_cash_in',p.id,{type:'Contra',date:p.date,partyName:nm,
         debitCode:'1101',creditCode:srcCode,amount:amt,
         narration:(fromLoan?'Transfer to petty cash — '+nm+' · from loan':'Petty cash funded to '+nm)+(p.purpose?' — '+p.purpose:'')});
@@ -24430,7 +24441,7 @@ async function accReconcile(){
     });
     loans.forEach(function(l){
       var taken=(l.direction==='taken');
-      var cc=l.to_petty_cash?'1102':(l.mode==='Cash'?'1001':(l.mode==='EmpBank'?'1102':'1002'));
+      var cc=(taken&&(l.to_petty_cash||l.mode==='EmpBank'))?'1002':(l.to_petty_cash?'1102':(l.mode==='Cash'?'1001':(l.mode==='EmpBank'?'1102':'1002')));
       var pn=partyName[l.party_id]||'Party';
       check('Loans','loan',l.id,{type:taken?'Receipt':'Payment',date:l.start_date,partyName:pn,
         debitCode:taken?cc:'1401',creditCode:taken?'2201':cc,amount:parseFloat(l.principal)||0,
@@ -29612,8 +29623,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261028h"></script>
-<script src="js/employee.js?v=20261028h"></script>
-<script src="js/projects.js?v=20261028h"></script>
-<script src="js/finance.js?v=20261028h"></script>
+<script src="js/registry.js?v=20261028i"></script>
+<script src="js/employee.js?v=20261028i"></script>
+<script src="js/projects.js?v=20261028i"></script>
+<script src="js/finance.js?v=20261028i"></script>
 </html>
