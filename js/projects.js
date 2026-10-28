@@ -9409,6 +9409,54 @@ async function execOpenDailyEntry(itemId){
 
 function dpPartyChange(){} // kept for compatibility
 
+// When more work is done than allotted: create a NEW allotment (same party, rate,
+// unit, scope, dates, doc type) for just the additional quantity, in its own batch,
+// so it gets its own Work Order. Existing allotment and its WO are left untouched.
+async function execCreateExtraAllotment(allot, extraQty){
+  var batchId='batch-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
+  var row={
+    project_id:allot.project_id, boq_item_id:allot.boq_item_id||null, boq_subitem_id:allot.boq_subitem_id||null,
+    boq_exec_resource_id:allot.boq_exec_resource_id||null,
+    date:new Date().toISOString().slice(0,10), exec_type:allot.exec_type, party_name:allot.party_name,
+    qty:extraQty, unit:allot.unit||null, rate:allot.rate,
+    scope:((allot.scope||'')+(allot.scope?' ':'')+'(Additional work)').trim(),
+    start_date:allot.start_date||null, end_date:allot.end_date||null,
+    doc_type:allot.doc_type||null, specification:allot.specification||null,
+    batch_id:batchId, rr_id:null
+  };
+  var res=await sbInsert('boq_exec_resources',row);
+  var saved=(res&&res[0])?res[0]:null;
+  if(saved) WA_ALLOT.push(saved);
+  return saved;
+}
+// Splits a progress entry's resource lines: up to the old allotment's balance stays on
+// it, the excess moves to the new extra allotment. Returns allotments needing a new WO.
+async function execApplyExtraAllotments(pending, resources){
+  var needWO=[];
+  for(var i=0;i<pending.length;i++){
+    var p=pending[i];
+    var orig=WA_ALLOT.find(function(a){return a.id===p.id;}); if(!orig) continue;
+    var neu=await execCreateExtraAllotment(orig, p.extra);
+    if(!neu) continue;
+    var line=resources.find(function(r){return r.allot_id===p.id;});
+    if(line){
+      var copy=Object.assign({},line,{allot_id:neu.id,qty:p.extra});
+      if(p.base>0.0001) line.qty=p.base; else resources.splice(resources.indexOf(line),1);
+      resources.push(copy);
+    }
+    if(neu.doc_type==='wo'||neu.doc_type==='po') needWO.push(neu);
+  }
+  return needWO;
+}
+function execOfferExtraOrders(list){
+  if(!list||!list.length) return;
+  setTimeout(function(){
+    var a=list[0];
+    toast('Additional allotment created for '+a.party_name+' \u2014 generate its '+(a.doc_type==='po'?'Purchase':'Work')+' Order','info');
+    if(typeof execGenBatchDoc==='function') execGenBatchDoc(a.batch_id, a.doc_type==='po'?'po':'wo');
+  },400);
+}
+
 async function execSaveDailyEntry(projId,itemId){
   var date=gv('dp-date'),qty=parseFloat(gv('dp-qty'))||0;
   if(!date){toast('Date required','warning');return;}
@@ -9461,9 +9509,9 @@ async function execSaveDailyEntry(projId,itemId){
       var resRemaining=Math.max(0,allotQty-alreadyUsed);
       if(resQty>resRemaining+0.0001){
         // More than allotted: offer to raise the allotment instead of just blocking.
-        var newAllotQty=Math.round((alreadyUsed+resQty)*10000)/10000;
-        if(confirm(resName+' ('+(allot.party_name||'party')+'): you entered '+resQty+' but only '+resRemaining.toFixed(2)+' '+(resUnit||'')+' is left of the allotted '+allotQty+'.\n\nIncrease the allotment from '+allotQty+' to '+newAllotQty+' '+(resUnit||'')+' and save this entry?\n(An already issued WO keeps its original quantity.)')){
-          pendingAllotIncreases.push({id:allotId,qty:newAllotQty});
+        var extraQ=Math.round((resQty-resRemaining)*10000)/10000;
+        if(confirm(resName+' ('+(allot.party_name||'party')+'): you entered '+resQty+' but only '+resRemaining.toFixed(2)+' '+(resUnit||'')+' is left of the allotted '+allotQty+'.\n\nCreate a NEW allotment for the additional '+extraQ+' '+(resUnit||'')+' (same party, rate and details) with its own work order, and save this entry?')){
+          pendingAllotIncreases.push({id:allotId,extra:extraQ,base:resRemaining});
         } else { resValid=false; return; }
       }
     }
@@ -9478,12 +9526,7 @@ async function execSaveDailyEntry(projId,itemId){
   });
   if(!resValid) return;
   try{
-    for(var pi=0;pi<pendingAllotIncreases.length;pi++){
-      var inc=pendingAllotIncreases[pi];
-      await sbUpdate('boq_exec_resources',inc.id,{qty:inc.qty});
-      var ai=WA_ALLOT.findIndex(function(a){return a.id===inc.id;});
-      if(ai>-1) WA_ALLOT[ai].qty=inc.qty;
-    }
+    var extraOrders=await execApplyExtraAllotments(pendingAllotIncreases, resources);
     var res=await sbInsert('work_daily_progress',{
       project_id:projId,
       boq_item_id:itemId,
@@ -9497,6 +9540,7 @@ async function execSaveDailyEntry(projId,itemId){
     toast('Entry saved!','success');
     closeSheet('ov-exec','sh-exec');
     execRenderDaily();
+    execOfferExtraOrders(extraOrders);
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 
@@ -9753,9 +9797,9 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
       });
       var resRem=Math.max(0,allotQ-usedExcl);
       if(resQty>resRem+0.0001){
-        var newAQ=Math.round((usedExcl+resQty)*10000)/10000;
-        if(confirm(resName+' ('+(allot.party_name||'party')+'): you entered '+resQty+' but only '+resRem.toFixed(2)+' is left of the allotted '+allotQ+'.\n\nIncrease the allotment from '+allotQ+' to '+newAQ+' and save this entry?\n(An already issued WO keeps its original quantity.)')){
-          pendingAllotInc2.push({id:allotId,qty:newAQ});
+        var extraQ2=Math.round((resQty-resRem)*10000)/10000;
+        if(confirm(resName+' ('+(allot.party_name||'party')+'): you entered '+resQty+' but only '+resRem.toFixed(2)+' is left of the allotted '+allotQ+'.\n\nCreate a NEW allotment for the additional '+extraQ2+' (same party, rate and details) with its own work order, and save this entry?')){
+          pendingAllotInc2.push({id:allotId,extra:extraQ2,base:resRem});
         } else { resValid=false; return; }
       }
     }
@@ -9763,20 +9807,17 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
   });
   if(!resValid)return;
 
-  var updateData={date:date,qty_done:qty,remarks:gv('dp-remarks')||null,resources_used:resources.length?JSON.stringify(resources):null};
+  var updateData;
   try{
-    for(var pj=0;pj<pendingAllotInc2.length;pj++){
-      var inc2=pendingAllotInc2[pj];
-      await sbUpdate('boq_exec_resources',inc2.id,{qty:inc2.qty});
-      var aj=WA_ALLOT.findIndex(function(a){return a.id===inc2.id;});
-      if(aj>-1) WA_ALLOT[aj].qty=inc2.qty;
-    }
+    var extraOrders2=await execApplyExtraAllotments(pendingAllotInc2, resources);
+    updateData={date:date,qty_done:qty,remarks:gv('dp-remarks')||null,resources_used:resources.length?JSON.stringify(resources):null};
     await sbUpdate('work_daily_progress',entryId,updateData);
     var idx=WA_DAILY.findIndex(function(d){return d.id===entryId;});
     if(idx>-1) WA_DAILY[idx]=Object.assign(WA_DAILY[idx],updateData);
     toast('Entry updated!','success');
     closeSheet('ov-exec','sh-exec');
     execRenderDaily();
+    execOfferExtraOrders(extraOrders2);
   }catch(e){toast('Error: '+e.message,'error');console.error(e);}
 }
 // ── Bills & Payments ────────────────────────────────────────────────────
