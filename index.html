@@ -8850,6 +8850,7 @@ function startSync(){
           if(dbCats.length){
             var newCatData=dbCats.map(function(c){return {id:c.id,icon:c.icon||'📦',name:c.name,desc:c.description||'',color:c.color||'#37474F',count:0,active:c.active};});
             if(type==='uom' && typeof uomMerge==='function') newCatData=uomMerge(newCatData);
+            if(type==='leave' && typeof leaveMerge==='function') newCatData=leaveMerge(newCatData);
             if(JSON.stringify(newCatData.map(function(c){return c.id+c.active;}))!==JSON.stringify(CAT_DATA[type].map(function(c){return c.id+c.active;}))){
               CAT_DATA[type]=newCatData;
               renderCatSection(type,catSectionMap[type]);
@@ -29684,8 +29685,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261030i"></script>
-<script src="js/employee.js?v=20261030i"></script>
-<script src="js/projects.js?v=20261030i"></script>
-<script src="js/finance.js?v=20261030i"></script>
+<script src="js/registry.js?v=20261030j"></script>
+<script src="js/employee.js?v=20261030j"></script>
+<script src="js/projects.js?v=20261030j"></script>
+<script src="js/finance.js?v=20261030j"></script>
 </html>

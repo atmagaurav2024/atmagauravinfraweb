@@ -20,6 +20,8 @@ var CAT_DATA={
 // Built-in units: always present, can't be duplicated, deleted or disabled. Extra units can be added/removed.
 var UOM_BUILTIN=['Cum','Sqm','Rmt','Nos','MT','Kg','Hours','Liters'];
 var RESCAT_BUILTIN=['Material','Labour','Machinery','Subcontractor'];
+var LEAVE_BUILTIN=['Casual Leave','Earned Leave','Sick Leave','Compulsory Off'];
+function leaveMerge(list){ return catBuiltinMerge(list,LEAVE_BUILTIN,'leave','\ud83c\udf34'); }
 function uomMerge(list){ return catBuiltinMerge(list,UOM_BUILTIN,'uom','\ud83d\udccf'); }
 function rescatMerge(list){ return catBuiltinMerge(list,RESCAT_BUILTIN,'resource','\ud83d\udd16'); }
 function catBuiltinMerge(list,BUILTIN,kind,icon){
@@ -39,6 +41,7 @@ function catBuiltinMerge(list,BUILTIN,kind,icon){
 }
 CAT_DATA.uom=uomMerge(CAT_DATA.uom);
 CAT_DATA.resource=rescatMerge(CAT_DATA.resource);
+CAT_DATA.leave=leaveMerge(CAT_DATA.leave);
 var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats',partytype:'partytype-cats',pdfsign:'pdfsign-cats'};
 
 function catKey(name){ return (name||'').toLowerCase().trim(); }
@@ -472,6 +475,7 @@ async function loadCategories(){
     });
     CAT_DATA.uom=uomMerge(CAT_DATA.uom);
     CAT_DATA.resource=rescatMerge(CAT_DATA.resource);
+    CAT_DATA.leave=leaveMerge(CAT_DATA.leave);
     Object.keys(catSectionMap).forEach(function(type){renderCatSection(type,catSectionMap[type]);});
     rebuildPills('vendor',  'vendor-cat-pills','var(--teal)',  filterVendors);
     rebuildPills('material','mat-cat-pills',   'var(--green)', filterMaterials);
