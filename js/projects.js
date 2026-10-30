@@ -3567,8 +3567,10 @@ async function rrGroupDelete(groupId){
 function rrGroupToggleRateMode(mode){
   var itemwiseEl=document.getElementById('rr-grp-itemwise-rows');
   var lumpsumEl=document.getElementById('rr-grp-lumpsum-row');
-  if(itemwiseEl) itemwiseEl.style.display=(mode==='lumpsum'?'none':'block');
+  var resEl=document.getElementById('rr-grp-res-wrap');
+  if(itemwiseEl) itemwiseEl.style.display=(mode==='itemwise'?'block':'none');
   if(lumpsumEl) lumpsumEl.style.display=(mode==='lumpsum'?'block':'none');
+  if(resEl) resEl.style.display=(mode==='resources'?'block':'none');
   if(mode==='lumpsum'){
     var rowsEl=document.getElementById('rr-grp-scope-rows');
     if(rowsEl && !rowsEl.children.length) rrGroupAddScopeLine();
@@ -3667,6 +3669,21 @@ async function rrGroupOpenAllotForm(groupId){
   var planItemsPool=(typeof RR_COMBINED_PLAN_ITEMS!=='undefined'?RR_COMBINED_PLAN_ITEMS:[]).concat(typeof WA_COMBINED_PLAN_ITEMS!=='undefined'?WA_COMBINED_PLAN_ITEMS:[]);
   var planItemById={}; planItemsPool.forEach(function(pi){ planItemById[pi.id]=pi; });
 
+  // Resources planned under this combined group (each may have its own unit and rate).
+  var cgResList=cgResourcesForRrItems(giItems);
+  var cgSubName={}; (typeof RR_PLAN_SUBS!=='undefined'?RR_PLAN_SUBS:[]).concat(typeof WA_SUBS!=='undefined'?WA_SUBS:[]).forEach(function(sb){cgSubName[sb.id]=sb.name;});
+  var cgResBlockHtml='<div id="rr-grp-res-wrap" style="display:none;margin-bottom:10px;">'+
+    '<div style="font-size:10px;color:var(--text3);margin-bottom:6px;">Each resource is allotted in its own unit and rate (qty comes from the plan). Items of this group are NOT allotted separately in this mode.</div>'+
+    cgResList.map(function(r){
+      var pr=parseFloat(r.rate)||0;
+      return '<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px;">'+
+        '<span style="flex:1;"><b>'+esc(r.party_name||'')+'</b>'+(cgSubName[r.boq_subitem_id]?' <span style="color:var(--text3);">('+esc(cgSubName[r.boq_subitem_id])+')</span>':'')+'<br><span style="color:var(--text2);">'+r.qty+' '+esc(r.unit||'')+'</span></span>'+
+        '<div style="text-align:center;"><div style="font-size:9px;color:var(--text3);">Rate ₹/'+esc(r.unit||'unit')+'</div>'+
+        '<input class="rr-grp-res-rate finp" data-res-id="'+r.id+'" data-qty="'+(parseFloat(r.qty)||0)+'" value="'+(pr||'')+'" oninput="rrGroupResRateInput(this)" type="number" step="any" style="width:90px;padding:4px 6px;font-size:11px;text-align:center;"></div>'+
+        '<div style="width:80px;text-align:right;font-weight:800;color:#1565C0;" class="rr-grp-res-amt">'+(pr?fmtINR((parseFloat(r.qty)||0)*pr):'—')+'</div></div>';
+    }).join('')+
+    '<div id="rr-grp-res-total" style="text-align:right;font-size:12px;font-weight:900;margin-top:6px;color:#00695C;">Total: '+fmtINR(cgResList.reduce(function(t,r){return t+(parseFloat(r.qty)||0)*(parseFloat(r.rate)||0);},0))+'</div></div>';
+
   var rowsHtml=giItems.map(function(ri){
     var boqItem=itemById[ri.boq_item_id];
     var planItem=ri.plan_item_id?planItemById[ri.plan_item_id]:null;
@@ -3709,7 +3726,11 @@ async function rrGroupOpenAllotForm(groupId){
         '<label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;cursor:pointer;">'+
           '<input type="radio" name="rr-grp-rate-mode" value="lumpsum" onchange="rrGroupToggleRateMode(\'lumpsum\')" style="accent-color:#00838F;"> Lumpsum for whole group'+
         '</label>'+
+        (cgResList.length?'<label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;cursor:pointer;">'+
+          '<input type="radio" name="rr-grp-rate-mode" value="resources" onchange="rrGroupToggleRateMode(\'resources\')" style="accent-color:#00838F;"> By resources (own units)'+
+        '</label>':'')+
       '</div>'+
+      (cgResList.length?cgResBlockHtml:'')+
       '<div id="rr-grp-lumpsum-row" style="display:none;margin-bottom:10px;">'+
         '<label class="flbl">Lumpsum Amount (\u20b9) *</label>'+
         '<input id="rr-grp-lumpsum-amt" class="finp" type="number" step="0.01" placeholder="Total for all '+giItems.length+' items">'+
@@ -3778,6 +3799,83 @@ async function rrGroupOpenAllotForm(groupId){
     if(ptSel) ptSel.addEventListener('change',function(){ waLoadPartyNames(ptSel.value); });
   },200);
 }
+// ── Combined group: resource-wise allotment (resources keep their own units) ──
+// A combined group can be allotted (1) by BOQ item rate, (2) as a lumpsum, or (3) by its
+// resources. (1)/(2) and (3) cover the same work, so only one way is allowed per group.
+function cgResourcesForRrItems(giItems){
+  var pool=(typeof RR_COMBINED_PLAN_ITEMS!=='undefined'?RR_COMBINED_PLAN_ITEMS:[]).concat(typeof WA_COMBINED_PLAN_ITEMS!=='undefined'?WA_COMBINED_PLAN_ITEMS:[]);
+  var gids={};
+  giItems.forEach(function(ri){ var pi=pool.find(function(p){return p.id===ri.plan_item_id;}); if(pi) gids[pi.group_id]=1; });
+  var seen={}, out=[];
+  (typeof RR_PLAN_RES!=='undefined'?RR_PLAN_RES:[]).concat(typeof WA_PLANNED!=='undefined'?WA_PLANNED:[]).forEach(function(r){
+    if(r.combined_plan_group_id && gids[r.combined_plan_group_id] && r.exec_type==='planned' && !seen[r.id]){ seen[r.id]=1; out.push(r); }
+  });
+  return out;
+}
+// Names of allotments already made against these planned resources (resource-wise route).
+async function cgResourceAllotments(resIds){
+  if(!resIds.length) return [];
+  var rows=await sbFetch('boq_exec_resources',{select:'id,party_name',filter:'boq_exec_resource_id=in.('+resIds.join(',')+')'});
+  return Array.isArray(rows)?rows:[];
+}
+// True if any of these combined PLAN groups has already been allotted by item rate / lumpsum.
+async function cgAllottedByItem(planGroupIds){
+  if(!planGroupIds.length) return false;
+  var pis=await sbFetch('combined_plan_items',{select:'id',filter:'group_id=in.('+planGroupIds.join(',')+')'});
+  var piIds=(Array.isArray(pis)?pis:[]).map(function(x){return x.id;});
+  if(!piIds.length) return false;
+  var ris=await sbFetch('combined_rr_items',{select:'id',filter:'plan_item_id=in.('+piIds.join(',')+')'});
+  var riIds=(Array.isArray(ris)?ris:[]).map(function(x){return x.id;});
+  if(!riIds.length) return false;
+  var al=await sbFetch('boq_exec_resources',{select:'id',filter:'combined_rr_item_id=in.('+riIds.join(',')+')'});
+  return Array.isArray(al)&&al.length>0;
+}
+function rrGroupResRateInput(inp){
+  var q=parseFloat(inp.getAttribute('data-qty'))||0, r=parseFloat(inp.value);
+  var out=inp.parentNode.parentNode.querySelector('.rr-grp-res-amt'); if(out) out.textContent=isNaN(r)?'—':fmtINR(q*r);
+  var tot=0; document.querySelectorAll('.rr-grp-res-rate').forEach(function(i){ var rr=parseFloat(i.value); if(!isNaN(rr)) tot+=rr*(parseFloat(i.getAttribute('data-qty'))||0); });
+  var t=document.getElementById('rr-grp-res-total'); if(t) t.textContent='Total: '+fmtINR(tot);
+}
+async function rrGroupAllotByResources(groupId,group,giItems,ctx){
+  var cgRes=cgResourcesForRrItems(giItems);
+  if(!cgRes.length){ toast('This group has no resources planned','warning'); return; }
+  var rateById={}, bad=false;
+  document.querySelectorAll('.rr-grp-res-rate').forEach(function(inp){
+    var r=parseFloat(inp.value); if(isNaN(r)||r<=0) bad=true; rateById[inp.getAttribute('data-res-id')]=r;
+  });
+  if(bad){ toast('Enter a valid rate for every resource','warning'); return; }
+  try{
+    var already=await cgResourceAllotments(cgRes.map(function(r){return r.id;}));
+    if(already.length){ alert('Some of this group\'s resources are already allotted ('+already.map(function(a){return a.party_name;}).join(', ')+').\n\nDelete those allotments first, or allot only the remaining resources from the normal Allotment screen.'); return; }
+    var gids=Array.from(new Set(cgRes.map(function(r){return r.combined_plan_group_id;})));
+    if(await cgAllottedByItem(gids)){ alert('This group has already been allotted by BOQ item rate / lumpsum, so its resources can\'t be allotted separately.\n\nDelete that allotment first if you want to allot by resources instead.'); return; }
+  }catch(e){ toast('Could not check existing allotments: '+e.message+' — nothing saved','error'); return; }
+  var batchId='rr-combined-batch-'+Date.now(), today=new Date().toISOString().slice(0,10), ok=0, failed=0;
+  for(var i=0;i<cgRes.length;i++){
+    var r=cgRes[i];
+    try{
+      var res=await sbInsert('boq_exec_resources',{
+        project_id:ctx.projId, boq_item_id:r.boq_item_id, boq_subitem_id:r.boq_subitem_id||null, boq_exec_resource_id:r.id,
+        date:today, exec_type:ctx.partyType, party_name:ctx.partyName, group_name:group.group_name||null,
+        qty:r.qty, unit:r.unit||null, rate:rateById[r.id]||0, scope:ctx.scope,
+        start_date:ctx.startDate, end_date:ctx.endDate, doc_type:ctx.docType==='none'?null:ctx.docType,
+        batch_id:batchId, combined_rr_group_id:groupId
+      });
+      if(res&&res[0]){ WA_ALLOT.push(res[0]); ok++; } else failed++;
+    }catch(e){ console.error('resource-wise allot failed',e); failed++; }
+  }
+  if(failed){ toast(ok+' of '+cgRes.length+' resources allotted, '+failed+' failed — check Allotted before retrying','warning'); closeSheet('ov-exec','sh-exec'); return; }
+  try{
+    await sbUpdate('combined_rr_groups', groupId, {status:'allotted'});
+    toast('All '+ok+' resources allotted','success');
+  }catch(e){ toast('Resources allotted but could not mark the group as allotted: '+e.message,'warning'); }
+  finally{
+    closeSheet('ov-exec','sh-exec');
+    if(document.getElementById('rr-content') && typeof rrLoadItems==='function') await rrLoadItems();
+    if(document.getElementById('exec-content') && typeof execLoadItems==='function') await execLoadItems();
+  }
+}
+
 async function rrGroupAllotConfirm(groupId){
   var group=RR_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;})||WA_COMBINED_RR_GROUPS.find(function(g){return g.id===groupId;});
   if(!group){ toast('Group not found','error'); return; }
@@ -3798,6 +3896,18 @@ async function rrGroupAllotConfirm(groupId){
   var docType=(document.querySelector('input[name="rr-grp-doc-type"]:checked')||{value:'none'}).value;
 
   var rateMode=(document.querySelector('input[name="rr-grp-rate-mode"]:checked')||{value:'itemwise'}).value;
+  if(rateMode==='resources'){
+    await rrGroupAllotByResources(groupId,group,giItems,{projId:projId,partyType:partyType,partyName:partyName,startDate:startDate,endDate:endDate,scope:scope,docType:docType});
+    return;
+  }
+  // Item-wise / lumpsum cover the same work as the group's resources: block if those were already allotted.
+  try{
+    var _cgRes=cgResourcesForRrItems(giItems);
+    if(_cgRes.length){
+      var _al=await cgResourceAllotments(_cgRes.map(function(r){return r.id;}));
+      if(_al.length){ alert('This group\'s resources are already allotted ('+_al.map(function(a){return a.party_name;}).join(', ')+'), so it can\'t also be allotted by item rate / lumpsum.\n\nDelete those allotments first, or finish the rest from the normal Allotment screen.'); return; }
+    }
+  }catch(e){ toast('Could not check existing allotments: '+e.message+' \u2014 nothing saved','error'); return; }
   var rateByRiId={}; var rateError=null;
   var lumpsum=null;
 
@@ -5217,6 +5327,17 @@ async function execSaveAllot(itemId, projId){
   });
 
   if(!allValid) return;
+
+  // A resource of a combined group can't be allotted here once the group itself was allotted
+  // by BOQ item rate / lumpsum (same work).
+  try{
+    var _gset={}; toSave.forEach(function(x){ if(x.planRes&&x.planRes.combined_plan_group_id) _gset[x.planRes.combined_plan_group_id]=1; });
+    var _gl=Object.keys(_gset);
+    if(_gl.length && await cgAllottedByItem(_gl)){
+      alert('This resource belongs to a combined group that was already allotted by BOQ item rate / lumpsum, so it can\'t be allotted again here.\n\nDelete the group allotment first if you want to allot by resources.');
+      return;
+    }
+  }catch(e){ toast('Could not check the group allotment: '+e.message+' \u2014 nothing saved','error'); return; }
 
   // Generate one batch_id for all resources saved together
   var batchId = 'batch-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
