@@ -23589,11 +23589,11 @@ function tpmRenderList(){
       '</div>'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">'+
         '<div style="font-size:11px;color:var(--text3);">'+
-          (projName?'&#128205; <b style="color:var(--text2);">'+projName+'</b>':'<span>Not assigned to a project</span>')+
+          (projName?'&#128205; <b style="color:var(--text2);">'+projName+'</b>':(x.ownership==='rented_in'?'<span>Assigned when allotted in a project</span>':'<span>Not assigned to a project</span>'))+
           (x.purchase_cost?' \u00b7 '+fmtINR(parseFloat(x.purchase_cost)||0):'')+
         '</div>'+
         '<div style="display:flex;gap:6px;flex-shrink:0;">'+
-          (tpmCanEdit()?'<button onclick="tpmOpenTransfer(\''+x.id+'\')" style="background:none;border:1px solid #D7CCC8;color:#4E342E;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128257; Assign</button>':'')+
+          (tpmCanEdit()&&x.ownership!=='rented_in'?'<button onclick="tpmOpenTransfer(\''+x.id+'\')" style="background:none;border:1px solid #D7CCC8;color:#4E342E;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;">&#128257; Assign</button>':'')+
           (tpmCanEdit()?'<button onclick="tpmOpenForm(\''+x.id+'\')" style="background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#9998;</button>':'')+
           (tpmCanDelete()?'<button onclick="tpmDelete(\''+x.id+'\')" style="background:none;border:1px solid #FFCDD2;color:#C62828;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:800;cursor:pointer;">&#128465;</button>':'')+
         '</div>'+
@@ -23619,11 +23619,12 @@ function tpmOpenForm(id){
     '<div class="fgrp"><label class="flbl">Make / Model</label><input id="tpm-makemodel" class="finp" placeholder="e.g. JCB 3DX Super" value="'+(ex?ex.make_model||'':'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Registration / Serial No.</label><input id="tpm-regno" class="finp" placeholder="e.g. MH-12-AB-1234" value="'+(ex?ex.reg_or_serial_no||'':'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Specification</label><textarea id="tpm-spec" class="finp" rows="3" style="resize:vertical;" placeholder="e.g. Engine: 4-cylinder diesel, Operating weight: 8.5T, Bucket capacity: 0.9 m3">'+(ex?ex.specification||'':'')+'</textarea></div>'+
-    '<div class="fgrp"><label class="flbl">Ownership</label><select id="tpm-ownership" class="fsel" onchange="document.getElementById(\'tpm-vendorwrap\').style.display=this.value===\'rented_in\'?\'\':\'none\';">'+
+    '<div class="fgrp"><label class="flbl">Ownership</label><select id="tpm-ownership" class="fsel" onchange="tpmOwnershipChanged(this.value)">'+
       '<option value="owned"'+((!ex||ex.ownership==='owned')?' selected':'')+'>Owned</option>'+
       '<option value="rented_in"'+((ex&&ex.ownership==='rented_in')?' selected':'')+'>Rented In (from a vendor)</option>'+
     '</select></div>'+
     '<div id="tpm-vendorwrap" class="fgrp" style="display:'+((ex&&ex.ownership==='rented_in')?'':'none')+';"><label class="flbl">Vendor Name</label><input id="tpm-vendor" class="finp" placeholder="e.g. Shree Equipment Rentals" value="'+(ex?ex.vendor_name||'':'')+'"></div>'+
+    '<div class="tpm-owned-only">'+
     '<div class="fgrp"><label class="flbl">Purchase Date</label><input id="tpm-pdate" class="finp" type="date" value="'+(ex&&ex.purchase_date?ex.purchase_date:'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Purchase Cost (\u20b9)</label><input id="tpm-pcost" class="finp" type="number" step="0.01" placeholder="0.00" value="'+(ex&&ex.purchase_cost?parseFloat(ex.purchase_cost):'')+'"></div>'+
     '<div class="fgrp"><label class="flbl">Approximate Life (Years)</label><input id="tpm-life" class="finp" type="number" step="0.5" placeholder="e.g. 10" value="'+(ex&&ex.approx_life_years!=null?parseFloat(ex.approx_life_years):'')+'"></div>'+
@@ -23638,7 +23639,8 @@ function tpmOpenForm(id){
       '</div>'+
       '<div id="tpm-loanmode-body"></div>'+
     '</div>'+
-    '<div class="fgrp"><label class="flbl">Status</label><select id="tpm-status" class="fsel">'+
+    '</div>'+
+    '<div class="fgrp tpm-owned-only"><label class="flbl">Status</label><select id="tpm-status" class="fsel">'+
       Object.keys(TPM_STATUS_DEFS).map(function(s){return '<option value="'+s+'"'+((ex&&ex.status===s)||(!ex&&s==='available')?' selected':'')+'>'+TPM_STATUS_DEFS[s].label+'</option>';}).join('')+
     '</select></div>'+
     '<div class="fgrp"><label class="flbl">Documents</label>'+
@@ -23655,6 +23657,14 @@ function tpmOpenForm(id){
   tpmRenderDocsList();
   if(takenOnLoan) tpmSetLoanMode('link', ex);
   openSheet('ov-tpm','sh-tpm');
+  tpmOwnershipChanged((ex&&ex.ownership)||'owned');
+}
+// Rented-in assets only need identity + vendor + documents. Purchase, life, loan and status
+// are owned-asset details, and project assignment happens when the machine is allotted in a project.
+function tpmOwnershipChanged(v){
+  var rented=(v==='rented_in');
+  var vw=document.getElementById('tpm-vendorwrap'); if(vw) vw.style.display=rented?'':'none';
+  document.querySelectorAll('#tpm-sheet-body .tpm-owned-only').forEach(function(el){ el.style.display=rented?'none':''; });
 }
 
 // Fires on every change of "Taken on Loan?", not just when opening the
@@ -23840,7 +23850,7 @@ async function tpmSave(id){
   var name=(document.getElementById('tpm-name')||{value:''}).value.trim();
   if(!name){toast('Asset name is required','warning');return;}
   var ownership=gv('tpm-ownership')||'owned';
-  var takenOnLoan=gv('tpm-loanyn')==='yes';
+  var takenOnLoan=gv('tpm-loanyn')==='yes' && ownership!=='rented_in';
   var linkedLoanId=null;
   if(takenOnLoan){
     if(TPM_LOAN_MODE==='new'){
@@ -23859,12 +23869,12 @@ async function tpmSave(id){
     specification:(document.getElementById('tpm-spec')||{value:''}).value.trim()||null,
     ownership:ownership,
     vendor_name:ownership==='rented_in'?((document.getElementById('tpm-vendor')||{value:''}).value.trim()||null):null,
-    purchase_date:gv('tpm-pdate')||null,
-    purchase_cost:parseFloat(gv('tpm-pcost'))||0,
-    approx_life_years:gv('tpm-life')?parseFloat(gv('tpm-life')):null,
-    taken_on_loan:takenOnLoan,
-    linked_loan_id:linkedLoanId,
-    status:gv('tpm-status')||'available',
+    purchase_date:ownership==='rented_in'?null:(gv('tpm-pdate')||null),
+    purchase_cost:ownership==='rented_in'?0:(parseFloat(gv('tpm-pcost'))||0),
+    approx_life_years:ownership==='rented_in'?null:(gv('tpm-life')?parseFloat(gv('tpm-life')):null),
+    taken_on_loan:ownership==='rented_in'?false:takenOnLoan,
+    linked_loan_id:ownership==='rented_in'?null:linkedLoanId,
+    status:ownership==='rented_in'?((id&&(TPM_LIST.find(function(x){return x.id===id;})||{}).status)||'available'):(gv('tpm-status')||'available'),
     documents:TPM_FORM_DOCS.length?JSON.stringify(TPM_FORM_DOCS):null,
     notes:(document.getElementById('tpm-notes')||{value:''}).value.trim()||null,
     updated_at:new Date().toISOString()
@@ -29670,8 +29680,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261030b"></script>
-<script src="js/employee.js?v=20261030b"></script>
-<script src="js/projects.js?v=20261030b"></script>
-<script src="js/finance.js?v=20261030b"></script>
+<script src="js/registry.js?v=20261030c"></script>
+<script src="js/employee.js?v=20261030c"></script>
+<script src="js/projects.js?v=20261030c"></script>
+<script src="js/finance.js?v=20261030c"></script>
 </html>

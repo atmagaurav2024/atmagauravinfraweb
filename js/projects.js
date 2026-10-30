@@ -17011,8 +17011,8 @@ async function partyFetchNames(type){
   if(src==='sc') rows=await sbFetch('subcontractors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
   else if(src==='labour') rows=await sbFetch('labourers',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
   else if(src==='machinery'){
-    try{ rows=await sbFetch('equipment',{select:'id,name',order:'name.asc'}); }catch(e){ rows=[]; }
-    if(!Array.isArray(rows)||!rows.length) rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
+    // Machinery allotments: only vendors registered under a machinery category.
+    rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active&category=ilike.*machin*',order:'name.asc'});
   }
   else rows=await sbFetch('vendors',{select:'id,name',filter:'status=eq.active',order:'name.asc'});
   return Array.isArray(rows)?rows:[];
