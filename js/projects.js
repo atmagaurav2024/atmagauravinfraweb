@@ -8433,7 +8433,17 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
     '<tr>'+
       '<td style="text-align:center;color:#888;">1</td>'+
       '<td><span style="font-weight:700;">'+(groupNameLabel||'Combined Work')+'</span>'+
-        '<div style="font-size:9px;color:#555;margin-top:3px;font-style:italic;">Lumpsum for entire scope of work</div></td>'+
+        '<div style="font-size:9px;color:#555;margin-top:3px;font-style:italic;">Lumpsum for entire scope of work</div>'+
+        // list every work item covered, not just the group name
+        (function(){
+          var names=batchItems.map(function(a){
+            var pr=WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
+            if(pr.combined_plan_group_id) return pr.party_name||'';
+            var bi=WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||pr.boq_item_id);})||{};
+            return bi.short_name||bi.description||'';
+          }).filter(function(v,i,arr){return v&&arr.indexOf(v)===i;});
+          return names.length?'<div style="font-size:9.5px;color:#333;margin-top:4px;">Includes: '+names.join('; ')+'</div>':'';
+        })()+'</td>'+
       '<td style="text-align:center;">Lot</td>'+
       '<td style="text-align:right;">—</td>'+
       '<td style="text-align:right;font-weight:700;">'+('₹'+lumpsumTotal.toLocaleString('en-IN',{minimumFractionDigits:2}))+'</td>'+
@@ -8442,13 +8452,16 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
   ) : batchItems.map(function(a,idx){
     var planRes = WA_PLANNED.find(function(r){return r.id===a.boq_exec_resource_id;})||{};
     var boqItem = WA_ITEMS.find(function(i){return i.id===(a.boq_item_id||planRes.boq_item_id);})||{};
-    var itemCode = boqItem.item_code?'<div style="font-size:9px;color:#888;margin-bottom:2px;">BOQ: '+boqItem.item_code+'</div>':'';
+    // Resource-wise group allotment: each row is a planned resource (its name is in party_name),
+    // so describe it by that resource rather than by the group's first BOQ item.
+    var isResRow = !!planRes.combined_plan_group_id;
+    var itemCode = (!isResRow && boqItem.item_code)?'<div style="font-size:9px;color:#888;margin-bottom:2px;">BOQ: '+boqItem.item_code+'</div>':'';
     var specText = a.specification?'<div style="font-size:9px;color:#555;margin-top:3px;font-style:italic;">Spec: '+a.specification+'</div>':'';
     // The item/work description is what genuinely differs row-to-row in
     // a combined document - the party is identical on every row (all
     // allotted to the same party) and already shown once at the top, so
     // it shouldn't be the primary, bold text repeated on every line.
-    var descText = boqItem.short_name||boqItem.description||planRes.party_name||a.party_name||'Item '+(idx+1);
+    var descText = isResRow ? (planRes.party_name||'Resource '+(idx+1)) : (boqItem.short_name||boqItem.description||planRes.party_name||a.party_name||'Item '+(idx+1));
     var amt = Math.round((parseFloat(a.qty)||0)*(parseFloat(a.rate)||0));
     var inrFull = function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2});};
     return '<tr>'+
