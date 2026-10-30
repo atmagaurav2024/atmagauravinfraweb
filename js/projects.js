@@ -3732,6 +3732,7 @@ async function rrGroupOpenAllotForm(groupId){
           '<input type="radio" name="rr-grp-rate-mode" value="resources" onchange="rrGroupToggleRateMode(\'resources\')" style="accent-color:#00838F;"> By resources (own units)'+
         '</label>':'')+
       '</div>'+
+      waOpenQtyHtml()+
       (cgResList.length?cgResBlockHtml:'')+
       '<div id="rr-grp-lumpsum-row" style="display:none;margin-bottom:10px;">'+
         '<label class="flbl">Lumpsum Amount (\u20b9) *</label>'+
@@ -3769,7 +3770,6 @@ async function rrGroupOpenAllotForm(groupId){
     '<div style="margin-bottom:8px;"><label class="flbl">Scope / Terms</label>'+
       '<textarea id="rr-grp-allot-scope" class="ftxt" rows="2" placeholder="Common scope for this allotment...">'+(group.remarks||'')+'</textarea>'+
     '</div>'+
-    waOpenQtyHtml()+
     '<div><label class="flbl">Document Type (optional)</label>'+
       '<div style="display:flex;gap:6px;margin-top:4px;">'+
         '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
@@ -4823,7 +4823,6 @@ async function execOpenMultiAllot(){
       '<div><label class="flbl">Scope / Terms</label>'+
         '<textarea id="wa-scope" class="ftxt" rows="2" placeholder="Common scope for all selected resources..."></textarea>'+
       '</div>'+
-      waOpenQtyHtml()+
       '<div><label class="flbl">Document Type (optional)</label>'+
         '<div style="display:flex;gap:6px;margin-top:4px;">'+
           '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
@@ -4908,6 +4907,7 @@ async function execOpenMultiAllot(){
   document.getElementById('exec-sheet-body').innerHTML=
     partySection+
     '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:8px;">&#9313; Select Resources (across all BOQ items)</div>'+
+    waOpenQtyHtml()+
     '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;">Tick item header to select all its resources, or tick individual resources</div>'+
     resRowsHtml;
 
@@ -5119,7 +5119,6 @@ async function execOpenAllot(itemId){
       '<div style="margin-bottom:8px;"><label class="flbl">Scope / Terms</label>'+
         '<textarea id="wa-scope" class="ftxt" rows="2" placeholder="Common scope for all selected resources..."></textarea>'+
       '</div>'+
-      waOpenQtyHtml()+
       '<div><label class="flbl">Document Type (optional)</label>'+
         '<div style="display:flex;gap:6px;margin-top:4px;">'+
           '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
@@ -5190,6 +5189,7 @@ async function execOpenAllot(itemId){
   document.getElementById('exec-sheet-body').innerHTML=
     partySection+
     '<div style="font-size:12px;font-weight:800;color:#E65100;margin-bottom:8px;">&#9313; Select Resources</div>'+
+    waOpenQtyHtml()+
     '<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Check resources to include — enter qty and rate for each</div>'+
     resRowsHtml;
 
