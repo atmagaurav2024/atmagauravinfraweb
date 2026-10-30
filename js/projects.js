@@ -9457,15 +9457,27 @@ function execRenderDailyContent(){
     '</div>'+
     itemCards;
 }
+// Allotments usable for a BOQ item in Daily Progress: its own, plus resource-wise allotments of a
+// combined group's resources (those are stored against one item but serve every item in the group).
+function dpItemAllots(itemId,itemSubIds){
+  var pool=(typeof WA_COMBINED_PLAN_ITEMS!=='undefined'?WA_COMBINED_PLAN_ITEMS:[]);
+  var myGroups={}; pool.forEach(function(ci){ if(ci.boq_item_id===itemId) myGroups[ci.group_id]=1; });
+  return WA_ALLOT.filter(function(a){
+    if(a.boq_item_id===itemId||(a.boq_subitem_id&&itemSubIds.includes(a.boq_subitem_id))) return true;
+    if(a.boq_exec_resource_id){
+      var pl=WA_PLANNED.find(function(p){return p.id===a.boq_exec_resource_id;});
+      if(pl&&pl.combined_plan_group_id&&myGroups[pl.combined_plan_group_id]) return true;
+    }
+    return false;
+  });
+}
 async function execOpenDailyEntry(itemId){
   var projId=PROJ_MOD_SEL_ID||(document.getElementById('exec-proj-sel')||{}).value||'';
   var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
 
   // Get allotted resources for this item (via boq_item_id or sub-item)
   var itemSubIds=WA_SUBS.filter(function(s){return s.boq_item_id===itemId;}).map(function(s){return s.id;});
-  var itemAllots=WA_ALLOT.filter(function(a){
-    return a.boq_item_id===itemId||(a.boq_subitem_id&&itemSubIds.includes(a.boq_subitem_id));
-  });
+  var itemAllots=dpItemAllots(itemId,itemSubIds);
 
   var tLbl=partyLblMap({vendor:'Vendor',sc:'SC',labour_contractor:'Labour Contr.',labour:'Labour',machinery:'Machinery'});
   var tCol=partyColMap({vendor:'#1565C0',sc:'#6A1B9A',labour_contractor:'#2E7D32',labour:'#37474F',machinery:'#E65100'});
@@ -9904,9 +9916,7 @@ async function execEditDailyEntry(entryId, itemId){
 
   // Get allotted resources for this item
   var itemSubIds=WA_SUBS.filter(function(s){return s.boq_item_id===itemId;}).map(function(s){return s.id;});
-  var itemAllots=WA_ALLOT.filter(function(a){
-    return a.boq_item_id===itemId||(a.boq_subitem_id&&itemSubIds.includes(a.boq_subitem_id));
-  });
+  var itemAllots=dpItemAllots(itemId,itemSubIds);
 
   // Parse existing resources_used
   var existingRes=[];try{existingRes=d.resources_used?JSON.parse(d.resources_used):[];}catch(e){}
