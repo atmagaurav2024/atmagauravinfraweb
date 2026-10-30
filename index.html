@@ -25029,10 +25029,20 @@ function accSortByDate(list){
   });
 }
 
+// Opening balance "as on" a date: entries dated before it are history that the opening balance already covers.
+function accPreOpenCash(v,cashIds){
+  var ids=[v.debit_account,v.credit_account].filter(function(i){return cashIds[i];});
+  return ids.some(function(i){ var od=cashIds[i].opening_date?String(cashIds[i].opening_date).slice(0,10):''; return od && String(v.date||'')<od; });
+}
+function accOpenDate(accountId){
+  var a=ACC_ACCOUNTS.find(function(x){return x.id===accountId;});
+  return (a&&a.opening_date)?String(a.opening_date).slice(0,10):'';
+}
 function accMovements(accountId, asOn){
-  var dr=0, cr=0;
+  var dr=0, cr=0, od=accOpenDate(accountId);
   ACC_VOUCHERS.forEach(function(v){
     if(accIsPersonal(v)) return;
+    if(od && String(v.date||'')<od) return;
     if(!accInPeriod(v, asOn)) return;
     if(v.debit_account===accountId) dr+=(parseFloat(v.amount)||0);
     if(v.credit_account===accountId) cr+=(parseFloat(v.amount)||0);
@@ -25054,8 +25064,9 @@ function accLoadLedger(accountId){
   if(!accountId){ body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Select account to view ledger</div>'; return; }
   var a=ACC_ACCOUNTS.find(function(x){return x.id===accountId;});
   if(!a){ body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">Account not found</div>'; return; }
+  var _od=accOpenDate(accountId);
   var entries=ACC_VOUCHERS
-    .filter(function(v){ return !accIsPersonal(v) && (v.debit_account===accountId || v.credit_account===accountId); })
+    .filter(function(v){ return !accIsPersonal(v) && (v.debit_account===accountId || v.credit_account===accountId) && !(_od && String(v.date||'')<_od); })
     .sort(function(x,y){ return String(x.date||'').localeCompare(String(y.date||'')); });
   var open=parseFloat(a.opening_balance)||0;
   var run=open; // running balance on the account's normal side
@@ -25441,7 +25452,7 @@ function accReportExportData(which){
     var cashIds={}; cashAccts.forEach(function(a){ cashIds[a.id]=a; });
     var rows=[], inflow=0, outflow=0;
     ACC_VOUCHERS
-      .filter(function(v){ return !accIsPersonal(v) && (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false); })
+      .filter(function(v){ return !accIsPersonal(v) && (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false) && !accPreOpenCash(v,cashIds); })
       .sort(function(x,y){ return String(y.date||'').localeCompare(String(x.date||'')); })
       .forEach(function(v){
         var amt=parseFloat(v.amount)||0;
@@ -25568,7 +25579,7 @@ function accShowReport(which){
     var cashIds={}; cashAccts.forEach(function(a){ cashIds[a.id]=a; });
     var inflow=0, outflow=0;
     var rows=ACC_VOUCHERS
-      .filter(function(v){ return !accIsPersonal(v) && (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false); })
+      .filter(function(v){ return !accIsPersonal(v) && (cashIds[v.debit_account]||cashIds[v.credit_account]) && accInPeriod(v,false) && !accPreOpenCash(v,cashIds); })
       .sort(function(x,y){ return String(y.date||'').localeCompare(String(x.date||'')); })
       .map(function(v){
         var amt=parseFloat(v.amount)||0;
@@ -26359,7 +26370,9 @@ function accNewAccount(){
     '<label class="flbl">Account Name *</label><input class="finp" id="ac-name" placeholder="e.g. Cash on Hand">'+
     '<label class="flbl">Type *</label><select class="fsel" id="ac-type"><option>Asset</option><option>Liability</option><option>Income</option><option>Expense</option><option>Equity</option></select>'+
     '<label class="flbl">Group</label><input class="finp" id="ac-group" placeholder="e.g. Current Assets">'+
-    '<label class="flbl">Opening Balance (₹)</label><input class="finp" id="ac-opening" type="number" placeholder="0">';
+    '<label class="flbl">Opening Balance (₹)</label><input class="finp" id="ac-opening" type="number" placeholder="0">'+
+    '<label class="flbl">Opening balance as on (date)</label><input class="finp" id="ac-opening-date" type="date">'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:3px;">Optional. Entries dated before this day are left out of this account\'s balance and reports \u2014 use it when you start the app with an existing balance but have older history imported.</div>';
   var foot=document.getElementById('acc-sheet-foot');if(foot)foot.innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-acc\',\'sh-acc\')">Cancel</button><button class="btn btn-navy" onclick="accSaveAccount()">💾 Save</button>';
 }
 
@@ -26367,6 +26380,7 @@ async function accSaveAccount(editId){
   var code=gv('ac-code'), name=gv('ac-name');
   if(!code||!name){toast('Code and name required','warning');return;}
   var payload={code:code,name:name,type:gv('ac-type'),group:gv('ac-group'),opening_balance:parseFloat(gv('ac-opening'))||0};
+  var _od=gv('ac-opening-date'); if(_od||editId) payload.opening_date=_od||null;   // only sent when set/edited, so it works before the SQL is run
   try{
     if(editId){await sbUpdate('chart_of_accounts',editId,payload);}else{await sbInsert('chart_of_accounts',payload);}
     closeSheet('ov-acc','sh-acc');await initAccounts();toast('Account saved','success');
@@ -26380,6 +26394,7 @@ function accEditAccount(id){
   setTimeout(function(){
     var code=document.getElementById('ac-code'),name=document.getElementById('ac-name'),type=document.getElementById('ac-type'),group=document.getElementById('ac-group'),opening=document.getElementById('ac-opening');
     if(code)code.value=a.code||'';if(name)name.value=a.name||'';if(type)type.value=a.type||'Asset';if(group)group.value=a.group||'';if(opening)opening.value=a.opening_balance||0;
+    var od=document.getElementById('ac-opening-date'); if(od) od.value=a.opening_date?String(a.opening_date).slice(0,10):'';
     var foot=document.getElementById('acc-sheet-foot');if(foot)foot.innerHTML='<button class="btn btn-outline" onclick="closeSheet(\'ov-acc\',\'sh-acc\')">Cancel</button><button class="btn btn-navy" onclick="accSaveAccount(\''+id+'\')">💾 Save</button>';
   },50);
 }
@@ -29686,8 +29701,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261030l"></script>
-<script src="js/employee.js?v=20261030l"></script>
-<script src="js/projects.js?v=20261030l"></script>
-<script src="js/finance.js?v=20261030l"></script>
+<script src="js/registry.js?v=20261030m"></script>
+<script src="js/employee.js?v=20261030m"></script>
+<script src="js/projects.js?v=20261030m"></script>
+<script src="js/finance.js?v=20261030m"></script>
 </html>

@@ -14069,13 +14069,14 @@ async function fundsFetchAll(table,select,filter){
   return out;
 }
 async function fundsBalances(asOn){
-  var accs=await sbFetch('chart_of_accounts',{select:'id,code,opening_balance',filter:'code=in.(1001,1002)'});
+  var accs=await sbFetch('chart_of_accounts',{select:'*',filter:'code=in.(1001,1002)'});
   var res={cash:0,bank:0,ok:true}, byCode={};
   (Array.isArray(accs)?accs:[]).forEach(function(a){byCode[a.code]=a;});
   var keys=[['cash','1001'],['bank','1002']];
   for(var k=0;k<keys.length;k++){
     var a=byCode[keys[k][1]]; if(!a){ res.ok=false; continue; }
     var dateF=asOn?('&date=lte.'+asOn):'';
+    if(a.opening_date) dateF+='&date=gte.'+String(a.opening_date).slice(0,10);   // opening balance is "as on" this date
     var typeF='&or=(type.is.null,type.neq.Personal%20Sales)';
     var dr=await fundsFetchAll('vouchers','amount','debit_account=eq.'+a.id+dateF+typeF);
     var cr=await fundsFetchAll('vouchers','amount','credit_account=eq.'+a.id+dateF+typeF);
@@ -14113,9 +14114,9 @@ async function fundsOpenStatement(cls){
   ov.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3);">Loading statement...</div>';
   document.body.appendChild(ov);
   try{
-    var accs=await sbFetch('chart_of_accounts',{select:'id,code,name,opening_balance',filter:'code=eq.'+(cls==='cash'?'1001':'1002')});
+    var accs=await sbFetch('chart_of_accounts',{select:'*',filter:'code=eq.'+(cls==='cash'?'1001':'1002')});
     var a=accs&&accs[0]; if(!a) throw new Error('Account not found in Chart of Accounts');
-    var f='&or=(type.is.null,type.neq.Personal%20Sales)';
+    var f='&or=(type.is.null,type.neq.Personal%20Sales)'+(a.opening_date?'&date=gte.'+String(a.opening_date).slice(0,10):'');   // opening balance is "as on" this date
     var dr=await fundsFetchAll('vouchers','id,date,created_at,vou_no,voucher_no,narration,party_name,amount,debit_account,credit_account,type','debit_account=eq.'+a.id+f);
     var cr=await fundsFetchAll('vouchers','id,date,created_at,vou_no,voucher_no,narration,party_name,amount,debit_account,credit_account,type','credit_account=eq.'+a.id+f);
     var seen={}, all=[];
