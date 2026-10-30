@@ -9769,9 +9769,10 @@ function execOfferExtraOrders(list){
 }
 
 async function execSaveDailyEntry(projId,itemId){
-  var date=gv('dp-date'),qty=parseFloat(gv('dp-qty'))||0;
+  var date=gv('dp-date'),qty=parseFloat(gv('dp-qty'));
   if(!date){toast('Date required','warning');return;}
-  if(!qty){toast('Enter qty completed','warning');return;}
+  // 0 is a valid quantity (a day with resources deployed but no measurable progress); only blank/negative is rejected
+  if(isNaN(qty)||qty<0){toast('Enter qty completed (0 if none)','warning');return;}
 
   var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
 
@@ -10073,9 +10074,10 @@ async function execEditDailyEntry(entryId, itemId){
 }
 
 async function execUpdateDailyEntry(entryId, itemId, projId){
-  var date=gv('dp-date'),qty=parseFloat(gv('dp-qty'))||0;
+  var date=gv('dp-date'),qty=parseFloat(gv('dp-qty'));
   if(!date){toast('Date required','warning');return;}
-  if(!qty){toast('Enter qty completed','warning');return;}
+  // 0 is a valid quantity (a day with resources deployed but no measurable progress); only blank/negative is rejected
+  if(isNaN(qty)||qty<0){toast('Enter qty completed (0 if none)','warning');return;}
 
   var item=WA_ITEMS.find(function(i){return i.id===itemId;})||{};
 
