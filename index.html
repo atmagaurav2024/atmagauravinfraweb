@@ -7914,7 +7914,7 @@ async function catQuickAdd(){
 async function catQuickToggle(i){
   var type=CAT_QUICK_TYPE, c=(CAT_DATA[type]||[])[i];
   if(!c) return;
-  if(c.builtin){ toast('Built-in units cannot be disabled','warning'); return; }
+  if(c.builtin){ toast('Built-in items cannot be disabled','warning'); return; }
   c.active=!c.active;
   catRenderQuickEdit();
   try{
@@ -29684,8 +29684,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261030h"></script>
-<script src="js/employee.js?v=20261030h"></script>
-<script src="js/projects.js?v=20261030h"></script>
-<script src="js/finance.js?v=20261030h"></script>
+<script src="js/registry.js?v=20261030i"></script>
+<script src="js/employee.js?v=20261030i"></script>
+<script src="js/projects.js?v=20261030i"></script>
+<script src="js/finance.js?v=20261030i"></script>
 </html>

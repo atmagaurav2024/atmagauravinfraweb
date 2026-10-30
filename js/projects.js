@@ -2333,8 +2333,8 @@ async function loadUomIfNeeded(){
     ]);
     var _uomRows=Array.isArray(rows[0])?rows[0].map(function(r){return {id:r.id,name:r.name,icon:r.icon||'',active:r.active!==false,count:0,desc:'',color:'#37474F'};}):[];
     CAT_DATA['uom']=(typeof uomMerge==='function')?uomMerge(_uomRows):_uomRows;
-    if(Array.isArray(rows[1])&&rows[1].length)
-      CAT_DATA['resource']=rows[1].map(function(r){return {id:r.id,name:r.name,icon:r.icon||'',active:r.active!==false,count:0,desc:'',color:'#37474F'};});
+    var _rcRows=Array.isArray(rows[1])?rows[1].map(function(r){return {id:r.id,name:r.name,icon:r.icon||'',active:r.active!==false,count:0,desc:'',color:'#37474F'};}):[];
+    CAT_DATA['resource']=(typeof rescatMerge==='function')?rescatMerge(_rcRows):_rcRows;
   }catch(e){console.warn('loadUomIfNeeded:',e);}
 }
 

@@ -19,22 +19,26 @@ var CAT_DATA={
 
 // Built-in units: always present, can't be duplicated, deleted or disabled. Extra units can be added/removed.
 var UOM_BUILTIN=['Cum','Sqm','Rmt','Nos','MT','Kg','Hours','Liters'];
-function uomMerge(list){
+var RESCAT_BUILTIN=['Material','Labour','Machinery','Subcontractor'];
+function uomMerge(list){ return catBuiltinMerge(list,UOM_BUILTIN,'uom','\ud83d\udccf'); }
+function rescatMerge(list){ return catBuiltinMerge(list,RESCAT_BUILTIN,'resource','\ud83d\udd16'); }
+function catBuiltinMerge(list,BUILTIN,kind,icon){
   list=Array.isArray(list)?list:[];
   var out=[];
-  UOM_BUILTIN.forEach(function(n){
+  BUILTIN.forEach(function(n){
     var k=n.toLowerCase();
     var hit=list.find(function(u){return String(u.name||'').toLowerCase().trim()===k;});
     if(hit){ hit.name=n; hit.active=true; hit.builtin=true; out.push(hit); }
-    else out.push({id:'uom-builtin-'+k,icon:'\ud83d\udccf',name:n,desc:'Built-in unit',color:'#37474F',count:0,active:true,builtin:true});
+    else out.push({id:kind+'-builtin-'+k,icon:icon,name:n,desc:'Built-in',color:'#37474F',count:0,active:true,builtin:true});
   });
   list.forEach(function(u){
     var k=String(u.name||'').toLowerCase().trim();
-    if(!UOM_BUILTIN.some(function(n){return n.toLowerCase()===k;})) out.push(u);   // DB duplicates of a built-in collapse into it
+    if(!BUILTIN.some(function(n){return n.toLowerCase()===k;})) out.push(u);   // DB duplicates of a built-in collapse into it
   });
   return out;
 }
 CAT_DATA.uom=uomMerge(CAT_DATA.uom);
+CAT_DATA.resource=rescatMerge(CAT_DATA.resource);
 var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats',partytype:'partytype-cats',pdfsign:'pdfsign-cats'};
 
 function catKey(name){ return (name||'').toLowerCase().trim(); }
@@ -388,7 +392,7 @@ function renderCatSection(type,containerId){
 
 async function deleteCat(type,i){
   var cat=CAT_DATA[type][i];
-  if(cat&&cat.builtin){ toast('"'+cat.name+'" is a built-in unit and cannot be deleted','warning'); return; }
+  if(cat&&cat.builtin){ toast('"'+cat.name+'" is a built-in item and cannot be deleted','warning'); return; }
   if(type==='role' && String(cat.name||'').trim().toLowerCase()==='admin'){ toast('The Admin role is required and cannot be deleted','warning'); return; }
   if(typeof catDeleteBlocked==='function' && await catDeleteBlocked(type,cat)) return;
   if(!confirm('Delete category "'+cat.name+'"?')) return;
@@ -405,7 +409,7 @@ async function deleteCat(type,i){
 }
 
 function toggleCat(type,i){
-  if(CAT_DATA[type][i]&&CAT_DATA[type][i].builtin){ toast('Built-in units cannot be disabled','warning'); return; }
+  if(CAT_DATA[type][i]&&CAT_DATA[type][i].builtin){ toast('Built-in items cannot be disabled','warning'); return; }
   CAT_DATA[type][i].active=!CAT_DATA[type][i].active;
   if(type==='pdfsign'){ var _p=CAT_DATA[type][i]; if(_p.id&&String(_p.id).indexOf('pdfsign-')!==0) sbUpdate('categories',_p.id,{active:_p.active}).then(function(){ return pdfSignLoad(true); }).catch(function(e){console.error(e);}); }
   if(type==='partytype'){ try{ var _c=CAT_DATA[type][i]; sbFetch('categories',{select:'id',filter:'type=eq.partytype&name=eq.'+encodeURIComponent(_c.name)}).then(function(r){ if(r&&r[0]) return sbUpdate('categories',r[0].id,{active:_c.active}); }).then(function(){ return partyTypesLoad(true); }); }catch(e){} }
@@ -467,6 +471,7 @@ async function loadCategories(){
       }
     });
     CAT_DATA.uom=uomMerge(CAT_DATA.uom);
+    CAT_DATA.resource=rescatMerge(CAT_DATA.resource);
     Object.keys(catSectionMap).forEach(function(type){renderCatSection(type,catSectionMap[type]);});
     rebuildPills('vendor',  'vendor-cat-pills','var(--teal)',  filterVendors);
     rebuildPills('material','mat-cat-pills',   'var(--green)', filterMaterials);
