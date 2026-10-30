@@ -3769,6 +3769,7 @@ async function rrGroupOpenAllotForm(groupId){
     '<div style="margin-bottom:8px;"><label class="flbl">Scope / Terms</label>'+
       '<textarea id="rr-grp-allot-scope" class="ftxt" rows="2" placeholder="Common scope for this allotment...">'+(group.remarks||'')+'</textarea>'+
     '</div>'+
+    waOpenQtyHtml()+
     '<div><label class="flbl">Document Type (optional)</label>'+
       '<div style="display:flex;gap:6px;margin-top:4px;">'+
         '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
@@ -3856,8 +3857,10 @@ async function rrGroupAllotByResources(groupId,group,giItems,ctx){
   var cgRes=cgResourcesForRrItems(giItems);
   if(!cgRes.length){ toast('This group has no resources planned','warning'); return; }
   var rateById={}, qtyById={}, bad=false, badQty=false;
+  var openQ=waOpenQtyOn();
   document.querySelectorAll('.rr-grp-res-qty').forEach(function(inp){
     var id=inp.getAttribute('data-res-id'), q=parseFloat(inp.value), max=parseFloat(inp.getAttribute('data-max'))||0;
+    if(openQ){ qtyById[id]=1; return; }   // placeholder so the rate is validated; saved as qty 0
     if(isNaN(q)||q<0||q>max+0.0001) badQty=true; qtyById[id]=isNaN(q)?0:q;
   });
   if(badQty){ toast('Qty must be between 0 and the planned qty for every resource','warning'); return; }
@@ -3881,7 +3884,7 @@ async function rrGroupAllotByResources(groupId,group,giItems,ctx){
       var res=await sbInsert('boq_exec_resources',{
         project_id:ctx.projId, boq_item_id:r.boq_item_id, boq_subitem_id:r.boq_subitem_id||null, boq_exec_resource_id:r.id,
         date:today, exec_type:ctx.partyType, party_name:ctx.partyName, group_name:group.group_name||null,
-        qty:qtyById[r.id], unit:r.unit||null, rate:rateById[r.id]||0, scope:ctx.scope,
+        qty:openQ?0:qtyById[r.id], unit:r.unit||null, rate:rateById[r.id]||0, scope:ctx.scope,
         start_date:ctx.startDate, end_date:ctx.endDate, doc_type:ctx.docType==='none'?null:ctx.docType,
         batch_id:batchId, combined_rr_group_id:groupId
       });
@@ -3935,6 +3938,7 @@ async function rrGroupAllotConfirm(groupId){
   var rateByRiId={}; var rateError=null;
   var lumpsum=null;
 
+  if(rateMode==='lumpsum' && waOpenQtyOn()){ toast('A lumpsum allotment needs quantities \u2014 untick "Qty not known yet" or use item-wise rates','warning'); return; }
   if(rateMode==='lumpsum'){
     lumpsum=parseFloat((document.getElementById('rr-grp-lumpsum-amt')||{}).value);
     if(isNaN(lumpsum)||lumpsum<=0){ toast('Enter a valid lumpsum amount','warning'); return; }
@@ -3990,7 +3994,7 @@ async function rrGroupAllotConfirm(groupId){
         exec_type:partyType,
         party_name:partyName,
         group_name:group.group_name||null,
-        qty:ri.qty,
+        qty:waOpenQtyOn()?0:ri.qty,
         unit:ri.unit||null,
         rate:rateByRiId[ri.id]||0,
         lumpsum_amount:lumpsum,
@@ -4819,6 +4823,7 @@ async function execOpenMultiAllot(){
       '<div><label class="flbl">Scope / Terms</label>'+
         '<textarea id="wa-scope" class="ftxt" rows="2" placeholder="Common scope for all selected resources..."></textarea>'+
       '</div>'+
+      waOpenQtyHtml()+
       '<div><label class="flbl">Document Type (optional)</label>'+
         '<div style="display:flex;gap:6px;margin-top:4px;">'+
           '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
@@ -4989,7 +4994,8 @@ async function execSaveMultiAllot(projId){
     var unit =((body.querySelector('.wa-unit-sel[data-res-id="'+resId+'"]'))||{value:''}).value;
     var rate =parseFloat((body.querySelector('.wa-rate-inp[data-res-id="'+resId+'"]')||{value:0}).value)||0;
     var spec =((body.querySelector('.wa-spec-inp[data-res-id="'+resId+'"]'))||{value:''}).value.trim()||null;
-    if(qty<=0||qty>max){toast('Invalid qty for '+resId+' (max '+max+')','warning');return null;}
+    if(waOpenQtyOn()){ qty=0; if(!(rate>0)){toast('Enter a rate for every selected resource','warning');return null;} }
+    else if(qty<=0||qty>max){toast('Invalid qty for '+resId+' (max '+max+')','warning');return null;}
     return {resId:resId,rrId:rrId,itemId:itemId,qty:qty,unit:unit,rate:rate,spec:spec};
   }).filter(Boolean);
 
@@ -5113,6 +5119,7 @@ async function execOpenAllot(itemId){
       '<div style="margin-bottom:8px;"><label class="flbl">Scope / Terms</label>'+
         '<textarea id="wa-scope" class="ftxt" rows="2" placeholder="Common scope for all selected resources..."></textarea>'+
       '</div>'+
+      waOpenQtyHtml()+
       '<div><label class="flbl">Document Type (optional)</label>'+
         '<div style="display:flex;gap:6px;margin-top:4px;">'+
           '<label style="display:flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;cursor:pointer;flex:1;">'+
@@ -5337,7 +5344,8 @@ async function execSaveAllot(itemId, projId){
     var unit = row&&row.querySelector('.wa-unit-sel')?row.querySelector('.wa-unit-sel').value:null;
     var spec = row&&row.querySelector('.wa-spec-inp')?(row.querySelector('.wa-spec-inp').value||'').trim():'';
 
-    if(!qty){toast('Enter qty for all selected resources','warning');allValid=false;return;}
+    if(waOpenQtyOn()) qty=0;
+    else if(!qty){toast('Enter qty for all selected resources','warning');allValid=false;return;}
     if(!rate){toast('Enter rate for all selected resources','warning');allValid=false;return;}
     if(qty > rrMax){
       toast('Qty ('+qty+') exceeds this RR approved qty ('+rrMax+')','warning');
@@ -5444,7 +5452,8 @@ async function execUpdateBatch(batchKey){
   var rate=parseFloat(gv('ea-rate'))||0;
   var unitSel=document.getElementById('ea-unit-sel');
   var unit=(unitSel&&unitSel.value)?unitSel.value:null;
-  if(!qty||!rate){toast('Qty and rate required','warning');return;}
+  var openBatch=items.every(allotIsOpen);
+  if(!rate||(!qty&&!openBatch)){toast(openBatch?'Rate required':'Qty and rate required','warning');return;}
   var updates={qty:qty,rate:rate,unit:unit,scope:gv('ea-scope')||null,start_date:gv('ea-start')||null,end_date:gv('ea-end')||null};
   var ok=0, failed=0;
   for(var i=0;i<items.length;i++){
@@ -5503,7 +5512,8 @@ async function execUpdateAllotted(id){
   var rate=parseFloat(gv('ea-rate'))||0;
   var unitSel=document.getElementById('ea-unit-sel');
   var unit=(unitSel&&unitSel.value)?unitSel.value:null;
-  if(!qty||!rate){toast('Qty and rate required','warning');return;}
+  var _cur=WA_ALLOT.find(function(a){return a.id===id;})||{};
+  if(!rate||(!qty&&!allotIsOpen(_cur))){toast(allotIsOpen(_cur)?'Rate required':'Qty and rate required','warning');return;}
   var updates={qty:qty,rate:rate,unit:unit,scope:gv('ea-scope')||null,start_date:gv('ea-start')||null,end_date:gv('ea-end')||null};
   try{
     await sbUpdate('boq_exec_resources',id,updates);
@@ -5698,6 +5708,24 @@ async function execDelAllot(id){
 }
 
 function execGenCombinedDoc(t){var cc=Array.from(document.querySelectorAll(".wa-sel-chk:checked")).map(function(c){return c.getAttribute("data-allot-id");});if(!cc.length){toast("Check at least one resource row","warning");return;}var aa=cc.map(function(id){return WA_ALLOT.find(function(a){return a.id===id;});}).filter(Boolean);if(!aa.length)return;if(t==="wo")generateCombinedDoc(aa,"WORK ORDER","#E65100","#FFF3E0");else generateCombinedDoc(aa,"PURCHASE ORDER","#1565C0","#E3F2FD");}
+// ── Rate-only ("open qty") allotments ──
+// Sometimes the quantity isn't known until the work is done. Such an allotment is saved with
+// qty 0 and a rate; the executed qty is then entered in Daily Progress and billed at the rate.
+function allotIsOpen(a){ return !(parseFloat(a&&a.qty)>0); }
+function waOpenQtyHtml(){
+  return '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin:4px 0 10px;background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;cursor:pointer;">'+
+    '<input type="checkbox" id="wa-open-qty" onchange="waOpenQtyToggle(this.checked)" style="margin-top:2px;accent-color:#E65100;">'+
+    '<span style="font-size:11px;"><b>Qty not known yet \u2014 allot on rate only</b><br><span style="color:var(--text3);">Only description and rate are saved. The executed qty is entered in Daily Progress and billed at this rate.</span></span></label>';
+}
+function waOpenQtyOn(){ var c=document.getElementById('wa-open-qty'); return !!(c&&c.checked); }
+function waOpenQtyToggle(on){
+  document.querySelectorAll('.wa-qty-inp,.rr-grp-res-qty').forEach(function(i){ i.disabled=on; i.style.opacity=on?'.4':''; });
+  var lump=document.querySelector('input[name="rr-grp-rate-mode"][value="lumpsum"]');
+  if(lump){
+    lump.disabled=on;
+    if(on && lump.checked){ var iw=document.querySelector('input[name="rr-grp-rate-mode"][value="itemwise"]'); if(iw){ iw.checked=true; if(typeof rrGroupToggleRateMode==='function') rrGroupToggleRateMode('itemwise'); } }
+  }
+}
 function generateCombinedDoc(allots,title,col,tbg){
   if((!COMPANY_DATA||!COMPANY_DATA.name||!window._partyInfoLoaded) && typeof preloadCompanyData==='function' && !window._coRetry){
     window._coRetry=true; var _args=arguments, _self=generateCombinedDoc;
@@ -8467,11 +8495,17 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
     return '<tr>'+
       '<td style="text-align:center;color:#888;">'+(idx+1)+'</td>'+
       '<td>'+itemCode+'<span style="font-weight:700;">'+descText+'</span>'+specText+'</td>'+
-      '<td style="text-align:center;">'+a.qty+' '+(a.unit||'')+'</td>'+
-      '<td style="text-align:right;">'+inrFull(a.rate)+'</td>'+
-      '<td style="text-align:right;font-weight:700;">'+inrFull(amt)+'</td>'+
+      (allotIsOpen(a)
+        ? '<td style="text-align:center;font-size:10px;">As executed'+(a.unit?' ('+a.unit+')':'')+'</td>'+
+          '<td style="text-align:right;">'+inrFull(a.rate)+'</td>'+
+          '<td style="text-align:right;font-size:10px;">On actual measurement</td>'
+        : '<td style="text-align:center;">'+a.qty+' '+(a.unit||'')+'</td>'+
+          '<td style="text-align:right;">'+inrFull(a.rate)+'</td>'+
+          '<td style="text-align:right;font-weight:700;">'+inrFull(amt)+'</td>')+
     '</tr>';
   }).join('');
+  var openCount = isLumpsum?0:batchItems.filter(allotIsOpen).length;
+  var allOpen = openCount>0 && openCount===batchItems.length;
 
   var inrFull = function(n){return '₹'+Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2});};
   // Optional GST on top of the order total (saved per order as gst_pct).
@@ -8615,12 +8649,14 @@ function execRenderBatchDoc(batchItems, docType, docNumber, fullDocNo, projId, s
           ? '<tr class="total-row"><td colspan="4" style="text-align:right;">Sub-Total (excl. GST)</td><td style="text-align:right;">'+inrFull(total)+'</td></tr>'+
             '<tr><td colspan="4" style="text-align:right;font-weight:700;">GST @ '+gstPct+'%</td><td style="text-align:right;font-weight:700;">'+inrFull(gstAmt)+'</td></tr>'+
             '<tr class="total-row"><td colspan="4" style="text-align:right;">TOTAL (incl. GST)</td><td style="text-align:right;">'+inrFull(grandTotal)+'</td></tr>'
-          : '<tr class="total-row"><td colspan="4" style="text-align:right;">TOTAL</td><td style="text-align:right;">'+inrFull(total)+'</td></tr>')+
+          : (allOpen
+              ? '<tr class="total-row"><td colspan="5" style="text-align:left;">Payment will be made at the above rates for the quantity actually executed and measured at site.</td></tr>'
+              : '<tr class="total-row"><td colspan="4" style="text-align:right;">TOTAL'+(openCount?' (items with fixed qty only)':'')+'</td><td style="text-align:right;">'+inrFull(total)+'</td></tr>'))+
       '</tbody>'+
     '</table>'+
 
     // Amount in words
-    '<div class="amt-words"><b>Amount in Words:</b> Rupees '+amtWords+'</div>'+
+    (allOpen?'':'<div class="amt-words"><b>Amount in Words:</b> Rupees '+amtWords+'</div>')+
 
     // Terms & conditions
     '<div class="tnc">'+
@@ -9281,7 +9317,7 @@ function execRenderDailyContent(){
     var pct=allotQty>0?Math.round(usedQty/allotQty*100):0;
     var col=tCol[g.execType]||'var(--text2)';
     var bal=Math.max(0,allotQty-usedQty);
-    var overused=usedQty>allotQty;
+    var overused=allotQty>0 && usedQty>allotQty;
     var td2='padding:7px 10px;font-size:11px;text-align:right;white-space:nowrap;';
     return '<tr style="border-bottom:1px solid var(--border);">'+
       '<td style="padding:7px 10px;">'+
@@ -9517,7 +9553,7 @@ async function execOpenDailyEntry(itemId){
           (issuedQty>0?'<span style="color:#1565C0;margin-left:6px;">&#10003; Issued: '+parseFloat(issuedQty).toFixed(2)+'</span>':
             '<span style="color:#E65100;margin-left:6px;">&#9888; Not issued — issue from Store tab first</span>')+
           '</div>':
-          (outsideQty?'<span style="font-size:9px;color:#E65100;font-weight:700;">Not in store — Allotted: '+a.qty+' | Outside: '+outsideQty.toFixed(2)+' '+(a.unit||'')+'</span>':''))+
+          (allotIsOpen(a)?'<span style="font-size:9px;color:#6A1B9A;font-weight:700;">Rate-only allotment \u2014 enter qty done</span>':outsideQty?'<span style="font-size:9px;color:#E65100;font-weight:700;">Not in store — Allotted: '+a.qty+' | Outside: '+outsideQty.toFixed(2)+' '+(a.unit||'')+'</span>':''))+
         '</div>'+
         (a.scope?'<div style="font-size:9px;color:var(--text3);margin-top:1px;">'+a.scope+'</div>':'')+
       '</div>'+
@@ -9770,7 +9806,7 @@ async function execSaveDailyEntry(projId,itemId){
         rr.forEach(function(r){if(r.allot_id===allotId&&r.qty)alreadyUsed+=parseFloat(r.qty)||0;});
       });
       var resRemaining=Math.max(0,allotQty-alreadyUsed);
-      if(resQty>resRemaining+0.0001){
+      if(allotQty>0 && resQty>resRemaining+0.0001){
         // More than allotted: offer to raise the allotment instead of just blocking.
         var extraQ=Math.round((resQty-resRemaining)*10000)/10000;
         pendingAllotIncreases.push({id:allotId,extra:extraQ,base:resRemaining,newTotal:Math.round((alreadyUsed+resQty)*10000)/10000,
@@ -9929,12 +9965,12 @@ async function execEditDailyEntry(entryId, itemId){
         (rn?'<span style="font-size:11px;font-weight:800;color:#1B5E20;margin-right:3px;">'+rn+'</span><span style="font-size:10px;color:#78909C;">&#8594;</span>':'')+
         ' <span style="font-size:11px;font-weight:700;color:#1E293B;">'+a.party_name+'</span>'+
         '<div style="font-size:9px;color:#78909C;">'+
-          (fromStore&&inHand!==null?'In Store: <b style="color:#2E7D32;">'+inHand.toFixed(2)+'</b> | ':'')+'Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b>'+
+          (fromStore&&inHand!==null?'In Store: <b style="color:#2E7D32;">'+inHand.toFixed(2)+'</b> | ':'')+(allotQ>0?'Allotted: '+a.qty+' | Balance: <b>'+balQ.toFixed(2)+'</b>':'Rate-only allotment (no qty limit)')+
         '</div>'+
       '</div>'+
       '<div class="dp-res-qty-wrap" style="display:'+(existingUse?'flex':'none')+';align-items:center;gap:4px;">'+
         '<div><div style="font-size:9px;color:#E65100;font-weight:700;margin-bottom:2px;">Qty Used *</div>'+
-          '<input class="dp-res-qty finp" data-allot-id="'+a.id+'" type="number" step="0.001" max="'+maxQ+'" value="'+existingQty+'" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;"></div>'+
+          '<input class="dp-res-qty finp" data-allot-id="'+a.id+'"  type="number" step="0.001" '+(maxQ>0?'max="'+maxQ+'" ':'')+'value="'+existingQty+'" placeholder="qty" style="width:80px;padding:4px 6px;font-size:12px;text-align:center;"></div>'+
         '<div style="font-size:11px;font-weight:700;color:var(--text3);padding-top:16px;">'+(a.unit||'')+'</div>'+
       '</div>'+
     '</div>';
@@ -10063,7 +10099,7 @@ async function execUpdateDailyEntry(entryId, itemId, projId){
         rr.forEach(function(r){if(r.allot_id===allotId&&r.qty)usedExcl+=parseFloat(r.qty)||0;});
       });
       var resRem=Math.max(0,allotQ-usedExcl);
-      if(resQty>resRem+0.0001){
+      if(allotQ>0 && resQty>resRem+0.0001){
         var extraQ2=Math.round((resQty-resRem)*10000)/10000;
         pendingAllotInc2.push({id:allotId,extra:extraQ2,base:resRem,newTotal:Math.round((usedExcl+resQty)*10000)/10000,
           label:resName+' ('+(allot.party_name||'party')+'): entered '+resQty+', only '+resRem.toFixed(2)+' left of allotted '+allotQ});
