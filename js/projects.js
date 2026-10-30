@@ -6434,7 +6434,7 @@ async function execRenderPettyExpenses(containerId){
       sbFetch('petty_cash_expenses',{select:'*',order:'date.desc'}),
       sbFetch('employees',{select:'id,emp_id,first_name,last_name',order:'first_name.asc'})
     ]);
-    var list=Array.isArray(r[0])?r[0]:[];
+    var list=(Array.isArray(r[0])?r[0]:[]).filter(function(x){return !x.linked_id;});   // attached to a party payment: not a project cost here
     var empList=Array.isArray(r[1])?r[1]:[];
     // Employee Data Visibility ("Self"/"Department"/"All") previously had
     // no effect here — this fetched and showed every active employee's
@@ -11418,7 +11418,7 @@ function advPostToAccounts(advId,partyType,partyName,date,purpose,bk,mode){
   var advTds=bk.deductions.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
   var advGst=bk.gst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
   var advRef='Advance to '+partyName+(purpose?' — '+purpose:'');
-  var cashCode=mode==='Cash'?'1001':'1002';
+  var cashCode=mode==='Cash'?'1001':(mode==='Petty Cash'?'1101':'1002');
   if(advNet>0) accAutoPost({type:'Payment', date:date, partyName:partyName,
     debitCode:'2001', creditCode:cashCode, amount:advNet,
     narration:advRef, sourceType:'work_advance', sourceId:advId});
@@ -12777,6 +12777,7 @@ async function execDelAdvance(id){
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
   if(WA_SUBTAB==='orders')execRenderOrders();else execRenderAllotted();
   try{await sbDelete('work_advances',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
+  await pclUnlinkFor(id);
   toast('Advance deleted','success');
 }
 
@@ -13906,12 +13907,13 @@ async function execOpenPayment(billId,partyKey,projId,balAmount){
     '</div>'+
     '<div class="g2">'+
       '<div><label class="flbl">Payment Mode</label>'+
-        '<select id="py-mode" class="fsel">'+
-          '<option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option>'+
+        '<select id="py-mode" class="fsel" onchange="pyModeChange()">'+
+          '<option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option><option value="Petty Cash">Petty Cash (already recorded)</option>'+
         '</select>'+
       '</div>'+
       '<div><label class="flbl">Reference / UTR <span id="py-ref-req" style="color:#C62828;"></span></label><input id="py-ref" class="finp" placeholder="UTR/Cheque no. (required)"></div>'+
     '</div>'+
+    '<div id="py-pcl-box" style="display:none;margin-bottom:10px;"></div>'+
     '<label class="flbl">Remarks</label>'+
     '<input id="py-remarks" class="finp" placeholder="Payment remarks...">'+
     '<input type="hidden" id="py-bill-id" value="'+billId+'">'+
@@ -13949,6 +13951,84 @@ function pyAdvChange(ai){
   pyUpdateNet();
 }
 
+// ── Petty cash <-> party payment link ──────────────────────────────────────
+// A petty cash expense that actually paid a party (bill or advance) is attached to that payment instead of
+// staying a separate cost: its voucher moves from Dr [expense] to Dr Sundry Creditors (so the party's
+// balance clears and the cost isn't counted twice) and the expense is marked linked_kind/linked_id.
+async function pclLoad(boxId,prefix){
+  var box=document.getElementById(boxId); if(!box) return;
+  box.innerHTML='<div style="font-size:11px;color:var(--text3);padding:6px;">Loading petty cash expenses...</div>';
+  try{
+    var r=await Promise.all([
+      sbFetch('petty_cash_expenses',{select:'*',filter:'linked_id=is.null&limit=300',order:'date.desc'}),
+      sbFetch('employees',{select:'id,emp_id,first_name,last_name'})
+    ]);
+    var rows=Array.isArray(r[0])?r[0]:[], emps=Array.isArray(r[1])?r[1]:[], nm={};
+    emps.forEach(function(e){ var n=((e.first_name||'')+' '+(e.last_name||'')).trim(); nm[e.id]=n; if(e.emp_id) nm[e.emp_id]=n; });
+    window.PCL_ROWS=rows;
+    box.innerHTML=rows.length?
+      '<div style="font-size:11px;font-weight:800;margin-bottom:4px;">Tick the petty cash expense(s) that paid this party</div>'+
+      '<div style="max-height:200px;overflow:auto;border:1px solid var(--border);border-radius:8px;">'+
+      rows.map(function(x){
+        return '<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 9px;border-bottom:1px solid var(--border);cursor:pointer;font-size:11px;">'+
+          '<input type="checkbox" class="pcl-chk" data-id="'+x.id+'" data-amt="'+(parseFloat(x.amount)||0)+'" onchange="pclRecalc(\''+prefix+'\')" style="margin-top:2px;">'+
+          '<span style="flex:1;"><b>'+(nm[x.emp_id]||'Employee')+'</b> \u00b7 '+(x.date||'')+' \u00b7 '+(x.category||'')+'<br><span style="color:var(--text3);">'+(x.description||'')+(x.bill_no?' \u00b7 Bill '+x.bill_no:'')+'</span></span>'+
+          '<b>\u20b9'+(parseFloat(x.amount)||0).toLocaleString('en-IN')+'</b></label>';
+      }).join('')+'</div><div id="pcl-total" style="text-align:right;font-size:12px;font-weight:800;margin-top:6px;">Selected: \u20b90</div>'
+      :'<div style="font-size:11px;color:#E65100;padding:6px;">No unlinked petty cash expenses found.</div>';
+  }catch(e){
+    box.innerHTML='<div style="font-size:11px;color:#C62828;padding:6px;">Could not load petty cash expenses ('+e.message+'). If this is the first time, run supabase/petty_cash_link.sql in the SQL Editor.</div>';
+  }
+}
+function pclSelected(){
+  return Array.from(document.querySelectorAll('.pcl-chk:checked')).map(function(c){
+    return {id:c.getAttribute('data-id'),amt:parseFloat(c.getAttribute('data-amt'))||0};
+  });
+}
+function pclRecalc(prefix){
+  var sel=pclSelected(), sum=sel.reduce(function(s,x){return s+x.amt;},0);
+  var el=document.getElementById('pcl-total'); if(el) el.textContent='Selected: \u20b9'+sum.toLocaleString('en-IN');
+  if(prefix==='py'){ var a=document.getElementById('py-amount'); if(a){ a.value=sum; a.setAttribute('data-manual','1'); } if(typeof pyUpdateNet==='function') pyUpdateNet(); }
+}
+function pclDesc(ids){
+  return (window.PCL_ROWS||[]).filter(function(x){return ids.indexOf(x.id)>-1;}).map(function(x){return (x.description||x.category||'petty expense');}).join('; ');
+}
+async function pclLinkExpenses(ids,kind,linkId){
+  for(var i=0;i<ids.length;i++){
+    await sbUpdate('petty_cash_expenses',ids[i],{linked_kind:kind,linked_id:String(linkId)});
+    if(typeof accCleanupVouchersForSource==='function') await accCleanupVouchersForSource(ids[i]);   // its own Dr expense / Cr petty voucher is replaced by the payment's
+  }
+}
+// When the payment/advance is deleted, put the petty expense back as an ordinary expense.
+async function pclUnlinkFor(linkId){
+  try{
+    var rows=await sbFetch('petty_cash_expenses',{select:'*',filter:'linked_id=eq.'+encodeURIComponent(linkId)});
+    if(!Array.isArray(rows)||!rows.length) return;
+    for(var i=0;i<rows.length;i++){
+      var p=rows[i];
+      await sbUpdate('petty_cash_expenses',p.id,{linked_kind:null,linked_id:null});
+      if(typeof accAutoPost==='function'){
+        var dc=(typeof ACC_PETTY_CAT_CODES!=='undefined'&&ACC_PETTY_CAT_CODES[p.category])||'4110';
+        accAutoPost({type:'Payment', date:p.date, partyName:p.description,
+          debitCode:dc, creditCode:'1101', amount:parseFloat(p.amount)||0,
+          narration:'Petty cash \u2014 '+(p.category||'')+' \u2014 '+(p.description||''), sourceType:'petty_cash_expense', sourceId:p.id});
+      }
+    }
+    toast(rows.length+' petty cash expense'+(rows.length>1?'s':'')+' unlinked and restored as normal expense'+(rows.length>1?'s':''),'info');
+  }catch(e){ console.warn('pclUnlinkFor',e); toast('Deleted, but could not restore the linked petty cash expense: '+e.message,'warning'); }
+}
+function pyModeChange(){
+  var m=gv('py-mode'), box=document.getElementById('py-pcl-box'), amt=document.getElementById('py-amount');
+  var on=(m==='Petty Cash');
+  if(box){ box.style.display=on?'block':'none'; if(on) pclLoad('py-pcl-box','py'); }
+  if(amt){ amt.readOnly=on; if(!on) amt.removeAttribute('data-manual'); }
+  var rq=document.getElementById('py-ref-req'); if(rq&&on) rq.textContent='';
+  if(!on&&typeof pyUpdateNet==='function') pyUpdateNet();
+}
+function advModeChange(){
+  var on=(gv('adv-mode')==='Petty Cash'), box=document.getElementById('adv-pcl-box');
+  if(box){ box.style.display=on?'block':'none'; if(on) pclLoad('adv-pcl-box','adv'); }
+}
 function pyUpdateNet(){
   var advTotal=0;
   document.querySelectorAll('.py-adv-chk:checked').forEach(function(chk){
@@ -14159,8 +14239,18 @@ async function execSavePaymentAdv(projId,balAmount){
   var ref=gv('py-ref')||null;
   var remarks=gv('py-remarks')||null;
   if(!date){toast('Payment date required','warning');return;}
-  if(cashAmt>0&&!ref){toast('Reference / UTR is required for cash/bank payment','warning');return;}
-  if(cashAmt>0 && !(await fundsCheck(mode,cashAmt,date))) return;
+  // Paid earlier from Petty Cash: attach the already-recorded expense(s) instead of a new cash/bank payment
+  var isPcl=(mode==='Petty Cash'), pclSel=[];
+  if(isPcl){
+    pclSel=pclSelected();
+    if(!pclSel.length){toast('Tick the petty cash expense(s) that paid this bill','warning');return;}
+    cashAmt=pclSel.reduce(function(s,x){return s+x.amt;},0);
+    var _bd=parseFloat(gv('py-bal-due'))||0;
+    if(_bd>0 && cashAmt>_bd+0.5 && !confirm('Selected petty cash total (\u20b9'+cashAmt.toLocaleString('en-IN')+') is more than the balance due (\u20b9'+_bd.toLocaleString('en-IN')+'). Continue?')) return;
+    ref='Petty cash: '+pclDesc(pclSel.map(function(x){return x.id;}));
+  }
+  if(!isPcl && cashAmt>0&&!ref){toast('Reference / UTR is required for cash/bank payment','warning');return;}
+  if(!isPcl && cashAmt>0 && !(await fundsCheck(mode,cashAmt,date))) return;
 
   var baseUrl=typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'';
   var anonKey=typeof SUPABASE_ANON_KEY!=='undefined'?SUPABASE_ANON_KEY:'';
@@ -14270,9 +14360,13 @@ async function execSavePaymentAdv(projId,balAmount){
         // Auto-post to Accounts: Dr Sundry Creditors, Cr Bank/Cash
         if(typeof accAutoPost==='function'){
           accAutoPost({type:'Payment', date:date, partyName:partyName,
-            debitCode:'2001', creditCode:(mode==='Cash'?'1001':'1002'), amount:cashAmt,
+            debitCode:'2001', creditCode:(isPcl?'1101':(mode==='Cash'?'1001':'1002')), amount:cashAmt,
             narration:'Payment against Work Bill'+(ref?' (Ref: '+ref+')':''),
             sourceType:'work_payment', sourceId:res[0].id});
+        }
+        if(isPcl){
+          try{ await pclLinkExpenses(pclSel.map(function(x){return x.id;}),'work_payment',res[0].id); }
+          catch(e){ toast('Payment saved, but linking the petty cash expense failed: '+e.message+' \u2014 run supabase/petty_cash_link.sql if not done','warning'); }
         }
       }
     }catch(e){toast('Payment save error: '+e.message,'error');console.error(e);return;}
@@ -14681,12 +14775,13 @@ async function execOpenAdvance(partyKey,projId){
     '<input id="adv-amount" type="hidden" value="">'+
     '<div class="g2" style="margin-top:8px;">'+
       '<div><label class="flbl">Payment Mode</label>'+
-        '<select id="adv-mode" class="fsel">'+
-          '<option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option>'+
+        '<select id="adv-mode" class="fsel" onchange="advModeChange()">'+
+          '<option>Bank Transfer</option><option>Cheque</option><option>Cash</option><option>UPI</option><option value="Petty Cash">Petty Cash (already recorded)</option>'+
         '</select>'+
       '</div>'+
       '<div><label class="flbl">UTR / Cheque No.</label><input id="adv-utr" class="finp" placeholder="UTR / Cheque no."></div>'+
     '</div>'+
+    '<div id="adv-pcl-box" style="display:none;margin-bottom:10px;"></div>'+
     '<label class="flbl">Purpose / Remarks *</label>'+
     '<input id="adv-purpose" class="finp" placeholder="e.g. Mobilization advance, Material advance...">';
   advUpdateTotal();
@@ -14704,15 +14799,22 @@ async function execOpenAdvance(partyKey,projId){
 async function execSaveAdvance(partyType,partyName,projId){
   var date=gv('adv-date');
   var bk=advCollectBreakdown();
+  var isPcl=(gv('adv-mode')==='Petty Cash'), pclSel=[];
+  if(isPcl){
+    pclSel=pclSelected();
+    if(!pclSel.length){toast('Tick the petty cash expense(s) that paid this advance','warning');return;}
+    var _s=pclSel.reduce(function(s,x){return s+x.amt;},0);
+    bk={net:_s,base_amount:_s,additions:[],deductions:[],gst:[]};   // amount comes from the petty expenses
+  }
   var amount=bk.net;
   var purpose=(gv('adv-purpose')||'').trim();
   var refDoc=(document.getElementById('adv-ref-doc')||{}).value||'';
   var refManual=(document.getElementById('adv-ref-doc-manual')||{}).value||'';
   var finalRef=refDoc||refManual||'';
-  var utr=gv('adv-utr')||'';
+  var utr=isPcl?('Petty cash: '+pclDesc(pclSel.map(function(x){return x.id;}))):(gv('adv-utr')||'');
   if(!date||!bk.base_amount){toast('Date and base amount required','warning');return;}
   if(!purpose){toast('Purpose/remarks required','warning');return;}
-  if(!(await fundsCheck(gv('adv-mode'),amount,date))) return;
+  if(!isPcl && !(await fundsCheck(gv('adv-mode'),amount,date))) return;
   try{
     var res=await sbInsert('work_advances',{
       project_id:projId,
@@ -14733,6 +14835,10 @@ async function execSaveAdvance(partyType,partyName,projId){
     if(res&&res[0]){
       WA_ADVANCES.push(res[0]);
       advPostToAccounts(res[0].id,partyType,partyName,date,purpose,bk,gv('adv-mode'));
+      if(isPcl){
+        try{ await pclLinkExpenses(pclSel.map(function(x){return x.id;}),'work_advance',res[0].id); }
+        catch(e){ toast('Advance saved, but linking the petty cash expense failed: '+e.message+' \u2014 run supabase/petty_cash_link.sql if not done','warning'); }
+      }
     }
     toast('Advance of \u20b9'+amount.toLocaleString('en-IN')+' recorded!','success');
     closeSheet('ov-exec','sh-exec');
@@ -14746,6 +14852,7 @@ async function execDelAdvance(id){
   WA_ADVANCES=WA_ADVANCES.filter(function(a){return a.id!==id;});
   execRenderSubTab();
   try{await sbDelete('work_advances',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){console.error(e);}
+  await pclUnlinkFor(id);
   toast('Advance deleted','success');
 }
 async function execDelBill(id){
@@ -14762,7 +14869,7 @@ async function execDelBill(id){
     : 'Delete this bill?'+(hasAdvAdj?' Advance adjustments of '+fmtInr(advAdjTotal)+' will also be reversed, restoring that balance to the advance(s).':'')+' This cannot be undone.';
   if(!confirm(msg))return;
   if(hasPaid){
-    for(var i=0;i<relPays.length;i++) try{await sbDelete('work_payments',relPays[i].id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(relPays[i].id);}catch(e){}
+    for(var i=0;i<relPays.length;i++){ try{await sbDelete('work_payments',relPays[i].id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(relPays[i].id);}catch(e){} await pclUnlinkFor(relPays[i].id); }
     WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.bill_id!==id;});
   }
   if(hasAdvAdj){
@@ -15302,6 +15409,7 @@ async function execDelPayment(id){
   WA_PAYMENTS=WA_PAYMENTS.filter(function(p){return p.id!==id;});
   execRenderSubTab();
   try{await sbDelete('work_payments',id);if(typeof accCleanupVouchersForSource==='function')accCleanupVouchersForSource(id);}catch(e){}
+  await pclUnlinkFor(id);
 }
 
 

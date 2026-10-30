@@ -2909,7 +2909,7 @@ async function loadDashboardInsights(filterProjId){
     ]);
     var projects=r[0]||[], employees=r[1]||[], boqItems=r[2]||[], execResources=r[3]||[], dailyProgress=r[4]||[],
         pendingRRs=r[5]||[], storeItems=r[6]||[], workBills=r[7]||[], workPayments=r[8]||[], salesBills=r[9]||[],
-        salesPayments=r[10]||[], boqJmRows=r[11]||[], plannedResRows=r[12]||[], todayAttendanceRows=r[13]||[], pettyExpenseRows=r[14]||[],
+        salesPayments=r[10]||[], boqJmRows=r[11]||[], plannedResRows=r[12]||[], todayAttendanceRows=r[13]||[], pettyExpenseRows=(r[14]||[]).filter(function(x){return !x.linked_id;}),
         recentActivityRows=r[15]||[], pendingOutsidePunchRows=r[16]||[];
     var presentTodayRows = todayAttendanceRows.filter(function(a){return a.status==='present';});
 
@@ -24436,14 +24436,14 @@ async function accReconcile(){
       var advTds=abd.filter(function(d){return d.is_tds;}).reduce(function(s,d){return s+(parseFloat(d.amount)||0);},0);
       var advGst=agst.reduce(function(s,g){return s+(parseFloat(g.amount)||0);},0);
       var advRef='Advance to '+(a.party_name||'')+(a.purpose?' — '+a.purpose:'');
-      var cashCode=a.payment_mode==='Cash'?'1001':'1002';
+      var cashCode=a.payment_mode==='Cash'?'1001':(a.payment_mode==='Petty Cash'?'1101':'1002');
       check('Advances','work_advance',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:cashCode,amount:advNet,narration:advRef});
       check('Advances','work_advance_tds',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'2001',creditCode:'2102',amount:advTds,narration:'TDS on '+advRef});
       check('Advances','work_advance_gst',a.id,{type:'Payment',date:a.date,partyName:a.party_name,debitCode:'1301',creditCode:'2001',amount:advGst,narration:'GST (ITC) on '+advRef});
     });
     workPayments.forEach(function(p){
       check('Purchase payments','work_payment',p.id,{type:'Payment',date:p.payment_date,partyName:p.party_name,
-        debitCode:'2001',creditCode:(p.payment_mode==='Cash'?'1001':'1002'),amount:parseFloat(p.amount)||0,
+        debitCode:'2001',creditCode:(p.payment_mode==='Cash'?'1001':(p.payment_mode==='Petty Cash'?'1101':'1002')),amount:parseFloat(p.amount)||0,
         narration:'Payment made'+(p.reference?' (Ref: '+p.reference+')':'')});
     });
     // Loans routed into an employee's account as petty cash post once, via
@@ -24474,6 +24474,7 @@ async function accReconcile(){
     });
     pettyExp.forEach(function(p){
       var amt=parseFloat(p.amount)||0; if(amt<=0) return;
+      if(p.linked_id) return;   // attached to a party payment/advance, which carries the voucher
       var nm=empName[p.emp_id]||p.emp_id;
       check('Petty cash expenses','petty_cash_expense',p.id,{type:'Payment',date:p.date,partyName:nm,
         debitCode:(ACC_PETTY_CAT_CODES[p.category]||'4110'),creditCode:'1101',amount:amt,
@@ -29685,8 +29686,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261030k"></script>
-<script src="js/employee.js?v=20261030k"></script>
-<script src="js/projects.js?v=20261030k"></script>
-<script src="js/finance.js?v=20261030k"></script>
+<script src="js/registry.js?v=20261030l"></script>
+<script src="js/employee.js?v=20261030l"></script>
+<script src="js/projects.js?v=20261030l"></script>
+<script src="js/finance.js?v=20261030l"></script>
 </html>

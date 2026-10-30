@@ -713,6 +713,7 @@ function pcRenderList(){
           (purposeText?'<div style="font-size:12px;color:var(--text2);font-weight:600;margin-top:1px;">'+escPc(purposeText)+'</div>':'')+
           '<div style="font-size:11px;color:var(--text3);margin-top:1px;">'+(pcEmpName(item.emp_id))+((!isIn&&item.project)?' · '+pcProjShort(item.project):'')+(item.date?' · '+fmtDate(item.date):'')+'</div>'+
           (isIn&&item.funded_by?'<div style="font-size:11px;color:#1565C0;font-weight:700;">'+(item.funded_by_type==='transfer_out'?'&#8594; to '+pcEmpName(item.funded_by_emp):'&#8592; from '+item.funded_by)+'</div>':'')+
+          (!isIn&&item.linked_id?'<div style="font-size:11px;color:#2E7D32;font-weight:800;margin-top:3px;">&#128279; Paid to party \u2014 attached to a '+(item.linked_kind==='work_advance'?'party advance':'bill payment')+'</div>':'')+
           (!isIn&&item.payout_status&&item.payout_status!=='not_applicable'?(function(){
             var b=PC_PAYOUT_BADGE[item.payout_status]||PC_PAYOUT_BADGE.pending;
             var clickable=item.payout_status==='pending'||item.payout_status==='failed';
@@ -1272,6 +1273,9 @@ async function pcAddUtr(id){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
+function pcLinkedMsg(row){
+  return 'This petty cash expense has been attached to a '+(row.linked_kind==='work_advance'?'party advance':'party bill payment')+' (it already counts as that payment). Delete that payment/advance first \u2014 the expense will then come back here as a normal expense.';
+}
 async function pcDeleteEntry(id,type){
   // Belt-and-braces alongside the delete button itself being hidden in
   // pcRenderList() when pcCanDeleteEntry() is false — this was previously
@@ -1281,6 +1285,7 @@ async function pcDeleteEntry(id,type){
   // covers the "Edit/Delete Own (5 min)" self-window exception.
   var row=(type==='in'?PC_IN:PC_EXP).find(function(x){return x.id===id;});
   if(!pcCanDeleteEntry(row||{})){toast('You do not have permission to delete this entry','error');return;}
+  if(type!=='in' && row && row.linked_id){ alert(pcLinkedMsg(row)); return; }
   // Warn if this funding came from a loan — deleting it here leaves the
   // loan itself in place, so the two records would disagree.
   if(row&&row.funded_by_type==='loan'){
@@ -1313,6 +1318,7 @@ function pcOpenEditEntry(id,type){
   var row=(type==='in'?PC_IN:PC_EXP).find(function(x){return x.id===id;});
   if(!row){toast('Entry not found','error');return;}
   if(!pcCanEditEntry(row)){toast('You do not have permission to edit this entry','error');return;}
+  if(type!=='in' && row.linked_id){ alert(pcLinkedMsg(row)); return; }
 
   if(type==='in'){
     if(row.funded_by_type==='emp'||row.funded_by_type==='transfer_out'||row.funded_by_type==='loan'){
