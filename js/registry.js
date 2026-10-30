@@ -17,6 +17,24 @@ var CAT_DATA={
   vendor:[], material:[], sc:[], role:[], dept:[], uom:[], labour:[], resource:[], leave:[], pettycash:[], partytype:[], pdfsign:[]
 };
 
+// Built-in units: always present, can't be duplicated, deleted or disabled. Extra units can be added/removed.
+var UOM_BUILTIN=['Cum','Sqm','Rmt','Nos','MT','Kg','Hours','Liters'];
+function uomMerge(list){
+  list=Array.isArray(list)?list:[];
+  var out=[];
+  UOM_BUILTIN.forEach(function(n){
+    var k=n.toLowerCase();
+    var hit=list.find(function(u){return String(u.name||'').toLowerCase().trim()===k;});
+    if(hit){ hit.name=n; hit.active=true; hit.builtin=true; out.push(hit); }
+    else out.push({id:'uom-builtin-'+k,icon:'\ud83d\udccf',name:n,desc:'Built-in unit',color:'#37474F',count:0,active:true,builtin:true});
+  });
+  list.forEach(function(u){
+    var k=String(u.name||'').toLowerCase().trim();
+    if(!UOM_BUILTIN.some(function(n){return n.toLowerCase()===k;})) out.push(u);   // DB duplicates of a built-in collapse into it
+  });
+  return out;
+}
+CAT_DATA.uom=uomMerge(CAT_DATA.uom);
 var catSectionMap={vendor:'vendor-cats',material:'material-cats',sc:'sc-cats',uom:'uom-cats',role:'role-cats',dept:'dept-cats',labour:'labour-cats',resource:'resource-cats',leave:'leave-cats',pettycash:'pettycash-cats',partytype:'partytype-cats',pdfsign:'pdfsign-cats'};
 
 function catKey(name){ return (name||'').toLowerCase().trim(); }
@@ -359,16 +377,18 @@ function renderCatSection(type,containerId){
     return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--border);">' +
       '<div style="width:38px;height:38px;border-radius:10px;background:'+c.color+'20;border:1px solid '+c.color+'40;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">'+c.icon+'</div>' +
       '<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+c.name+'</div><div style="font-size:11px;color:var(--text3);">'+(type==='partytype'&&typeof partyDescText==='function'?partyDescText(c.desc):(type==='pdfsign'&&typeof pdfSignDescText==='function'?pdfSignDescText(c.desc):c.desc))+'</div></div>' +
+      (c.builtin?'<span style="font-size:10px;font-weight:800;color:var(--text3);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 8px;">Built-in</span>':
       '<div onclick="toggleCat(\''+type+'\','+i+')" style="width:40px;height:22px;border-radius:11px;background:'+(c.active?'var(--green)':'#CBD5E1')+';position:relative;cursor:pointer;">' +
         '<div style="position:absolute;top:3px;left:'+(c.active?'21':'3')+'px;width:16px;height:16px;border-radius:50%;background:white;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div>' +
       '</div>' +
-      '<button onclick="deleteCat(\''+type+'\','+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:18px;padding:0 2px;" title="Delete">&#215;</button>'+
+      '<button onclick="deleteCat(\''+type+'\','+i+')" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:18px;padding:0 2px;" title="Delete">&#215;</button>')+
     '</div>';
   }).join('');
 }
 
 async function deleteCat(type,i){
   var cat=CAT_DATA[type][i];
+  if(cat&&cat.builtin){ toast('"'+cat.name+'" is a built-in unit and cannot be deleted','warning'); return; }
   if(type==='role' && String(cat.name||'').trim().toLowerCase()==='admin'){ toast('The Admin role is required and cannot be deleted','warning'); return; }
   if(typeof catDeleteBlocked==='function' && await catDeleteBlocked(type,cat)) return;
   if(!confirm('Delete category "'+cat.name+'"?')) return;
@@ -385,6 +405,7 @@ async function deleteCat(type,i){
 }
 
 function toggleCat(type,i){
+  if(CAT_DATA[type][i]&&CAT_DATA[type][i].builtin){ toast('Built-in units cannot be disabled','warning'); return; }
   CAT_DATA[type][i].active=!CAT_DATA[type][i].active;
   if(type==='pdfsign'){ var _p=CAT_DATA[type][i]; if(_p.id&&String(_p.id).indexOf('pdfsign-')!==0) sbUpdate('categories',_p.id,{active:_p.active}).then(function(){ return pdfSignLoad(true); }).catch(function(e){console.error(e);}); }
   if(type==='partytype'){ try{ var _c=CAT_DATA[type][i]; sbFetch('categories',{select:'id',filter:'type=eq.partytype&name=eq.'+encodeURIComponent(_c.name)}).then(function(r){ if(r&&r[0]) return sbUpdate('categories',r[0].id,{active:_c.active}); }).then(function(){ return partyTypesLoad(true); }); }catch(e){} }
@@ -445,6 +466,7 @@ async function loadCategories(){
         });
       }
     });
+    CAT_DATA.uom=uomMerge(CAT_DATA.uom);
     Object.keys(catSectionMap).forEach(function(type){renderCatSection(type,catSectionMap[type]);});
     rebuildPills('vendor',  'vendor-cat-pills','var(--teal)',  filterVendors);
     rebuildPills('material','mat-cat-pills',   'var(--green)', filterMaterials);

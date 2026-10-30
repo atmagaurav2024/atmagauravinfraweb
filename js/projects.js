@@ -2331,8 +2331,8 @@ async function loadUomIfNeeded(){
       sbFetch('categories',{select:'id,name,icon,active',filter:'type=eq.uom&active=eq.true',order:'name.asc'}),
       sbFetch('categories',{select:'id,name,icon,active',filter:'type=eq.resource&active=eq.true',order:'name.asc'})
     ]);
-    if(Array.isArray(rows[0])&&rows[0].length)
-      CAT_DATA['uom']=rows[0].map(function(r){return {id:r.id,name:r.name,icon:r.icon||'',active:r.active!==false,count:0,desc:'',color:'#37474F'};});
+    var _uomRows=Array.isArray(rows[0])?rows[0].map(function(r){return {id:r.id,name:r.name,icon:r.icon||'',active:r.active!==false,count:0,desc:'',color:'#37474F'};}):[];
+    CAT_DATA['uom']=(typeof uomMerge==='function')?uomMerge(_uomRows):_uomRows;
     if(Array.isArray(rows[1])&&rows[1].length)
       CAT_DATA['resource']=rows[1].map(function(r){return {id:r.id,name:r.name,icon:r.icon||'',active:r.active!==false,count:0,desc:'',color:'#37474F'};});
   }catch(e){console.warn('loadUomIfNeeded:',e);}
