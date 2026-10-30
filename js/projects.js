@@ -3677,7 +3677,9 @@ async function rrGroupOpenAllotForm(groupId){
     cgResList.map(function(r){
       var pr=parseFloat(r.rate)||0;
       return '<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px;">'+
-        '<span style="flex:1;"><b>'+esc(r.party_name||'')+'</b>'+(cgSubName[r.boq_subitem_id]?' <span style="color:var(--text3);">('+esc(cgSubName[r.boq_subitem_id])+')</span>':'')+'<br><span style="color:var(--text2);">'+r.qty+' '+esc(r.unit||'')+'</span></span>'+
+        '<span style="flex:1;"><b>'+esc(r.party_name||'')+'</b>'+(cgSubName[r.boq_subitem_id]?' <span style="color:var(--text3);">('+esc(cgSubName[r.boq_subitem_id])+')</span>':'')+'<br><span style="color:var(--text2);">Planned '+r.qty+' '+esc(r.unit||'')+'</span></span>'+
+        '<div style="text-align:center;"><div style="font-size:9px;color:var(--text3);">Qty ('+esc(r.unit||'unit')+')</div>'+
+        '<input class="rr-grp-res-qty finp" data-res-id="'+r.id+'" data-max="'+(parseFloat(r.qty)||0)+'" value="'+(parseFloat(r.qty)||0)+'" oninput="rrGroupResQtyInput(this)" type="number" step="any" style="width:80px;padding:4px 6px;font-size:11px;text-align:center;"></div>'+
         '<div style="text-align:center;"><div style="font-size:9px;color:var(--text3);">Rate ₹/'+esc(r.unit||'unit')+'</div>'+
         '<input class="rr-grp-res-rate finp" data-res-id="'+r.id+'" data-qty="'+(parseFloat(r.qty)||0)+'" value="'+(pr||'')+'" oninput="rrGroupResRateInput(this)" type="number" step="any" style="width:90px;padding:4px 6px;font-size:11px;text-align:center;"></div>'+
         '<div style="width:80px;text-align:right;font-weight:800;color:#1565C0;" class="rr-grp-res-amt">'+(pr?fmtINR((parseFloat(r.qty)||0)*pr):'—')+'</div></div>';
@@ -3830,20 +3832,42 @@ async function cgAllottedByItem(planGroupIds){
   var al=await sbFetch('boq_exec_resources',{select:'id',filter:'combined_rr_item_id=in.('+riIds.join(',')+')'});
   return Array.isArray(al)&&al.length>0;
 }
-function rrGroupResRateInput(inp){
-  var q=parseFloat(inp.getAttribute('data-qty'))||0, r=parseFloat(inp.value);
-  var out=inp.parentNode.parentNode.querySelector('.rr-grp-res-amt'); if(out) out.textContent=isNaN(r)?'—':fmtINR(q*r);
-  var tot=0; document.querySelectorAll('.rr-grp-res-rate').forEach(function(i){ var rr=parseFloat(i.value); if(!isNaN(rr)) tot+=rr*(parseFloat(i.getAttribute('data-qty'))||0); });
+// Qty of a resource row comes from its own qty box (defaults to the planned qty, can be reduced).
+function rrGroupResQty(rateInp){
+  var row=rateInp.parentNode.parentNode, q=row.querySelector('.rr-grp-res-qty');
+  return q?(parseFloat(q.value)||0):(parseFloat(rateInp.getAttribute('data-qty'))||0);
+}
+function rrGroupResRecalc(){
+  var tot=0;
+  document.querySelectorAll('.rr-grp-res-rate').forEach(function(i){
+    var r=parseFloat(i.value), q=rrGroupResQty(i);
+    var out=i.parentNode.parentNode.querySelector('.rr-grp-res-amt'); if(out) out.textContent=isNaN(r)?'\u2014':fmtINR(q*r);
+    if(!isNaN(r)) tot+=r*q;
+  });
   var t=document.getElementById('rr-grp-res-total'); if(t) t.textContent='Total: '+fmtINR(tot);
+}
+function rrGroupResRateInput(inp){ rrGroupResRecalc(); }
+function rrGroupResQtyInput(inp){
+  var max=parseFloat(inp.getAttribute('data-max'))||0, v=parseFloat(inp.value);
+  if(!isNaN(v) && v>max+0.0001){ inp.value=max; toast('Cannot exceed the planned qty ('+max+')','warning'); }
+  rrGroupResRecalc();
 }
 async function rrGroupAllotByResources(groupId,group,giItems,ctx){
   var cgRes=cgResourcesForRrItems(giItems);
   if(!cgRes.length){ toast('This group has no resources planned','warning'); return; }
-  var rateById={}, bad=false;
-  document.querySelectorAll('.rr-grp-res-rate').forEach(function(inp){
-    var r=parseFloat(inp.value); if(isNaN(r)||r<=0) bad=true; rateById[inp.getAttribute('data-res-id')]=r;
+  var rateById={}, qtyById={}, bad=false, badQty=false;
+  document.querySelectorAll('.rr-grp-res-qty').forEach(function(inp){
+    var id=inp.getAttribute('data-res-id'), q=parseFloat(inp.value), max=parseFloat(inp.getAttribute('data-max'))||0;
+    if(isNaN(q)||q<0||q>max+0.0001) badQty=true; qtyById[id]=isNaN(q)?0:q;
   });
-  if(bad){ toast('Enter a valid rate for every resource','warning'); return; }
+  if(badQty){ toast('Qty must be between 0 and the planned qty for every resource','warning'); return; }
+  document.querySelectorAll('.rr-grp-res-rate').forEach(function(inp){
+    var id=inp.getAttribute('data-res-id'), r=parseFloat(inp.value);
+    if(qtyById[id]>0 && (isNaN(r)||r<=0)) bad=true; rateById[id]=r;
+  });
+  if(bad){ toast('Enter a valid rate for every resource being allotted','warning'); return; }
+  cgRes=cgRes.filter(function(r){return qtyById[r.id]>0;});   // qty 0 = leave this resource out
+  if(!cgRes.length){ toast('Enter a qty for at least one resource','warning'); return; }
   try{
     var already=await cgResourceAllotments(cgRes.map(function(r){return r.id;}));
     if(already.length){ alert('Some of this group\'s resources are already allotted ('+already.map(function(a){return a.party_name;}).join(', ')+').\n\nDelete those allotments first, or allot only the remaining resources from the normal Allotment screen.'); return; }
@@ -3857,7 +3881,7 @@ async function rrGroupAllotByResources(groupId,group,giItems,ctx){
       var res=await sbInsert('boq_exec_resources',{
         project_id:ctx.projId, boq_item_id:r.boq_item_id, boq_subitem_id:r.boq_subitem_id||null, boq_exec_resource_id:r.id,
         date:today, exec_type:ctx.partyType, party_name:ctx.partyName, group_name:group.group_name||null,
-        qty:r.qty, unit:r.unit||null, rate:rateById[r.id]||0, scope:ctx.scope,
+        qty:qtyById[r.id], unit:r.unit||null, rate:rateById[r.id]||0, scope:ctx.scope,
         start_date:ctx.startDate, end_date:ctx.endDate, doc_type:ctx.docType==='none'?null:ctx.docType,
         batch_id:batchId, combined_rr_group_id:groupId
       });
