@@ -24006,6 +24006,21 @@ async function accAutoPost(opts){
       return false;
     }
     var prefix={Payment:'PV',Receipt:'RV',Journal:'JV',Contra:'CV',Purchase:'PUR',Sales:'SAL','Personal Sales':'PSAL'}[opts.type]||'VOU';
+    // Never post the same leg twice: if this source record already has a voucher with the same type,
+    // accounts and amount (double-click, retry, import + backfill...), keep the existing one.
+    var _dk=null;
+    if(opts.sourceId){
+      _dk=[opts.sourceType,opts.sourceId,debitId,creditId,Math.round(opts.amount*100)].join('|');
+      if(window._accCleaning && window._accCleaning[opts.sourceId]){ try{ await window._accCleaning[opts.sourceId]; }catch(e){} }   // a delete-then-repost must not see the old voucher
+      window._accPosting=window._accPosting||{};
+      if(window._accPosting[_dk]) return true;          // identical post already in flight
+      window._accPosting[_dk]=1;
+    }
+    try{
+      if(opts.sourceId){
+        var _ex=await sbFetch('vouchers',{select:'id,amount',filter:'source_id=eq.'+opts.sourceId+'&source_type=eq.'+encodeURIComponent(opts.sourceType||'')+'&debit_account=eq.'+debitId+'&credit_account=eq.'+creditId+'&limit=50'});
+        if(Array.isArray(_ex) && _ex.some(function(x){return Math.abs((parseFloat(x.amount)||0)-opts.amount)<0.005;})) return true;
+      }
     var vou_no=prefix+'-AUTO-'+String(Date.now()).slice(-7);
     var res = await sbInsert('vouchers',{
       vou_no:vou_no, voucher_no:vou_no, type:opts.type, date:opts.date||new Date().toISOString().slice(0,10),
@@ -24015,6 +24030,7 @@ async function accAutoPost(opts){
     });
     if(res && res[0]){ ACC_VOUCHERS.unshift(res[0]); return true; }
     return false;
+    }finally{ if(_dk) setTimeout(function(){ delete window._accPosting[_dk]; },3000); }
   }catch(e){
     console.error('accAutoPost failed for '+(opts&&opts.sourceType), e);
     ACC_AUTOPOST_LAST_ERROR = e.message||String(e);
@@ -24028,8 +24044,16 @@ var ACC_AUTOPOST_LAST_ERROR = null;
 // keeps Accounts consistent without manual cleanup. Matched purely by
 // source_id, which also covers multi-leg posts (e.g. a sales bill's base
 // + GST vouchers share one source_id). Fire-and-forget safe.
-async function accCleanupVouchersForSource(sourceId){
-  if(!sourceId) return;
+function accCleanupVouchersForSource(sourceId){
+  if(!sourceId) return Promise.resolve();
+  // registered immediately so a re-post that follows (even when this call isn't awaited) waits for it
+  window._accCleaning=window._accCleaning||{};
+  var p=accCleanupVouchersForSourceRun(sourceId);
+  window._accCleaning[sourceId]=p;
+  p.then(function(){ if(window._accCleaning[sourceId]===p) delete window._accCleaning[sourceId]; },function(){ delete window._accCleaning[sourceId]; });
+  return p;
+}
+async function accCleanupVouchersForSourceRun(sourceId){
   try{
     var vs = await sbFetch('vouchers',{select:'id',filter:'source_id=eq.'+sourceId});
     if(!Array.isArray(vs)||!vs.length) return;
@@ -29701,8 +29725,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261031a"></script>
-<script src="js/employee.js?v=20261031a"></script>
-<script src="js/projects.js?v=20261031a"></script>
-<script src="js/finance.js?v=20261031a"></script>
+<script src="js/registry.js?v=20261031b"></script>
+<script src="js/employee.js?v=20261031b"></script>
+<script src="js/projects.js?v=20261031b"></script>
+<script src="js/finance.js?v=20261031b"></script>
 </html>
