@@ -89,6 +89,7 @@ body.has-rail #dash-scan-fab{display:none !important;}
   --indigo:#283593;--indigol:#E8EAF6;--indigob:#9FA8DA;
   --bg:#F0F4F8;--white:#fff;--border:#E2E8F0;
   --text:#0D2137;--text2:#475569;--text3:#94A3B8;
+  --tds-p:#4A148C;--tds-g:#2E7D32;--tds-i:#1A237E;
   --shadow:0 2px 12px rgba(13,33,55,.08);--shadow2:0 8px 32px rgba(13,33,55,.15);
   --top:56px;--bot:68px;
 }
@@ -1309,7 +1310,7 @@ body{--card-bg:#fff;}
    months dropdowns, the multi-project picker modal) still correctly
    inherit these variables through normal CSS inheritance, rather than
    falling outside a narrower container's scope and losing the theme. */
-body.dash-dark{--bg:#1E293B;--card-bg:#1E293B;--border:#334155;--text:#F1F5F9;--text2:#CBD5E1;--text3:#94A3B8;--bg2:#1E293B;--bg3:#334155;--border2:#334155;--white:#1E293B;--accent:var(--navy);}
+body.dash-dark{--tds-p:#CE93D8;--tds-g:#81C784;--tds-i:#9FA8DA;--bg:#1E293B;--card-bg:#1E293B;--border:#334155;--text:#F1F5F9;--text2:#CBD5E1;--text3:#94A3B8;--bg2:#1E293B;--bg3:#334155;--border2:#334155;--white:#1E293B;--accent:var(--navy);}
 /* Master Registry (and other lists) in dark mode: anything coloured with the
    dark navy brand colour becomes unreadable on dark cards, so lift it. */
 body.dash-dark .ni.on .ni-lb{color:#60A5FA;}
@@ -26116,16 +26117,16 @@ function accTdsSetPeriod(kind){
 }
 function accTdsPeriodSelectorHtml(){
   accTdsInitPeriod();
-  var btn=function(k,l){ return '<button onclick="accTdsSetPeriod(\''+k+'\')" style="background:transparent;border:1.5px solid var(--border);border-radius:8px;padding:5px 9px;font-size:10.5px;font-weight:800;cursor:pointer;margin-right:6px;white-space:nowrap;font-family:Nunito,sans-serif;">'+l+'</button>'; };
+  var btn=function(k,l){ return '<button onclick="accTdsSetPeriod(\''+k+'\')" style="background:transparent;color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:5px 9px;font-size:10.5px;font-weight:800;cursor:pointer;margin-right:6px;white-space:nowrap;font-family:Nunito,sans-serif;">'+l+'</button>'; };
   return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;">'+
-    '<div style="font-size:10px;color:var(--text3);font-weight:800;margin-bottom:6px;">TDS PERIOD — <span style="color:#1A237E;">'+ACC_TDS_LABEL+'</span></div>'+
+    '<div style="font-size:10px;color:var(--text3);font-weight:800;margin-bottom:6px;">TDS PERIOD — <span style="color:var(--tds-i);">'+ACC_TDS_LABEL+'</span></div>'+
     '<div style="display:flex;overflow-x:auto;scrollbar-width:none;margin-bottom:8px;">'+
       btn('thismonth','This Month')+btn('lastmonth','Last Month')+btn('thisfy','This FY')+btn('lastfy','Last FY')+btn('all','All Time')+
     '</div>'+
     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+
-      '<input type="date" id="acc-tds-from" value="'+ACC_TDS_FROM+'" style="flex:1;min-width:120px;padding:5px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;">'+
+      '<input type="date" id="acc-tds-from" value="'+ACC_TDS_FROM+'" style="flex:1;min-width:120px;padding:5px;background:var(--card-bg);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;">'+
       '<span style="font-size:10px;color:var(--text3);">to</span>'+
-      '<input type="date" id="acc-tds-to" value="'+ACC_TDS_TO+'" style="flex:1;min-width:120px;padding:5px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;">'+
+      '<input type="date" id="acc-tds-to" value="'+ACC_TDS_TO+'" style="flex:1;min-width:120px;padding:5px;background:var(--card-bg);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;">'+
       '<button onclick="accTdsSetPeriod(\'custom\')" style="background:var(--accent);color:white;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;">Apply</button>'+
     '</div></div>';
 }
@@ -26262,8 +26263,8 @@ async function accTdsTab(){
         '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Reference</th><th>Client / Project</th><th style="text-align:right;">TDS</th></tr></thead><tbody>'+
         recvPeriod.map(function(r){
           return '<tr><td style="white-space:nowrap;">'+fmtDate(r.date)+'</td><td><strong>'+r.ref+'</strong></td><td>'+r.party+(r.proj&&r.proj!==r.party?'<br><span style="font-size:10px;color:var(--text3);">'+r.proj+'</span>':'')+'</td>'+
-            '<td style="text-align:right;font-weight:700;color:#2E7D32;">'+fmtINR(r.amount)+'</td></tr>';
-        }).join('')+'<tr style="font-weight:800;"><td colspan="3" style="text-align:right;">Total</td><td style="text-align:right;color:#2E7D32;">'+fmtINR(recvPeriodTotal)+'</td></tr></tbody></table></div>'
+            '<td style="text-align:right;font-weight:700;color:var(--tds-g);">'+fmtINR(r.amount)+'</td></tr>';
+        }).join('')+'<tr style="font-weight:800;"><td colspan="3" style="text-align:right;">Total</td><td style="text-align:right;color:var(--tds-g);">'+fmtINR(recvPeriodTotal)+'</td></tr></tbody></table></div>'
         :'<div style="text-align:center;padding:16px;color:var(--text3);">No TDS deducted by clients in this period</div>');
 
     // Cache for the Excel/PDF export buttons (same pattern as GST_DRILL).
@@ -26297,9 +26298,9 @@ async function accTdsTab(){
 
     var tdsSettlementHtml=
       '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;">'+
-        '<div style="font-size:12px;font-weight:900;color:#4A148C;margin-bottom:8px;">&#127970; TDS Deposited to Income Tax</div>'+
+        '<div style="font-size:12px;font-weight:900;color:var(--tds-p);margin-bottom:8px;">&#127970; TDS Deposited to Income Tax</div>'+
         '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px;">'+
-          '<div><div style="font-size:9.5px;color:var(--text3);">DEPOSITED TO DATE</div><div style="font-size:13px;font-weight:900;color:#2E7D32;">'+fmtINR(depositTotal)+'</div></div>'+
+          '<div><div style="font-size:9.5px;color:var(--text3);">DEPOSITED TO DATE</div><div style="font-size:13px;font-weight:900;color:var(--tds-g);">'+fmtINR(depositTotal)+'</div></div>'+
           '<div><div style="font-size:9.5px;color:var(--text3);">TDS PAYABLE OUTSTANDING</div><div style="font-size:13px;font-weight:900;color:'+(payableBal>0?'#C62828':'var(--text3)')+';">'+fmtINR(payableBal)+'</div></div>'+
         '</div>'+
         (depositRows?
@@ -26318,8 +26319,8 @@ async function accTdsTab(){
       '</div>'+
       '<div style="font-size:10.5px;color:var(--text3);margin-bottom:12px;">TDS withheld from subcontractor/vendor bills and advance payments, deposited with the Income Tax Department on their behalf — never payable back to the party. For information only — verify before filing TDS returns.</div>'+
       '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;">'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL TDS (ALL TIME)</div><div style="font-size:16px;font-weight:900;color:#4A148C;">'+fmtINR(totalAll)+'</div></div>'+
-        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TDS IN '+ACC_TDS_LABEL.toUpperCase()+'</div><div style="font-size:16px;font-weight:900;color:#4A148C;">'+fmtINR(periodTotal)+'</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TOTAL TDS (ALL TIME)</div><div style="font-size:16px;font-weight:900;color:var(--tds-p);">'+fmtINR(totalAll)+'</div></div>'+
+        '<div class="card" style="text-align:center;"><div style="font-size:10px;color:var(--text3);">TDS IN '+ACC_TDS_LABEL.toUpperCase()+'</div><div style="font-size:16px;font-weight:900;color:var(--tds-p);">'+fmtINR(periodTotal)+'</div></div>'+
       '</div>'+
       tdsSettlementHtml+
       '<div style="display:flex;gap:0;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;">'+
@@ -26329,7 +26330,7 @@ async function accTdsTab(){
       '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Party-wise ('+ACC_TDS_LABEL+')</div>'+
       (partyKeys.length?
         '<div class="table-card" style="margin-bottom:14px;"><table class="att-table"><thead><tr><th>Party</th><th>PAN</th><th style="text-align:right;">Entries</th><th style="text-align:right;">Total TDS</th></tr></thead><tbody>'+
-        partyKeys.map(function(pk){var x=byParty[pk];return '<tr><td>'+pk+'</td><td style="font-family:monospace;font-size:10.5px;">'+(x.pan||'—')+'</td><td style="text-align:right;">'+x.count+'</td><td style="text-align:right;font-weight:800;color:#4A148C;">'+fmtINR(x.amount)+'</td></tr>';}).join('')+
+        partyKeys.map(function(pk){var x=byParty[pk];return '<tr><td>'+pk+'</td><td style="font-family:monospace;font-size:10.5px;">'+(x.pan||'—')+'</td><td style="text-align:right;">'+x.count+'</td><td style="text-align:right;font-weight:800;color:var(--tds-p);">'+fmtINR(x.amount)+'</td></tr>';}).join('')+
         '</tbody></table></div>'
         :'<div style="text-align:center;padding:20px;color:var(--text3);margin-bottom:14px;">No TDS deducted in this period</div>')+
       '<div style="font-size:13px;font-weight:800;margin-bottom:6px;">Date-wise Entries ('+ACC_TDS_LABEL+')</div>'+
@@ -26338,7 +26339,7 @@ async function accTdsTab(){
         periodRows.map(function(r){
           return '<tr><td style="white-space:nowrap;">'+fmtDate(r.date)+'</td><td><strong>'+r.billRef+'</strong></td>'+
             '<td>'+r.party+'</td><td style="font-family:monospace;font-size:10.5px;">'+(r.pan||'—')+'</td><td>'+r.head+'</td>'+
-            '<td style="text-align:right;font-weight:700;color:#4A148C;">'+fmtINR(r.amount)+'</td></tr>';
+            '<td style="text-align:right;font-weight:700;color:var(--tds-p);">'+fmtINR(r.amount)+'</td></tr>';
         }).join('')+'</tbody></table></div>'
         :'<div style="text-align:center;padding:20px;color:var(--text3);">No TDS entries in this period</div>')+
       recvHtml;
@@ -29765,8 +29766,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261031c"></script>
-<script src="js/employee.js?v=20261031c"></script>
-<script src="js/projects.js?v=20261031c"></script>
-<script src="js/finance.js?v=20261031c"></script>
+<script src="js/registry.js?v=20261031d"></script>
+<script src="js/employee.js?v=20261031d"></script>
+<script src="js/projects.js?v=20261031d"></script>
+<script src="js/finance.js?v=20261031d"></script>
 </html>
