@@ -3747,7 +3747,7 @@ async function rrGroupOpenAllotForm(groupId){
         '</div>'+
       '</div>'+
       '<div id="rr-grp-itemwise-rows">'+
-        '<div id="rr-grp-total-bar" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;margin-bottom:8px;background:#E0F7FA;border:1px solid #B2EBF2;border-radius:8px;font-size:12px;font-weight:800;color:#00695C;position:sticky;top:0;z-index:2;"><span>Total Amount (all items)</span><span id="rr-grp-total-amt">\u20b90.00</span></div>'+
+        '<div id="rr-grp-total-bar" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;margin-bottom:8px;background:var(--card-bg);border:1.5px solid #00838F;border-radius:8px;font-size:12px;font-weight:800;color:var(--text);position:sticky;top:0;z-index:2;"><span>Total Amount (all items)</span><span id="rr-grp-total-amt">\u20b90.00</span></div>'+
         pctFillHtml+rowsHtml+'</div>'+
     '</div>'+
     '<div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:14px;">'+
@@ -5713,7 +5713,7 @@ function execGenCombinedDoc(t){var cc=Array.from(document.querySelectorAll(".wa-
 // qty 0 and a rate; the executed qty is then entered in Daily Progress and billed at the rate.
 function allotIsOpen(a){ return !(parseFloat(a&&a.qty)>0); }
 function waOpenQtyHtml(){
-  return '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin:4px 0 10px;background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;cursor:pointer;">'+
+  return '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin:4px 0 10px;background:var(--card-bg);color:var(--text);border:1.5px solid #E65100;border-radius:8px;cursor:pointer;">'+
     '<input type="checkbox" id="wa-open-qty" onchange="waOpenQtyToggle(this.checked)" style="margin-top:2px;accent-color:#E65100;">'+
     '<span style="font-size:11px;"><b>Qty not known yet \u2014 allot on rate only</b><br><span style="color:var(--text3);">Only description and rate are saved. The executed qty is entered in Daily Progress and billed at this rate.</span></span></label>';
 }
