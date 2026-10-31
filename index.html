@@ -26137,10 +26137,35 @@ async function accTdsTab(){
     accTdsInitPeriod();
     var tdsFetch=await Promise.all([
       sbFetch('work_bills',{select:'*',order:'bill_date.desc'}).catch(function(){return [];}),
-      sbFetch('work_advances',{select:'*',order:'date.desc'}).catch(function(){return [];})
+      sbFetch('work_advances',{select:'*',order:'date.desc'}).catch(function(){return [];}),
+      sbFetch('sales_payments',{select:'*'}).catch(function(){return [];}),
+      sbFetch('client_advances',{select:'*'}).catch(function(){return [];}),
+      sbFetch('projects',{select:'id,name,client'}).catch(function(){return [];}),
+      sbFetch('sales_bills',{select:'*'}).catch(function(){return [];})
     ]);
     var workBills=Array.isArray(tdsFetch[0])?tdsFetch[0]:[];
     var workAdvances=Array.isArray(tdsFetch[1])?tdsFetch[1]:[];
+    var salesPays=Array.isArray(tdsFetch[2])?tdsFetch[2]:[];
+    var clientAdvs=Array.isArray(tdsFetch[3])?tdsFetch[3]:[];
+    var tdsProjs={}; (Array.isArray(tdsFetch[4])?tdsFetch[4]:[]).forEach(function(p){tdsProjs[p.id]=p;});
+    var tdsSBills={}; (Array.isArray(tdsFetch[5])?tdsFetch[5]:[]).forEach(function(b){tdsSBills[b.id]=b;});
+    // TDS the CLIENT withheld from what they paid us (sales bill payments and client advances): a receivable
+    // we claim credit for, not a liability. Kept separate from TDS we deduct from vendors/subcontractors.
+    var recvRows=[];
+    salesPays.forEach(function(p){
+      var amt=parseFloat(p.tds_amount)||0; if(amt<=0) return;
+      var pr=tdsProjs[p.project_id]||{}, sb=tdsSBills[p.sales_bill_id]||{};
+      recvRows.push({date:p.payment_date, party:pr.client||pr.name||'Client', proj:pr.name||'', ref:'Payment against '+(sb.bill_ref||(sb.bill_number?'Sales Bill #'+sb.bill_number:'sales bill')), amount:amt});
+    });
+    clientAdvs.forEach(function(a){
+      var deds=[]; try{deds=a.deductions?JSON.parse(a.deductions):[];}catch(e){}
+      var pr=tdsProjs[a.project_id]||{};
+      deds.filter(function(d){return d.is_tds;}).forEach(function(d){
+        var amt=parseFloat(d.amount)||0; if(amt<=0) return;
+        recvRows.push({date:a.date, party:pr.client||pr.name||a.party_name||'Client', proj:pr.name||'', ref:a.adv_ref||('Advance received'+(a.purpose?' \u2014 '+a.purpose:'')), amount:amt});
+      });
+    });
+    recvRows.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
 
     // Master-record PAN, keyed by "party_type::party_name", as a fallback
     // for TDS entries whose own deduction row never had a PAN typed in
@@ -26227,6 +26252,20 @@ async function accTdsTab(){
     });
     var partyKeys=Object.keys(byParty).sort(function(a,b){return byParty[b].amount-byParty[a].amount;});
 
+    var recvPeriod=recvRows.filter(function(r){return r.date && r.date>=ACC_TDS_FROM && r.date<=ACC_TDS_TO;});
+    var recvAllTotal=recvRows.reduce(function(s,r){return s+r.amount;},0);
+    var recvPeriodTotal=recvPeriod.reduce(function(s,r){return s+r.amount;},0);
+    var recvHtml=
+      '<div style="font-size:13px;font-weight:800;margin:18px 0 4px;">TDS Deducted by Clients \u2014 Receivable ('+ACC_TDS_LABEL+')</div>'+
+      '<div style="font-size:10.5px;color:var(--text3);margin-bottom:8px;">Tax your clients withheld from sales bill payments and advances you received. It is not a liability: claim it as credit in your return (check Form 26AS). Total all time: <b>'+fmtINR(recvAllTotal)+'</b> \u00b7 This period: <b>'+fmtINR(recvPeriodTotal)+'</b></div>'+
+      (recvPeriod.length?
+        '<div class="table-card"><table class="att-table"><thead><tr><th>Date</th><th>Reference</th><th>Client / Project</th><th style="text-align:right;">TDS</th></tr></thead><tbody>'+
+        recvPeriod.map(function(r){
+          return '<tr><td style="white-space:nowrap;">'+fmtDate(r.date)+'</td><td><strong>'+r.ref+'</strong></td><td>'+r.party+(r.proj&&r.proj!==r.party?'<br><span style="font-size:10px;color:var(--text3);">'+r.proj+'</span>':'')+'</td>'+
+            '<td style="text-align:right;font-weight:700;color:#2E7D32;">'+fmtINR(r.amount)+'</td></tr>';
+        }).join('')+'<tr style="font-weight:800;"><td colspan="3" style="text-align:right;">Total</td><td style="text-align:right;color:#2E7D32;">'+fmtINR(recvPeriodTotal)+'</td></tr></tbody></table></div>'
+        :'<div style="text-align:center;padding:16px;color:var(--text3);">No TDS deducted by clients in this period</div>');
+
     // Cache for the Excel/PDF export buttons (same pattern as GST_DRILL).
     TDS_DRILL={periodRows:periodRows, byParty:byParty, partyKeys:partyKeys,
       totalAll:totalAll, periodTotal:periodTotal, periodLabel:ACC_TDS_LABEL};
@@ -26301,7 +26340,8 @@ async function accTdsTab(){
             '<td>'+r.party+'</td><td style="font-family:monospace;font-size:10.5px;">'+(r.pan||'—')+'</td><td>'+r.head+'</td>'+
             '<td style="text-align:right;font-weight:700;color:#4A148C;">'+fmtINR(r.amount)+'</td></tr>';
         }).join('')+'</tbody></table></div>'
-        :'<div style="text-align:center;padding:20px;color:var(--text3);">No TDS entries in this period</div>');
+        :'<div style="text-align:center;padding:20px;color:var(--text3);">No TDS entries in this period</div>')+
+      recvHtml;
   }catch(e){
     console.error('accTdsTab failed',e);
     cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Error loading TDS summary: '+e.message+'</div>';
@@ -29725,8 +29765,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261031b"></script>
-<script src="js/employee.js?v=20261031b"></script>
-<script src="js/projects.js?v=20261031b"></script>
-<script src="js/finance.js?v=20261031b"></script>
+<script src="js/registry.js?v=20261031c"></script>
+<script src="js/employee.js?v=20261031c"></script>
+<script src="js/projects.js?v=20261031c"></script>
+<script src="js/finance.js?v=20261031c"></script>
 </html>
