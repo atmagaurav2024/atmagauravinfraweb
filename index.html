@@ -2996,6 +2996,7 @@ async function loadDashboardInsights(filterProjId){
         return pid ? fyProjIds.indexOf(String(pid))>-1 : true; // not project-linked rows pass through
       });
     }
+    var salesBillsAllRaw = salesBills.slice();   // turnover is by bill date, not by which projects overlap the FY
     boqItems       = filterByFYProjects(boqItems);
     execResources  = filterByFYProjects(execResources);
     dailyProgress  = filterByFYProjects(dailyProgress);
@@ -3030,6 +3031,19 @@ async function loadDashboardInsights(filterProjId){
       projects=projects.filter(function(p){return p.id===filterProjId;});
     }
 
+    // ── Turnover for the selected financial year: sales billed (net of GST) with a bill date inside the FY ──
+    var tvBills = salesBillsAllRaw.filter(function(b){
+      if(filterProjId && b.project_id!==filterProjId) return false;
+      var d=String(b.bill_date||'').slice(0,10);
+      return d && d>=fyR.from && d<=fyR.to;
+    });
+    var turnoverFY = tvBills.reduce(function(s,b){
+      var additions=[]; try{additions=b.additions?JSON.parse(b.additions):[];}catch(e){}
+      var gst=additions.filter(function(a){return a.is_gst;}).reduce(function(s2,a){return s2+(parseFloat(a.amount)||0);},0);
+      return s+((parseFloat(b.bill_amount)||0)-gst);
+    },0);
+    var tvCur = currentFYStartYear();
+    var tvYears=[]; for(var ty=tvCur+1; ty>=tvCur-5; ty--) tvYears.push(ty);
     var projName={}; projects.forEach(function(p){projName[p.id]=p.name;});
     var activeProjects=projects.filter(function(p){return p.status==='planning'||p.status==='in-progress';}).length;
     var underDlpProjects=projects.filter(function(p){return p.status==='under-dlp';}).length;
@@ -3757,7 +3771,18 @@ async function loadDashboardInsights(filterProjId){
         '<div onclick="dashBusyStart();showApp(\'access\')" style="text-align:right;margin-top:6px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer;">View all activity &#8594;</div>'+
       '</div></div>';
 
+    var turnoverHtml =
+      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
+        '<div><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;">Turnover \u2014 FY '+fyStart+'-'+String(fyStart+1).slice(2)+(fyStart===tvCur?' (current)':'')+(selectedProject?' \u00b7 '+esc(selectedProject.name):'')+'</div>'+
+          '<div style="font-size:26px;font-weight:900;color:var(--text);line-height:1.15;margin-top:2px;">'+inr(turnoverFY)+'</div>'+
+          '<div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Sales billed excl. GST \u00b7 '+tvBills.length+' bill'+(tvBills.length===1?'':'s')+' dated '+fyR.from.split('-').reverse().join('/')+' to '+fyR.to.split('-').reverse().join('/')+'</div></div>'+
+        '<div><div style="font-size:9.5px;font-weight:700;color:var(--text3);margin-bottom:3px;">VIEW FINANCIAL YEAR</div>'+
+          '<select onchange="selectFY(parseInt(this.value))" class="fsel" style="min-width:130px;margin:0;">'+
+            tvYears.map(function(y){return '<option value="'+y+'"'+(y===fyStart?' selected':'')+'>FY '+y+'-'+String(y+1).slice(2)+'</option>';}).join('')+
+          '</select></div>'+
+      '</div>';
     gridEl.innerHTML =
+      turnoverHtml+
       '<div style="margin-bottom:10px;"><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Action Required</div>'+actionRequiredHtml+'</div>'+
       '<div class="dash-overview-health-grid" style="margin-bottom:10px;">'+
         '<div style="height:100%;display:flex;flex-direction:column;"><div style="font-size:11.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Business Overview</div>'+businessOverviewHtml+'</div>'+
@@ -29803,8 +29828,8 @@ function annDownloadPDF(){
 
 
 </script>
-<script src="js/registry.js?v=20261031e"></script>
-<script src="js/employee.js?v=20261031e"></script>
-<script src="js/projects.js?v=20261031e"></script>
-<script src="js/finance.js?v=20261031e"></script>
+<script src="js/registry.js?v=20261102a"></script>
+<script src="js/employee.js?v=20261102a"></script>
+<script src="js/projects.js?v=20261102a"></script>
+<script src="js/finance.js?v=20261102a"></script>
 </html>
