@@ -17678,7 +17678,9 @@ async function projLedgerLoad(){
         if(advAdj){ bLines.push(['\u2212 Advance adjusted',-advAdj]); bNet-=advAdj; }
         if(bLines.length>1) bLines.push(['= Bill net payable',bNet]);
       }
+      var _pre=rows.length;
       add(p.payment_date,'payment','Payment to party',p.party_name,'Bill '+(b.bill_ref||(b.bill_number?'#'+b.bill_number:'')),p.payment_mode,0,parseFloat(p.amount)||0,p.reference||'',bGross||num(p.amount),bLines&&bLines.length>2?bLines:null);
+      if(rows.length>_pre&&b.id) rows[rows.length-1].bkey=b.id;
     });
     r[3].forEach(function(a){
       var bd2=advBd(a);
@@ -17723,7 +17725,21 @@ function projLedgerData(){
   });
   bal=opening;
   rows.forEach(function(r){ tin+=r.inAmt; tout+=r.outAmt; bal+=r.inAmt-r.outAmt; r.bal=bal; });
-  return {rows:rows,opening:opening,tin:tin,tout:tout,closing:bal};
+  // Separate totals of additions / GST / TDS / deductions shown in the breakups (a bill's deductions counted once)
+  var ex={}, seen={};
+  rows.forEach(function(r){
+    if(!r.lines) return;
+    var side=r.inAmt?'in':'out';
+    if(r.bkey){ if(seen[r.bkey]) return; seen[r.bkey]=1; }
+    r.lines.forEach(function(l){
+      var s=String(l[0]), v=Math.abs(l[1]), c=null;
+      if(s.charAt(0)==='+') c=/gst/i.test(s)?'GST':'Additions';
+      else if(s.charAt(0)==='\u2212'){ c=/advance adjusted/i.test(s)?'Advance adjusted':(/tds/i.test(s)?'TDS':'Other deductions'); }
+      if(!c||!v) return;
+      var k=side+'|'+c; ex[k]=(ex[k]||0)+v;
+    });
+  });
+  return {rows:rows,opening:opening,tin:tin,tout:tout,closing:bal,ex:ex};
 }
 function projLedgerRender(){
   var el=document.getElementById('ledger-content'); if(!el) return;
@@ -17759,6 +17775,17 @@ function projLedgerRender(){
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px;">'+
       card('Opening',d.opening,'var(--text)')+card('Received',d.tin,'#2E7D32')+card('Paid',d.tout,'#C62828')+card('Net (closing)',d.closing,d.closing<0?'#C62828':'#1565C0')+
     '</div>'+
+    (function(){
+      var ks=Object.keys(d.ex||{}); if(!ks.length) return '';
+      var order=['GST','Additions','TDS','Other deductions','Advance adjusted'];
+      ks.sort(function(a,b){ var x=a.split('|'), y=b.split('|'); return (x[0]===y[0]?0:(x[0]==='in'?-1:1))||(order.indexOf(x[1])-order.indexOf(y[1])); });
+      return '<div style="font-size:10px;font-weight:700;color:var(--text3);margin:0 0 4px;">ADDITIONS &amp; DEDUCTIONS (from the breakups below)</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px;">'+ks.map(function(k){
+          var p=k.split('|'), isIn=p[0]==='in';
+          var plus=(p[1]==='GST'||p[1]==='Additions');
+          return card(p[1]+(isIn?' (client side)':' (party side)'),d.ex[k],plus?'#2E7D32':'#C62828');
+        }).join('')+'</div>';
+    })()+
     '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
       '<table style="width:100%;border-collapse:collapse;min-width:680px;"><thead><tr style="background:var(--bg);">'+
         ['Date','Particulars','Mode','Gross','Net Received','Net Paid','Balance'].map(function(h,i){return '<th style="padding:7px 8px;font-size:10px;text-align:'+(i>=3?'right':'left')+';color:var(--text3);text-transform:uppercase;">'+h+'</th>';}).join('')+
