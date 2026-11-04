@@ -190,6 +190,7 @@ function projModRenderNav(){
     {id:'sales',           label:'Sales'},
     {id:'otherexp',        label:'Other Expenses'},
     {id:'ledger',          label:'Ledger'},
+    {id:'allledger',       label:'\u{1F4D2} All Projects Ledger'},
     {id:'orders',          label:'Orders'}
   ];
 
@@ -199,7 +200,7 @@ function projModRenderNav(){
     mainTabs.map(function(t){
       var isActive=(PROJ_MOD_TAB===t.id)||(t.group&&activeGroup===t.id);
       // Hide non-project tabs when no project selected OR when on Projects tab
-      if(t.id!=='projects'&&(onProjects||!hasProjId)) return '';
+      if(t.id!=='projects'&&t.id!=='allledger'&&(onProjects||!hasProjId)) return '';
       return '<button id="pmt-'+t.id+'" '+(isActive?'data-act="1" ':'')+
         'onclick="projModTab(\''+t.id+'\')" '+
         'style="flex-shrink:0;padding:7px 14px;font-size:12px;font-weight:800;border:none;border-radius:8px;'+
@@ -307,6 +308,12 @@ function projModLoadTab(){
       el.innerHTML = '<div style="padding:0 0 6px;"><div class="search-bar"><span style="font-size:16px;color:var(--text3);">&#128269;</span><input type="text" id="proj-search" placeholder="Search projects..." oninput="searchProj(this.value)"></div></div><div id="proj-list"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>';
     }
     loadProjData();
+    return;
+  }
+
+  if(tab === 'allledger'){
+    el.innerHTML = '<div id="ledger-content"><div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading...</div></div>';
+    projLedgerLoad();
     return;
   }
 
@@ -17627,9 +17634,11 @@ function pdfSignGridSig(blocks){
 var PL_STATE={rows:[],from:'',to:'',kind:'all',q:'',projName:''};
 async function projLedgerLoad(){
   var el=document.getElementById('ledger-content'); if(!el) return;
-  var projId=PROJ_MOD_SEL_ID; if(!projId) return;
+  var ALL=(PROJ_MOD_TAB==='allledger');
+  var projId=PROJ_MOD_SEL_ID; if(!projId&&!ALL) return;
+  PL_STATE.all=ALL;
   el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading ledger...</div>';
-  var safeF=function(table,filter){ return sbFetch(table,{select:'*',filter:filter||('project_id=eq.'+projId)}).then(function(r){return Array.isArray(r)?r:[];}).catch(function(){return [];}); };
+  var safeF=function(table,filter){ return sbFetch(table,{select:'*',filter:filter||(ALL?'project_id=not.is.null':('project_id=eq.'+projId))}).then(function(r){return Array.isArray(r)?r:[];}).catch(function(){return [];}); };
   try{
     var r=await Promise.all([
       safeF('sales_payments'), safeF('client_advances'),
@@ -17638,8 +17647,11 @@ async function projLedgerLoad(){
       sbFetch('employees',{select:'id,emp_id,first_name,last_name'}).then(function(x){return Array.isArray(x)?x:[];}).catch(function(){return [];}),
       safeF('sales_bills'), safeF('work_bills')
     ]);
-    var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
-    PL_STATE.projName=proj.name||'';
+    var proj=ALL?{}:(PROJ_DATA.find(function(p){return p.id===projId;})||{});
+    PL_STATE.projName=ALL?'All Projects':(proj.name||'');
+    var pmap={}; (PROJ_DATA||[]).forEach(function(p){pmap[p.id]=p;});
+    var cur='';
+    var pj=function(id){ return ALL?(pmap[id]||{}):proj; };
     var emp={}; r[6].forEach(function(e){ var n=((e.first_name||'')+' '+(e.last_name||'')).trim(); emp[e.id]=n; if(e.emp_id) emp[e.emp_id]=n; });
     var sbill={}; r[7].forEach(function(b){sbill[b.id]=b;});
     var wbill={}; r[8].forEach(function(b){wbill[b.id]=b;});
@@ -17671,9 +17683,10 @@ async function projLedgerLoad(){
     };
     var add=function(date,kind,label,party,ref,mode,inAmt,outAmt,note,gross,lines){
       if(!(inAmt>0||outAmt>0)) return;
-      rows.push({date:String(date||'').slice(0,10),kind:kind,label:label,party:party||'',ref:ref||'',mode:mode||'',inAmt:inAmt||0,outAmt:outAmt||0,note:note||'',gross:gross||(inAmt||outAmt),lines:lines||null});
+      rows.push({proj:ALL?((pmap[cur]||{}).name||''):'',date:String(date||'').slice(0,10),kind:kind,label:label,party:party||'',ref:ref||'',mode:mode||'',inAmt:inAmt||0,outAmt:outAmt||0,note:note||'',gross:gross||(inAmt||outAmt),lines:lines||null});
     };
     r[0].forEach(function(p){
+      cur=p.project_id; var proj=pj(p.project_id);
       var sb=sbill[p.sales_bill_id]||{};
       var tds=parseFloat(p.tds_amount)||0;
       var sbd=sb.id?billBd(sb):null, sl=null;
@@ -17685,10 +17698,12 @@ async function projLedgerLoad(){
       if(rows.length>_p0&&sb.id) rows[rows.length-1].bkey='S'+sb.id;
     });
     r[1].forEach(function(a){
+      cur=a.project_id; var proj=pj(a.project_id);
       var bd=advBd(a);
       add(a.date,'receipt','Advance received',proj.client||proj.name,a.adv_ref||a.purpose||'',a.payment_mode,parseFloat(a.amount)||0,0,a.reference?'Ref '+a.reference:'',bd.gross,bd.hasExtra?bd.lines:null);
     });
     r[2].forEach(function(p){
+      cur=p.project_id||(wbill[p.bill_id]||{}).project_id;
       var b=wbill[p.bill_id]||{};
       var wbd=b.id?billBd(b):null, bGross=wbd?wbd.gross:0, bLines=null;
       if(wbd&&wbd.lines.length>1) bLines=wbd.lines.concat([['= Bill net payable',wbd.net]]);
@@ -17697,23 +17712,30 @@ async function projLedgerLoad(){
       if(rows.length>_pre&&b.id) rows[rows.length-1].bkey=b.id;
     });
     r[3].forEach(function(a){
+      cur=a.project_id;
       var bd2=advBd(a);
       add(a.date,'payment','Advance to party',a.party_name,a.adv_ref||a.purpose||'',a.payment_mode,0,parseFloat(a.amount)||0,a.reference||'',bd2.gross,bd2.hasExtra?bd2.lines:null);
     });
     r[4].forEach(function(x){
+      cur=x.project_id;
       add(x.date,'payment','Other expense',x.party_name||'',(x.type||'')+(x.description?' \u2014 '+x.description:''),x.payment_mode||'',0,parseFloat(x.amount)||0,'');
     });
     r[5].forEach(function(x){
       if(x.linked_id) return;   // already counted as a party payment/advance
       var allocs=[]; try{allocs=x.project_allocations?JSON.parse(x.project_allocations):[];}catch(e){}
-      var mine=allocs.find(function(a){return a.id===projId;}), amt=0;
-      if(mine) amt=parseFloat(mine.amount)||0;
-      else if(!allocs.length){
-        var ids=[]; try{ids=x.project_ids?JSON.parse(x.project_ids):[];}catch(e){}
-        if(ids.indexOf(projId)>-1) amt=(parseFloat(x.amount)||0)/Math.max(1,ids.length);
-        else if(!ids.length && x.project && proj.name && String(x.project).split(',').map(function(s){return s.trim();}).indexOf(proj.name)>-1) amt=(parseFloat(x.amount)||0)/Math.max(1,String(x.project).split(',').length);
+      var ids=[]; try{ids=x.project_ids?JSON.parse(x.project_ids):[];}catch(e){}
+      var parts=[];   // [projectId, amount]
+      if(allocs.length) allocs.forEach(function(a){ parts.push([a.id,parseFloat(a.amount)||0]); });
+      else if(ids.length) ids.forEach(function(id){ parts.push([id,(parseFloat(x.amount)||0)/ids.length]); });
+      else if(x.project){
+        var nm=String(x.project).split(',').map(function(s){return s.trim();}).filter(Boolean);
+        nm.forEach(function(n){ var pp=(PROJ_DATA||[]).find(function(q){return q.name===n;}); if(pp) parts.push([pp.id,(parseFloat(x.amount)||0)/nm.length]); });
       }
-      add(x.date,'payment','Petty cash expense',emp[x.emp_id]||'',(x.category||'')+(x.description?' \u2014 '+x.description:''),'Petty Cash',0,amt,'');
+      parts.forEach(function(pt){
+        if(!ALL && pt[0]!==projId) return;
+        cur=pt[0];
+        add(x.date,'payment','Petty cash expense',emp[x.emp_id]||'',(x.category||'')+(x.description?' \u2014 '+x.description:''),'Petty Cash',0,pt[1],'');
+      });
     });
     rows.sort(function(a,b){ return a.date!==b.date?(a.date<b.date?-1:1):(a.inAmt?-1:1); });
     PL_STATE.rows=rows;
@@ -17731,7 +17753,7 @@ function projLedgerData(){
     if(S.kind==='in' && !r.inAmt) return;
     if(S.kind==='out' && !r.outAmt) return;
     if(S.q){
-      var hay=(r.label+' '+r.party+' '+r.ref+' '+r.note+' '+r.mode+' '+r.date).toLowerCase();
+      var hay=(r.label+' '+r.party+' '+r.ref+' '+r.note+' '+r.mode+' '+r.date+' '+(r.proj||'')).toLowerCase();
       var ok=S.q.toLowerCase().split(/\s+/).filter(Boolean).every(function(w){return hay.indexOf(w)>-1;});   // every typed word must match
       if(!ok) return;
     }
@@ -17767,7 +17789,7 @@ function projLedgerRender(){
   var td='padding:7px 8px;border-bottom:1px solid var(--border);font-size:11.5px;vertical-align:top;';
   var body=d.rows.map(function(r){
     return '<tr><td style="'+td+'white-space:nowrap;">'+fd(r.date)+'</td>'+
-      '<td style="'+td+'min-width:170px;"><b>'+esc(r.label)+'</b>'+(r.party?' \u00b7 '+esc(r.party):'')+(r.ref?'<br><span style="color:var(--text3);">'+esc(r.ref)+'</span>':'')+(r.note?'<br><span style="color:var(--text3);font-size:10.5px;">'+esc(r.note)+'</span>':'')+
+      '<td style="'+td+'min-width:170px;">'+(r.proj?'<div style="font-size:10px;font-weight:800;color:#1565C0;">&#128207; '+esc(r.proj)+'</div>':'')+'<b>'+esc(r.label)+'</b>'+(r.party?' \u00b7 '+esc(r.party):'')+(r.ref?'<br><span style="color:var(--text3);">'+esc(r.ref)+'</span>':'')+(r.note?'<br><span style="color:var(--text3);font-size:10.5px;">'+esc(r.note)+'</span>':'')+
         (r.lines?'<div style="margin-top:4px;padding:4px 8px;background:var(--bg);border-radius:6px;font-size:10.5px;">'+r.lines.map(function(l){ var neg=l[1]<0; return '<div style="display:flex;justify-content:space-between;gap:12px;"><span>'+esc(l[0])+'</span><span style="font-weight:700;color:'+(neg?'#C62828':'inherit')+';">'+(neg?'\u2212':'')+f(Math.abs(l[1]))+'</span></div>'; }).join('')+
           '<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--border);margin-top:2px;padding-top:2px;font-weight:800;"><span>'+(r.inAmt?'Net received':'Net paid')+'</span><span>'+f(r.inAmt||r.outAmt)+'</span></div></div>':'')+'</td>'+
       '<td style="'+td+'white-space:nowrap;">'+esc(r.mode||'\u2014')+'</td>'+
@@ -17823,7 +17845,7 @@ function projLedgerExport(kind){
   var header=['Date','Particulars','Reference / breakup','Mode','Gross','Net Received','Net Paid','Balance'];
   var rows=d.rows.map(function(r){
     var bk=r.lines?(' ['+r.lines.map(function(l){return l[0]+' '+(Math.round(l[1]*100)/100);}).join('; ')+']'):'';
-    return [fd(r.date),r.label+(r.party?' - '+r.party:''),r.ref+(r.note?' ('+r.note+')':'')+bk,r.mode,Math.round((r.gross||r.inAmt||r.outAmt)*100)/100,r.inAmt?Math.round(r.inAmt*100)/100:'',r.outAmt?Math.round(r.outAmt*100)/100:'',Math.round(r.bal*100)/100]; });
+    return [fd(r.date),(r.proj?r.proj+' | ':'')+r.label+(r.party?' - '+r.party:''),r.ref+(r.note?' ('+r.note+')':'')+bk,r.mode,Math.round((r.gross||r.inAmt||r.outAmt)*100)/100,r.inAmt?Math.round(r.inAmt*100)/100:'',r.outAmt?Math.round(r.outAmt*100)/100:'',Math.round(r.bal*100)/100]; });
   rows.push(['TOTAL','','','','',Math.round(d.tin*100)/100,Math.round(d.tout*100)/100,Math.round(d.closing*100)/100]);
   if(kind==='csv'){ if(typeof accExportCSV==='function') accExportCSV('Project_Ledger_'+new Date().toISOString().slice(0,10)+'.csv',[[title],[(PL_STATE.from||PL_STATE.to)?('Period: '+(PL_STATE.from||'start')+' to '+(PL_STATE.to||'today')):'All time'],[''],header].concat(rows)); }
   else if(typeof accExportPDF==='function'){
