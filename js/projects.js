@@ -17624,7 +17624,7 @@ function pdfSignGridSig(blocks){
 // ════════════════════════════════════════════════════════════════
 // PROJECT LEDGER — every payment in and out for the selected project
 // ════════════════════════════════════════════════════════════════
-var PL_STATE={rows:[],from:'',to:'',kind:'all',projName:''};
+var PL_STATE={rows:[],from:'',to:'',kind:'all',q:'',projName:''};
 async function projLedgerLoad(){
   var el=document.getElementById('ledger-content'); if(!el) return;
   var projId=PROJ_MOD_SEL_ID; if(!projId) return;
@@ -17693,6 +17693,11 @@ function projLedgerData(){
     if(S.to && d>S.to) return;
     if(S.kind==='in' && !r.inAmt) return;
     if(S.kind==='out' && !r.outAmt) return;
+    if(S.q){
+      var hay=(r.label+' '+r.party+' '+r.ref+' '+r.note+' '+r.mode+' '+r.date).toLowerCase();
+      var ok=S.q.toLowerCase().split(/\s+/).filter(Boolean).every(function(w){return hay.indexOf(w)>-1;});   // every typed word must match
+      if(!ok) return;
+    }
     rows.push(r);
   });
   bal=opening;
@@ -17717,11 +17722,12 @@ function projLedgerRender(){
   var sel=function(v,l){ return '<option value="'+v+'"'+(S.kind===v?' selected':'')+'>'+l+'</option>'; };
   el.innerHTML=
     '<div style="padding:0 2px;">'+
+    '<div style="margin-bottom:8px;"><input id="pl-search" class="finp" style="margin:0;width:100%;" type="search" placeholder="&#128269; Search name, bill, reference, mode..." value="'+esc(S.q||'')+'" oninput="PL_STATE.q=this.value;PL_STATE._focus=true;projLedgerRender()"></div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">'+
       '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">From</div><input type="date" class="finp" style="margin:0;" value="'+(S.from||'')+'" onchange="PL_STATE.from=this.value;projLedgerRender()"></div>'+
       '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">To</div><input type="date" class="finp" style="margin:0;" value="'+(S.to||'')+'" onchange="PL_STATE.to=this.value;projLedgerRender()"></div>'+
       '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">Show</div><select class="fsel" style="margin:0;" onchange="PL_STATE.kind=this.value;projLedgerRender()">'+sel('all','All')+sel('in','Received only')+sel('out','Paid only')+'</select></div>'+
-      ((S.from||S.to)?'<button class="btn btn-outline" onclick="PL_STATE.from=\'\';PL_STATE.to=\'\';projLedgerRender()">All time</button>':'')+
+      ((S.from||S.to||S.q)?'<button class="btn btn-outline" onclick="PL_STATE.from=\'\';PL_STATE.to=\'\';PL_STATE.q=\'\';projLedgerRender()">Clear filters</button>':'')+
       '<div style="flex:1;"></div>'+
       '<button onclick="projLedgerExport(\'csv\')" style="border:none;background:#E8F5E9;color:#2E7D32;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer;">Excel</button>'+
       '<button onclick="projLedgerExport(\'pdf\')" style="border:none;background:#FFEBEE;color:#C62828;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer;">PDF</button>'+
@@ -17735,6 +17741,11 @@ function projLedgerRender(){
       '</tr></thead><tbody>'+body+'</tbody></table></div>'+
     '<div style="font-size:10px;color:var(--text3);margin-top:8px;">Cash movement for this project: client receipts and advances in; party payments, party advances, other expenses and petty cash spent here out. TDS withheld by the client is noted but not counted as cash. Net is running (received \u2212 paid).</div>'+
     '</div>';
+  if(S._focus){   // typing re-draws the page: put the cursor back in the search box
+    S._focus=false;
+    var si=document.getElementById('pl-search');
+    if(si){ si.focus(); try{ si.setSelectionRange(si.value.length,si.value.length); }catch(e){} }
+  }
 }
 function projLedgerExport(kind){
   var d=projLedgerData();
