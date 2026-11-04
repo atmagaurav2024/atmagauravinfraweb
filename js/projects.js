@@ -17644,24 +17644,45 @@ async function projLedgerLoad(){
     var sbill={}; r[7].forEach(function(b){sbill[b.id]=b;});
     var wbill={}; r[8].forEach(function(b){wbill[b.id]=b;});
     var rows=[];
-    var add=function(date,kind,label,party,ref,mode,inAmt,outAmt,note){
+    var jarr=function(s){ if(Array.isArray(s)) return s; try{ return s?(JSON.parse(s)||[]):[]; }catch(e){ return []; } };
+    var num=function(v){ return parseFloat(v)||0; };
+    var advBd=function(a){
+      var base=num(a.base_amount!=null?a.base_amount:a.amount), lines=[['Work / base amount',base]], gross=base;
+      jarr(a.additions).forEach(function(x){ var v=num(x.amount); if(v){ lines.push(['+ '+(x.head||'Addition'),v]); gross+=v; } });
+      jarr(a.gst).forEach(function(x){ var v=num(x.amount); if(v){ lines.push(['+ '+(x.head||'GST')+(x.pct?' ('+x.pct+'%)':''),v]); gross+=v; } });
+      jarr(a.deductions).forEach(function(x){ var v=num(x.amount); if(v){ lines.push(['\u2212 '+(x.head||'Deduction')+(x.is_tds?' (TDS)':''),-v]); } });
+      return {gross:gross,lines:lines,hasExtra:lines.length>1};
+    };
+    var add=function(date,kind,label,party,ref,mode,inAmt,outAmt,note,gross,lines){
       if(!(inAmt>0||outAmt>0)) return;
-      rows.push({date:String(date||'').slice(0,10),kind:kind,label:label,party:party||'',ref:ref||'',mode:mode||'',inAmt:inAmt||0,outAmt:outAmt||0,note:note||''});
+      rows.push({date:String(date||'').slice(0,10),kind:kind,label:label,party:party||'',ref:ref||'',mode:mode||'',inAmt:inAmt||0,outAmt:outAmt||0,note:note||'',gross:gross||(inAmt||outAmt),lines:lines||null});
     };
     r[0].forEach(function(p){
       var sb=sbill[p.sales_bill_id]||{};
       var tds=parseFloat(p.tds_amount)||0;
-      add(p.payment_date,'receipt','Payment received',proj.client||proj.name,'Against '+(sb.bill_ref||(sb.bill_number?'Sales Bill #'+sb.bill_number:'sales bill')),p.payment_mode,parseFloat(p.amount)||0,0,(tds>0?'TDS withheld by client \u20b9'+tds.toLocaleString('en-IN')+' (not cash)':'')+(p.reference?(tds>0?' \u00b7 ':'')+'Ref '+p.reference:''));
+      add(p.payment_date,'receipt','Payment received',proj.client||proj.name,'Against '+(sb.bill_ref||(sb.bill_number?'Sales Bill #'+sb.bill_number:'sales bill')),p.payment_mode,parseFloat(p.amount)||0,0,p.reference?'Ref '+p.reference:'',
+        num(p.amount)+tds, tds>0?[['Amount settled',num(p.amount)+tds],['\u2212 TDS withheld by client',-tds]]:null);
     });
     r[1].forEach(function(a){
-      add(a.date,'receipt','Advance received',proj.client||proj.name,a.adv_ref||a.purpose||'',a.payment_mode,parseFloat(a.amount)||0,0,a.reference?'Ref '+a.reference:'');
+      var bd=advBd(a);
+      add(a.date,'receipt','Advance received',proj.client||proj.name,a.adv_ref||a.purpose||'',a.payment_mode,parseFloat(a.amount)||0,0,a.reference?'Ref '+a.reference:'',bd.gross,bd.hasExtra?bd.lines:null);
     });
     r[2].forEach(function(p){
       var b=wbill[p.bill_id]||{};
-      add(p.payment_date,'payment','Payment to party',p.party_name,'Bill '+(b.bill_ref||(b.bill_number?'#'+b.bill_number:'')),p.payment_mode,0,parseFloat(p.amount)||0,p.reference||'');
+      var bDed=jarr(b.deductions).filter(function(d){return !d.released;});
+      var bGross=num(b.bill_amount), bLines=null, bNet=bGross;
+      if(b.id&&bGross){
+        bLines=[['Bill gross (work + additions + GST)',bGross]];
+        bDed.filter(function(d){return !d.is_advance_adj;}).forEach(function(d){ var v=num(d.amount); if(v){ bLines.push(['\u2212 '+(d.head||'Deduction')+(d.is_tds?' (TDS)':''),-v]); bNet-=v; } });
+        var advAdj=bDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+num(d.amount);},0);
+        if(advAdj){ bLines.push(['\u2212 Advance adjusted',-advAdj]); bNet-=advAdj; }
+        if(bLines.length>1) bLines.push(['= Bill net payable',bNet]);
+      }
+      add(p.payment_date,'payment','Payment to party',p.party_name,'Bill '+(b.bill_ref||(b.bill_number?'#'+b.bill_number:'')),p.payment_mode,0,parseFloat(p.amount)||0,p.reference||'',bGross||num(p.amount),bLines&&bLines.length>2?bLines:null);
     });
     r[3].forEach(function(a){
-      add(a.date,'payment','Advance to party',a.party_name,a.adv_ref||a.purpose||'',a.payment_mode,0,parseFloat(a.amount)||0,a.reference||'');
+      var bd2=advBd(a);
+      add(a.date,'payment','Advance to party',a.party_name,a.adv_ref||a.purpose||'',a.payment_mode,0,parseFloat(a.amount)||0,a.reference||'',bd2.gross,bd2.hasExtra?bd2.lines:null);
     });
     r[4].forEach(function(x){
       add(x.date,'payment','Other expense',x.party_name||'',(x.type||'')+(x.description?' \u2014 '+x.description:''),x.payment_mode||'',0,parseFloat(x.amount)||0,'');
@@ -17712,12 +17733,15 @@ function projLedgerRender(){
   var td='padding:7px 8px;border-bottom:1px solid var(--border);font-size:11.5px;vertical-align:top;';
   var body=d.rows.map(function(r){
     return '<tr><td style="'+td+'white-space:nowrap;">'+fd(r.date)+'</td>'+
-      '<td style="'+td+'min-width:170px;"><b>'+esc(r.label)+'</b>'+(r.party?' \u00b7 '+esc(r.party):'')+(r.ref?'<br><span style="color:var(--text3);">'+esc(r.ref)+'</span>':'')+(r.note?'<br><span style="color:var(--text3);font-size:10.5px;">'+esc(r.note)+'</span>':'')+'</td>'+
+      '<td style="'+td+'min-width:170px;"><b>'+esc(r.label)+'</b>'+(r.party?' \u00b7 '+esc(r.party):'')+(r.ref?'<br><span style="color:var(--text3);">'+esc(r.ref)+'</span>':'')+(r.note?'<br><span style="color:var(--text3);font-size:10.5px;">'+esc(r.note)+'</span>':'')+
+        (r.lines?'<div style="margin-top:4px;padding:4px 8px;background:var(--bg);border-radius:6px;font-size:10.5px;">'+r.lines.map(function(l){ var neg=l[1]<0; return '<div style="display:flex;justify-content:space-between;gap:12px;"><span>'+esc(l[0])+'</span><span style="font-weight:700;color:'+(neg?'#C62828':'inherit')+';">'+(neg?'\u2212':'')+f(Math.abs(l[1]))+'</span></div>'; }).join('')+
+          '<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--border);margin-top:2px;padding-top:2px;font-weight:800;"><span>'+(r.inAmt?'Net received':'Net paid')+'</span><span>'+f(r.inAmt||r.outAmt)+'</span></div></div>':'')+'</td>'+
       '<td style="'+td+'white-space:nowrap;">'+esc(r.mode||'\u2014')+'</td>'+
+      '<td style="'+td+'text-align:right;color:var(--text2);">'+f(r.gross||r.inAmt||r.outAmt)+'</td>'+
       '<td style="'+td+'text-align:right;color:#2E7D32;font-weight:700;">'+(r.inAmt?f(r.inAmt):'')+'</td>'+
       '<td style="'+td+'text-align:right;color:#C62828;font-weight:700;">'+(r.outAmt?f(r.outAmt):'')+'</td>'+
       '<td style="'+td+'text-align:right;font-weight:800;'+(r.bal<0?'color:#C62828;':'')+'">'+f(r.bal)+'</td></tr>';
-  }).join('')||'<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">No payments in this period</td></tr>';
+  }).join('')||'<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3);">No payments in this period</td></tr>';
   var card=function(l,v,c){ return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:9px 12px;"><div style="font-size:10px;font-weight:700;color:var(--text3);">'+l+'</div><div style="font-size:14px;font-weight:900;color:'+c+';">'+f(v)+'</div></div>'; };
   var sel=function(v,l){ return '<option value="'+v+'"'+(S.kind===v?' selected':'')+'>'+l+'</option>'; };
   el.innerHTML=
@@ -17736,10 +17760,10 @@ function projLedgerRender(){
       card('Opening',d.opening,'var(--text)')+card('Received',d.tin,'#2E7D32')+card('Paid',d.tout,'#C62828')+card('Net (closing)',d.closing,d.closing<0?'#C62828':'#1565C0')+
     '</div>'+
     '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
-      '<table style="width:100%;border-collapse:collapse;min-width:560px;"><thead><tr style="background:var(--bg);">'+
-        ['Date','Particulars','Mode','Received','Paid','Net'].map(function(h,i){return '<th style="padding:7px 8px;font-size:10px;text-align:'+(i>=3?'right':'left')+';color:var(--text3);text-transform:uppercase;">'+h+'</th>';}).join('')+
+      '<table style="width:100%;border-collapse:collapse;min-width:680px;"><thead><tr style="background:var(--bg);">'+
+        ['Date','Particulars','Mode','Gross','Net Received','Net Paid','Balance'].map(function(h,i){return '<th style="padding:7px 8px;font-size:10px;text-align:'+(i>=3?'right':'left')+';color:var(--text3);text-transform:uppercase;">'+h+'</th>';}).join('')+
       '</tr></thead><tbody>'+body+'</tbody></table></div>'+
-    '<div style="font-size:10px;color:var(--text3);margin-top:8px;">Cash movement for this project: client receipts and advances in; party payments, party advances, other expenses and petty cash spent here out. TDS withheld by the client is noted but not counted as cash. Net is running (received \u2212 paid).</div>'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:8px;">Cash movement for this project: client receipts and advances in; party payments, party advances, other expenses and petty cash spent here out. TDS withheld by the client is noted but not counted as cash. Gross is the amount before deductions (TDS etc.); Net Received / Net Paid is the actual money moved; Balance is running (received \u2212 paid).</div>'+
     '</div>';
   if(S._focus){   // typing re-draws the page: put the cursor back in the search box
     S._focus=false;
@@ -17751,12 +17775,14 @@ function projLedgerExport(kind){
   var d=projLedgerData();
   var fd=function(x){ var p=String(x||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:(x||''); };
   var title='Project Ledger \u2014 '+(PL_STATE.projName||'');
-  var header=['Date','Particulars','Reference','Mode','Received','Paid','Net'];
-  var rows=d.rows.map(function(r){ return [fd(r.date),r.label+(r.party?' - '+r.party:''),r.ref+(r.note?' ('+r.note+')':''),r.mode,r.inAmt?Math.round(r.inAmt*100)/100:'',r.outAmt?Math.round(r.outAmt*100)/100:'',Math.round(r.bal*100)/100]; });
-  rows.push(['TOTAL','','','',Math.round(d.tin*100)/100,Math.round(d.tout*100)/100,Math.round(d.closing*100)/100]);
+  var header=['Date','Particulars','Reference / breakup','Mode','Gross','Net Received','Net Paid','Balance'];
+  var rows=d.rows.map(function(r){
+    var bk=r.lines?(' ['+r.lines.map(function(l){return l[0]+' '+(Math.round(l[1]*100)/100);}).join('; ')+']'):'';
+    return [fd(r.date),r.label+(r.party?' - '+r.party:''),r.ref+(r.note?' ('+r.note+')':'')+bk,r.mode,Math.round((r.gross||r.inAmt||r.outAmt)*100)/100,r.inAmt?Math.round(r.inAmt*100)/100:'',r.outAmt?Math.round(r.outAmt*100)/100:'',Math.round(r.bal*100)/100]; });
+  rows.push(['TOTAL','','','','',Math.round(d.tin*100)/100,Math.round(d.tout*100)/100,Math.round(d.closing*100)/100]);
   if(kind==='csv'){ if(typeof accExportCSV==='function') accExportCSV('Project_Ledger_'+new Date().toISOString().slice(0,10)+'.csv',[[title],[(PL_STATE.from||PL_STATE.to)?('Period: '+(PL_STATE.from||'start')+' to '+(PL_STATE.to||'today')):'All time'],[''],header].concat(rows)); }
   else if(typeof accExportPDF==='function'){
     var fm=function(n){ return n===''?'':'\u20b9'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2}); };
-    accExportPDF(title,header,rows.map(function(r){ var x=r.slice(); x[4]=fm(x[4]); x[5]=fm(x[5]); x[6]=fm(x[6]); return x; }));
+    accExportPDF(title,header,rows.map(function(r){ var x=r.slice(); x[4]=fm(x[4]); x[5]=fm(x[5]); x[6]=fm(x[6]); x[7]=fm(x[7]); return x; }));
   }
 }
