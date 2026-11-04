@@ -189,6 +189,7 @@ function projModRenderNav(){
     {id:'bills',           label:'Bills & Payments'},
     {id:'sales',           label:'Sales'},
     {id:'otherexp',        label:'Other Expenses'},
+    {id:'ledger',          label:'Ledger'},
     {id:'orders',          label:'Orders'}
   ];
 
@@ -331,6 +332,7 @@ function projModLoadTab(){
     bills:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='bills';    execSwitchTab(); }},
     sales:     {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='sales';    execSwitchTab(); }},
     otherexp:  {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='otherexp'; execSwitchTab(); }},
+    ledger:    {cont:'ledger-content', sel:'ledger-proj-sel', fn: function(){ projLedgerLoad(); }},
     orders:    {cont:'exec-content',  sel:'exec-proj-sel',  fn: function(){ WA_SUBTAB='orders';   execSwitchTab(); }}
   };
 
@@ -17617,3 +17619,133 @@ function pdfSignGridSig(blocks){
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
   setInterval(start,2000);
 })();
+
+
+// ════════════════════════════════════════════════════════════════
+// PROJECT LEDGER — every payment in and out for the selected project
+// ════════════════════════════════════════════════════════════════
+var PL_STATE={rows:[],from:'',to:'',kind:'all',projName:''};
+async function projLedgerLoad(){
+  var el=document.getElementById('ledger-content'); if(!el) return;
+  var projId=PROJ_MOD_SEL_ID; if(!projId) return;
+  el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">&#9203; Loading ledger...</div>';
+  var safeF=function(table,filter){ return sbFetch(table,{select:'*',filter:filter||('project_id=eq.'+projId)}).then(function(r){return Array.isArray(r)?r:[];}).catch(function(){return [];}); };
+  try{
+    var r=await Promise.all([
+      safeF('sales_payments'), safeF('client_advances'),
+      safeF('work_payments'), safeF('work_advances'), safeF('other_expenses'),
+      sbFetch('petty_cash_expenses',{select:'*'}).then(function(x){return Array.isArray(x)?x:[];}).catch(function(){return [];}),
+      sbFetch('employees',{select:'id,emp_id,first_name,last_name'}).then(function(x){return Array.isArray(x)?x:[];}).catch(function(){return [];}),
+      safeF('sales_bills'), safeF('work_bills')
+    ]);
+    var proj=PROJ_DATA.find(function(p){return p.id===projId;})||{};
+    PL_STATE.projName=proj.name||'';
+    var emp={}; r[6].forEach(function(e){ var n=((e.first_name||'')+' '+(e.last_name||'')).trim(); emp[e.id]=n; if(e.emp_id) emp[e.emp_id]=n; });
+    var sbill={}; r[7].forEach(function(b){sbill[b.id]=b;});
+    var wbill={}; r[8].forEach(function(b){wbill[b.id]=b;});
+    var rows=[];
+    var add=function(date,kind,label,party,ref,mode,inAmt,outAmt,note){
+      if(!(inAmt>0||outAmt>0)) return;
+      rows.push({date:String(date||'').slice(0,10),kind:kind,label:label,party:party||'',ref:ref||'',mode:mode||'',inAmt:inAmt||0,outAmt:outAmt||0,note:note||''});
+    };
+    r[0].forEach(function(p){
+      var sb=sbill[p.sales_bill_id]||{};
+      var tds=parseFloat(p.tds_amount)||0;
+      add(p.payment_date,'receipt','Payment received',proj.client||proj.name,'Against '+(sb.bill_ref||(sb.bill_number?'Sales Bill #'+sb.bill_number:'sales bill')),p.payment_mode,parseFloat(p.amount)||0,0,(tds>0?'TDS withheld by client \u20b9'+tds.toLocaleString('en-IN')+' (not cash)':'')+(p.reference?(tds>0?' \u00b7 ':'')+'Ref '+p.reference:''));
+    });
+    r[1].forEach(function(a){
+      add(a.date,'receipt','Advance received',proj.client||proj.name,a.adv_ref||a.purpose||'',a.payment_mode,parseFloat(a.amount)||0,0,a.reference?'Ref '+a.reference:'');
+    });
+    r[2].forEach(function(p){
+      var b=wbill[p.bill_id]||{};
+      add(p.payment_date,'payment','Payment to party',p.party_name,'Bill '+(b.bill_ref||(b.bill_number?'#'+b.bill_number:'')),p.payment_mode,0,parseFloat(p.amount)||0,p.reference||'');
+    });
+    r[3].forEach(function(a){
+      add(a.date,'payment','Advance to party',a.party_name,a.adv_ref||a.purpose||'',a.payment_mode,0,parseFloat(a.amount)||0,a.reference||'');
+    });
+    r[4].forEach(function(x){
+      add(x.date,'payment','Other expense',x.party_name||'',(x.type||'')+(x.description?' \u2014 '+x.description:''),x.payment_mode||'',0,parseFloat(x.amount)||0,'');
+    });
+    r[5].forEach(function(x){
+      if(x.linked_id) return;   // already counted as a party payment/advance
+      var allocs=[]; try{allocs=x.project_allocations?JSON.parse(x.project_allocations):[];}catch(e){}
+      var mine=allocs.find(function(a){return a.id===projId;}), amt=0;
+      if(mine) amt=parseFloat(mine.amount)||0;
+      else if(!allocs.length){
+        var ids=[]; try{ids=x.project_ids?JSON.parse(x.project_ids):[];}catch(e){}
+        if(ids.indexOf(projId)>-1) amt=(parseFloat(x.amount)||0)/Math.max(1,ids.length);
+        else if(!ids.length && x.project && proj.name && String(x.project).split(',').map(function(s){return s.trim();}).indexOf(proj.name)>-1) amt=(parseFloat(x.amount)||0)/Math.max(1,String(x.project).split(',').length);
+      }
+      add(x.date,'payment','Petty cash expense',emp[x.emp_id]||'',(x.category||'')+(x.description?' \u2014 '+x.description:''),'Petty Cash',0,amt,'');
+    });
+    rows.sort(function(a,b){ return a.date!==b.date?(a.date<b.date?-1:1):(a.inAmt?-1:1); });
+    PL_STATE.rows=rows;
+    projLedgerRender();
+  }catch(e){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--red);">Could not load ledger: '+e.message+'</div>';
+  }
+}
+function projLedgerData(){
+  var S=PL_STATE, bal=0, rows=[], tin=0, tout=0, opening=0;
+  S.rows.forEach(function(r){
+    var d=r.date||'';
+    if(S.from && d<S.from){ opening+=r.inAmt-r.outAmt; return; }
+    if(S.to && d>S.to) return;
+    if(S.kind==='in' && !r.inAmt) return;
+    if(S.kind==='out' && !r.outAmt) return;
+    rows.push(r);
+  });
+  bal=opening;
+  rows.forEach(function(r){ tin+=r.inAmt; tout+=r.outAmt; bal+=r.inAmt-r.outAmt; r.bal=bal; });
+  return {rows:rows,opening:opening,tin:tin,tout:tout,closing:bal};
+}
+function projLedgerRender(){
+  var el=document.getElementById('ledger-content'); if(!el) return;
+  var S=PL_STATE, d=projLedgerData();
+  var f=function(n){return '\u20b9'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var fd=function(x){ var p=String(x||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:(x||''); };
+  var td='padding:7px 8px;border-bottom:1px solid var(--border);font-size:11.5px;vertical-align:top;';
+  var body=d.rows.map(function(r){
+    return '<tr><td style="'+td+'white-space:nowrap;">'+fd(r.date)+'</td>'+
+      '<td style="'+td+'min-width:170px;"><b>'+esc(r.label)+'</b>'+(r.party?' \u00b7 '+esc(r.party):'')+(r.ref?'<br><span style="color:var(--text3);">'+esc(r.ref)+'</span>':'')+(r.note?'<br><span style="color:var(--text3);font-size:10.5px;">'+esc(r.note)+'</span>':'')+'</td>'+
+      '<td style="'+td+'white-space:nowrap;">'+esc(r.mode||'\u2014')+'</td>'+
+      '<td style="'+td+'text-align:right;color:#2E7D32;font-weight:700;">'+(r.inAmt?f(r.inAmt):'')+'</td>'+
+      '<td style="'+td+'text-align:right;color:#C62828;font-weight:700;">'+(r.outAmt?f(r.outAmt):'')+'</td>'+
+      '<td style="'+td+'text-align:right;font-weight:800;'+(r.bal<0?'color:#C62828;':'')+'">'+f(r.bal)+'</td></tr>';
+  }).join('')||'<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text3);">No payments in this period</td></tr>';
+  var card=function(l,v,c){ return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:9px 12px;"><div style="font-size:10px;font-weight:700;color:var(--text3);">'+l+'</div><div style="font-size:14px;font-weight:900;color:'+c+';">'+f(v)+'</div></div>'; };
+  var sel=function(v,l){ return '<option value="'+v+'"'+(S.kind===v?' selected':'')+'>'+l+'</option>'; };
+  el.innerHTML=
+    '<div style="padding:0 2px;">'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">'+
+      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">From</div><input type="date" class="finp" style="margin:0;" value="'+(S.from||'')+'" onchange="PL_STATE.from=this.value;projLedgerRender()"></div>'+
+      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">To</div><input type="date" class="finp" style="margin:0;" value="'+(S.to||'')+'" onchange="PL_STATE.to=this.value;projLedgerRender()"></div>'+
+      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">Show</div><select class="fsel" style="margin:0;" onchange="PL_STATE.kind=this.value;projLedgerRender()">'+sel('all','All')+sel('in','Received only')+sel('out','Paid only')+'</select></div>'+
+      ((S.from||S.to)?'<button class="btn btn-outline" onclick="PL_STATE.from=\'\';PL_STATE.to=\'\';projLedgerRender()">All time</button>':'')+
+      '<div style="flex:1;"></div>'+
+      '<button onclick="projLedgerExport(\'csv\')" style="border:none;background:#E8F5E9;color:#2E7D32;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer;">Excel</button>'+
+      '<button onclick="projLedgerExport(\'pdf\')" style="border:none;background:#FFEBEE;color:#C62828;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer;">PDF</button>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px;">'+
+      card('Opening',d.opening,'var(--text)')+card('Received',d.tin,'#2E7D32')+card('Paid',d.tout,'#C62828')+card('Net (closing)',d.closing,d.closing<0?'#C62828':'#1565C0')+
+    '</div>'+
+    '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
+      '<table style="width:100%;border-collapse:collapse;min-width:560px;"><thead><tr style="background:var(--bg);">'+
+        ['Date','Particulars','Mode','Received','Paid','Net'].map(function(h,i){return '<th style="padding:7px 8px;font-size:10px;text-align:'+(i>=3?'right':'left')+';color:var(--text3);text-transform:uppercase;">'+h+'</th>';}).join('')+
+      '</tr></thead><tbody>'+body+'</tbody></table></div>'+
+    '<div style="font-size:10px;color:var(--text3);margin-top:8px;">Cash movement for this project: client receipts and advances in; party payments, party advances, other expenses and petty cash spent here out. TDS withheld by the client is noted but not counted as cash. Net is running (received \u2212 paid).</div>'+
+    '</div>';
+}
+function projLedgerExport(kind){
+  var d=projLedgerData();
+  var fd=function(x){ var p=String(x||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:(x||''); };
+  var title='Project Ledger \u2014 '+(PL_STATE.projName||'');
+  var header=['Date','Particulars','Reference','Mode','Received','Paid','Net'];
+  var rows=d.rows.map(function(r){ return [fd(r.date),r.label+(r.party?' - '+r.party:''),r.ref+(r.note?' ('+r.note+')':''),r.mode,r.inAmt?Math.round(r.inAmt*100)/100:'',r.outAmt?Math.round(r.outAmt*100)/100:'',Math.round(r.bal*100)/100]; });
+  rows.push(['TOTAL','','','',Math.round(d.tin*100)/100,Math.round(d.tout*100)/100,Math.round(d.closing*100)/100]);
+  if(kind==='csv'){ if(typeof accExportCSV==='function') accExportCSV('Project_Ledger_'+new Date().toISOString().slice(0,10)+'.csv',[[title],[(PL_STATE.from||PL_STATE.to)?('Period: '+(PL_STATE.from||'start')+' to '+(PL_STATE.to||'today')):'All time'],[''],header].concat(rows)); }
+  else if(typeof accExportPDF==='function'){
+    var fm=function(n){ return n===''?'':'\u20b9'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2}); };
+    accExportPDF(title,header,rows.map(function(r){ var x=r.slice(); x[4]=fm(x[4]); x[5]=fm(x[5]); x[6]=fm(x[6]); return x; }));
+  }
+}
