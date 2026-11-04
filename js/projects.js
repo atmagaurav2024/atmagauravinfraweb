@@ -17726,8 +17726,10 @@ function projLedgerData(){
   bal=opening;
   rows.forEach(function(r){ tin+=r.inAmt; tout+=r.outAmt; bal+=r.inAmt-r.outAmt; r.bal=bal; });
   // Separate totals of additions / GST / TDS / deductions shown in the breakups (a bill's deductions counted once)
-  var ex={}, seen={};
+  var ex={}, seen={}, gin=0, gout=0, gseen={};
   rows.forEach(function(r){
+    var g=r.gross||r.inAmt||r.outAmt;
+    if(r.bkey){ if(!gseen[r.bkey]){ gseen[r.bkey]=1; gout+=g; } } else if(r.inAmt) gin+=g; else gout+=g;
     if(!r.lines) return;
     var side=r.inAmt?'in':'out';
     if(r.bkey){ if(seen[r.bkey]) return; seen[r.bkey]=1; }
@@ -17739,7 +17741,7 @@ function projLedgerData(){
       var k=side+'|'+c; ex[k]=(ex[k]||0)+v;
     });
   });
-  return {rows:rows,opening:opening,tin:tin,tout:tout,closing:bal,ex:ex};
+  return {rows:rows,opening:opening,tin:tin,tout:tout,closing:bal,ex:ex,gin:gin,gout:gout};
 }
 function projLedgerRender(){
   var el=document.getElementById('ledger-content'); if(!el) return;
@@ -17773,7 +17775,7 @@ function projLedgerRender(){
       '<button onclick="projLedgerExport(\'pdf\')" style="border:none;background:#FFEBEE;color:#C62828;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer;">PDF</button>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px;">'+
-      card('Opening',d.opening,'var(--text)')+card('Received',d.tin,'#2E7D32')+card('Paid',d.tout,'#C62828')+card('Net (closing)',d.closing,d.closing<0?'#C62828':'#1565C0')+
+      card('Opening',d.opening,'var(--text)')+card('Gross received',d.gin,'#2E7D32')+card('Net received',d.tin,'#2E7D32')+card('Gross paid (bills counted once)',d.gout,'#C62828')+card('Net paid',d.tout,'#C62828')+card('Net (closing)',d.closing,d.closing<0?'#C62828':'#1565C0')+
     '</div>'+
     (function(){
       var ks=Object.keys(d.ex||{}); if(!ks.length) return '';
