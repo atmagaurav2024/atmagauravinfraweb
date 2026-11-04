@@ -17653,6 +17653,22 @@ async function projLedgerLoad(){
       jarr(a.deductions).forEach(function(x){ var v=num(x.amount); if(v){ lines.push(['\u2212 '+(x.head||'Deduction')+(x.is_tds?' (TDS)':''),-v]); } });
       return {gross:gross,lines:lines,hasExtra:lines.length>1};
     };
+    // Gross of a bill = work + all additions + GST (recomputed from items so old bills are right too)
+    var billBd=function(b){
+      var items=jarr(b.selected_items), adds=jarr(b.additions), work=0, lines=[], gross, ded=0, advAdj=0;
+      items.forEach(function(x){ work+=num(x.amount); });
+      var addSum=0; adds.forEach(function(a){ addSum+=num(a.amount); });
+      gross=work+addSum;
+      if(!items.length||!gross){ gross=num(b.bill_amount); work=gross-addSum; }
+      lines.push(['Work done',work]);
+      adds.forEach(function(a){ var v=num(a.amount); if(v) lines.push(['+ '+(a.head||(a.is_gst?'GST':'Addition'))+(a.is_gst&&a.pct?' ('+a.pct+'%)':''),v]); });
+      jarr(b.deductions).filter(function(d){return !d.released;}).forEach(function(d){
+        var v=num(d.amount); if(!v) return;
+        if(d.is_advance_adj){ advAdj+=v; lines.push(['\u2212 Advance adjusted',-v]); }
+        else { ded+=v; lines.push(['\u2212 '+(d.head||'Deduction')+(d.is_tds?' (TDS)':''),-v]); }
+      });
+      return {gross:gross,net:gross-ded-advAdj,lines:lines};
+    };
     var add=function(date,kind,label,party,ref,mode,inAmt,outAmt,note,gross,lines){
       if(!(inAmt>0||outAmt>0)) return;
       rows.push({date:String(date||'').slice(0,10),kind:kind,label:label,party:party||'',ref:ref||'',mode:mode||'',inAmt:inAmt||0,outAmt:outAmt||0,note:note||'',gross:gross||(inAmt||outAmt),lines:lines||null});
@@ -17660,8 +17676,13 @@ async function projLedgerLoad(){
     r[0].forEach(function(p){
       var sb=sbill[p.sales_bill_id]||{};
       var tds=parseFloat(p.tds_amount)||0;
+      var sbd=sb.id?billBd(sb):null, sl=null;
+      if(sbd&&sbd.lines.length>1){ sl=sbd.lines.concat([['= Bill net',sbd.net]]); }
+      else if(tds>0){ sl=[['Amount settled',num(p.amount)+tds],['\u2212 TDS withheld by client',-tds]]; }
+      var _p0=rows.length;
       add(p.payment_date,'receipt','Payment received',proj.client||proj.name,'Against '+(sb.bill_ref||(sb.bill_number?'Sales Bill #'+sb.bill_number:'sales bill')),p.payment_mode,parseFloat(p.amount)||0,0,p.reference?'Ref '+p.reference:'',
-        num(p.amount)+tds, tds>0?[['Amount settled',num(p.amount)+tds],['\u2212 TDS withheld by client',-tds]]:null);
+        sbd?sbd.gross:num(p.amount)+tds, sl);
+      if(rows.length>_p0&&sb.id) rows[rows.length-1].bkey='S'+sb.id;
     });
     r[1].forEach(function(a){
       var bd=advBd(a);
@@ -17669,17 +17690,10 @@ async function projLedgerLoad(){
     });
     r[2].forEach(function(p){
       var b=wbill[p.bill_id]||{};
-      var bDed=jarr(b.deductions).filter(function(d){return !d.released;});
-      var bGross=num(b.bill_amount), bLines=null, bNet=bGross;
-      if(b.id&&bGross){
-        bLines=[['Bill gross (work + additions + GST)',bGross]];
-        bDed.filter(function(d){return !d.is_advance_adj;}).forEach(function(d){ var v=num(d.amount); if(v){ bLines.push(['\u2212 '+(d.head||'Deduction')+(d.is_tds?' (TDS)':''),-v]); bNet-=v; } });
-        var advAdj=bDed.filter(function(d){return d.is_advance_adj;}).reduce(function(s,d){return s+num(d.amount);},0);
-        if(advAdj){ bLines.push(['\u2212 Advance adjusted',-advAdj]); bNet-=advAdj; }
-        if(bLines.length>1) bLines.push(['= Bill net payable',bNet]);
-      }
+      var wbd=b.id?billBd(b):null, bGross=wbd?wbd.gross:0, bLines=null;
+      if(wbd&&wbd.lines.length>1) bLines=wbd.lines.concat([['= Bill net payable',wbd.net]]);
       var _pre=rows.length;
-      add(p.payment_date,'payment','Payment to party',p.party_name,'Bill '+(b.bill_ref||(b.bill_number?'#'+b.bill_number:'')),p.payment_mode,0,parseFloat(p.amount)||0,p.reference||'',bGross||num(p.amount),bLines&&bLines.length>2?bLines:null);
+      add(p.payment_date,'payment','Payment to party',p.party_name,'Bill '+(b.bill_ref||(b.bill_number?'#'+b.bill_number:'')),p.payment_mode,0,parseFloat(p.amount)||0,p.reference||'',bGross||num(p.amount),bLines);
       if(rows.length>_pre&&b.id) rows[rows.length-1].bkey=b.id;
     });
     r[3].forEach(function(a){
@@ -17729,7 +17743,7 @@ function projLedgerData(){
   var ex={}, seen={}, gin=0, gout=0, gseen={};
   rows.forEach(function(r){
     var g=r.gross||r.inAmt||r.outAmt;
-    if(r.bkey){ if(!gseen[r.bkey]){ gseen[r.bkey]=1; gout+=g; } } else if(r.inAmt) gin+=g; else gout+=g;
+    if(r.bkey){ if(!gseen[r.bkey]){ gseen[r.bkey]=1; if(r.inAmt) gin+=g; else gout+=g; } } else if(r.inAmt) gin+=g; else gout+=g;
     if(!r.lines) return;
     var side=r.inAmt?'in':'out';
     if(r.bkey){ if(seen[r.bkey]) return; seen[r.bkey]=1; }
@@ -17775,7 +17789,7 @@ function projLedgerRender(){
       '<button onclick="projLedgerExport(\'pdf\')" style="border:none;background:#FFEBEE;color:#C62828;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer;">PDF</button>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px;">'+
-      card('Opening',d.opening,'var(--text)')+card('Gross received',d.gin,'#2E7D32')+card('Net received',d.tin,'#2E7D32')+card('Gross paid (bills counted once)',d.gout,'#C62828')+card('Net paid',d.tout,'#C62828')+card('Net (closing)',d.closing,d.closing<0?'#C62828':'#1565C0')+
+      card('Opening',d.opening,'var(--text)')+card('Gross received (bills counted once)',d.gin,'#2E7D32')+card('Net received',d.tin,'#2E7D32')+card('Gross paid (bills counted once)',d.gout,'#C62828')+card('Net paid',d.tout,'#C62828')+card('Net (closing)',d.closing,d.closing<0?'#C62828':'#1565C0')+
     '</div>'+
     (function(){
       var ks=Object.keys(d.ex||{}); if(!ks.length) return '';
