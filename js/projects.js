@@ -17786,17 +17786,18 @@ function projLedgerRender(){
   var S=PL_STATE, d=projLedgerData();
   var f=function(n){return '\u20b9'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var fd=function(x){ var p=String(x||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:(x||''); };
-  var td='padding:7px 8px;border-bottom:1px solid var(--border);font-size:11.5px;vertical-align:top;';
+  var td='padding:6px 6px;border-bottom:1px solid var(--border);font-size:11px;vertical-align:top;';
+  var nw='white-space:nowrap;';
   var body=d.rows.map(function(r){
     return '<tr><td style="'+td+'white-space:nowrap;">'+fd(r.date)+'</td>'+
-      '<td style="'+td+'min-width:170px;">'+(r.proj?'<div style="font-size:10px;font-weight:800;color:#1565C0;">&#128207; '+esc(r.proj)+'</div>':'')+'<b>'+esc(r.label)+'</b>'+(r.party?' \u00b7 '+esc(r.party):'')+(r.ref?'<br><span style="color:var(--text3);">'+esc(r.ref)+'</span>':'')+(r.note?'<br><span style="color:var(--text3);font-size:10.5px;">'+esc(r.note)+'</span>':'')+
-        (r.lines?'<div style="margin-top:4px;padding:4px 8px;background:var(--bg);border-radius:6px;font-size:10.5px;">'+r.lines.map(function(l){ var neg=l[1]<0; return '<div style="display:flex;justify-content:space-between;gap:12px;"><span>'+esc(l[0])+'</span><span style="font-weight:700;color:'+(neg?'#C62828':'inherit')+';">'+(neg?'\u2212':'')+f(Math.abs(l[1]))+'</span></div>'; }).join('')+
+      '<td style="'+td+'min-width:150px;word-break:break-word;">'+(r.proj?'<div style="font-size:10px;font-weight:800;color:#1565C0;">&#128207; '+esc(r.proj)+'</div>':'')+'<b>'+esc(r.label)+'</b>'+(r.party?' \u00b7 '+esc(r.party):'')+(r.ref?'<br><span style="color:var(--text3);">'+esc(r.ref)+'</span>':'')+(r.note?'<br><span style="color:var(--text3);font-size:10.5px;">'+esc(r.note)+'</span>':'')+
+        (r.lines?'<div style="margin-top:4px;padding:4px 8px;background:var(--bg);border-radius:6px;font-size:10.5px;max-width:300px;">'+r.lines.map(function(l){ var neg=l[1]<0; return '<div style="display:flex;justify-content:space-between;gap:12px;"><span>'+esc(l[0])+'</span><span style="font-weight:700;color:'+(neg?'#C62828':'inherit')+';">'+(neg?'\u2212':'')+f(Math.abs(l[1]))+'</span></div>'; }).join('')+
           '<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--border);margin-top:2px;padding-top:2px;font-weight:800;"><span>'+(r.inAmt?'Net received':'Net paid')+'</span><span>'+f(r.inAmt||r.outAmt)+'</span></div></div>':'')+'</td>'+
       '<td style="'+td+'white-space:nowrap;">'+esc(r.mode||'\u2014')+'</td>'+
-      '<td style="'+td+'text-align:right;color:var(--text2);">'+f(r.gross||r.inAmt||r.outAmt)+'</td>'+
-      '<td style="'+td+'text-align:right;color:#2E7D32;font-weight:700;">'+(r.inAmt?f(r.inAmt):'')+'</td>'+
-      '<td style="'+td+'text-align:right;color:#C62828;font-weight:700;">'+(r.outAmt?f(r.outAmt):'')+'</td>'+
-      '<td style="'+td+'text-align:right;font-weight:800;'+(r.bal<0?'color:#C62828;':'')+'">'+f(r.bal)+'</td></tr>';
+      '<td style="'+td+'text-align:right;'+nw+'color:var(--text2);">'+f(r.gross||r.inAmt||r.outAmt)+'</td>'+
+      '<td style="'+td+'text-align:right;'+nw+'color:#2E7D32;font-weight:700;">'+(r.inAmt?f(r.inAmt):'')+'</td>'+
+      '<td style="'+td+'text-align:right;'+nw+'color:#C62828;font-weight:700;">'+(r.outAmt?f(r.outAmt):'')+'</td>'+
+      '<td style="'+td+'text-align:right;'+nw+'font-weight:800;'+(r.bal<0?'color:#C62828;':'')+'">'+f(r.bal)+'</td></tr>';
   }).join('')||'<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text3);">No payments in this period</td></tr>';
   var card=function(l,v,c){ return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:9px 12px;"><div style="font-size:10px;font-weight:700;color:var(--text3);">'+l+'</div><div style="font-size:14px;font-weight:900;color:'+c+';">'+f(v)+'</div></div>'; };
   var sel=function(v,l){ return '<option value="'+v+'"'+(S.kind===v?' selected':'')+'>'+l+'</option>'; };
@@ -17806,7 +17807,11 @@ function projLedgerRender(){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">'+
       '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">From</div><input type="date" class="finp" style="margin:0;" value="'+(S.from||'')+'" onchange="PL_STATE.from=this.value;projLedgerRender()"></div>'+
       '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">To</div><input type="date" class="finp" style="margin:0;" value="'+(S.to||'')+'" onchange="PL_STATE.to=this.value;projLedgerRender()"></div>'+
-      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">Show</div><select class="fsel" style="margin:0;" onchange="PL_STATE.kind=this.value;projLedgerRender()">'+sel('all','All')+sel('in','Received only')+sel('out','Paid only')+'</select></div>'+
+      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);">Show</div><div style="display:flex;gap:4px;">'+
+        [['all','All entries','#111827'],['in','Credit only','#2E7D32'],['out','Debit only','#C62828']].map(function(o){
+          var on=S.kind===o[0];
+          return '<button onclick="PL_STATE.kind=\''+o[0]+'\';projLedgerRender()" style="border:1.5px solid '+o[2]+';background:'+(on?o[2]:'transparent')+';color:'+(on?'#fff':o[2])+';border-radius:8px;padding:7px 10px;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;">'+o[1]+'</button>';
+        }).join('')+'</div></div>'+
       ((S.from||S.to||S.q)?'<button class="btn btn-outline" onclick="PL_STATE.from=\'\';PL_STATE.to=\'\';PL_STATE.q=\'\';projLedgerRender()">Clear filters</button>':'')+
       '<div style="flex:1;"></div>'+
       '<button onclick="projLedgerExport(\'csv\')" style="border:none;background:#E8F5E9;color:#2E7D32;border-radius:8px;padding:8px 11px;font-weight:800;cursor:pointer;">Excel</button>'+
@@ -17827,8 +17832,8 @@ function projLedgerRender(){
         }).join('')+'</div>';
     })()+
     '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;">'+
-      '<table style="width:100%;border-collapse:collapse;min-width:680px;"><thead><tr style="background:var(--bg);">'+
-        ['Date','Particulars','Mode','Gross','Net Received','Net Paid','Balance'].map(function(h,i){return '<th style="padding:7px 8px;font-size:10px;text-align:'+(i>=3?'right':'left')+';color:var(--text3);text-transform:uppercase;">'+h+'</th>';}).join('')+
+      '<table style="width:100%;border-collapse:collapse;min-width:0;"><thead><tr style="background:var(--bg);">'+
+        ['Date','Particulars','Mode','Gross','Credit (Received)','Debit (Paid)','Balance'].map(function(h,i){return '<th style="padding:7px 6px;font-size:9.5px;text-align:'+(i>=3?'right':'left')+';color:var(--text3);text-transform:uppercase;">'+h+'</th>';}).join('')+
       '</tr></thead><tbody>'+body+'</tbody></table></div>'+
     '<div style="font-size:10px;color:var(--text3);margin-top:8px;">Cash movement for this project: client receipts and advances in; party payments, party advances, other expenses and petty cash spent here out. TDS withheld by the client is noted but not counted as cash. Gross is the amount before deductions (TDS etc.); Net Received / Net Paid is the actual money moved; Balance is running (received \u2212 paid).</div>'+
     '</div>';
